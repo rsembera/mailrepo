@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Create Archive - {{ app_name }}{% endblock %}
+
+{% block body_class %}auth-page{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-header">
+            {% if is_first_run %}
+            <h1>Create Your First Archive</h1>
+            <p class="auth-subtitle">Archives are folders where you'll file your emails</p>
+            {% else %}
+            <h1>Create New Archive</h1>
+            <p class="auth-subtitle">Add a new top-level archive folder</p>
+            {% endif %}
+        </div>
+        
+        {% if errors %}
+        <div class="error-box">
+            <ul>
+                {% for error in errors %}
+                <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        
+        <form method="POST" class="auth-form">
+            <div class="form-group">
+                <label for="name">Archive Name</label>
+                <input 
+                    type="text" 
+                    id="name" 
+                    name="name" 
+                    required 
+                    maxlength="100"
+                    placeholder="e.g., Client Files, Personal, Work Projects"
+                    value="{{ name if name else '' }}"
+                    autofocus
+                >
+                <span class="helper-text">Choose a descriptive name for this archive folder.</span>
+            </div>
+            
+            <div class="form-group">
+                <label>Security</label>
+                <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" name="encrypted" value="1" checked>
+                        <span class="radio-text">
+                            <strong>🔒 Encrypted</strong>
+                            <span class="radio-hint">For client correspondence, sensitive materials. Files are encrypted at rest.</span>
+                        </span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="encrypted" value="0">
+                        <span class="radio-text">
+                            <strong>📁 Unencrypted</strong>
+                            <span class="radio-hint">For personal emails, newsletters. Faster access, standard .eml files.</span>
+                        </span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary btn-full">Create Archive</button>
+            </div>
+        </form>
+        
+        {% if not is_first_run %}
+        <div class="auth-footer">
+            <a href="{{ url_for('main.index') }}" class="link-muted">← Back to Dashboard</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

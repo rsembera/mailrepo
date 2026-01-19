@@ -1,0 +1,501 @@
+{% extends "base.html" %}
+
+{% block title %}Review Staged Emails - {{ app_name }}{% endblock %}
+
+{% block body_class %}review-page{% endblock %}
+
+{% block content %}
+<div class="review-container">
+    <header class="review-header">
+        <h1>Review Staged Emails</h1>
+        <div class="review-actions">
+            <button class="btn btn-secondary" onclick="history.back()">← Back</button>
+            <button class="btn btn-primary" id="commitBtn" disabled>
+                Commit <span id="commitCount">0</span> Emails
+            </button>
+        </div>
+    </header>
+    
+    <div class="review-content" id="reviewContent">
+        <!-- Emails grouped by source will be rendered here -->
+        <div class="empty-state">
+            <div class="empty-icon">📭</div>
+            <h3>No Staged Emails</h3>
+            <p>Go back and stage some emails first.</p>
+        </div>
+    </div>
+    
+    <!-- Progress Modal -->
+    <div class="modal-overlay" id="progressModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Filing Emails...</h2>
+            </div>
+            <div class="progress-container">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <p class="progress-text" id="progressText">Preparing...</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Results Modal -->
+    <div class="modal-overlay" id="resultsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="resultsTitle">Complete</h2>
+            </div>
+            <p id="resultsMessage"></p>
+            <div class="failed-list hidden" id="failedList">
+                <h4>Failed:</h4>
+                <ul id="failedItems"></ul>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary hidden" id="retryBtn">Retry Failed</button>
+                <button class="btn btn-primary" id="doneBtn">Done</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ============================================
+// REVIEW PAGE LOGIC
+// ============================================
+
+let stagedEmails = new Map();
+let folders = [];
+let sourceActions = {};  // { accountId-labelId: action }
+
+document.addEventListener('DOMContentLoaded', async () => {
+    // Load staged emails from sessionStorage
+    const savedStaged = sessionStorage.getItem('stagedEmails');
+    if (savedStaged) {
+        try {
+            const entries = JSON.parse(savedStaged);
+            stagedEmails = new Map(entries);
+        } catch (e) {
+            console.error('Failed to parse staged emails:', e);
+        }
+    }
+    
+    if (stagedEmails.size === 0) {
+        return;  // Show empty state
+    }
+    
+    // Load folders
+    await loadFolders();
+    
+    // Render review list
+    renderReviewList();
+    updateCommitButton();
+});
+
+async function loadFolders() {
+    try {
+        const response = await fetch('/api/folders');
+        if (response.ok) {
+            const data = await response.json();
+            folders = data.folders;
+        }
+    } catch (e) {
+        console.error('Failed to load folders:', e);
+    }
+}
+
+function renderReviewList() {
+    const content = document.getElementById('reviewContent');
+    
+    // Group by source account
+    const byAccount = new Map();
+    stagedEmails.forEach((data, emailId) => {
+        const key = data.sourceAccountId || 'import';
+        if (!byAccount.has(key)) {
+            byAccount.set(key, []);
+        }
+        byAccount.get(key).push({ emailId, ...data });
+    });
+    
+    let html = '';
+    
+    byAccount.forEach((emails, accountId) => {
+        const accountName = accountId === 'import' ? 'Imported' : `Account ${accountId}`;
+        
+        html += `
+            <div class="review-group">
+                <div class="review-group-header">
+                    <h2>${escapeHtml(accountName)}</h2>
+                    <div class="source-action">
+                        <label>After commit:</label>
+                        <select onchange="setSourceAction('${accountId}', this.value)">
+                            <option value="leave">Leave in place</option>
+                            <option value="archive">Archive</option>
+                            <option value="trash">Move to trash</option>
+                            <option value="delete">Delete permanently</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="review-list">
+        `;
+        
+        emails.forEach(item => {
+            const folder = folders.find(f => f.id == item.destinationFolderId);
+            const folderName = folder ? folder.name : 'Unknown';
+            const folderIcon = folder?.encrypted ? '🔒' : '📁';
+            
+            html += `
+                <div class="review-item" data-id="${item.emailId}">
+                    <div class="review-checkbox">
+                        <input type="checkbox" checked onchange="toggleReviewItem('${item.emailId}')">
+                    </div>
+                    <div class="review-email">
+                        <div class="review-email-header">
+                            <span class="review-sender">${escapeHtml(item.email.sender)}</span>
+                            <span class="review-date">${formatDate(item.email.date)}</span>
+                        </div>
+                        <div class="review-subject">${escapeHtml(item.email.subject)}</div>
+                    </div>
+                    <div class="review-destination">
+                        <span class="folder-icon">${folderIcon}</span>
+                        <select onchange="changeDestination('${item.emailId}', this.value)">
+                            ${folders.map(f => `
+                                <option value="${f.id}" ${f.id == item.destinationFolderId ? 'selected' : ''}>
+                                    ${f.encrypted ? '🔒' : '📁'} ${escapeHtml(f.name)}
+                                </option>
+                            `).join('')}
+                        </select>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `
+                </div>
+            </div>
+        `;
+    });
+    
+    content.innerHTML = html;
+}
+
+function toggleReviewItem(emailId) {
+    const checkbox = document.querySelector(`.review-item[data-id="${emailId}"] input[type="checkbox"]`);
+    const item = document.querySelector(`.review-item[data-id="${emailId}"]`);
+    
+    if (checkbox.checked) {
+        item.classList.remove('unchecked');
+    } else {
+        item.classList.add('unchecked');
+    }
+    
+    updateCommitButton();
+}
+
+function changeDestination(emailId, folderId) {
+    const data = stagedEmails.get(emailId);
+    if (data) {
+        data.destinationFolderId = folderId;
+        stagedEmails.set(emailId, data);
+    }
+}
+
+function setSourceAction(accountId, action) {
+    sourceActions[accountId] = action;
+}
+
+function updateCommitButton() {
+    const checkedCount = document.querySelectorAll('.review-item input[type="checkbox"]:checked').length;
+    document.getElementById('commitCount').textContent = checkedCount;
+    document.getElementById('commitBtn').disabled = checkedCount === 0;
+}
+
+// Commit button handler
+document.getElementById('commitBtn').addEventListener('click', commitEmails);
+
+async function commitEmails() {
+    // Gather checked emails
+    const toCommit = [];
+    document.querySelectorAll('.review-item').forEach(item => {
+        const checkbox = item.querySelector('input[type="checkbox"]');
+        if (checkbox.checked) {
+            const emailId = item.dataset.id;
+            const data = stagedEmails.get(emailId);
+            if (data) {
+                toCommit.push({
+                    email: data.email,
+                    destinationFolderId: data.destinationFolderId,
+                    sourceAccountId: data.sourceAccountId,
+                    sourceAction: sourceActions[data.sourceAccountId] || 'leave',
+                });
+            }
+        }
+    });
+    
+    if (toCommit.length === 0) return;
+    
+    // Show progress modal
+    const progressModal = document.getElementById('progressModal');
+    const progressFill = document.getElementById('progressFill');
+    const progressText = document.getElementById('progressText');
+    
+    progressModal.classList.add('active');
+    progressFill.style.width = '0%';
+    progressText.textContent = `Filing 0 of ${toCommit.length}...`;
+    
+    try {
+        const response = await fetch('/api/commit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ staged: toCommit }),
+        });
+        
+        const data = await response.json();
+        
+        // Hide progress, show results
+        progressModal.classList.remove('active');
+        
+        const resultsModal = document.getElementById('resultsModal');
+        const resultsTitle = document.getElementById('resultsTitle');
+        const resultsMessage = document.getElementById('resultsMessage');
+        const failedList = document.getElementById('failedList');
+        const failedItems = document.getElementById('failedItems');
+        const retryBtn = document.getElementById('retryBtn');
+        
+        const successCount = data.results.success.length;
+        const failedCount = data.results.failed.length;
+        
+        resultsTitle.textContent = failedCount === 0 ? 'Success!' : 'Complete';
+        resultsMessage.textContent = data.message;
+        
+        if (failedCount > 0) {
+            failedList.classList.remove('hidden');
+            failedItems.innerHTML = data.results.failed.map(f => 
+                `<li>${escapeHtml(f.id)}: ${escapeHtml(f.error)}</li>`
+            ).join('');
+            retryBtn.classList.remove('hidden');
+        } else {
+            failedList.classList.add('hidden');
+            retryBtn.classList.add('hidden');
+        }
+        
+        resultsModal.classList.add('active');
+        
+        // Remove successful emails from staged
+        data.results.success.forEach(id => stagedEmails.delete(id));
+        sessionStorage.setItem('stagedEmails', JSON.stringify([...stagedEmails.entries()]));
+        
+    } catch (error) {
+        console.error('Commit failed:', error);
+        progressModal.classList.remove('active');
+        alert('Failed to commit emails. Please try again.');
+    }
+}
+
+document.getElementById('doneBtn').addEventListener('click', () => {
+    if (stagedEmails.size === 0) {
+        sessionStorage.removeItem('stagedEmails');
+        window.location.href = '/';
+    } else {
+        document.getElementById('resultsModal').classList.remove('active');
+        renderReviewList();
+        updateCommitButton();
+    }
+});
+
+document.getElementById('retryBtn').addEventListener('click', () => {
+    document.getElementById('resultsModal').classList.remove('active');
+    commitEmails();
+});
+
+// Utilities
+function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function formatDate(timestamp) {
+    if (!timestamp) return '';
+    const date = new Date(timestamp * 1000);
+    return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+}
+</script>
+
+<style>
+/* Review Page Styles */
+.review-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: var(--space-xl);
+}
+
+.review-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-xl);
+}
+
+.review-header h1 {
+    margin: 0;
+}
+
+.review-actions {
+    display: flex;
+    gap: var(--space-md);
+}
+
+.review-group {
+    background: white;
+    border-radius: var(--radius-xl);
+    margin-bottom: var(--space-xl);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+}
+
+.review-group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-lg) var(--space-xl);
+    background: var(--color-background-secondary);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.review-group-header h2 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.source-action {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    font-size: 0.875rem;
+}
+
+.source-action select {
+    padding: var(--space-xs) var(--space-sm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+}
+
+.review-list {
+    padding: var(--space-md);
+}
+
+.review-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-md);
+    border-radius: var(--radius-md);
+    transition: background 0.15s;
+}
+
+.review-item:hover {
+    background: var(--color-background-secondary);
+}
+
+.review-item.unchecked {
+    opacity: 0.5;
+}
+
+.review-checkbox input {
+    width: 18px;
+    height: 18px;
+}
+
+.review-email {
+    flex: 1;
+    min-width: 0;
+}
+
+.review-email-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: var(--space-xs);
+}
+
+.review-sender {
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.review-date {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+}
+
+.review-subject {
+    font-size: 0.875rem;
+    color: var(--color-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.review-destination {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.review-destination select {
+    padding: var(--space-xs) var(--space-sm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-size: 0.8125rem;
+    max-width: 200px;
+}
+
+/* Progress */
+.progress-container {
+    padding: var(--space-lg) 0;
+}
+
+.progress-bar {
+    height: 8px;
+    background: var(--color-border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--color-primary);
+    transition: width 0.3s;
+}
+
+.progress-text {
+    text-align: center;
+    margin-top: var(--space-md);
+    color: var(--color-text-muted);
+}
+
+/* Failed list */
+.failed-list {
+    margin-top: var(--space-lg);
+    padding: var(--space-md);
+    background: #FEE2E2;
+    border-radius: var(--radius-md);
+}
+
+.failed-list h4 {
+    margin: 0 0 var(--space-sm) 0;
+    color: #DC2626;
+}
+
+.failed-list ul {
+    margin: 0;
+    padding-left: var(--space-xl);
+    font-size: 0.875rem;
+    color: #991B1B;
+}
+</style>
+{% endblock %}

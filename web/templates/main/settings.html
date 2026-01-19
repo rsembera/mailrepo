@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - {{ app_name }}{% endblock %}
+
+{% block body_class %}settings-page{% endblock %}
+
+{% block content %}
+<div class="settings-container">
+    <header class="settings-header">
+        <h1>Settings</h1>
+        <a href="/" class="btn btn-secondary">← Back to Inbox</a>
+    </header>
+    
+    <!-- Accounts Section -->
+    <section class="settings-section">
+        <div class="section-header">
+            <h2>Email Accounts</h2>
+            <button class="btn btn-primary" id="addAccountBtn">+ Add Account</button>
+        </div>
+        
+        <div class="accounts-list" id="accountsList">
+            {% if accounts %}
+                {% for account in accounts %}
+                <div class="account-card" data-id="{{ account.id }}">
+                    <div class="account-info">
+                        <div class="account-name">{{ account.name }}</div>
+                        <div class="account-email">{{ account.email or 'Not authorized' }}</div>
+                        <div class="account-provider">{{ account.provider | upper }}</div>
+                    </div>
+                    <div class="account-actions">
+                        {% if not account.email %}
+                        <button class="btn btn-primary btn-sm" onclick="authorizeAccount({{ account.id }})">
+                            Authorize
+                        </button>
+                        {% endif %}
+                        <button class="btn btn-danger btn-sm" onclick="deleteAccount({{ account.id }})">
+                            Remove
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state-small">
+                    <p>No email accounts connected yet.</p>
+                </div>
+            {% endif %}
+        </div>
+        
+        <div class="helper-text mt-1">
+            <strong>Note:</strong> To connect Gmail, you need a <code>credentials.json</code> file from 
+            <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a>. 
+            Place it in <code>~/mailrepo/config/credentials.json</code>.
+        </div>
+    </section>
+    
+    <!-- Security Section -->
+    <section class="settings-section">
+        <h2>Security</h2>
+        <p class="section-description">Your master password protects your OAuth tokens and encrypted archives.</p>
+        <button class="btn btn-secondary" disabled>Change Master Password</button>
+        <span class="helper-text">(Coming soon)</span>
+    </section>
+    
+    <!-- Import Section -->
+    <section class="settings-section">
+        <h2>Import</h2>
+        <p class="section-description">Import emails from .mbox archive files.</p>
+        <button class="btn btn-secondary" disabled>Import .mbox File</button>
+        <span class="helper-text">(Coming soon)</span>
+    </section>
+    
+    <!-- About Section -->
+    <section class="settings-section">
+        <h2>About</h2>
+        <p><strong>{{ app_name }}</strong> v{{ app_version }}</p>
+        <p class="helper-text">Your correspondence, your machine, your control.</p>
+    </section>
+</div>
+
+<!-- Add Account Modal -->
+<div class="modal-overlay" id="addAccountModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Add Email Account</h2>
+        </div>
+        
+        <div class="form-group">
+            <label for="accountName">Account Name</label>
+            <input type="text" id="accountName" placeholder="e.g., Work Gmail, Personal">
+            <span class="helper-text">A friendly name to identify this account</span>
+        </div>
+        
+        <div class="form-group">
+            <label>Provider</label>
+            <div class="radio-group">
+                <label class="radio-label">
+                    <input type="radio" name="provider" value="gmail" checked>
+                    <div class="radio-text">
+                        <strong>Gmail</strong>
+                        <span class="radio-hint">Connect via Google OAuth</span>
+                    </div>
+                </label>
+                <label class="radio-label" style="opacity: 0.5;">
+                    <input type="radio" name="provider" value="imap" disabled>
+                    <div class="radio-text">
+                        <strong>IMAP</strong>
+                        <span class="radio-hint">Coming in Phase 2</span>
+                    </div>
+                </label>
+            </div>
+        </div>
+        
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeModal('addAccountModal')">Cancel</button>
+            <button class="btn btn-primary" id="createAccountBtn">Add Account</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Add Account
+document.getElementById('addAccountBtn')?.addEventListener('click', () => {
+    document.getElementById('addAccountModal').classList.add('active');
+    document.getElementById('accountName').focus();
+});
+
+document.getElementById('createAccountBtn')?.addEventListener('click', async () => {
+    const name = document.getElementById('accountName').value.trim();
+    const provider = document.querySelector('input[name="provider"]:checked').value;
+    
+    if (!name) {
+        alert('Please enter an account name');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/accounts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, provider }),
+        });
+        
+        if (!response.ok) {
+            const data = await response.json();
+            alert(data.error || 'Failed to create account');
+            return;
+        }
+        
+        const data = await response.json();
+        closeModal('addAccountModal');
+        
+        // Immediately authorize
+        authorizeAccount(data.account.id);
+        
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to create account');
+    }
+});
+
+async function authorizeAccount(accountId) {
+    try {
+        // Show loading state
+        const btn = document.querySelector(`.account-card[data-id="${accountId}"] .btn-primary`);
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Authorizing...';
+        }
+        
+        const response = await fetch(`/api/accounts/${accountId}/authorize`, {
+            method: 'POST',
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            alert(data.error || 'Authorization failed');
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Authorize';
+            }
+            return;
+        }
+        
+        // Refresh page to show updated account
+        location.reload();
+        
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Authorization failed. Check console for details.');
+    }
+}
+
+async function deleteAccount(accountId) {
+    if (!confirm('Are you sure you want to remove this account? This will not delete any archived emails.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/accounts/${accountId}`, {
+            method: 'DELETE',
+        });
+        
+        if (!response.ok) {
+            const data = await response.json();
+            alert(data.error || 'Failed to remove account');
+            return;
+        }
+        
+        // Remove from UI
+        document.querySelector(`.account-card[data-id="${accountId}"]`)?.remove();
+        
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to remove account');
+    }
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId)?.classList.remove('active');
+}
+
+// Close modal on backdrop click
+document.getElementById('addAccountModal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'addAccountModal') {
+        closeModal('addAccountModal');
+    }
+});
+</script>
+
+<style>
+.settings-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: var(--space-xl);
+}
+
+.settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-2xl);
+}
+
+.settings-header h1 {
+    margin: 0;
+}
+
+.settings-section {
+    background: white;
+    border-radius: var(--radius-xl);
+    padding: var(--space-xl);
+    margin-bottom: var(--space-xl);
+    box-shadow: var(--shadow-sm);
+}
+
+.settings-section h2 {
+    margin-top: 0;
+    margin-bottom: var(--space-md);
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-lg);
+}
+
+.section-header h2 {
+    margin: 0;
+}
+
+.section-description {
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-lg);
+}
+
+.accounts-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+.account-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-lg);
+    background: var(--color-background-secondary);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+}
+
+.account-name {
+    font-weight: 600;
+    margin-bottom: var(--space-xs);
+}
+
+.account-email {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+}
+
+.account-provider {
+    font-size: 0.75rem;
+    color: var(--color-text-light);
+    margin-top: var(--space-xs);
+}
+
+.account-actions {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+.btn-sm {
+    padding: var(--space-xs) var(--space-md);
+    font-size: 0.8125rem;
+    height: 32px;
+}
+
+.empty-state-small {
+    padding: var(--space-xl);
+    text-align: center;
+    color: var(--color-text-muted);
+}
+
+code {
+    background: var(--color-background-secondary);
+    padding: 0.125rem 0.375rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+}
+</style>
+{% endblock %}
