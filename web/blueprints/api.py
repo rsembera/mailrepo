@@ -5,9 +5,13 @@ Provides JSON API endpoints for the frontend.
 """
 
 import time
+from pathlib import Path
 from flask import Blueprint, jsonify, request
 
-from core import Database, Gmail, GmailError, Encryption, Config
+from core import (
+    Database, IMAP, IMAPError, Encryption, Config,
+    import_eml_file, import_mbox_file, scan_mbox_file, ImportError
+)
 
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
@@ -146,7 +150,7 @@ def get_folder_emails(folder_id):
 
 
 # ============================================
-# ACCOUNTS
+# ACCOUNTS (IMAP)
 # ============================================
 
 @api_bp.route("/accounts", methods=["GET"])
@@ -163,161 +167,147 @@ def list_accounts():
 
 @api_bp.route("/accounts", methods=["POST"])
 def create_account():
-    """Create a new email account (before OAuth)."""
+    """Create a new IMAP email account."""
     data = request.get_json()
     
     name = data.get("name", "").strip()
-    provider = data.get("provider", "gmail")
+    email_addr = data.get("email", "").strip()
+    password = data.get("password", "")
+    host = data.get("host", "").strip()
+    port = int(data.get("port", 993))
+    use_ssl = data.get("use_ssl", True)
     
     if not name:
         return jsonify({"error": "Account name is required"}), 400
     
-    if provider not in ["gmail", "imap"]:
-        return jsonify({"error": "Invalid provider"}), 400
+    if not email_addr:
+        return jsonify({"error": "Email address is required"}), 400
     
-    # Create account record (email will be populated after OAuth)
+    if not password:
+        return jsonify({"error": "Password is required"}), 400
+    
+    # Auto-detect server if not provided
+    if not host:
+        detected = IMAP.detect_server(email_addr)
+        if detected:
+            host, port = detected
+        else:
+            return jsonify({
+                "error": "Could not auto-detect IMAP server. Please enter server details manually."
+            }), 400
+    
+    # Test connection before saving
+    test_result = IMAP.test_connection(email_addr, password, host, port, use_ssl)
+    if not test_result["success"]:
+        return jsonify({"error": test_result["error"]}), 400
+    
+    # Create account record
     cursor = Database.execute(
         "INSERT INTO accounts (name, email, provider) VALUES (?, ?, ?)",
-        (name, "", provider)
+        (name, email_addr, "imap")
     )
     Database.commit()
     
+    account_id = cursor.lastrowid
+    
+    # Save encrypted credentials
+    IMAP.save_credentials(account_id, email_addr, password, host, port, use_ssl)
+    
     return jsonify({
         "account": {
-            "id": cursor.lastrowid,
+            "id": account_id,
             "name": name,
-            "provider": provider,
-        }
+            "email": email_addr,
+            "provider": "imap",
+        },
+        "message": test_result["message"],
     }), 201
 
 
-@api_bp.route("/accounts/<int:account_id>/authorize", methods=["POST"])
-def authorize_account(account_id):
-    """
-    Start OAuth flow for a Gmail account.
-    
-    This will open a browser window for the user to sign in.
-    """
+@api_bp.route("/accounts/<int:account_id>/test", methods=["POST"])
+def test_account_connection(account_id):
+    """Test connection to an existing IMAP account."""
     account = Database.fetchone(
-        "SELECT id, provider FROM accounts WHERE id = ?",
+        "SELECT id, credentials_encrypted FROM accounts WHERE id = ?",
         (account_id,)
     )
     
     if not account:
         return jsonify({"error": "Account not found"}), 404
     
-    if account["provider"] != "gmail":
-        return jsonify({"error": "OAuth only supported for Gmail accounts"}), 400
+    if not account["credentials_encrypted"]:
+        return jsonify({"error": "Account has no saved credentials"}), 400
     
-    # Check for credentials.json
-    if not Gmail.has_client_credentials():
-        return jsonify({
-            "error": "credentials.json not found",
-            "message": "Download OAuth credentials from Google Cloud Console and place in ~/mailrepo/config/credentials.json"
-        }), 400
+    creds = IMAP.load_credentials(account["credentials_encrypted"])
+    if not creds:
+        return jsonify({"error": "Failed to load credentials"}), 400
     
-    try:
-        # Run OAuth flow (opens browser)
-        credentials = Gmail.authorize(account_id)
-        
-        # Get profile to update email address
-        service = Gmail.get_service(credentials)
-        profile = Gmail.get_profile(service)
-        
-        # Update account with email
+    test_result = IMAP.test_connection(
+        creds["email"], creds["password"], 
+        creds["host"], creds["port"], 
+        creds.get("use_ssl", True)
+    )
+    
+    if test_result["success"]:
+        # Update last_sync
         Database.execute(
-            "UPDATE accounts SET email = ?, last_sync = ? WHERE id = ?",
-            (profile["email"], int(time.time()), account_id)
+            "UPDATE accounts SET last_sync = ? WHERE id = ?",
+            (int(time.time()), account_id)
         )
         Database.commit()
-        
-        return jsonify({
-            "success": True,
-            "email": profile["email"],
-        })
-        
-    except GmailError as e:
-        return jsonify({"error": str(e)}), 500
+    
+    return jsonify(test_result)
 
 
 @api_bp.route("/accounts/<int:account_id>/emails", methods=["GET"])
 def get_account_emails(account_id):
     """
-    Get emails from a Gmail account.
+    Get emails from an IMAP account.
     
     Query params:
-        label: Gmail label to filter by (default: INBOX)
-        q: Search query
-        max: Max results (default: 50)
-        pageToken: Pagination token
+        folder: IMAP folder to fetch from (default: INBOX)
+        limit: Max results (default: 50)
     """
     account = Database.fetchone(
-        "SELECT id, provider, credentials_encrypted FROM accounts WHERE id = ?",
+        "SELECT id, credentials_encrypted FROM accounts WHERE id = ?",
         (account_id,)
     )
     
     if not account:
         return jsonify({"error": "Account not found"}), 404
     
-    if account["provider"] != "gmail":
-        return jsonify({"error": "Only Gmail accounts supported currently"}), 400
-    
     if not account["credentials_encrypted"]:
-        return jsonify({"error": "Account not authorized. Run OAuth flow first."}), 401
+        return jsonify({"error": "Account not configured. Add credentials first."}), 401
     
+    folder = request.args.get("folder", "INBOX")
+    limit = int(request.args.get("limit", 50))
+    
+    client = None
     try:
-        # Get credentials
-        credentials = Gmail.get_credentials(account_id, account["credentials_encrypted"])
-        if not credentials:
-            return jsonify({"error": "Failed to load credentials. Re-authorize account."}), 401
+        client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+        client.select_folder(folder)
         
-        # Build service
-        service = Gmail.get_service(credentials)
+        uids = client.search("ALL", limit=limit)
         
-        # Get params
-        label = request.args.get("label", "INBOX")
-        query = request.args.get("q")
-        max_results = int(request.args.get("max", 50))
-        page_token = request.args.get("pageToken")
-        
-        # List messages (just IDs)
-        result = Gmail.list_messages(
-            service,
-            label_ids=[label] if label else None,
-            query=query,
-            max_results=max_results,
-            page_token=page_token,
-        )
-        
-        # Fetch metadata for each message
         emails = []
-        for msg in result.get("messages", []):
-            msg_data = Gmail.get_message(service, msg["id"], format="metadata")
-            emails.append({
-                "id": msg_data["id"],
-                "threadId": msg_data["threadId"],
-                "subject": msg_data["subject"],
-                "sender": msg_data["from"],
-                "date": msg_data["date"],
-                "snippet": msg_data["snippet"],
-                "labelIds": msg_data["labelIds"],
-            })
+        for uid in uids:
+            headers = client.fetch_headers(uid)
+            emails.append(headers)
         
-        return jsonify({
-            "emails": emails,
-            "nextPageToken": result.get("nextPageToken"),
-            "resultSizeEstimate": result.get("resultSizeEstimate"),
-        })
+        return jsonify({"emails": emails})
         
-    except GmailError as e:
+    except IMAPError as e:
         return jsonify({"error": str(e)}), 500
+    finally:
+        if client:
+            client.disconnect()
 
 
-@api_bp.route("/accounts/<int:account_id>/labels", methods=["GET"])
-def get_account_labels(account_id):
-    """Get Gmail labels (folders) for an account."""
+@api_bp.route("/accounts/<int:account_id>/folders", methods=["GET"])
+def get_account_folders(account_id):
+    """Get IMAP folders (mailboxes) for an account."""
     account = Database.fetchone(
-        "SELECT id, provider, credentials_encrypted FROM accounts WHERE id = ?",
+        "SELECT id, credentials_encrypted FROM accounts WHERE id = ?",
         (account_id,)
     )
     
@@ -325,20 +315,20 @@ def get_account_labels(account_id):
         return jsonify({"error": "Account not found"}), 404
     
     if not account["credentials_encrypted"]:
-        return jsonify({"error": "Account not authorized"}), 401
+        return jsonify({"error": "Account not configured"}), 401
     
+    client = None
     try:
-        credentials = Gmail.get_credentials(account_id, account["credentials_encrypted"])
-        if not credentials:
-            return jsonify({"error": "Failed to load credentials"}), 401
+        client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+        folders = client.list_folders()
         
-        service = Gmail.get_service(credentials)
-        labels = Gmail.list_labels(service)
+        return jsonify({"folders": folders})
         
-        return jsonify({"labels": labels})
-        
-    except GmailError as e:
+    except IMAPError as e:
         return jsonify({"error": str(e)}), 500
+    finally:
+        if client:
+            client.disconnect()
 
 
 @api_bp.route("/accounts/<int:account_id>", methods=["DELETE"])
@@ -355,6 +345,30 @@ def delete_account(account_id):
     return jsonify({"success": True})
 
 
+@api_bp.route("/accounts/detect-server", methods=["POST"])
+def detect_imap_server():
+    """Auto-detect IMAP server from email address."""
+    data = request.get_json()
+    email_addr = data.get("email", "").strip()
+    
+    if not email_addr:
+        return jsonify({"error": "Email address required"}), 400
+    
+    detected = IMAP.detect_server(email_addr)
+    if detected:
+        host, port = detected
+        return jsonify({
+            "detected": True,
+            "host": host,
+            "port": port,
+        })
+    else:
+        return jsonify({
+            "detected": False,
+            "message": "Could not auto-detect server. Please enter manually."
+        })
+
+
 # ============================================
 # STAGING & COMMIT
 # ============================================
@@ -368,10 +382,10 @@ def commit_staged():
     {
         "staged": [
             {
-                "email": { id, subject, sender, date, ... },
+                "email": { uid, subject, sender, date, ... },
                 "destinationFolderId": 123,
                 "sourceAccountId": 456,
-                "sourceAction": "archive" | "trash" | "delete" | "leave"
+                "sourceFolder": "INBOX"
             },
             ...
         ]
@@ -399,96 +413,109 @@ def commit_staged():
     for account_id, items in by_account.items():
         # Get account and credentials
         account = Database.fetchone(
-            "SELECT id, provider, credentials_encrypted FROM accounts WHERE id = ?",
+            "SELECT id, credentials_encrypted FROM accounts WHERE id = ?",
             (account_id,)
         )
         
         if not account or not account["credentials_encrypted"]:
             for item in items:
                 results["failed"].append({
-                    "id": item["email"].get("id"),
-                    "error": "Account not found or not authorized",
+                    "uid": item["email"].get("uid"),
+                    "error": "Account not found or not configured",
                 })
             continue
         
+        client = None
         try:
-            credentials = Gmail.get_credentials(account_id, account["credentials_encrypted"])
-            service = Gmail.get_service(credentials)
+            client = IMAP.connect_with_credentials(account["credentials_encrypted"])
         except Exception as e:
             for item in items:
                 results["failed"].append({
-                    "id": item["email"].get("id"),
+                    "uid": item["email"].get("uid"),
                     "error": f"Failed to connect: {e}",
                 })
             continue
         
-        # Process each email
+        # Group by source folder
+        by_folder = {}
         for item in items:
-            email = item.get("email", {})
-            folder_id = item.get("destinationFolderId")
-            source_action = item.get("sourceAction", "leave")
-            
+            src_folder = item.get("sourceFolder", "INBOX")
+            if src_folder not in by_folder:
+                by_folder[src_folder] = []
+            by_folder[src_folder].append(item)
+        
+        for source_folder, folder_items in by_folder.items():
             try:
-                # Verify folder exists
-                folder = Database.fetchone(
-                    "SELECT id, encrypted FROM folders WHERE id = ?",
-                    (folder_id,)
-                )
-                if not folder:
-                    raise ValueError(f"Folder {folder_id} not found")
+                client.select_folder(source_folder)
+            except IMAPError as e:
+                for item in folder_items:
+                    results["failed"].append({
+                        "uid": item["email"].get("uid"),
+                        "error": f"Failed to select folder: {e}",
+                    })
+                continue
+            
+            for item in folder_items:
+                email_data = item.get("email", {})
+                folder_id = item.get("destinationFolderId")
+                uid = email_data.get("uid")
                 
-                # Download raw email
-                raw_email = Gmail.get_message_raw(service, email["id"])
-                
-                # Determine filepath
-                archive_path = Config.get_archive_path() / str(folder_id)
-                archive_path.mkdir(parents=True, exist_ok=True)
-                
-                if folder["encrypted"]:
-                    # Encrypt and save
-                    encrypted_data = Encryption.encrypt(raw_email)
-                    filepath = archive_path / f"{email['id']}.eml.enc"
-                    filepath.write_bytes(encrypted_data)
-                else:
-                    # Save as plain .eml
-                    filepath = archive_path / f"{email['id']}.eml"
-                    filepath.write_bytes(raw_email)
-                
-                # Create database record
-                Database.execute(
-                    """
-                    INSERT INTO messages 
-                    (folder_id, source_account_id, message_id, subject, sender, date, filepath, encrypted)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        folder_id,
-                        account_id,
-                        email.get("id", ""),
-                        email.get("subject", ""),
-                        email.get("sender", ""),
-                        email.get("date"),
-                        str(filepath.relative_to(Config.get_base_path())),
-                        1 if folder["encrypted"] else 0,
+                try:
+                    # Verify destination folder exists
+                    folder = Database.fetchone(
+                        "SELECT id, encrypted FROM folders WHERE id = ?",
+                        (folder_id,)
                     )
-                )
-                
-                # Execute source action
-                if source_action == "archive":
-                    Gmail.archive_message(service, email["id"])
-                elif source_action == "trash":
-                    Gmail.trash_message(service, email["id"])
-                elif source_action == "delete":
-                    Gmail.delete_message(service, email["id"])
-                # "leave" = do nothing
-                
-                results["success"].append(email.get("id"))
-                
-            except Exception as e:
-                results["failed"].append({
-                    "id": email.get("id"),
-                    "error": str(e),
-                })
+                    if not folder:
+                        raise ValueError(f"Folder {folder_id} not found")
+                    
+                    # Download raw email
+                    raw_email = client.fetch_raw(uid)
+                    
+                    # Determine filepath
+                    archive_path = Config.get_archive_path() / str(folder_id)
+                    archive_path.mkdir(parents=True, exist_ok=True)
+                    
+                    # Use UID as filename base
+                    safe_id = f"{account_id}_{uid}"
+                    
+                    if folder["encrypted"]:
+                        encrypted_data = Encryption.encrypt(raw_email)
+                        filepath = archive_path / f"{safe_id}.eml.enc"
+                        filepath.write_bytes(encrypted_data)
+                    else:
+                        filepath = archive_path / f"{safe_id}.eml"
+                        filepath.write_bytes(raw_email)
+                    
+                    # Create database record
+                    Database.execute(
+                        """
+                        INSERT INTO messages 
+                        (folder_id, source_account_id, message_id, subject, sender, date, filepath, encrypted)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            folder_id,
+                            account_id,
+                            email_data.get("message_id", ""),
+                            email_data.get("subject", ""),
+                            email_data.get("from", email_data.get("sender", "")),
+                            email_data.get("date"),
+                            str(filepath.relative_to(Config.get_base_path())),
+                            1 if folder["encrypted"] else 0,
+                        )
+                    )
+                    
+                    results["success"].append(uid)
+                    
+                except Exception as e:
+                    results["failed"].append({
+                        "uid": uid,
+                        "error": str(e),
+                    })
+        
+        if client:
+            client.disconnect()
     
     Database.commit()
     
@@ -496,6 +523,118 @@ def commit_staged():
         "results": results,
         "message": f"{len(results['success'])} emails filed successfully. {len(results['failed'])} failed."
     })
+
+
+# ============================================
+# IMPORT
+# ============================================
+
+@api_bp.route("/import/mbox/scan", methods=["POST"])
+def scan_mbox():
+    """
+    Scan an mbox file and return summary.
+    
+    Expects JSON: { "path": "/path/to/file.mbox" }
+    """
+    data = request.get_json()
+    mbox_path = data.get("path", "").strip()
+    
+    if not mbox_path:
+        return jsonify({"error": "Path is required"}), 400
+    
+    path = Path(mbox_path).expanduser()
+    if not path.exists():
+        return jsonify({"error": "File not found"}), 404
+    
+    try:
+        result = scan_mbox_file(path)
+        return jsonify(result)
+    except ImportError as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@api_bp.route("/import/mbox", methods=["POST"])
+def import_mbox():
+    """
+    Import an mbox file into a folder.
+    
+    Expects JSON: { "path": "/path/to/file.mbox", "folder_id": 123 }
+    """
+    data = request.get_json()
+    mbox_path = data.get("path", "").strip()
+    folder_id = data.get("folder_id")
+    
+    if not mbox_path:
+        return jsonify({"error": "Path is required"}), 400
+    
+    if not folder_id:
+        return jsonify({"error": "Folder ID is required"}), 400
+    
+    path = Path(mbox_path).expanduser()
+    if not path.exists():
+        return jsonify({"error": "File not found"}), 404
+    
+    folder = Database.fetchone(
+        "SELECT id, encrypted FROM folders WHERE id = ?",
+        (folder_id,)
+    )
+    if not folder:
+        return jsonify({"error": "Folder not found"}), 404
+    
+    try:
+        result = import_mbox_file(path, folder_id, encrypted=bool(folder["encrypted"]))
+        return jsonify({
+            "success": True,
+            "total": result["total"],
+            "imported": result["success_count"],
+            "failed": result["failed_count"],
+            "errors": result["errors"][:10],  # Limit error details
+        })
+    except ImportError as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@api_bp.route("/import/eml", methods=["POST"])
+def import_eml():
+    """
+    Import a single .eml file into a folder.
+    
+    Expects JSON: { "path": "/path/to/email.eml", "folder_id": 123 }
+    """
+    data = request.get_json()
+    eml_path = data.get("path", "").strip()
+    folder_id = data.get("folder_id")
+    
+    if not eml_path:
+        return jsonify({"error": "Path is required"}), 400
+    
+    if not folder_id:
+        return jsonify({"error": "Folder ID is required"}), 400
+    
+    path = Path(eml_path).expanduser()
+    if not path.exists():
+        return jsonify({"error": "File not found"}), 404
+    
+    folder = Database.fetchone(
+        "SELECT id, encrypted FROM folders WHERE id = ?",
+        (folder_id,)
+    )
+    if not folder:
+        return jsonify({"error": "Folder not found"}), 404
+    
+    result = import_eml_file(path, folder_id, encrypted=bool(folder["encrypted"]))
+    
+    if result["success"]:
+        Database.commit()
+        return jsonify({
+            "success": True,
+            "subject": result["subject"],
+        })
+    else:
+        return jsonify({
+            "success": False,
+            "error": result["error"],
+        }), 500
 
 
 # ============================================

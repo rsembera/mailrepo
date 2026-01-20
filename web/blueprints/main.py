@@ -95,4 +95,5 @@ def review():
 def settings():
     """Application settings page."""
     accounts = Database.fetchall("SELECT * FROM accounts ORDER BY name")
-    return render_template("main/settings.html", accounts=accounts)
+    folders = Database.fetchall("SELECT * FROM folders ORDER BY name")
+    return render_template("main/settings.html", accounts=accounts, folders=folders)

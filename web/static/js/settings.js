@@ -3,113 +3,310 @@
    ============================================ */
 
 // ============================================
-// ACCOUNT MANAGEMENT
+// ACCOUNT MANAGEMENT (IMAP)
 // ============================================
 
 document.getElementById('addAccountBtn')?.addEventListener('click', () => {
+    // Clear form
+    document.getElementById('accountName').value = '';
+    document.getElementById('accountEmail').value = '';
+    document.getElementById('accountPassword').value = '';
+    document.getElementById('imapHost').value = '';
+    document.getElementById('imapPort').value = '993';
+    document.getElementById('imapSsl').checked = true;
+    
     document.getElementById('addAccountModal').classList.add('active');
     document.getElementById('accountName').focus();
 });
 
+// Auto-detect IMAP server when email is entered
+document.getElementById('accountEmail')?.addEventListener('blur', async (e) => {
+    const email = e.target.value.trim();
+    if (!email || !email.includes('@')) return;
+    
+    // Only auto-detect if host is empty
+    const hostInput = document.getElementById('imapHost');
+    if (hostInput.value.trim()) return;
+    
+    try {
+        const response = await fetch('/api/accounts/detect-server', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+        });
+        
+        const data = await response.json();
+        
+        if (data.detected) {
+            hostInput.value = data.host;
+            document.getElementById('imapPort').value = data.port;
+        }
+    } catch (error) {
+        console.log('Server detection failed:', error);
+    }
+});
+
 document.getElementById('createAccountBtn')?.addEventListener('click', async () => {
     const name = document.getElementById('accountName').value.trim();
+    const email = document.getElementById('accountEmail').value.trim();
+    const password = document.getElementById('accountPassword').value;
+    const host = document.getElementById('imapHost').value.trim();
+    const port = parseInt(document.getElementById('imapPort').value) || 993;
+    const useSsl = document.getElementById('imapSsl').checked;
     
     if (!name) {
-        alert('Please enter an account name');
+        showAlert('Missing Field', 'Please enter an account name.');
         return;
     }
+    
+    if (!email) {
+        showAlert('Missing Field', 'Please enter an email address.');
+        return;
+    }
+    
+    if (!password) {
+        showAlert('Missing Field', 'Please enter a password.');
+        return;
+    }
+    
+    const btn = document.getElementById('createAccountBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader"></i> Connecting...';
+    lucide.createIcons();
     
     try {
         const response = await fetch('/api/accounts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, provider: 'gmail' }),
+            body: JSON.stringify({ 
+                name, 
+                email, 
+                password,
+                host: host || undefined,
+                port,
+                use_ssl: useSsl,
+            }),
         });
         
+        const data = await response.json();
+        
         if (!response.ok) {
-            const data = await response.json();
-            alert(data.error || 'Failed to create account');
+            showAlert('Connection Failed', data.error || 'Failed to add account');
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="plus"></i> Add Account';
+            lucide.createIcons();
             return;
         }
         
-        const data = await response.json();
         closeModal('addAccountModal');
-        
-        // Immediately authorize
-        authorizeAccount(data.account.id);
+        location.reload();
         
     } catch (error) {
         console.error('Error:', error);
-        alert('Failed to create account');
+        showAlert('Error', 'Failed to add account. Check console for details.');
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="plus"></i> Add Account';
+        lucide.createIcons();
     }
 });
 
-async function authorizeAccount(accountId) {
+async function testAccount(accountId) {
+    const btn = document.querySelector(`.account-card[data-id="${accountId}"] .btn-secondary`);
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i data-lucide="loader"></i>';
+        lucide.createIcons();
+    }
+    
     try {
-        const btn = document.querySelector(`.account-card[data-id="${accountId}"] .btn-primary`);
-        if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = '<i data-lucide="loader"></i> Authorizing...';
-            lucide.createIcons();
-        }
-        
-        const response = await fetch(`/api/accounts/${accountId}/authorize`, {
+        const response = await fetch(`/api/accounts/${accountId}/test`, {
             method: 'POST',
         });
         
         const data = await response.json();
         
-        if (!response.ok) {
-            alert(data.error || 'Authorization failed');
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = '<i data-lucide="key"></i> Authorize';
-                lucide.createIcons();
-            }
-            return;
+        if (data.success) {
+            showAlert('Connection Successful', data.message);
+        } else {
+            showAlert('Connection Failed', data.error);
         }
-        
-        location.reload();
         
     } catch (error) {
         console.error('Error:', error);
-        alert('Authorization failed. Check console for details.');
+        showAlert('Error', 'Connection test failed. Check console for details.');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="wifi"></i>';
+            lucide.createIcons();
+        }
     }
 }
 
 async function deleteAccount(accountId) {
-    if (!confirm('Remove this account? This will not delete any archived emails.')) {
-        return;
-    }
+    showConfirm(
+        'Remove Account',
+        'Remove this account? This will not delete any archived emails.',
+        async () => {
+            try {
+                const response = await fetch(`/api/accounts/${accountId}`, {
+                    method: 'DELETE',
+                });
+                
+                if (!response.ok) {
+                    const data = await response.json();
+                    showAlert('Error', data.error || 'Failed to remove account');
+                    return;
+                }
+                
+                document.querySelector(`.account-card[data-id="${accountId}"]`)?.remove();
+                
+                // Show empty state if no accounts left
+                const list = document.getElementById('accountsList');
+                if (list && !list.querySelector('.account-card')) {
+                    list.innerHTML = '<div class="section-empty"><p>No email accounts connected yet.</p></div>';
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showAlert('Error', 'Failed to remove account');
+            }
+        }
+    );
+}
+
+// ============================================
+// IMPORT FUNCTIONALITY
+// ============================================
+
+let currentImportType = null;
+
+document.getElementById('importMboxBtn')?.addEventListener('click', () => {
+    currentImportType = 'mbox';
+    document.getElementById('importModalTitle').textContent = 'Import .mbox File';
+    document.getElementById('importPath').placeholder = '/path/to/archive.mbox';
+    document.getElementById('importPreview').style.display = 'none';
+    document.getElementById('importModal').classList.add('active');
+    document.getElementById('importPath').focus();
+});
+
+document.getElementById('importEmlBtn')?.addEventListener('click', () => {
+    currentImportType = 'eml';
+    document.getElementById('importModalTitle').textContent = 'Import .eml File';
+    document.getElementById('importPath').placeholder = '/path/to/email.eml';
+    document.getElementById('importPreview').style.display = 'none';
+    document.getElementById('importModal').classList.add('active');
+    document.getElementById('importPath').focus();
+});
+
+// Scan mbox on path blur
+document.getElementById('importPath')?.addEventListener('blur', async (e) => {
+    if (currentImportType !== 'mbox') return;
+    
+    const path = e.target.value.trim();
+    if (!path) return;
+    
+    const preview = document.getElementById('importPreview');
+    preview.innerHTML = '<p>Scanning...</p>';
+    preview.style.display = 'block';
     
     try {
-        const response = await fetch(`/api/accounts/${accountId}`, {
-            method: 'DELETE',
+        const response = await fetch('/api/import/mbox/scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path }),
         });
         
+        const data = await response.json();
+        
         if (!response.ok) {
-            const data = await response.json();
-            alert(data.error || 'Failed to remove account');
+            preview.innerHTML = `<p class="error">Error: ${data.error}</p>`;
             return;
         }
         
-        document.querySelector(`.account-card[data-id="${accountId}"]`)?.remove();
-        
-        // Show empty state if no accounts left
-        const list = document.getElementById('accountsList');
-        if (list && !list.querySelector('.account-card')) {
-            list.innerHTML = '<div class="section-empty"><p>No email accounts connected yet.</p></div>';
+        let html = `<p><strong>${data.message_count}</strong> emails found</p>`;
+        if (data.samples && data.samples.length > 0) {
+            html += '<p class="preview-label">Sample emails:</p><ul>';
+            for (const sample of data.samples) {
+                html += `<li><strong>${escapeHtml(sample.subject)}</strong><br>
+                         <small>${escapeHtml(sample.sender)}</small></li>`;
+            }
+            html += '</ul>';
         }
+        preview.innerHTML = html;
         
     } catch (error) {
         console.error('Error:', error);
-        alert('Failed to remove account');
+        preview.innerHTML = '<p class="error">Failed to scan file</p>';
     }
+});
+
+document.getElementById('runImportBtn')?.addEventListener('click', async () => {
+    const path = document.getElementById('importPath').value.trim();
+    const folderId = document.getElementById('importFolder').value;
+    
+    if (!path) {
+        showAlert('Missing Field', 'Please enter a file path.');
+        return;
+    }
+    
+    if (!folderId) {
+        showAlert('Missing Field', 'Please select a destination folder.');
+        return;
+    }
+    
+    const btn = document.getElementById('runImportBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader"></i> Importing...';
+    lucide.createIcons();
+    
+    try {
+        const endpoint = currentImportType === 'mbox' ? '/api/import/mbox' : '/api/import/eml';
+        
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path, folder_id: parseInt(folderId) }),
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            showAlert('Import Failed', data.error || 'Unknown error');
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="upload"></i> Import';
+            lucide.createIcons();
+            return;
+        }
+        
+        if (currentImportType === 'mbox') {
+            showAlert('Import Complete', `${data.imported} of ${data.total} emails imported. ${data.failed} failed.`);
+        } else {
+            showAlert('Import Complete', 'Email imported successfully!');
+        }
+        
+        closeModal('importModal');
+        
+    } catch (error) {
+        console.error('Error:', error);
+        showAlert('Import Failed', 'Import failed. Check console for details.');
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="upload"></i> Import';
+        lucide.createIcons();
+    }
+});
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // ============================================
 // MODAL HELPERS
 // ============================================
+
+let confirmCallback = null;
 
 function closeModal(modalId) {
     document.getElementById(modalId)?.classList.remove('active');
@@ -119,24 +316,42 @@ function showAboutModal() {
     document.getElementById('aboutModal').classList.add('active');
 }
 
-// Close modal on backdrop click
-document.getElementById('addAccountModal')?.addEventListener('click', (e) => {
-    if (e.target.id === 'addAccountModal') {
-        closeModal('addAccountModal');
+function showAlert(title, message) {
+    document.getElementById('alertTitle').textContent = title;
+    document.getElementById('alertMessage').textContent = message;
+    document.getElementById('alertModal').classList.add('active');
+}
+
+function showConfirm(title, message, onConfirm) {
+    document.getElementById('confirmTitle').textContent = title;
+    document.getElementById('confirmMessage').textContent = message;
+    confirmCallback = onConfirm;
+    document.getElementById('confirmModal').classList.add('active');
+}
+
+document.getElementById('confirmBtn')?.addEventListener('click', () => {
+    closeModal('confirmModal');
+    if (confirmCallback) {
+        confirmCallback();
+        confirmCallback = null;
     }
 });
 
-document.getElementById('aboutModal')?.addEventListener('click', (e) => {
-    if (e.target.id === 'aboutModal') {
-        closeModal('aboutModal');
-    }
+// Close modal on backdrop click
+document.querySelectorAll('.modal-overlay').forEach(modal => {
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.classList.remove('active');
+        }
+    });
 });
 
 // Close modals on Escape key
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-        closeModal('addAccountModal');
-        closeModal('aboutModal');
+        document.querySelectorAll('.modal-overlay.active').forEach(modal => {
+            modal.classList.remove('active');
+        });
     }
 });
 

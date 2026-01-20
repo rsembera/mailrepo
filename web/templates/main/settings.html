@@ -87,7 +87,7 @@
             <i data-lucide="mail" class="header-icon"></i>
             <div class="header-text">
                 <h3>Email Accounts</h3>
-                <p>Connect Gmail accounts to archive emails from</p>
+                <p>Connect IMAP email accounts to archive from</p>
             </div>
         </summary>
         <div class="settings-section-content">
@@ -105,17 +105,14 @@
                                 <span class="account-email">{{ account.email }}</span>
                                 <span class="account-status connected">Connected</span>
                                 {% else %}
-                                <span class="account-status pending">Not authorized</span>
+                                <span class="account-status pending">Not configured</span>
                                 {% endif %}
                             </div>
                         </div>
                         <div class="account-actions">
-                            {% if not account.email %}
-                            <button class="btn btn-primary btn-sm" onclick="authorizeAccount({{ account.id }})">
-                                <i data-lucide="key"></i>
-                                Authorize
+                            <button class="btn btn-secondary btn-sm" onclick="testAccount({{ account.id }})" title="Test connection">
+                                <i data-lucide="wifi"></i>
                             </button>
-                            {% endif %}
                             <button class="btn btn-danger btn-sm" onclick="deleteAccount({{ account.id }})">
                                 <i data-lucide="trash-2"></i>
                             </button>
@@ -132,14 +129,42 @@
             <div style="margin-top: var(--space-lg);">
                 <button class="btn btn-primary" id="addAccountBtn">
                     <i data-lucide="plus"></i>
-                    Add Gmail Account
+                    Add Email Account
                 </button>
             </div>
             
             <div class="helper-box">
-                <strong>Note:</strong> To connect Gmail, you need OAuth credentials from 
-                <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a>. 
-                Place <code>credentials.json</code> in <code>~/mailrepo/config/</code>
+                <strong>Note:</strong> For Gmail, iCloud, and other providers with 2FA, 
+                you'll need to use an <strong>app-specific password</strong> instead of your regular password.
+                <a href="https://support.google.com/accounts/answer/185833" target="_blank">Learn more</a>
+            </div>
+        </div>
+    </details>
+    
+    <!-- Import Section -->
+    <details class="settings-section">
+        <summary class="settings-section-header">
+            <i data-lucide="chevron-right" class="arrow"></i>
+            <i data-lucide="upload" class="header-icon"></i>
+            <div class="header-text">
+                <h3>Import</h3>
+                <p>Import emails from .mbox or .eml files</p>
+            </div>
+        </summary>
+        <div class="settings-section-content">
+            <div class="import-buttons">
+                <button class="btn btn-secondary" id="importMboxBtn">
+                    <i data-lucide="file-archive"></i>
+                    Import .mbox File
+                </button>
+                <button class="btn btn-secondary" id="importEmlBtn">
+                    <i data-lucide="file-text"></i>
+                    Import .eml File
+                </button>
+            </div>
+            <div class="helper-box" style="margin-top: var(--space-lg);">
+                <strong>Tip:</strong> You can export emails from Apple Mail, Thunderbird, 
+                and other clients as .mbox files to import your entire archive.
             </div>
         </div>
     </details>
@@ -156,32 +181,11 @@
         </summary>
         <div class="settings-section-content">
             <p style="color: var(--color-text-muted); margin-bottom: var(--space-lg);">
-                Your master password protects your OAuth tokens and encrypted archives.
+                Your master password protects your IMAP credentials and encrypted archives.
             </p>
             <button class="btn btn-secondary" disabled>
                 <i data-lucide="key"></i>
                 Change Master Password
-            </button>
-            <span style="margin-left: var(--space-sm); color: var(--color-text-muted); font-size: 0.875rem;">
-                (Coming soon)
-            </span>
-        </div>
-    </details>
-    
-    <!-- Import Section -->
-    <details class="settings-section">
-        <summary class="settings-section-header">
-            <i data-lucide="chevron-right" class="arrow"></i>
-            <i data-lucide="upload" class="header-icon"></i>
-            <div class="header-text">
-                <h3>Import</h3>
-                <p>Import emails from .mbox archive files</p>
-            </div>
-        </summary>
-        <div class="settings-section-content">
-            <button class="btn btn-secondary" disabled>
-                <i data-lucide="file-up"></i>
-                Import .mbox File
             </button>
             <span style="margin-left: var(--space-sm); color: var(--color-text-muted); font-size: 0.875rem;">
                 (Coming soon)
@@ -215,14 +219,47 @@
 <div class="modal-overlay" id="addAccountModal">
     <div class="modal-content">
         <div class="modal-header">
-            <h2>Add Gmail Account</h2>
+            <h2>Add Email Account</h2>
         </div>
         
         <div class="form-group">
             <label for="accountName">Account Name</label>
-            <input type="text" id="accountName" placeholder="e.g., Work Gmail, Personal">
+            <input type="text" id="accountName" placeholder="e.g., Work Gmail, Personal iCloud">
             <span class="helper-text">A friendly name to identify this account</span>
         </div>
+        
+        <div class="form-group">
+            <label for="accountEmail">Email Address</label>
+            <input type="email" id="accountEmail" placeholder="you@example.com">
+        </div>
+        
+        <div class="form-group">
+            <label for="accountPassword">Password</label>
+            <input type="password" id="accountPassword" placeholder="App password or regular password">
+            <span class="helper-text">For Gmail/iCloud with 2FA, use an app-specific password</span>
+        </div>
+        
+        <details class="advanced-settings">
+            <summary>Advanced Settings</summary>
+            <div class="advanced-content">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="imapHost">IMAP Server</label>
+                        <input type="text" id="imapHost" placeholder="Auto-detected">
+                    </div>
+                    <div class="form-group" style="width: 100px;">
+                        <label for="imapPort">Port</label>
+                        <input type="number" id="imapPort" value="993">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="imapSsl" checked>
+                        Use SSL/TLS
+                    </label>
+                </div>
+            </div>
+        </details>
         
         <div class="modal-actions">
             <button class="btn btn-secondary" onclick="closeModal('addAccountModal')">Cancel</button>
@@ -230,6 +267,73 @@
                 <i data-lucide="plus"></i>
                 Add Account
             </button>
+        </div>
+    </div>
+</div>
+
+<!-- Import Modal -->
+<div class="modal-overlay" id="importModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="importModalTitle">Import</h2>
+        </div>
+        
+        <div class="form-group">
+            <label for="importPath">File Path</label>
+            <input type="text" id="importPath" placeholder="/path/to/file.mbox">
+            <span class="helper-text">Full path to the file on your computer</span>
+        </div>
+        
+        <div class="form-group">
+            <label for="importFolder">Destination Folder</label>
+            <select id="importFolder">
+                <option value="">Select a folder...</option>
+                {% for folder in folders %}
+                <option value="{{ folder.id }}">
+                    {% if folder.encrypted %}🔒{% else %}📁{% endif %} 
+                    {{ folder.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div id="importPreview" class="import-preview" style="display: none;">
+            <!-- Populated by JS after scanning -->
+        </div>
+        
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeModal('importModal')">Cancel</button>
+            <button class="btn btn-primary" id="runImportBtn">
+                <i data-lucide="upload"></i>
+                Import
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Confirm Modal -->
+<div class="modal-overlay" id="confirmModal">
+    <div class="modal-content confirm-modal-content">
+        <div class="modal-header">
+            <h2 id="confirmTitle">Confirm</h2>
+        </div>
+        <p id="confirmMessage">Are you sure?</p>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeModal('confirmModal')">Cancel</button>
+            <button class="btn btn-danger" id="confirmBtn">Remove</button>
+        </div>
+    </div>
+</div>
+
+<!-- Alert Modal -->
+<div class="modal-overlay" id="alertModal">
+    <div class="modal-content alert-modal-content">
+        <div class="modal-header">
+            <h2 id="alertTitle">Notice</h2>
+        </div>
+        <p id="alertMessage"></p>
+        <div class="modal-actions">
+            <button class="btn btn-primary" onclick="closeModal('alertModal')" style="width: 100%;">OK</button>
         </div>
     </div>
 </div>

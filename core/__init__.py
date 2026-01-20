@@ -1,13 +1,14 @@
 """
 MailRepo - Core module.
 
-Provides configuration, database, encryption, and Gmail utilities.
+Provides configuration, database, encryption, and IMAP utilities.
 """
 
 from .config import Config, FlaskConfig
 from .database import Database, get_setting, set_setting, delete_setting
 from .encryption import Encryption, EncryptionError, InvalidPasswordError, generate_flask_secret_key
-from .gmail import Gmail, GmailError
+from .imap import IMAP, IMAPError
+from .importer import import_eml_file, import_mbox_file, scan_mbox_file, ImportError
 
 __all__ = [
     "Config",
@@ -20,6 +21,10 @@ __all__ = [
     "EncryptionError",
     "InvalidPasswordError",
     "generate_flask_secret_key",
-    "Gmail",
-    "GmailError",
+    "IMAP",
+    "IMAPError",
+    "import_eml_file",
+    "import_mbox_file",
+    "scan_mbox_file",
+    "ImportError",
 ]
