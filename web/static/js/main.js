@@ -200,7 +200,7 @@ async function loadAccountLabels(accountId) {
         let html = '';
         
         // Show folders (limit to 15 to avoid overwhelming the sidebar)
-        folders.slice(0, 15).forEach(folder => {
+        folders.forEach(folder => {
             html += `
                 <div class="tree-item-row" data-type="imap-folder" data-account-id="${accountId}" data-folder="${escapeHtml(folder.name)}">
                     <i data-lucide="${getFolderIcon(folder.name)}" class="tree-icon"></i>
