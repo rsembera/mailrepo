@@ -82,17 +82,17 @@
    ============================================ */
 [data-theme="plum"] {
     /* Rail */
-    --rail-bg: #7c3aed;
-    --rail-logo-bg: #ddd6fe;
+    --rail-bg: #6d28d9;
+    --rail-logo-bg: #e9d5ff;
     --rail-text: rgba(255, 255, 255, 0.7);
     --rail-text-active: #ffffff;
     --rail-btn-hover: rgba(255, 255, 255, 0.1);
     --rail-btn-active: rgba(255, 255, 255, 0.2);
     
     /* Primary accent */
-    --color-primary: #7c3aed;
+    --color-primary: #6d28d9;
     --color-primary-light: #a78bfa;
-    --color-primary-lighter: #ede9fe;
+    --color-primary-lighter: #f3e8ff;
     --color-primary-dark: #5b21b6;
     
     /* Backgrounds */
@@ -108,8 +108,8 @@
     
     /* Borders & focus */
     --color-border: #e9e4f0;
-    --color-border-focus: #7c3aed;
-    --shadow-focus: 0 0 0 3px rgba(124, 58, 237, 0.15);
+    --color-border-focus: #6d28d9;
+    --shadow-focus: 0 0 0 3px rgba(109, 40, 217, 0.15);
 }
 
 /* ============================================
@@ -118,7 +118,7 @@
    ============================================ */
 [data-theme="amber"] {
     /* Rail */
-    --rail-bg: #d97706;
+    --rail-bg: #b45309;
     --rail-logo-bg: #fef3c7;
     --rail-text: rgba(255, 255, 255, 0.8);
     --rail-text-active: #ffffff;
@@ -126,10 +126,10 @@
     --rail-btn-active: rgba(255, 255, 255, 0.2);
     
     /* Primary accent */
-    --color-primary: #d97706;
-    --color-primary-light: #fbbf24;
+    --color-primary: #b45309;
+    --color-primary-light: #f59e0b;
     --color-primary-lighter: #fef3c7;
-    --color-primary-dark: #b45309;
+    --color-primary-dark: #92400e;
     
     /* Backgrounds */
     --color-background: #FFFDFB;
