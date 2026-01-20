@@ -15,7 +15,7 @@
 const state = {
     currentView: null,      // { type: 'account'|'folder', id: number, label?: string }
     emails: [],
-    staged: new Map(),      // Map<emailId, {email, destinationFolderId, sourceAccountId, sourceLabel}>
+    staged: new Map(),      // Map<emailId, {email, destinationFolderId, sourceAccountId, sourceFolder}>
     selectedEmails: new Set(),
     folders: [],
     expandedAccounts: new Set(),
@@ -133,11 +133,11 @@ function handleTreeItemClick(e, row) {
         return;
     }
     
-    // Handle label click (under account)
-    if (type === 'label') {
+    // Handle label click (under account) - now handles IMAP folders
+    if (type === 'label' || type === 'imap-folder') {
         const accountId = row.dataset.accountId;
-        const label = row.dataset.label;
-        selectView({ type: 'account', id: accountId, label: label });
+        const folder = row.dataset.label || row.dataset.folder;
+        selectView({ type: 'account', id: accountId, folder: folder });
     }
     
     // Handle folder click (archive)
@@ -155,7 +155,7 @@ function selectView(view) {
     state.selectedEmails.clear();
     
     if (view.type === 'account') {
-        loadAccountEmails(view.id, view.label);
+        loadAccountEmails(view.id, view.folder);
     } else if (view.type === 'folder') {
         loadFolderEmails(view.id);
     }
@@ -164,7 +164,7 @@ function selectView(view) {
 }
 
 // ============================================
-// LOAD ACCOUNT LABELS
+// LOAD ACCOUNT FOLDERS (IMAP)
 // ============================================
 
 async function loadAccountLabels(accountId) {
@@ -172,7 +172,7 @@ async function loadAccountLabels(accountId) {
     if (!container) return;
     
     try {
-        const response = await fetch(`/api/accounts/${accountId}/labels`);
+        const response = await fetch(`/api/accounts/${accountId}/folders`);
         
         if (!response.ok) {
             const data = await response.json();
@@ -181,36 +181,35 @@ async function loadAccountLabels(accountId) {
         }
         
         const data = await response.json();
-        const labels = data.labels || [];
+        const folders = data.folders || [];
         
-        // Filter to common labels
-        const commonLabels = ['INBOX', 'SENT', 'DRAFT', 'SPAM', 'TRASH', 'STARRED', 'IMPORTANT'];
-        const systemLabels = labels.filter(l => commonLabels.includes(l.id));
-        const userLabels = labels.filter(l => !l.id.startsWith('CATEGORY_') && !commonLabels.includes(l.id) && l.name);
+        // Common folder names to prioritize
+        const priorityFolders = ['INBOX', 'Sent', 'Sent Messages', 'Drafts', 'Trash', 'Junk', 'Spam', 'Archive'];
+        
+        // Sort: priority folders first, then alphabetically
+        folders.sort((a, b) => {
+            const aIdx = priorityFolders.findIndex(p => a.name.toUpperCase().includes(p.toUpperCase()));
+            const bIdx = priorityFolders.findIndex(p => b.name.toUpperCase().includes(p.toUpperCase()));
+            
+            if (aIdx !== -1 && bIdx === -1) return -1;
+            if (aIdx === -1 && bIdx !== -1) return 1;
+            if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+            return a.name.localeCompare(b.name);
+        });
         
         let html = '';
         
-        // System labels first
-        systemLabels.forEach(label => {
+        // Show folders (limit to 15 to avoid overwhelming the sidebar)
+        folders.slice(0, 15).forEach(folder => {
             html += `
-                <div class="tree-item-row" data-type="label" data-account-id="${accountId}" data-label="${label.id}">
-                    <i data-lucide="${getLabelIcon(label.id)}" class="tree-icon"></i>
-                    <span class="tree-label">${label.name}</span>
+                <div class="tree-item-row" data-type="imap-folder" data-account-id="${accountId}" data-folder="${escapeHtml(folder.name)}">
+                    <i data-lucide="${getFolderIcon(folder.name)}" class="tree-icon"></i>
+                    <span class="tree-label">${escapeHtml(folder.name)}</span>
                 </div>
             `;
         });
         
-        // Then user labels
-        userLabels.slice(0, 10).forEach(label => {
-            html += `
-                <div class="tree-item-row" data-type="label" data-account-id="${accountId}" data-label="${label.id}">
-                    <i data-lucide="tag" class="tree-icon"></i>
-                    <span class="tree-label">${escapeHtml(label.name)}</span>
-                </div>
-            `;
-        });
-        
-        container.innerHTML = html || '<div class="tree-loading">No labels</div>';
+        container.innerHTML = html || '<div class="tree-loading">No folders</div>';
         
         // Render Lucide icons
         if (typeof lucide !== 'undefined') {
@@ -226,35 +225,34 @@ async function loadAccountLabels(accountId) {
         });
         
     } catch (error) {
-        console.error('Error loading labels:', error);
-        container.innerHTML = '<div class="tree-loading">Error loading labels</div>';
+        console.error('Error loading folders:', error);
+        container.innerHTML = '<div class="tree-loading">Error loading folders</div>';
     }
 }
 
-function getLabelIcon(labelId) {
-    const icons = {
-        'INBOX': 'inbox',
-        'SENT': 'send',
-        'DRAFT': 'file-edit',
-        'SPAM': 'alert-triangle',
-        'TRASH': 'trash-2',
-        'STARRED': 'star',
-        'IMPORTANT': 'alert-circle',
-    };
-    return icons[labelId] || 'tag';
+function getFolderIcon(folderName) {
+    const name = folderName.toUpperCase();
+    if (name === 'INBOX') return 'inbox';
+    if (name.includes('SENT')) return 'send';
+    if (name.includes('DRAFT')) return 'file-edit';
+    if (name.includes('SPAM') || name.includes('JUNK')) return 'alert-triangle';
+    if (name.includes('TRASH') || name.includes('DELETED')) return 'trash-2';
+    if (name.includes('ARCHIVE')) return 'archive';
+    if (name.includes('STAR') || name.includes('FLAG')) return 'star';
+    return 'folder';
 }
 
 // ============================================
 // LOAD EMAILS
 // ============================================
 
-async function loadAccountEmails(accountId, label = 'INBOX') {
+async function loadAccountEmails(accountId, folder = 'INBOX') {
     elements.contextTitle.textContent = `Loading...`;
     elements.contextMeta.textContent = '';
     showLoading();
     
     try {
-        const response = await fetch(`/api/accounts/${accountId}/emails?label=${label}`);
+        const response = await fetch(`/api/accounts/${accountId}/emails?folder=${encodeURIComponent(folder)}`);
         
         if (!response.ok) {
             const data = await response.json();
@@ -265,7 +263,7 @@ async function loadAccountEmails(accountId, label = 'INBOX') {
         state.emails = data.emails || [];
         
         // Update header
-        elements.contextTitle.textContent = label;
+        elements.contextTitle.textContent = folder;
         elements.contextMeta.textContent = `${state.emails.length} emails`;
         
         renderEmailList();
@@ -462,7 +460,7 @@ function confirmStage() {
                 email,
                 destinationFolderId: selectedDestinationFolder,
                 sourceAccountId: state.currentView.type === 'account' ? state.currentView.id : null,
-                sourceLabel: state.currentView.label || 'INBOX',
+                sourceFolder: state.currentView.folder || 'INBOX',
             });
         }
     });
