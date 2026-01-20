@@ -49,14 +49,14 @@
                     <label class="radio-label">
                         <input type="radio" name="encrypted" value="1" checked>
                         <span class="radio-text">
-                            <strong>🔒 Encrypted</strong>
+                            <strong><i data-lucide="lock"></i> Encrypted</strong>
                             <span class="radio-hint">For client correspondence, sensitive materials. Files are encrypted at rest.</span>
                         </span>
                     </label>
                     <label class="radio-label">
                         <input type="radio" name="encrypted" value="0">
                         <span class="radio-text">
-                            <strong>📁 Unencrypted</strong>
+                            <strong><i data-lucide="folder"></i> Unencrypted</strong>
                             <span class="radio-hint">For personal emails, newsletters. Faster access, standard .eml files.</span>
                         </span>
                     </label>
@@ -70,7 +70,7 @@
         
         {% if not is_first_run %}
         <div class="auth-footer">
-            <a href="{{ url_for('main.index') }}" class="link-muted">← Back to Dashboard</a>
+            <a href="{{ url_for('main.index') }}" class="link-muted"><i data-lucide="arrow-left"></i> Back to Dashboard</a>
         </div>
         {% endif %}
     </div>

@@ -9,7 +9,7 @@
     <header class="review-header">
         <h1>Review Staged Emails</h1>
         <div class="review-actions">
-            <button class="btn btn-secondary" onclick="history.back()">← Back</button>
+            <button class="btn btn-secondary" onclick="history.back()"><i data-lucide="arrow-left"></i> Back</button>
             <button class="btn btn-primary" id="commitBtn" disabled>
                 Commit <span id="commitCount">0</span> Emails
             </button>
@@ -19,7 +19,7 @@
     <div class="review-content" id="reviewContent">
         <!-- Emails grouped by source will be rendered here -->
         <div class="empty-state">
-            <div class="empty-icon">📭</div>
+            <i data-lucide="mail-x" class="empty-icon"></i>
             <h3>No Staged Emails</h3>
             <p>Go back and stage some emails first.</p>
         </div>
@@ -144,7 +144,7 @@ function renderReviewList() {
         emails.forEach(item => {
             const folder = folders.find(f => f.id == item.destinationFolderId);
             const folderName = folder ? folder.name : 'Unknown';
-            const folderIcon = folder?.encrypted ? '🔒' : '📁';
+            const folderIcon = folder?.encrypted ? 'lock' : 'folder';
             
             html += `
                 <div class="review-item" data-id="${item.emailId}">
@@ -159,7 +159,7 @@ function renderReviewList() {
                         <div class="review-subject">${escapeHtml(item.email.subject)}</div>
                     </div>
                     <div class="review-destination">
-                        <span class="folder-icon">${folderIcon}</span>
+                        <i data-lucide="${folderIcon}" class="folder-icon"></i>
                         <select onchange="changeDestination('${item.emailId}', this.value)">
                             ${folders.map(f => `
                                 <option value="${f.id}" ${f.id == item.destinationFolderId ? 'selected' : ''}>
@@ -179,6 +179,11 @@ function renderReviewList() {
     });
     
     content.innerHTML = html;
+    
+    // Render Lucide icons
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
 }
 
 function toggleReviewItem(emailId) {

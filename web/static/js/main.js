@@ -329,11 +329,12 @@ function renderEmailList() {
     if (state.emails.length === 0) {
         elements.emailList.innerHTML = `
             <div class="empty-state">
-                <div class="empty-icon">📭</div>
+                <i data-lucide="mail-x" class="empty-icon"></i>
                 <h3>No Emails</h3>
                 <p>This folder is empty.</p>
             </div>
         `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
         return;
     }
     
@@ -546,7 +547,7 @@ async function createFolder(returnToStage) {
             newItem.className = 'folder-select-item selected';
             newItem.dataset.id = data.folder.id;
             newItem.innerHTML = `
-                <span class="folder-icon">${encrypted ? '🔒' : '📁'}</span>
+                <i data-lucide="${encrypted ? 'lock' : 'folder'}" class="folder-icon"></i>
                 <span class="folder-name">${escapeHtml(name)}</span>
             `;
             list.appendChild(newItem);
@@ -579,21 +580,23 @@ function showLoading() {
     if (!elements.emailList) return;
     elements.emailList.innerHTML = `
         <div class="empty-state">
-            <div class="empty-icon">⏳</div>
+            <i data-lucide="loader" class="empty-icon spin"></i>
             <h3>Loading...</h3>
         </div>
     `;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 function showError(message) {
     if (!elements.emailList) return;
     elements.emailList.innerHTML = `
         <div class="empty-state">
-            <div class="empty-icon">⚠️</div>
+            <i data-lucide="alert-triangle" class="empty-icon"></i>
             <h3>Error</h3>
             <p>${escapeHtml(message)}</p>
         </div>
     `;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 function escapeHtml(str) {
