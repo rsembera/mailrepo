@@ -21,8 +21,16 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/themes.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     {% block styles %}{% endblock %}
+    
+    <!-- Apply theme early to prevent flash -->
+    <script>
+        (function() {
+            const theme = localStorage.getItem('mailrepo-theme') || 'teal';
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
 </head>
-<body class="{% block body_class %}{% endblock %}" data-theme="{{ theme or 'teal' }}">
+<body class="{% block body_class %}{% endblock %}" data-theme="teal">
     {% block body %}
         {% block content %}{% endblock %}
     {% endblock %}
@@ -30,6 +38,10 @@
     <!-- Scripts -->
     <script src="{{ url_for('static', filename='js/lucide.min.js') }}"></script>
     {% block scripts %}{% endblock %}
-    <script>lucide.createIcons();</script>
+    <script>
+        // Apply theme to body as well (html already has it from head script)
+        document.body.setAttribute('data-theme', localStorage.getItem('mailrepo-theme') || 'teal');
+        lucide.createIcons();
+    </script>
 </body>
 </html>

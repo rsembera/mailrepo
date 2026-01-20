@@ -218,6 +218,70 @@ details[open] .settings-section-header .arrow {
     height: 16px;
 }
 
+/* Appearance Section */
+.appearance-group {
+    margin-bottom: var(--space-xl);
+}
+
+.appearance-group:last-child {
+    margin-bottom: 0;
+}
+
+.appearance-label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--color-text-heading);
+    margin-bottom: var(--space-md);
+}
+
+.theme-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+}
+
+.theme-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-md);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-background);
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 80px;
+}
+
+.theme-option:hover {
+    border-color: var(--color-primary-light);
+    background: var(--color-background-secondary);
+}
+
+.theme-option.active {
+    border-color: var(--color-primary);
+    background: var(--color-primary-lighter);
+}
+
+.theme-swatch {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+.theme-name {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--color-text);
+}
+
+.theme-option.active .theme-name {
+    color: var(--color-primary-dark);
+}
+
 /* About section */
 .about-info {
     display: flex;
@@ -387,6 +451,45 @@ details[open] .settings-section-header .arrow {
             <span style="margin-left: var(--space-sm); color: var(--color-text-muted); font-size: 0.875rem;">
                 (Coming soon)
             </span>
+        </div>
+    </details>
+    
+    <!-- Appearance Section -->
+    <details class="settings-section" open>
+        <summary class="settings-section-header">
+            <i data-lucide="chevron-right" class="arrow"></i>
+            <i data-lucide="palette" class="header-icon"></i>
+            <div class="header-text">
+                <h3>Appearance</h3>
+                <p>Customize the look and feel of MailRepo</p>
+            </div>
+        </summary>
+        <div class="settings-section-content">
+            <div class="appearance-group">
+                <label class="appearance-label">Theme</label>
+                <div class="theme-grid" id="themeGrid">
+                    <button class="theme-option" data-theme="teal" title="Teal">
+                        <span class="theme-swatch" style="background: #1F8F74;"></span>
+                        <span class="theme-name">Teal</span>
+                    </button>
+                    <button class="theme-option" data-theme="slate" title="Slate">
+                        <span class="theme-swatch" style="background: #475569;"></span>
+                        <span class="theme-name">Slate</span>
+                    </button>
+                    <button class="theme-option" data-theme="plum" title="Plum">
+                        <span class="theme-swatch" style="background: #7c3aed;"></span>
+                        <span class="theme-name">Plum</span>
+                    </button>
+                    <button class="theme-option" data-theme="amber" title="Amber">
+                        <span class="theme-swatch" style="background: #d97706;"></span>
+                        <span class="theme-name">Amber</span>
+                    </button>
+                    <button class="theme-option" data-theme="dark" title="Dark">
+                        <span class="theme-swatch" style="background: #1e1e2e;"></span>
+                        <span class="theme-name">Dark</span>
+                    </button>
+                </div>
+            </div>
         </div>
     </details>
     
@@ -581,6 +684,39 @@ document.getElementById('addAccountModal')?.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         closeModal('addAccountModal');
+    }
+});
+
+// ============================================
+// THEME SWITCHING
+// ============================================
+
+// Initialize theme on page load
+document.addEventListener('DOMContentLoaded', () => {
+    const savedTheme = localStorage.getItem('mailrepo-theme') || 'teal';
+    setTheme(savedTheme, false);
+});
+
+function setTheme(theme, save = true) {
+    // Update body attribute
+    document.body.setAttribute('data-theme', theme);
+    
+    // Update active state on buttons
+    document.querySelectorAll('.theme-option').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.theme === theme);
+    });
+    
+    // Save to localStorage
+    if (save) {
+        localStorage.setItem('mailrepo-theme', theme);
+    }
+}
+
+// Theme button clicks
+document.getElementById('themeGrid')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.theme-option');
+    if (btn) {
+        setTheme(btn.dataset.theme);
     }
 });
 </script>
