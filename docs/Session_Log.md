@@ -285,15 +285,20 @@ All major design decisions have been resolved. Ready to continue building.
 
 ## What's Next to Build
 
-1. Test IMAP workflow end-to-end
-2. Test mbox import
+1. ~~Test IMAP workflow end-to-end~~ ✅ Working!
+2. Import UI for .eml and .mbox files (backend ready in `core/importer.py`)
 3. ZIP export functionality
 4. Search within archive
+5. Viewing archived emails (archive folder browser)
 
 ---
 
 ## Parking Lot (Future Ideas)
 
+- **Import folder structure options:**
+  - Import multiple .mbox files, mirror as folder tree
+  - Parse folder hints from headers (X-Mozilla-Status, etc.) to auto-suggest structure
+  - Bulk .eml import from directory with folder mirroring
 - Auto-suggest folders based on sender/subject patterns
 - AI categorization
 - EdgeCase integration (link folders to client files)
