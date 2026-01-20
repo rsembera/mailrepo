@@ -511,4 +511,4 @@ SCOPES = [
 
 ---
 
-*"Your correspondence, your machine, your control."*
+*"Email archiving, done right."*

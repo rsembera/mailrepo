@@ -2,10 +2,10 @@
  * MailRepo - Main Application JavaScript
  * 
  * Handles:
- * - Account/folder selection
+ * - Three-pane navigation
+ * - Account/folder tree interactions
  * - Email list rendering
  * - Staging workflow
- * - Navigation warnings
  */
 
 // ============================================
@@ -13,12 +13,12 @@
 // ============================================
 
 const state = {
-    currentAccount: null,
-    currentFolder: null,
-    viewMode: 'inbox',  // 'inbox' or 'archive'
+    currentView: null,      // { type: 'account'|'folder', id: number, label?: string }
     emails: [],
-    staged: new Map(),  // Map<emailId, {email, destinationFolderId}>
+    staged: new Map(),      // Map<emailId, {email, destinationFolderId, sourceAccountId, sourceLabel}>
     selectedEmails: new Set(),
+    folders: [],
+    expandedAccounts: new Set(),
 };
 
 // ============================================
@@ -26,15 +26,28 @@ const state = {
 // ============================================
 
 const elements = {
-    accountDropdown: document.getElementById('accountDropdown'),
-    stageBtn: document.getElementById('stageBtn'),
-    reviewBtn: document.getElementById('reviewBtn'),
-    stageBadge: document.getElementById('stageBadge'),
-    folderTree: document.getElementById('folderTree'),
+    // Sidebar
+    accountsSection: document.getElementById('accountsSection'),
+    archiveSection: document.getElementById('archiveSection'),
+    sidebarFilter: document.getElementById('sidebarFilter'),
+    
+    // Main content
+    contextTitle: document.getElementById('contextTitle'),
+    contextMeta: document.getElementById('contextMeta'),
     emailList: document.getElementById('emailList'),
     selectAll: document.getElementById('selectAll'),
     searchInput: document.getElementById('searchInput'),
+    
+    // Buttons
+    stageBtn: document.getElementById('stageBtn'),
+    reviewBtn: document.getElementById('reviewBtn'),
+    stagedBadge: document.getElementById('stagedBadge'),
     newFolderBtn: document.getElementById('newFolderBtn'),
+    addFolderBtn: document.getElementById('addFolderBtn'),
+    
+    // Modals
+    stageModal: document.getElementById('stageModal'),
+    newFolderModal: document.getElementById('newFolderModal'),
 };
 
 // ============================================
@@ -43,107 +56,272 @@ const elements = {
 
 document.addEventListener('DOMContentLoaded', () => {
     initEventListeners();
-    updateStageBadge();
+    loadFolders();
+    updateStagedBadge();
+    
+    // Load labels for each account
+    document.querySelectorAll('.account-item').forEach(item => {
+        const accountId = item.dataset.accountId;
+        loadAccountLabels(accountId);
+    });
 });
 
 function initEventListeners() {
-    // Account dropdown
-    elements.accountDropdown?.addEventListener('change', handleAccountChange);
+    // Section headers (collapse/expand)
+    document.querySelectorAll('.section-header').forEach(header => {
+        header.addEventListener('click', () => toggleSection(header));
+    });
     
-    // Folder selection
-    elements.folderTree?.addEventListener('click', handleFolderClick);
+    // Tree item clicks
+    document.querySelectorAll('.tree-item-row[data-type]').forEach(row => {
+        row.addEventListener('click', (e) => handleTreeItemClick(e, row));
+    });
     
     // Stage/Review buttons
     elements.stageBtn?.addEventListener('click', openStageModal);
     elements.reviewBtn?.addEventListener('click', goToReview);
     
-    // Select all checkbox
+    // Select all
     elements.selectAll?.addEventListener('change', handleSelectAll);
     
     // Search
     elements.searchInput?.addEventListener('input', debounce(handleSearch, 300));
     
-    // New folder button
-    elements.newFolderBtn?.addEventListener('click', openNewFolderModal);
+    // New folder buttons
+    elements.newFolderBtn?.addEventListener('click', () => openNewFolderModal(false));
+    elements.addFolderBtn?.addEventListener('click', () => openNewFolderModal(false));
+    
+    // Folder select in stage modal
+    document.getElementById('folderSelectList')?.addEventListener('click', handleFolderSelect);
+    document.getElementById('confirmStageBtn')?.addEventListener('click', confirmStage);
+    
+    // New folder modal
+    document.getElementById('createFolderBtn')?.addEventListener('click', () => createFolder(false));
     
     // Navigation warning
     window.addEventListener('beforeunload', handleBeforeUnload);
 }
 
 // ============================================
-// ACCOUNT & FOLDER HANDLING
+// SECTION COLLAPSE/EXPAND
 // ============================================
 
-function handleAccountChange(e) {
-    const value = e.target.value;
+function toggleSection(header) {
+    const section = header.dataset.section;
+    const content = document.getElementById(section + 'Section') || 
+                    document.getElementById(section === 'accounts' ? 'accountsSection' : 'archiveSection');
     
-    if (value === 'archive') {
-        state.viewMode = 'archive';
-        state.currentAccount = null;
-        loadArchiveFolders();
-    } else if (value === 'settings') {
-        window.location.href = '/settings';
-    } else if (value === 'import') {
-        openImportModal();
-    } else if (value) {
-        state.viewMode = 'inbox';
-        state.currentAccount = value;
-        loadInbox(value);
-    }
+    header.classList.toggle('collapsed');
+    content?.classList.toggle('expanded');
 }
 
-function handleFolderClick(e) {
-    const folderItem = e.target.closest('.folder-item');
-    if (!folderItem) return;
+// ============================================
+// TREE NAVIGATION
+// ============================================
+
+function handleTreeItemClick(e, row) {
+    const type = row.dataset.type;
+    const id = row.dataset.id;
     
-    const folderId = folderItem.dataset.id;
+    // Handle account expansion
+    if (type === 'account') {
+        row.classList.toggle('expanded');
+        const children = row.nextElementSibling;
+        if (children?.classList.contains('tree-children')) {
+            children.style.display = row.classList.contains('expanded') ? 'block' : 'none';
+        }
+        return;
+    }
+    
+    // Handle label click (under account)
+    if (type === 'label') {
+        const accountId = row.dataset.accountId;
+        const label = row.dataset.label;
+        selectView({ type: 'account', id: accountId, label: label });
+    }
+    
+    // Handle folder click (archive)
+    if (type === 'folder') {
+        selectView({ type: 'folder', id: id });
+    }
     
     // Update active state
-    document.querySelectorAll('.folder-item').forEach(f => f.classList.remove('active'));
-    folderItem.classList.add('active');
+    document.querySelectorAll('.tree-item-row').forEach(r => r.classList.remove('active'));
+    row.classList.add('active');
+}
+
+function selectView(view) {
+    state.currentView = view;
+    state.selectedEmails.clear();
     
-    state.currentFolder = folderId;
-    
-    if (state.viewMode === 'archive') {
-        loadArchivedEmails(folderId);
+    if (view.type === 'account') {
+        loadAccountEmails(view.id, view.label);
+    } else if (view.type === 'folder') {
+        loadFolderEmails(view.id);
     }
+    
+    updateButtonStates();
 }
 
 // ============================================
-// EMAIL LIST
+// LOAD ACCOUNT LABELS
 // ============================================
 
-async function loadInbox(accountId) {
+async function loadAccountLabels(accountId) {
+    const container = document.getElementById(`labels-${accountId}`);
+    if (!container) return;
+    
+    try {
+        const response = await fetch(`/api/accounts/${accountId}/labels`);
+        
+        if (!response.ok) {
+            const data = await response.json();
+            container.innerHTML = `<div class="tree-loading">${data.error || 'Failed to load'}</div>`;
+            return;
+        }
+        
+        const data = await response.json();
+        const labels = data.labels || [];
+        
+        // Filter to common labels
+        const commonLabels = ['INBOX', 'SENT', 'DRAFT', 'SPAM', 'TRASH', 'STARRED', 'IMPORTANT'];
+        const systemLabels = labels.filter(l => commonLabels.includes(l.id));
+        const userLabels = labels.filter(l => !l.id.startsWith('CATEGORY_') && !commonLabels.includes(l.id) && l.name);
+        
+        let html = '';
+        
+        // System labels first
+        systemLabels.forEach(label => {
+            html += `
+                <div class="tree-item-row" data-type="label" data-account-id="${accountId}" data-label="${label.id}">
+                    <i data-lucide="${getLabelIcon(label.id)}" class="tree-icon"></i>
+                    <span class="tree-label">${label.name}</span>
+                </div>
+            `;
+        });
+        
+        // Then user labels
+        userLabels.slice(0, 10).forEach(label => {
+            html += `
+                <div class="tree-item-row" data-type="label" data-account-id="${accountId}" data-label="${label.id}">
+                    <i data-lucide="tag" class="tree-icon"></i>
+                    <span class="tree-label">${escapeHtml(label.name)}</span>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html || '<div class="tree-loading">No labels</div>';
+        
+        // Render Lucide icons
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+        
+        // Add click handlers
+        container.querySelectorAll('.tree-item-row').forEach(row => {
+            row.addEventListener('click', (e) => {
+                e.stopPropagation();
+                handleTreeItemClick(e, row);
+            });
+        });
+        
+    } catch (error) {
+        console.error('Error loading labels:', error);
+        container.innerHTML = '<div class="tree-loading">Error loading labels</div>';
+    }
+}
+
+function getLabelIcon(labelId) {
+    const icons = {
+        'INBOX': 'inbox',
+        'SENT': 'send',
+        'DRAFT': 'file-edit',
+        'SPAM': 'alert-triangle',
+        'TRASH': 'trash-2',
+        'STARRED': 'star',
+        'IMPORTANT': 'alert-circle',
+    };
+    return icons[labelId] || 'tag';
+}
+
+// ============================================
+// LOAD EMAILS
+// ============================================
+
+async function loadAccountEmails(accountId, label = 'INBOX') {
+    elements.contextTitle.textContent = `Loading...`;
+    elements.contextMeta.textContent = '';
     showLoading();
     
     try {
-        const response = await fetch(`/api/accounts/${accountId}/emails`);
-        if (!response.ok) throw new Error('Failed to load emails');
+        const response = await fetch(`/api/accounts/${accountId}/emails?label=${label}`);
+        
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error || 'Failed to load emails');
+        }
         
         const data = await response.json();
         state.emails = data.emails || [];
+        
+        // Update header
+        elements.contextTitle.textContent = label;
+        elements.contextMeta.textContent = `${state.emails.length} emails`;
+        
         renderEmailList();
+        
     } catch (error) {
-        console.error('Error loading inbox:', error);
-        showError('Failed to load emails. Please try again.');
+        console.error('Error loading emails:', error);
+        elements.contextTitle.textContent = 'Error';
+        showError(error.message);
     }
 }
 
-async function loadArchivedEmails(folderId) {
+async function loadFolderEmails(folderId) {
+    elements.contextTitle.textContent = `Loading...`;
+    elements.contextMeta.textContent = '';
     showLoading();
     
     try {
         const response = await fetch(`/api/folders/${folderId}/emails`);
-        if (!response.ok) throw new Error('Failed to load archived emails');
+        
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error || 'Failed to load emails');
+        }
         
         const data = await response.json();
         state.emails = data.emails || [];
+        
+        // Get folder name
+        const folder = state.folders.find(f => f.id == folderId);
+        elements.contextTitle.textContent = folder?.name || 'Archive';
+        elements.contextMeta.textContent = `${state.emails.length} archived emails`;
+        
         renderEmailList();
+        
     } catch (error) {
-        console.error('Error loading archived emails:', error);
-        showError('Failed to load archived emails. Please try again.');
+        console.error('Error loading emails:', error);
+        elements.contextTitle.textContent = 'Error';
+        showError(error.message);
     }
 }
+
+async function loadFolders() {
+    try {
+        const response = await fetch('/api/folders');
+        if (response.ok) {
+            const data = await response.json();
+            state.folders = data.folders || [];
+        }
+    } catch (e) {
+        console.error('Failed to load folders:', e);
+    }
+}
+
+// ============================================
+// RENDER EMAIL LIST
+// ============================================
 
 function renderEmailList() {
     if (!elements.emailList) return;
@@ -153,7 +331,7 @@ function renderEmailList() {
             <div class="empty-state">
                 <div class="empty-icon">📭</div>
                 <h3>No Emails</h3>
-                <p>No emails found in this ${state.viewMode === 'inbox' ? 'inbox' : 'folder'}.</p>
+                <p>This folder is empty.</p>
             </div>
         `;
         return;
@@ -174,11 +352,11 @@ function renderEmailList() {
                 </div>
                 <div class="email-content">
                     <div class="email-header">
-                        <span class="email-sender">${escapeHtml(email.sender)}</span>
+                        <span class="email-sender">${escapeHtml(extractName(email.sender))}</span>
                         <span class="email-date">${formatDate(email.date)}</span>
                     </div>
-                    <div class="email-subject">${escapeHtml(email.subject)}</div>
-                    ${email.preview ? `<div class="email-preview">${escapeHtml(email.preview)}</div>` : ''}
+                    <div class="email-subject">${escapeHtml(email.subject || '(no subject)')}</div>
+                    ${email.snippet ? `<div class="email-preview">${escapeHtml(email.snippet)}</div>` : ''}
                 </div>
             </div>
         `;
@@ -188,20 +366,23 @@ function renderEmailList() {
 }
 
 function toggleEmailSelection(emailId) {
+    if (state.staged.has(emailId)) return;
+    
     if (state.selectedEmails.has(emailId)) {
         state.selectedEmails.delete(emailId);
     } else {
         state.selectedEmails.add(emailId);
     }
     
+    // Update UI
+    const item = document.querySelector(`.email-item[data-id="${emailId}"]`);
+    if (item) {
+        item.classList.toggle('selected', state.selectedEmails.has(emailId));
+        item.querySelector('input[type="checkbox"]').checked = state.selectedEmails.has(emailId);
+    }
+    
     updateButtonStates();
     updateSelectAllState();
-    
-    // Update visual state
-    const emailItem = document.querySelector(`.email-item[data-id="${emailId}"]`);
-    if (emailItem) {
-        emailItem.classList.toggle('selected', state.selectedEmails.has(emailId));
-    }
 }
 
 function handleSelectAll(e) {
@@ -224,96 +405,45 @@ function handleSelectAll(e) {
 function updateSelectAllState() {
     if (!elements.selectAll) return;
     
-    const availableEmails = state.emails.filter(e => !state.staged.has(e.id));
+    const available = state.emails.filter(e => !state.staged.has(e.id));
     const selectedCount = [...state.selectedEmails].filter(id => 
-        availableEmails.some(e => e.id === id)
+        available.some(e => e.id === id)
     ).length;
     
-    elements.selectAll.checked = availableEmails.length > 0 && 
-                                  selectedCount === availableEmails.length;
-    elements.selectAll.indeterminate = selectedCount > 0 && 
-                                        selectedCount < availableEmails.length;
+    elements.selectAll.checked = available.length > 0 && selectedCount === available.length;
+    elements.selectAll.indeterminate = selectedCount > 0 && selectedCount < available.length;
 }
 
 // ============================================
-// STAGING WORKFLOW
+// STAGING
 // ============================================
+
+let selectedDestinationFolder = null;
 
 function openStageModal() {
     if (state.selectedEmails.size === 0) return;
     
-    // Create and show modal
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay active';
-    modal.id = 'stageModal';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Stage ${state.selectedEmails.size} Email${state.selectedEmails.size > 1 ? 's' : ''}</h2>
-            </div>
-            
-            <p>Select destination folder:</p>
-            
-            <div class="folder-select-list" id="folderSelectList">
-                <div class="folder-select-item new-folder" data-action="new">
-                    <span>+ New Folder</span>
-                </div>
-                <!-- Folders will be loaded here -->
-            </div>
-            
-            <div class="modal-actions">
-                <button class="btn btn-secondary" onclick="closeModal('stageModal')">Cancel</button>
-                <button class="btn btn-primary" id="confirmStageBtn" disabled>Stage</button>
-            </div>
-        </div>
-    `;
+    document.getElementById('stageCount').textContent = state.selectedEmails.size;
+    selectedDestinationFolder = null;
     
-    document.body.appendChild(modal);
-    loadFoldersForModal();
-    
-    // Event listeners
-    modal.querySelector('.folder-select-list').addEventListener('click', handleFolderSelect);
-    modal.querySelector('#confirmStageBtn').addEventListener('click', confirmStage);
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) closeModal('stageModal');
+    // Reset folder selection
+    document.querySelectorAll('.folder-select-item').forEach(item => {
+        item.classList.remove('selected');
     });
+    document.getElementById('confirmStageBtn').disabled = true;
+    
+    elements.stageModal.classList.add('active');
 }
-
-async function loadFoldersForModal() {
-    try {
-        const response = await fetch('/api/folders');
-        if (!response.ok) throw new Error('Failed to load folders');
-        
-        const data = await response.json();
-        const list = document.getElementById('folderSelectList');
-        
-        data.folders.forEach(folder => {
-            const item = document.createElement('div');
-            item.className = 'folder-select-item';
-            item.dataset.id = folder.id;
-            item.innerHTML = `
-                <span class="folder-icon">${folder.encrypted ? '🔒' : '📁'}</span>
-                <span class="folder-name">${escapeHtml(folder.name)}</span>
-            `;
-            list.appendChild(item);
-        });
-    } catch (error) {
-        console.error('Error loading folders:', error);
-    }
-}
-
-let selectedDestinationFolder = null;
 
 function handleFolderSelect(e) {
     const item = e.target.closest('.folder-select-item');
     if (!item) return;
     
     if (item.dataset.action === 'new') {
-        openNewFolderModal(true);  // Modal-in-modal
+        openNewFolderModal(true);
         return;
     }
     
-    // Update selection
     document.querySelectorAll('.folder-select-item').forEach(i => i.classList.remove('selected'));
     item.classList.add('selected');
     
@@ -322,42 +452,41 @@ function handleFolderSelect(e) {
 }
 
 function confirmStage() {
-    if (!selectedDestinationFolder) return;
+    if (!selectedDestinationFolder || !state.currentView) return;
     
-    // Add selected emails to staged map
     state.selectedEmails.forEach(emailId => {
         const email = state.emails.find(e => e.id === emailId);
         if (email) {
             state.staged.set(emailId, {
                 email,
                 destinationFolderId: selectedDestinationFolder,
-                sourceAccountId: state.currentAccount,
+                sourceAccountId: state.currentView.type === 'account' ? state.currentView.id : null,
+                sourceLabel: state.currentView.label || 'INBOX',
             });
         }
     });
     
-    // Clear selection
     state.selectedEmails.clear();
-    
     closeModal('stageModal');
-    selectedDestinationFolder = null;
     
-    updateStageBadge();
+    updateStagedBadge();
     updateButtonStates();
     renderEmailList();
 }
 
-function updateStageBadge() {
-    if (!elements.stageBadge) return;
+function updateStagedBadge() {
+    if (!elements.stagedBadge) return;
     
     const count = state.staged.size;
-    elements.stageBadge.textContent = count;
-    elements.stageBadge.classList.toggle('hidden', count === 0);
+    elements.stagedBadge.textContent = count;
+    elements.stagedBadge.classList.toggle('hidden', count === 0);
 }
 
 function updateButtonStates() {
     if (elements.stageBtn) {
-        elements.stageBtn.disabled = state.selectedEmails.size === 0;
+        // Only enable stage for account views (not archive)
+        const canStage = state.currentView?.type === 'account' && state.selectedEmails.size > 0;
+        elements.stageBtn.disabled = !canStage;
     }
     if (elements.reviewBtn) {
         elements.reviewBtn.disabled = state.staged.size === 0;
@@ -367,77 +496,28 @@ function updateButtonStates() {
 function goToReview() {
     if (state.staged.size === 0) return;
     
-    // Save staged data to sessionStorage and navigate
     sessionStorage.setItem('stagedEmails', JSON.stringify([...state.staged.entries()]));
     window.location.href = '/review';
 }
 
 // ============================================
-// NEW FOLDER MODAL
+// NEW FOLDER
 // ============================================
 
-function openNewFolderModal(isNested = false) {
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay active';
-    modal.id = 'newFolderModal';
-    modal.style.zIndex = isNested ? '1001' : '1000';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>New Folder</h2>
-            </div>
-            
-            <div class="form-group">
-                <label for="newFolderName">Folder Name</label>
-                <input type="text" id="newFolderName" placeholder="e.g., Client: John Smith" autofocus>
-            </div>
-            
-            <div class="form-group">
-                <label>Encryption</label>
-                <div class="radio-group">
-                    <label class="radio-label">
-                        <input type="radio" name="encryption" value="1" checked>
-                        <div class="radio-text">
-                            <strong>🔒 Encrypted</strong>
-                            <span class="radio-hint">For client correspondence, sensitive materials</span>
-                        </div>
-                    </label>
-                    <label class="radio-label">
-                        <input type="radio" name="encryption" value="0">
-                        <div class="radio-text">
-                            <strong>📁 Unencrypted</strong>
-                            <span class="radio-hint">For personal emails, newsletters</span>
-                        </div>
-                    </label>
-                </div>
-            </div>
-            
-            <div class="modal-actions">
-                <button class="btn btn-secondary" onclick="closeModal('newFolderModal')">Cancel</button>
-                <button class="btn btn-primary" id="createFolderBtn">Create</button>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    // Event listeners
-    modal.querySelector('#createFolderBtn').addEventListener('click', () => createFolder(isNested));
-    modal.querySelector('#newFolderName').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') createFolder(isNested);
-    });
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) closeModal('newFolderModal');
-    });
+function openNewFolderModal(fromStageModal = false) {
+    elements.newFolderModal.dataset.fromStage = fromStageModal;
+    document.getElementById('newFolderName').value = '';
+    elements.newFolderModal.classList.add('active');
+    document.getElementById('newFolderName').focus();
 }
 
-async function createFolder(returnToStageModal = false) {
-    const nameInput = document.getElementById('newFolderName');
-    const name = nameInput.value.trim();
+async function createFolder(returnToStage) {
+    const name = document.getElementById('newFolderName').value.trim();
     const encrypted = document.querySelector('input[name="encryption"]:checked').value === '1';
+    const fromStage = elements.newFolderModal.dataset.fromStage === 'true';
     
     if (!name) {
-        nameInput.focus();
+        document.getElementById('newFolderName').focus();
         return;
     }
     
@@ -455,49 +535,35 @@ async function createFolder(returnToStageModal = false) {
         }
         
         const data = await response.json();
+        state.folders.push(data.folder);
         
         closeModal('newFolderModal');
         
-        if (returnToStageModal) {
-            // Add new folder to stage modal list and select it
+        if (fromStage) {
+            // Add to stage modal folder list
             const list = document.getElementById('folderSelectList');
-            if (list) {
-                const item = document.createElement('div');
-                item.className = 'folder-select-item selected';
-                item.dataset.id = data.folder.id;
-                item.innerHTML = `
-                    <span class="folder-icon">${encrypted ? '🔒' : '📁'}</span>
-                    <span class="folder-name">${escapeHtml(name)}</span>
-                `;
-                list.appendChild(item);
-                
-                // Clear other selections
-                document.querySelectorAll('.folder-select-item').forEach(i => {
-                    if (i !== item) i.classList.remove('selected');
-                });
-                
-                selectedDestinationFolder = data.folder.id;
-                document.getElementById('confirmStageBtn').disabled = false;
-            }
+            const newItem = document.createElement('div');
+            newItem.className = 'folder-select-item selected';
+            newItem.dataset.id = data.folder.id;
+            newItem.innerHTML = `
+                <span class="folder-icon">${encrypted ? '🔒' : '📁'}</span>
+                <span class="folder-name">${escapeHtml(name)}</span>
+            `;
+            list.appendChild(newItem);
+            
+            document.querySelectorAll('.folder-select-item').forEach(i => {
+                if (i !== newItem) i.classList.remove('selected');
+            });
+            
+            selectedDestinationFolder = data.folder.id;
+            document.getElementById('confirmStageBtn').disabled = false;
         } else {
-            // Refresh folder tree
             location.reload();
         }
+        
     } catch (error) {
         console.error('Error creating folder:', error);
-        alert('Failed to create folder. Please try again.');
-    }
-}
-
-// ============================================
-// NAVIGATION WARNING
-// ============================================
-
-function handleBeforeUnload(e) {
-    if (state.staged.size > 0) {
-        e.preventDefault();
-        e.returnValue = '';  // Chrome requires this
-        return '';
+        alert('Failed to create folder');
     }
 }
 
@@ -506,11 +572,7 @@ function handleBeforeUnload(e) {
 // ============================================
 
 function closeModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) {
-        modal.classList.remove('active');
-        setTimeout(() => modal.remove(), 200);
-    }
+    document.getElementById(modalId)?.classList.remove('active');
 }
 
 function showLoading() {
@@ -541,23 +603,37 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
-function formatDate(timestamp) {
-    if (!timestamp) return '';
-    const date = new Date(timestamp * 1000);
-    const now = new Date();
+function extractName(sender) {
+    if (!sender) return '';
+    // Extract name from "Name <email>" format
+    const match = sender.match(/^([^<]+)</);
+    return match ? match[1].trim() : sender;
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return '';
     
-    // Same day: show time
-    if (date.toDateString() === now.toDateString()) {
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    try {
+        const date = new Date(dateStr);
+        const now = new Date();
+        
+        if (isNaN(date.getTime())) return dateStr;
+        
+        // Same day
+        if (date.toDateString() === now.toDateString()) {
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+        
+        // This year
+        if (date.getFullYear() === now.getFullYear()) {
+            return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        }
+        
+        // Other
+        return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch {
+        return dateStr;
     }
-    
-    // This year: show month and day
-    if (date.getFullYear() === now.getFullYear()) {
-        return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    }
-    
-    // Different year: show full date
-    return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 function debounce(fn, delay) {
@@ -576,18 +652,26 @@ function handleSearch(e) {
         return;
     }
     
-    const filtered = state.emails.filter(email => 
+    const filtered = state.emails.filter(email =>
         email.subject?.toLowerCase().includes(query) ||
         email.sender?.toLowerCase().includes(query) ||
-        email.preview?.toLowerCase().includes(query)
+        email.snippet?.toLowerCase().includes(query)
     );
     
-    const originalEmails = state.emails;
+    const original = state.emails;
     state.emails = filtered;
     renderEmailList();
-    state.emails = originalEmails;  // Restore for future operations
+    state.emails = original;
 }
 
-// Make functions globally available for inline handlers
+function handleBeforeUnload(e) {
+    if (state.staged.size > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+    }
+}
+
+// Global functions for inline handlers
 window.toggleEmailSelection = toggleEmailSelection;
 window.closeModal = closeModal;

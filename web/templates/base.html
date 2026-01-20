@@ -12,16 +12,17 @@
     
     <!-- Styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/shared.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     {% block styles %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
     {% block body %}
-    <main class="main-content">
         {% block content %}{% endblock %}
-    </main>
     {% endblock %}
     
     <!-- Scripts -->
+    <script src="{{ url_for('static', filename='js/lucide.min.js') }}"></script>
     {% block scripts %}{% endblock %}
+    <script>lucide.createIcons();</script>
 </body>
 </html>

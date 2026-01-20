@@ -26,7 +26,7 @@ def main():
     # Development server settings
     host = "127.0.0.1"
     port = 5050  # Different from EdgeCase's 5000
-    debug = app.config.get("DEBUG", False)
+    debug = True  # Development mode
     
     print(f"\n{'=' * 50}")
     print(f"  MailRepo v{app.config.get('app_version', '0.1.0')}")

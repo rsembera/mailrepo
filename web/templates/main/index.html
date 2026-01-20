@@ -5,100 +5,211 @@
 {% block body_class %}main-page{% endblock %}
 
 {% block content %}
-<div class="app-layout">
-    <!-- Header -->
-    <header class="app-header">
-        <div class="header-left">
-            <select class="account-dropdown" id="accountDropdown">
-                <option value="">Select Account...</option>
-                {% for account in accounts %}
-                <option value="{{ account.id }}">{{ account.name }}</option>
-                {% endfor %}
-                <option disabled>──────────</option>
-                <option value="archive">📂 Archive</option>
-                <option disabled>──────────</option>
-                <option value="import">Import .mbox...</option>
-                <option value="settings">Settings</option>
-            </select>
-        </div>
-        <div class="header-right">
-            <button class="btn btn-secondary" id="stageBtn" disabled>
-                Stage
-                <span class="badge hidden" id="stageBadge">0</span>
+<div class="app-container">
+    <!-- Pane 1: Left Rail -->
+    <nav class="left-rail">
+        <div class="rail-top">
+            <div class="rail-logo">
+                <img src="{{ url_for('static', filename='assets/icon.png') }}" alt="MailRepo" class="logo-icon">
+            </div>
+            <button class="rail-btn active" data-view="mail" title="Mail">
+                <i data-lucide="inbox"></i>
             </button>
-            <button class="btn btn-primary" id="reviewBtn" disabled>
-                Review
+            <button class="rail-btn" data-view="staged" title="Staged Emails" id="stagedRailBtn">
+                <i data-lucide="package"></i>
+                <span class="rail-badge hidden" id="stagedBadge">0</span>
             </button>
         </div>
-    </header>
-    
-    <!-- Main Content -->
-    <div class="app-body">
-        <!-- Sidebar: Folders -->
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <h2>Folders</h2>
-                <button class="btn-icon" id="newFolderBtn" title="New Folder">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
+        <div class="rail-bottom">
+            <button class="rail-btn" onclick="window.location.href='/settings'" title="Settings">
+                <i data-lucide="settings"></i>
+            </button>
+            <form action="{{ url_for('auth.logout') }}" method="POST" style="margin:0;">
+                <button type="submit" class="rail-btn" title="Logout">
+                    <i data-lucide="log-out"></i>
+                </button>
+            </form>
+        </div>
+    </nav>
+
+    <!-- Pane 2: Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-search">
+            <input type="text" placeholder="Filter..." id="sidebarFilter">
+        </div>
+        
+        <!-- Accounts Section -->
+        <div class="sidebar-section">
+            <button class="section-header" data-section="accounts">
+                <i data-lucide="chevron-right" class="chevron"></i>
+                <span>Accounts</span>
+                <span class="section-count" id="accountCount">{{ accounts|length }}</span>
+            </button>
+            <div class="section-content expanded" id="accountsSection">
+                {% if accounts %}
+                    {% for account in accounts %}
+                    <div class="tree-item account-item" data-account-id="{{ account.id }}">
+                        <div class="tree-item-row" data-type="account" data-id="{{ account.id }}">
+                            <i data-lucide="chevron-right" class="chevron"></i>
+                            <i data-lucide="mail" class="tree-icon"></i>
+                            <span class="tree-label">{{ account.name or account.email }}</span>
+                        </div>
+                        <div class="tree-children" id="labels-{{ account.id }}">
+                            <!-- Gmail labels loaded dynamically -->
+                            <div class="tree-loading">Loading...</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="sidebar-empty">
+                        <p>No accounts connected</p>
+                        <a href="/settings" class="btn btn-sm btn-primary">Add Account</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Archive Section -->
+        <div class="sidebar-section">
+            <button class="section-header" data-section="archive">
+                <i data-lucide="chevron-right" class="chevron"></i>
+                <span>Archive</span>
+                <span class="section-count" id="folderCount">{{ folders|length }}</span>
+            </button>
+            <div class="section-content expanded" id="archiveSection">
+                {% if folders %}
+                    {% for folder in folders if not folder.parent_id %}
+                    <div class="tree-item folder-item">
+                        <div class="tree-item-row" data-type="folder" data-id="{{ folder.id }}" data-encrypted="{{ folder.encrypted }}">
+                            <i data-lucide="{{ 'lock' if folder.encrypted else 'folder' }}" class="tree-icon"></i>
+                            <span class="tree-label">{{ folder.name }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="sidebar-empty">
+                        <p>No archive folders</p>
+                    </div>
+                {% endif %}
+                <button class="tree-item-row add-folder-btn" id="addFolderBtn">
+                    <i data-lucide="plus" class="tree-icon"></i>
+                    <span class="tree-label">New Folder</span>
                 </button>
             </div>
-            <div class="folder-tree" id="folderTree">
-                {% for folder in folders %}
-                <div class="folder-item {% if folder.encrypted %}encrypted{% else %}unencrypted{% endif %}" data-id="{{ folder.id }}">
-                    <span class="folder-icon">{% if folder.encrypted %}🔒{% else %}📁{% endif %}</span>
-                    <span class="folder-name">{{ folder.name }}</span>
-                </div>
-                {% endfor %}
+        </div>
+    </aside>
+
+    <!-- Pane 3: Main Content -->
+    <main class="main-content">
+        <!-- Context Header -->
+        <header class="content-header">
+            <div class="header-context">
+                <h1 id="contextTitle">Select a folder</h1>
+                <span class="header-meta" id="contextMeta"></span>
             </div>
-        </aside>
+            <div class="header-actions">
+                <button class="btn btn-secondary" id="stageBtn" disabled>
+                    <i data-lucide="package-plus"></i>
+                    Stage Selected
+                </button>
+                <button class="btn btn-primary" id="reviewBtn" disabled>
+                    <i data-lucide="check-circle"></i>
+                    Review & Commit
+                </button>
+            </div>
+        </header>
         
-        <!-- Main: Email List -->
-        <main class="email-list-container">
-            <div class="email-list-header">
-                <label class="checkbox-label">
-                    <input type="checkbox" id="selectAll">
-                    <span>Select All</span>
-                </label>
-                <div class="search-box">
-                    <input type="text" placeholder="Search emails..." id="searchInput">
-                </div>
+        <!-- Search/Filter Bar -->
+        <div class="content-toolbar">
+            <label class="checkbox-label">
+                <input type="checkbox" id="selectAll">
+                <span>Select All</span>
+            </label>
+            <div class="toolbar-spacer"></div>
+            <div class="search-box">
+                <input type="text" placeholder="Search emails..." id="searchInput">
             </div>
-            
-            <div class="email-list" id="emailList">
-                <!-- Empty state -->
-                <div class="empty-state">
-                    <div class="empty-icon">📬</div>
-                    <h3>No Account Selected</h3>
-                    <p>Select an email account from the dropdown above to view your inbox.</p>
-                    {% if not accounts %}
-                    <p class="mt-1">
-                        <a href="{{ url_for('main.settings') }}" class="btn btn-primary">
-                            Connect Gmail Account
-                        </a>
-                    </p>
-                    {% endif %}
-                </div>
+        </div>
+        
+        <!-- Email List -->
+        <div class="email-list" id="emailList">
+            <div class="empty-state">
+                <i data-lucide="arrow-left" class="empty-icon"></i>
+                <h3>No Folder Selected</h3>
+                <p>Select an account or archive folder from the sidebar to view emails.</p>
+                {% if not accounts %}
+                <p class="mt-1">
+                    <a href="/settings" class="btn btn-primary">Connect Gmail Account</a>
+                </p>
+                {% endif %}
             </div>
-        </main>
+        </div>
+    </main>
+</div>
+
+<!-- Stage Modal -->
+<div class="modal-overlay" id="stageModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Stage <span id="stageCount">0</span> Email(s)</h2>
+        </div>
+        <p>Select destination folder:</p>
+        <div class="folder-select-list" id="folderSelectList">
+            <div class="folder-select-item new-folder" data-action="new">
+                <i data-lucide="plus"></i>
+                <span>New Folder</span>
+            </div>
+            {% for folder in folders %}
+            <div class="folder-select-item" data-id="{{ folder.id }}">
+                <i data-lucide="{{ 'lock' if folder.encrypted else 'folder' }}" class="folder-icon"></i>
+                <span class="folder-name">{{ folder.name }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeModal('stageModal')">Cancel</button>
+            <button class="btn btn-primary" id="confirmStageBtn" disabled>Stage</button>
+        </div>
     </div>
 </div>
 
-<!-- Flash Messages -->
-{% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    <div class="flash-container">
-        {% for category, message in messages %}
-        <div class="flash-message flash-{{ category }}">
-            {{ message }}
-            <button class="flash-close" onclick="this.parentElement.remove()">×</button>
+<!-- New Folder Modal -->
+<div class="modal-overlay" id="newFolderModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>New Folder</h2>
         </div>
-        {% endfor %}
+        <div class="form-group">
+            <label for="newFolderName">Folder Name</label>
+            <input type="text" id="newFolderName" placeholder="e.g., Client: John Smith">
+        </div>
+        <div class="form-group">
+            <label>Encryption</label>
+            <div class="radio-group">
+                <label class="radio-label">
+                    <input type="radio" name="encryption" value="1" checked>
+                    <div class="radio-text">
+                        <i data-lucide="lock"></i>
+                        <strong>Encrypted</strong>
+                        <span class="radio-hint">For client correspondence</span>
+                    </div>
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="encryption" value="0">
+                    <div class="radio-text">
+                        <i data-lucide="folder"></i>
+                        <strong>Unencrypted</strong>
+                        <span class="radio-hint">For personal emails</span>
+                    </div>
+                </label>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeModal('newFolderModal')">Cancel</button>
+            <button class="btn btn-primary" id="createFolderBtn">Create</button>
+        </div>
     </div>
-    {% endif %}
-{% endwith %}
+</div>
 {% endblock %}
 
 {% block scripts %}

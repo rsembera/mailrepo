@@ -4,84 +4,441 @@
 
 {% block body_class %}settings-page{% endblock %}
 
+{% block styles %}
+<style>
+/* Settings Page Layout */
+.settings-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: var(--space-xl);
+}
+
+.settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-xl);
+}
+
+.settings-header h1 {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.settings-header h1 i {
+    width: 28px;
+    height: 28px;
+    color: var(--color-primary);
+}
+
+/* Collapsible Sections */
+.settings-section {
+    background: white;
+    border-radius: var(--radius-xl);
+    margin-bottom: var(--space-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: visible;
+}
+
+.settings-section-header {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-md);
+    padding: var(--space-xl);
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    transition: background-color 0.2s;
+    border-radius: var(--radius-xl);
+}
+
+.settings-section-header:hover {
+    background-color: var(--color-background-secondary);
+}
+
+.settings-section-header::-webkit-details-marker {
+    display: none;
+}
+
+.settings-section-header .arrow {
+    color: var(--color-text-muted);
+    transition: transform 0.2s;
+    flex-shrink: 0;
+    margin-top: 0.25rem;
+    width: 18px;
+    height: 18px;
+}
+
+details[open] .settings-section-header .arrow {
+    transform: rotate(90deg);
+}
+
+.settings-section-header .header-text {
+    flex: 1;
+}
+
+.settings-section-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: var(--color-text-heading);
+    font-weight: 600;
+}
+
+.settings-section-header p {
+    margin: 0.25rem 0 0 0;
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+}
+
+.settings-section-header .header-icon {
+    width: 24px;
+    height: 24px;
+    color: var(--color-primary);
+    flex-shrink: 0;
+    margin-top: 0.125rem;
+}
+
+.settings-section-content {
+    padding: 0 var(--space-xl) var(--space-xl) var(--space-xl);
+}
+
+/* Account Cards */
+.accounts-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+.account-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-lg);
+    background: var(--color-background-secondary);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+}
+
+.account-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.account-icon {
+    width: 40px;
+    height: 40px;
+    background: var(--color-primary-lighter);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.account-icon i {
+    width: 20px;
+    height: 20px;
+    color: var(--color-primary-dark);
+}
+
+.account-details {
+    display: flex;
+    flex-direction: column;
+}
+
+.account-name {
+    font-weight: 600;
+    color: var(--color-text-heading);
+}
+
+.account-email {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+}
+
+.account-status {
+    font-size: 0.75rem;
+    color: var(--color-text-light);
+    margin-top: 2px;
+}
+
+.account-status.connected {
+    color: var(--color-success);
+}
+
+.account-status.pending {
+    color: var(--color-warning);
+}
+
+.account-actions {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+/* Empty state in section */
+.section-empty {
+    text-align: center;
+    padding: var(--space-xl);
+    color: var(--color-text-muted);
+}
+
+.section-empty p {
+    margin: 0 0 var(--space-md) 0;
+}
+
+/* Helper text */
+.helper-box {
+    background: var(--color-background-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    margin-top: var(--space-lg);
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+}
+
+.helper-box code {
+    background: white;
+    padding: 0.125rem 0.375rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.8125rem;
+}
+
+/* Buttons */
+.btn-sm {
+    padding: var(--space-xs) var(--space-md);
+    font-size: 0.8125rem;
+    height: 32px;
+}
+
+.btn i {
+    width: 16px;
+    height: 16px;
+}
+
+/* About section */
+.about-info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.about-info p {
+    margin: 0;
+    color: var(--color-text-muted);
+}
+
+.about-info strong {
+    color: var(--color-text-heading);
+}
+
+/* Footer section with About link */
+.footer-section {
+    text-align: center;
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--color-border);
+}
+
+.about-link {
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+    text-decoration: none;
+}
+
+.about-link:hover {
+    text-decoration: underline;
+}
+
+/* About Modal */
+.about-modal-content {
+    text-align: center;
+    max-width: 400px;
+}
+
+.about-logo {
+    width: 120px;
+    margin-bottom: var(--space-lg);
+}
+
+.about-modal-content h2 {
+    color: var(--color-text-heading);
+    margin-bottom: var(--space-xs);
+    font-size: 1.5rem;
+}
+
+.about-version {
+    color: var(--color-primary);
+    font-weight: 600;
+    margin-bottom: var(--space-md);
+}
+
+.about-credits {
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+}
+
+.about-tagline {
+    color: var(--color-text);
+    font-style: italic;
+    margin: var(--space-lg) 0;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="settings-container">
     <header class="settings-header">
-        <h1>Settings</h1>
-        <a href="/" class="btn btn-secondary">← Back to Inbox</a>
+        <h1>
+            <i data-lucide="settings"></i>
+            Settings
+        </h1>
+        <a href="/" class="btn btn-secondary">
+            <i data-lucide="arrow-left"></i>
+            Back
+        </a>
     </header>
     
-    <!-- Accounts Section -->
-    <section class="settings-section">
-        <div class="section-header">
-            <h2>Email Accounts</h2>
-            <button class="btn btn-primary" id="addAccountBtn">+ Add Account</button>
-        </div>
-        
-        <div class="accounts-list" id="accountsList">
-            {% if accounts %}
-                {% for account in accounts %}
-                <div class="account-card" data-id="{{ account.id }}">
-                    <div class="account-info">
-                        <div class="account-name">{{ account.name }}</div>
-                        <div class="account-email">{{ account.email or 'Not authorized' }}</div>
-                        <div class="account-provider">{{ account.provider | upper }}</div>
+    <!-- Email Accounts Section -->
+    <details class="settings-section">
+        <summary class="settings-section-header">
+            <i data-lucide="chevron-right" class="arrow"></i>
+            <i data-lucide="mail" class="header-icon"></i>
+            <div class="header-text">
+                <h3>Email Accounts</h3>
+                <p>Connect Gmail accounts to archive emails from</p>
+            </div>
+        </summary>
+        <div class="settings-section-content">
+            <div class="accounts-list" id="accountsList">
+                {% if accounts %}
+                    {% for account in accounts %}
+                    <div class="account-card" data-id="{{ account.id }}">
+                        <div class="account-info">
+                            <div class="account-icon">
+                                <i data-lucide="mail"></i>
+                            </div>
+                            <div class="account-details">
+                                <span class="account-name">{{ account.name }}</span>
+                                {% if account.email %}
+                                <span class="account-email">{{ account.email }}</span>
+                                <span class="account-status connected">Connected</span>
+                                {% else %}
+                                <span class="account-status pending">Not authorized</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="account-actions">
+                            {% if not account.email %}
+                            <button class="btn btn-primary btn-sm" onclick="authorizeAccount({{ account.id }})">
+                                <i data-lucide="key"></i>
+                                Authorize
+                            </button>
+                            {% endif %}
+                            <button class="btn btn-danger btn-sm" onclick="deleteAccount({{ account.id }})">
+                                <i data-lucide="trash-2"></i>
+                            </button>
+                        </div>
                     </div>
-                    <div class="account-actions">
-                        {% if not account.email %}
-                        <button class="btn btn-primary btn-sm" onclick="authorizeAccount({{ account.id }})">
-                            Authorize
-                        </button>
-                        {% endif %}
-                        <button class="btn btn-danger btn-sm" onclick="deleteAccount({{ account.id }})">
-                            Remove
-                        </button>
+                    {% endfor %}
+                {% else %}
+                    <div class="section-empty">
+                        <p>No email accounts connected yet.</p>
                     </div>
-                </div>
-                {% endfor %}
-            {% else %}
-                <div class="empty-state-small">
-                    <p>No email accounts connected yet.</p>
-                </div>
-            {% endif %}
+                {% endif %}
+            </div>
+            
+            <div style="margin-top: var(--space-lg);">
+                <button class="btn btn-primary" id="addAccountBtn">
+                    <i data-lucide="plus"></i>
+                    Add Gmail Account
+                </button>
+            </div>
+            
+            <div class="helper-box">
+                <strong>Note:</strong> To connect Gmail, you need OAuth credentials from 
+                <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a>. 
+                Place <code>credentials.json</code> in <code>~/mailrepo/config/</code>
+            </div>
         </div>
-        
-        <div class="helper-text mt-1">
-            <strong>Note:</strong> To connect Gmail, you need a <code>credentials.json</code> file from 
-            <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a>. 
-            Place it in <code>~/mailrepo/config/credentials.json</code>.
-        </div>
-    </section>
+    </details>
     
     <!-- Security Section -->
-    <section class="settings-section">
-        <h2>Security</h2>
-        <p class="section-description">Your master password protects your OAuth tokens and encrypted archives.</p>
-        <button class="btn btn-secondary" disabled>Change Master Password</button>
-        <span class="helper-text">(Coming soon)</span>
-    </section>
+    <details class="settings-section">
+        <summary class="settings-section-header">
+            <i data-lucide="chevron-right" class="arrow"></i>
+            <i data-lucide="shield" class="header-icon"></i>
+            <div class="header-text">
+                <h3>Security</h3>
+                <p>Master password and encryption settings</p>
+            </div>
+        </summary>
+        <div class="settings-section-content">
+            <p style="color: var(--color-text-muted); margin-bottom: var(--space-lg);">
+                Your master password protects your OAuth tokens and encrypted archives.
+            </p>
+            <button class="btn btn-secondary" disabled>
+                <i data-lucide="key"></i>
+                Change Master Password
+            </button>
+            <span style="margin-left: var(--space-sm); color: var(--color-text-muted); font-size: 0.875rem;">
+                (Coming soon)
+            </span>
+        </div>
+    </details>
     
     <!-- Import Section -->
-    <section class="settings-section">
-        <h2>Import</h2>
-        <p class="section-description">Import emails from .mbox archive files.</p>
-        <button class="btn btn-secondary" disabled>Import .mbox File</button>
-        <span class="helper-text">(Coming soon)</span>
-    </section>
+    <details class="settings-section">
+        <summary class="settings-section-header">
+            <i data-lucide="chevron-right" class="arrow"></i>
+            <i data-lucide="upload" class="header-icon"></i>
+            <div class="header-text">
+                <h3>Import</h3>
+                <p>Import emails from .mbox archive files</p>
+            </div>
+        </summary>
+        <div class="settings-section-content">
+            <button class="btn btn-secondary" disabled>
+                <i data-lucide="file-up"></i>
+                Import .mbox File
+            </button>
+            <span style="margin-left: var(--space-sm); color: var(--color-text-muted); font-size: 0.875rem;">
+                (Coming soon)
+            </span>
+        </div>
+    </details>
     
-    <!-- About Section -->
-    <section class="settings-section">
-        <h2>About</h2>
-        <p><strong>{{ app_name }}</strong> v{{ app_version }}</p>
-        <p class="helper-text">Your correspondence, your machine, your control.</p>
-    </section>
+    <!-- About Footer Link -->
+    <div class="footer-section">
+        <a href="javascript:void(0);" onclick="showAboutModal()" class="about-link">
+            About {{ app_name }}
+        </a>
+    </div>
+</div>
+
+<!-- About Modal -->
+<div class="modal-overlay" id="aboutModal">
+    <div class="modal-content about-modal-content">
+        <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="MailRepo Logo" class="about-logo">
+        <h2>{{ app_name }}</h2>
+        <p class="about-version">v{{ app_version }} "Enigma"</p>
+        <p class="about-credits">Designed by Richard Sembera</p>
+        <p class="about-credits">Coded by Claude Opus 4.5</p>
+        <p class="about-tagline">"Email archiving, done right."</p>
+        <button onclick="closeModal('aboutModal')" class="btn btn-secondary" style="width: 100%;">
+            Close
+        </button>
+    </div>
 </div>
 
 <!-- Add Account Modal -->
 <div class="modal-overlay" id="addAccountModal">
     <div class="modal-content">
         <div class="modal-header">
-            <h2>Add Email Account</h2>
+            <h2>Add Gmail Account</h2>
         </div>
         
         <div class="form-group">
@@ -90,29 +447,12 @@
             <span class="helper-text">A friendly name to identify this account</span>
         </div>
         
-        <div class="form-group">
-            <label>Provider</label>
-            <div class="radio-group">
-                <label class="radio-label">
-                    <input type="radio" name="provider" value="gmail" checked>
-                    <div class="radio-text">
-                        <strong>Gmail</strong>
-                        <span class="radio-hint">Connect via Google OAuth</span>
-                    </div>
-                </label>
-                <label class="radio-label" style="opacity: 0.5;">
-                    <input type="radio" name="provider" value="imap" disabled>
-                    <div class="radio-text">
-                        <strong>IMAP</strong>
-                        <span class="radio-hint">Coming in Phase 2</span>
-                    </div>
-                </label>
-            </div>
-        </div>
-        
         <div class="modal-actions">
             <button class="btn btn-secondary" onclick="closeModal('addAccountModal')">Cancel</button>
-            <button class="btn btn-primary" id="createAccountBtn">Add Account</button>
+            <button class="btn btn-primary" id="createAccountBtn">
+                <i data-lucide="plus"></i>
+                Add Account
+            </button>
         </div>
     </div>
 </div>
@@ -120,7 +460,7 @@
 
 {% block scripts %}
 <script>
-// Add Account
+// Add Account Modal
 document.getElementById('addAccountBtn')?.addEventListener('click', () => {
     document.getElementById('addAccountModal').classList.add('active');
     document.getElementById('accountName').focus();
@@ -128,7 +468,6 @@ document.getElementById('addAccountBtn')?.addEventListener('click', () => {
 
 document.getElementById('createAccountBtn')?.addEventListener('click', async () => {
     const name = document.getElementById('accountName').value.trim();
-    const provider = document.querySelector('input[name="provider"]:checked').value;
     
     if (!name) {
         alert('Please enter an account name');
@@ -139,7 +478,7 @@ document.getElementById('createAccountBtn')?.addEventListener('click', async () 
         const response = await fetch('/api/accounts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, provider }),
+            body: JSON.stringify({ name, provider: 'gmail' }),
         });
         
         if (!response.ok) {
@@ -162,11 +501,11 @@ document.getElementById('createAccountBtn')?.addEventListener('click', async () 
 
 async function authorizeAccount(accountId) {
     try {
-        // Show loading state
         const btn = document.querySelector(`.account-card[data-id="${accountId}"] .btn-primary`);
         if (btn) {
             btn.disabled = true;
-            btn.textContent = 'Authorizing...';
+            btn.innerHTML = '<i data-lucide="loader"></i> Authorizing...';
+            lucide.createIcons();
         }
         
         const response = await fetch(`/api/accounts/${accountId}/authorize`, {
@@ -179,12 +518,12 @@ async function authorizeAccount(accountId) {
             alert(data.error || 'Authorization failed');
             if (btn) {
                 btn.disabled = false;
-                btn.textContent = 'Authorize';
+                btn.innerHTML = '<i data-lucide="key"></i> Authorize';
+                lucide.createIcons();
             }
             return;
         }
         
-        // Refresh page to show updated account
         location.reload();
         
     } catch (error) {
@@ -194,7 +533,7 @@ async function authorizeAccount(accountId) {
 }
 
 async function deleteAccount(accountId) {
-    if (!confirm('Are you sure you want to remove this account? This will not delete any archived emails.')) {
+    if (!confirm('Remove this account? This will not delete any archived emails.')) {
         return;
     }
     
@@ -209,8 +548,13 @@ async function deleteAccount(accountId) {
             return;
         }
         
-        // Remove from UI
         document.querySelector(`.account-card[data-id="${accountId}"]`)?.remove();
+        
+        // Show empty state if no accounts left
+        const list = document.getElementById('accountsList');
+        if (list && !list.querySelector('.account-card')) {
+            list.innerHTML = '<div class="section-empty"><p>No email accounts connected yet.</p></div>';
+        }
         
     } catch (error) {
         console.error('Error:', error);
@@ -222,115 +566,22 @@ function closeModal(modalId) {
     document.getElementById(modalId)?.classList.remove('active');
 }
 
+function showAboutModal() {
+    document.getElementById('aboutModal').classList.add('active');
+}
+
 // Close modal on backdrop click
 document.getElementById('addAccountModal')?.addEventListener('click', (e) => {
     if (e.target.id === 'addAccountModal') {
         closeModal('addAccountModal');
     }
 });
+
+// Close modal on Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeModal('addAccountModal');
+    }
+});
 </script>
-
-<style>
-.settings-container {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: var(--space-xl);
-}
-
-.settings-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: var(--space-2xl);
-}
-
-.settings-header h1 {
-    margin: 0;
-}
-
-.settings-section {
-    background: white;
-    border-radius: var(--radius-xl);
-    padding: var(--space-xl);
-    margin-bottom: var(--space-xl);
-    box-shadow: var(--shadow-sm);
-}
-
-.settings-section h2 {
-    margin-top: 0;
-    margin-bottom: var(--space-md);
-}
-
-.section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: var(--space-lg);
-}
-
-.section-header h2 {
-    margin: 0;
-}
-
-.section-description {
-    color: var(--color-text-muted);
-    margin-bottom: var(--space-lg);
-}
-
-.accounts-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-md);
-}
-
-.account-card {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--space-lg);
-    background: var(--color-background-secondary);
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--color-border);
-}
-
-.account-name {
-    font-weight: 600;
-    margin-bottom: var(--space-xs);
-}
-
-.account-email {
-    font-size: 0.875rem;
-    color: var(--color-text-muted);
-}
-
-.account-provider {
-    font-size: 0.75rem;
-    color: var(--color-text-light);
-    margin-top: var(--space-xs);
-}
-
-.account-actions {
-    display: flex;
-    gap: var(--space-sm);
-}
-
-.btn-sm {
-    padding: var(--space-xs) var(--space-md);
-    font-size: 0.8125rem;
-    height: 32px;
-}
-
-.empty-state-small {
-    padding: var(--space-xl);
-    text-align: center;
-    color: var(--color-text-muted);
-}
-
-code {
-    background: var(--color-background-secondary);
-    padding: 0.125rem 0.375rem;
-    border-radius: var(--radius-sm);
-    font-size: 0.875rem;
-}
-</style>
 {% endblock %}
