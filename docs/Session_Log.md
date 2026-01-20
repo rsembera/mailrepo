@@ -21,10 +21,20 @@ Running record of planning sessions and decisions. Most recent first.
    - Root cause: IMAP SELECT command requires quoted folder names
    - Fix: Changed `self.connection.select(folder)` to `self.connection.select(f'"{folder}"')` in `core/imap.py`
 
-**Commits:**
-- (pending) — Fix IMAP folder quoting for names with spaces
+2. **Added horizontal scroll to sidebar:**
+   - Long folder names now scrollable instead of truncated
+   - Updated `.section-content` to `overflow-x: auto`
 
-**Status:** Bug fix complete. Ready for continued testing.
+3. **Improved account selection UX:**
+   - Clicking account name now auto-selects INBOX (previously just expanded/collapsed)
+   - More intuitive - one click to see your mail
+
+**Commits:**
+- `48e810e` — Fix IMAP folder quoting for names with spaces
+- `64fcb0c` — Add horizontal scroll to sidebar for long folder names
+- `4f0e6b6` — Auto-select INBOX when clicking account name
+
+**Status:** All fixes complete. Ready for continued testing.
 
 ---
 
