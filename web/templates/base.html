@@ -18,10 +18,11 @@
     
     <!-- Styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/shared.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/themes.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     {% block styles %}{% endblock %}
 </head>
-<body class="{% block body_class %}{% endblock %}">
+<body class="{% block body_class %}{% endblock %}" data-theme="{{ theme or 'teal' }}">
     {% block body %}
         {% block content %}{% endblock %}
     {% endblock %}

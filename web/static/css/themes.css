@@ -1,0 +1,312 @@
+/* ============================================
+   MAILREPO THEME SYSTEM
+   Five themes: Teal (default), Slate, Plum, Amber, Dark
+   ============================================ */
+
+/* ============================================
+   THEME: TEAL (Default)
+   Professional and calm - the original look
+   ============================================ */
+:root,
+[data-theme="teal"] {
+    /* Rail */
+    --rail-bg: #1F8F74;
+    --rail-logo-bg: #b2ebf2;
+    --rail-text: rgba(255, 255, 255, 0.7);
+    --rail-text-active: #ffffff;
+    --rail-btn-hover: rgba(255, 255, 255, 0.1);
+    --rail-btn-active: rgba(255, 255, 255, 0.2);
+    
+    /* Primary accent */
+    --color-primary: #1F8F74;
+    --color-primary-light: #9FCFC0;
+    --color-primary-lighter: #BFDCDC;
+    --color-primary-dark: #115D4F;
+    
+    /* Backgrounds */
+    --color-background: #FBFCFD;
+    --color-background-secondary: #F7FAFC;
+    --color-background-page: #EDF2F5;
+    
+    /* Text */
+    --color-text: #323B45;
+    --color-text-heading: #2D3748;
+    --color-text-muted: #5B6571;
+    --color-text-light: #718096;
+    
+    /* Borders & focus */
+    --color-border: #DEE2E6;
+    --color-border-focus: #1F8F74;
+    --shadow-focus: 0 0 0 3px rgba(31, 143, 116, 0.15);
+}
+
+/* ============================================
+   THEME: SLATE
+   Neutral gray/blue, understated and professional
+   ============================================ */
+[data-theme="slate"] {
+    /* Rail */
+    --rail-bg: #475569;
+    --rail-logo-bg: #cbd5e1;
+    --rail-text: rgba(255, 255, 255, 0.7);
+    --rail-text-active: #ffffff;
+    --rail-btn-hover: rgba(255, 255, 255, 0.1);
+    --rail-btn-active: rgba(255, 255, 255, 0.2);
+    
+    /* Primary accent */
+    --color-primary: #475569;
+    --color-primary-light: #94a3b8;
+    --color-primary-lighter: #e2e8f0;
+    --color-primary-dark: #334155;
+    
+    /* Backgrounds */
+    --color-background: #FBFCFD;
+    --color-background-secondary: #F8FAFC;
+    --color-background-page: #F1F5F9;
+    
+    /* Text */
+    --color-text: #334155;
+    --color-text-heading: #1e293b;
+    --color-text-muted: #64748b;
+    --color-text-light: #94a3b8;
+    
+    /* Borders & focus */
+    --color-border: #e2e8f0;
+    --color-border-focus: #475569;
+    --shadow-focus: 0 0 0 3px rgba(71, 85, 105, 0.15);
+}
+
+/* ============================================
+   THEME: PLUM
+   Purple tones with personality
+   ============================================ */
+[data-theme="plum"] {
+    /* Rail */
+    --rail-bg: #7c3aed;
+    --rail-logo-bg: #ddd6fe;
+    --rail-text: rgba(255, 255, 255, 0.7);
+    --rail-text-active: #ffffff;
+    --rail-btn-hover: rgba(255, 255, 255, 0.1);
+    --rail-btn-active: rgba(255, 255, 255, 0.2);
+    
+    /* Primary accent */
+    --color-primary: #7c3aed;
+    --color-primary-light: #a78bfa;
+    --color-primary-lighter: #ede9fe;
+    --color-primary-dark: #5b21b6;
+    
+    /* Backgrounds */
+    --color-background: #FDFCFE;
+    --color-background-secondary: #FAF8FC;
+    --color-background-page: #F5F3F8;
+    
+    /* Text */
+    --color-text: #3b3154;
+    --color-text-heading: #2e2346;
+    --color-text-muted: #6b5b7a;
+    --color-text-light: #8b7b9a;
+    
+    /* Borders & focus */
+    --color-border: #e9e4f0;
+    --color-border-focus: #7c3aed;
+    --shadow-focus: 0 0 0 3px rgba(124, 58, 237, 0.15);
+}
+
+/* ============================================
+   THEME: AMBER
+   Warm gold/orange, inviting
+   ============================================ */
+[data-theme="amber"] {
+    /* Rail */
+    --rail-bg: #d97706;
+    --rail-logo-bg: #fef3c7;
+    --rail-text: rgba(255, 255, 255, 0.8);
+    --rail-text-active: #ffffff;
+    --rail-btn-hover: rgba(255, 255, 255, 0.1);
+    --rail-btn-active: rgba(255, 255, 255, 0.2);
+    
+    /* Primary accent */
+    --color-primary: #d97706;
+    --color-primary-light: #fbbf24;
+    --color-primary-lighter: #fef3c7;
+    --color-primary-dark: #b45309;
+    
+    /* Backgrounds */
+    --color-background: #FFFDFB;
+    --color-background-secondary: #FFFBF5;
+    --color-background-page: #FEF7ED;
+    
+    /* Text */
+    --color-text: #44403c;
+    --color-text-heading: #292524;
+    --color-text-muted: #78716c;
+    --color-text-light: #a8a29e;
+    
+    /* Borders & focus */
+    --color-border: #e7e5e4;
+    --color-border-focus: #d97706;
+    --shadow-focus: 0 0 0 3px rgba(217, 119, 6, 0.15);
+}
+
+/* ============================================
+   THEME: DARK
+   Dark mode for late-night archiving
+   ============================================ */
+[data-theme="dark"] {
+    /* Rail */
+    --rail-bg: #1e1e2e;
+    --rail-logo-bg: #45475a;
+    --rail-text: rgba(205, 214, 244, 0.7);
+    --rail-text-active: #cdd6f4;
+    --rail-btn-hover: rgba(205, 214, 244, 0.1);
+    --rail-btn-active: rgba(205, 214, 244, 0.15);
+    
+    /* Primary accent */
+    --color-primary: #89b4fa;
+    --color-primary-light: #b4befe;
+    --color-primary-lighter: #313244;
+    --color-primary-dark: #74c7ec;
+    
+    /* Backgrounds */
+    --color-background: #1e1e2e;
+    --color-background-secondary: #181825;
+    --color-background-page: #11111b;
+    
+    /* Text */
+    --color-text: #cdd6f4;
+    --color-text-heading: #f5f5f5;
+    --color-text-muted: #a6adc8;
+    --color-text-light: #7f849c;
+    
+    /* Borders & focus */
+    --color-border: #45475a;
+    --color-border-focus: #89b4fa;
+    --shadow-focus: 0 0 0 3px rgba(137, 180, 250, 0.2);
+    
+    /* Shadows (lighter for dark mode) */
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+    
+    /* Status colors adjusted for dark */
+    --color-danger: #f38ba8;
+    --color-danger-hover: #eba0ac;
+    --color-success: #a6e3a1;
+    --color-warning: #f9e2af;
+}
+
+
+/* ============================================
+   DARK THEME OVERRIDES
+   Additional styles needed for dark mode
+   ============================================ */
+[data-theme="dark"] {
+    /* Cards and modals */
+    --card-bg: #1e1e2e;
+    --modal-bg: #1e1e2e;
+    
+    /* Sidebar */
+    --sidebar-bg: #181825;
+    
+    /* Input backgrounds */
+    --input-bg: #313244;
+}
+
+/* Dark mode specific element overrides */
+[data-theme="dark"] .sidebar {
+    background: var(--sidebar-bg);
+    border-right-color: var(--color-border);
+}
+
+[data-theme="dark"] .content-header,
+[data-theme="dark"] .content-toolbar {
+    background: var(--color-background);
+    border-bottom-color: var(--color-border);
+}
+
+[data-theme="dark"] .email-item {
+    border-bottom-color: var(--color-border);
+}
+
+[data-theme="dark"] .email-item:hover {
+    background: var(--color-background-secondary);
+}
+
+[data-theme="dark"] .modal-content {
+    background: var(--modal-bg);
+}
+
+[data-theme="dark"] .auth-card {
+    background: var(--card-bg);
+}
+
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+    background: var(--input-bg);
+    color: var(--color-text);
+    border-color: var(--color-border);
+}
+
+[data-theme="dark"] .btn-secondary {
+    background: #313244;
+    color: var(--color-text);
+}
+
+[data-theme="dark"] .btn-secondary:hover:not(:disabled) {
+    background: #45475a;
+}
+
+[data-theme="dark"] .section-header {
+    color: var(--color-text);
+}
+
+[data-theme="dark"] .tree-item-row:hover {
+    background: var(--color-background-secondary);
+}
+
+[data-theme="dark"] .tree-item-row.active {
+    background: var(--color-primary-lighter);
+    color: var(--color-primary);
+}
+
+[data-theme="dark"] .folder-select-item:hover {
+    background: var(--color-background-secondary);
+}
+
+[data-theme="dark"] .radio-label {
+    border-color: var(--color-border);
+}
+
+[data-theme="dark"] .radio-label:hover {
+    background: var(--color-background-secondary);
+    border-color: var(--color-primary);
+}
+
+/* Settings page cards in dark mode */
+[data-theme="dark"] .settings-section {
+    background: var(--card-bg);
+}
+
+[data-theme="dark"] .account-card {
+    background: var(--color-background-secondary);
+}
+
+[data-theme="dark"] .icon-select-dropdown {
+    background: var(--card-bg);
+    border-color: var(--color-border);
+}
+
+[data-theme="dark"] .icon-select-trigger {
+    background: var(--input-bg);
+    border-color: var(--color-border);
+    color: var(--color-text);
+}
+
+[data-theme="dark"] .icon-select-option:hover {
+    background: var(--color-background-secondary);
+}
+
+[data-theme="dark"] .icon-select-option.selected {
+    background: var(--color-primary-lighter);
+}
