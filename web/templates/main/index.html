@@ -210,6 +210,42 @@
         </div>
     </div>
 </div>
+
+<!-- Email Viewer Panel -->
+<div class="email-viewer-overlay" id="emailViewerOverlay">
+    <div class="email-viewer">
+        <div class="email-viewer-header">
+            <button class="btn btn-secondary btn-icon" onclick="closeEmailViewer()">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <div class="email-viewer-meta">
+            <h2 id="viewerSubject">Loading...</h2>
+            <div class="email-viewer-details">
+                <div class="detail-row">
+                    <span class="detail-label">From:</span>
+                    <span id="viewerFrom"></span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">To:</span>
+                    <span id="viewerTo"></span>
+                </div>
+                <div class="detail-row" id="viewerCcRow" style="display: none;">
+                    <span class="detail-label">Cc:</span>
+                    <span id="viewerCc"></span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Date:</span>
+                    <span id="viewerDate"></span>
+                </div>
+            </div>
+            <div id="viewerAttachments" class="email-attachments" style="display: none;"></div>
+        </div>
+        <div class="email-viewer-body" id="viewerBody">
+            <div class="loading-spinner">Loading...</div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}

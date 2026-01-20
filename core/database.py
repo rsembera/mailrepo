@@ -13,7 +13,7 @@ from .config import Config
 
 
 # Current schema version (increment when schema changes)
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class Database:
@@ -162,11 +162,10 @@ class Database:
             from_version: Current schema version.
             to_version: Target schema version.
         """
-        # Add migrations here as schema evolves
-        # Example:
-        # if from_version < 2:
-        #     conn.execute("ALTER TABLE folders ADD COLUMN color TEXT")
-        pass
+        # Migration from version 1 to 2: add folder caching columns
+        if from_version < 2:
+            conn.execute("ALTER TABLE accounts ADD COLUMN cached_folders TEXT")
+            conn.execute("ALTER TABLE accounts ADD COLUMN cached_folders_at INTEGER")
 
 
 # SQL schema definition
@@ -178,6 +177,8 @@ CREATE TABLE IF NOT EXISTS accounts (
     email TEXT NOT NULL,                   -- Email address
     provider TEXT NOT NULL,                -- 'gmail' or 'imap'
     credentials_encrypted TEXT,            -- Encrypted OAuth tokens or IMAP credentials
+    cached_folders TEXT,                   -- JSON cache of IMAP folder list
+    cached_folders_at INTEGER,             -- When folder cache was last updated
     created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
     last_sync INTEGER,                     -- Last successful sync timestamp
     UNIQUE(email, provider)

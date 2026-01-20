@@ -337,21 +337,22 @@ function renderEmailList() {
     }
     
     elements.emailList.innerHTML = state.emails.map(email => {
-        const isStaged = state.staged.has(email.id);
-        const isSelected = state.selectedEmails.has(email.id);
+        const emailId = email.uid || email.id;
+        const isStaged = state.staged.has(emailId);
+        const isSelected = state.selectedEmails.has(emailId);
         
         return `
             <div class="email-item ${isStaged ? 'staged' : ''} ${isSelected ? 'selected' : ''}" 
-                 data-id="${email.id}">
-                <div class="email-checkbox">
+                 data-id="${emailId}">
+                <div class="email-checkbox" onclick="event.stopPropagation()">
                     <input type="checkbox" 
                            ${isSelected ? 'checked' : ''} 
                            ${isStaged ? 'disabled' : ''}
-                           onchange="toggleEmailSelection('${email.id}')">
+                           onchange="toggleEmailSelection('${emailId}')">
                 </div>
-                <div class="email-content">
+                <div class="email-content" onclick="openEmailViewer('${emailId}')">
                     <div class="email-header">
-                        <span class="email-sender">${escapeHtml(extractName(email.sender))}</span>
+                        <span class="email-sender">${escapeHtml(extractName(email.from || email.sender))}</span>
                         <span class="email-date">${formatDate(email.date)}</span>
                     </div>
                     <div class="email-subject">${escapeHtml(email.subject || '(no subject)')}</div>
@@ -388,11 +389,12 @@ function handleSelectAll(e) {
     const checked = e.target.checked;
     
     state.emails.forEach(email => {
-        if (!state.staged.has(email.id)) {
+        const emailId = email.uid || email.id;
+        if (!state.staged.has(emailId)) {
             if (checked) {
-                state.selectedEmails.add(email.id);
+                state.selectedEmails.add(emailId);
             } else {
-                state.selectedEmails.delete(email.id);
+                state.selectedEmails.delete(emailId);
             }
         }
     });
@@ -454,7 +456,7 @@ function confirmStage() {
     if (!selectedDestinationFolder || !state.currentView) return;
     
     state.selectedEmails.forEach(emailId => {
-        const email = state.emails.find(e => e.id === emailId);
+        const email = state.emails.find(e => (e.uid || e.id) === emailId);
         if (email) {
             state.staged.set(emailId, {
                 email,
@@ -673,6 +675,153 @@ function handleBeforeUnload(e) {
     }
 }
 
+// ============================================
+// EMAIL VIEWER
+// ============================================
+
+async function openEmailViewer(emailId) {
+    const email = state.emails.find(e => e.uid === emailId || e.id === emailId);
+    if (!email) return;
+    
+    // Show overlay with loading state
+    const overlay = document.getElementById('emailViewerOverlay');
+    overlay.classList.add('active');
+    
+    document.getElementById('viewerSubject').textContent = email.subject || '(no subject)';
+    document.getElementById('viewerFrom').textContent = email.from || '';
+    document.getElementById('viewerTo').textContent = email.to || '';
+    document.getElementById('viewerDate').textContent = email.date || '';
+    document.getElementById('viewerBody').innerHTML = '<div class="loading-spinner">Loading...</div>';
+    document.getElementById('viewerAttachments').style.display = 'none';
+    document.getElementById('viewerCcRow').style.display = 'none';
+    
+    // Render icons
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+    
+    // Fetch full email
+    if (state.currentView?.type === 'account') {
+        const accountId = state.currentView.id;
+        const folder = state.currentView.folder || 'INBOX';
+        const uid = email.uid || email.id;
+        
+        try {
+            const response = await fetch(
+                `/api/accounts/${accountId}/emails/${uid}?folder=${encodeURIComponent(folder)}`
+            );
+            
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || 'Failed to load email');
+            }
+            
+            const data = await response.json();
+            renderEmailContent(data.email);
+            
+        } catch (error) {
+            console.error('Error loading email:', error);
+            document.getElementById('viewerBody').innerHTML = 
+                `<div class="error-message">Failed to load email: ${escapeHtml(error.message)}</div>`;
+        }
+    }
+}
+
+function renderEmailContent(email) {
+    // Update meta
+    document.getElementById('viewerSubject').textContent = email.subject || '(no subject)';
+    document.getElementById('viewerFrom').textContent = email.from || '';
+    document.getElementById('viewerTo').textContent = email.to || '';
+    document.getElementById('viewerDate').textContent = email.date || '';
+    
+    if (email.cc) {
+        document.getElementById('viewerCc').textContent = email.cc;
+        document.getElementById('viewerCcRow').style.display = 'flex';
+    }
+    
+    // Attachments
+    if (email.attachments && email.attachments.length > 0) {
+        const attachDiv = document.getElementById('viewerAttachments');
+        let html = '<div class="attachment-list">';
+        email.attachments.forEach(att => {
+            html += `
+                <div class="attachment-item">
+                    <i data-lucide="paperclip"></i>
+                    <span>${escapeHtml(att.filename)}</span>
+                </div>
+            `;
+        });
+        html += '</div>';
+        attachDiv.innerHTML = html;
+        attachDiv.style.display = 'block';
+        
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+    
+    // Body - prefer HTML, fall back to text
+    const bodyDiv = document.getElementById('viewerBody');
+    
+    if (email.html_body) {
+        // Use an iframe for HTML content to isolate styles
+        const iframe = document.createElement('iframe');
+        iframe.sandbox = 'allow-same-origin';
+        iframe.style.width = '100%';
+        iframe.style.border = 'none';
+        bodyDiv.innerHTML = '';
+        bodyDiv.appendChild(iframe);
+        
+        // Write content to iframe
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        doc.open();
+        doc.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                           font-size: 14px; line-height: 1.5; color: #333; margin: 0; padding: 0; }
+                    img { max-width: 100%; height: auto; }
+                    a { color: #1a73e8; }
+                </style>
+            </head>
+            <body>${email.html_body}</body>
+            </html>
+        `);
+        doc.close();
+        
+        // Adjust iframe height to content
+        setTimeout(() => {
+            iframe.style.height = doc.body.scrollHeight + 'px';
+        }, 100);
+        
+    } else if (email.text_body) {
+        bodyDiv.innerHTML = `<div class="email-text-body">${escapeHtml(email.text_body)}</div>`;
+    } else {
+        bodyDiv.innerHTML = '<div class="email-text-body">(No content)</div>';
+    }
+}
+
+function closeEmailViewer() {
+    document.getElementById('emailViewerOverlay').classList.remove('active');
+}
+
+// Close viewer on Escape or backdrop click
+document.getElementById('emailViewerOverlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'emailViewerOverlay') {
+        closeEmailViewer();
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.getElementById('emailViewerOverlay')?.classList.contains('active')) {
+        closeEmailViewer();
+    }
+});
+
 // Global functions for inline handlers
 window.toggleEmailSelection = toggleEmailSelection;
 window.closeModal = closeModal;
+window.openEmailViewer = openEmailViewer;
+window.closeEmailViewer = closeEmailViewer;

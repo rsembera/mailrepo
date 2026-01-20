@@ -303,9 +303,14 @@ def get_account_emails(account_id):
             client.disconnect()
 
 
-@api_bp.route("/accounts/<int:account_id>/folders", methods=["GET"])
-def get_account_folders(account_id):
-    """Get IMAP folders (mailboxes) for an account."""
+@api_bp.route("/accounts/<int:account_id>/emails/<uid>", methods=["GET"])
+def get_account_email(account_id, uid):
+    """
+    Get a single email with full content for viewing.
+    
+    Query params:
+        folder: IMAP folder the email is in (default: INBOX)
+    """
     account = Database.fetchone(
         "SELECT id, credentials_encrypted FROM accounts WHERE id = ?",
         (account_id,)
@@ -317,14 +322,80 @@ def get_account_folders(account_id):
     if not account["credentials_encrypted"]:
         return jsonify({"error": "Account not configured"}), 401
     
+    folder = request.args.get("folder", "INBOX")
+    
+    client = None
+    try:
+        client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+        client.select_folder(folder)
+        email_data = client.fetch_full(uid)
+        
+        return jsonify({"email": email_data})
+        
+    except IMAPError as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if client:
+            client.disconnect()
+
+
+@api_bp.route("/accounts/<int:account_id>/folders", methods=["GET"])
+def get_account_folders(account_id):
+    """
+    Get IMAP folders (mailboxes) for an account.
+    
+    Uses cached folder list if available and fresh (< 1 hour old).
+    Query param: refresh=1 to force refresh from server.
+    """
+    import json
+    
+    account = Database.fetchone(
+        "SELECT id, credentials_encrypted, cached_folders, cached_folders_at FROM accounts WHERE id = ?",
+        (account_id,)
+    )
+    
+    if not account:
+        return jsonify({"error": "Account not found"}), 404
+    
+    if not account["credentials_encrypted"]:
+        return jsonify({"error": "Account not configured"}), 401
+    
+    force_refresh = request.args.get("refresh") == "1"
+    cache_max_age = 3600  # 1 hour
+    
+    # Check if we have a fresh cache
+    if not force_refresh and account["cached_folders"] and account["cached_folders_at"]:
+        cache_age = int(time.time()) - account["cached_folders_at"]
+        if cache_age < cache_max_age:
+            try:
+                folders = json.loads(account["cached_folders"])
+                return jsonify({"folders": folders, "cached": True})
+            except json.JSONDecodeError:
+                pass  # Fall through to fetch from server
+    
+    # Fetch from server
     client = None
     try:
         client = IMAP.connect_with_credentials(account["credentials_encrypted"])
         folders = client.list_folders()
         
-        return jsonify({"folders": folders})
+        # Update cache
+        Database.execute(
+            "UPDATE accounts SET cached_folders = ?, cached_folders_at = ? WHERE id = ?",
+            (json.dumps(folders), int(time.time()), account_id)
+        )
+        Database.commit()
+        
+        return jsonify({"folders": folders, "cached": False})
         
     except IMAPError as e:
+        # If we have stale cache, return it with error note
+        if account["cached_folders"]:
+            try:
+                folders = json.loads(account["cached_folders"])
+                return jsonify({"folders": folders, "cached": True, "stale": True, "error": str(e)})
+            except:
+                pass
         return jsonify({"error": str(e)}), 500
     finally:
         if client:

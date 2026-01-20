@@ -259,6 +259,74 @@ class IMAP:
         except Exception as e:
             raise IMAPError(f"Failed to fetch message {uid}: {e}")
     
+    def fetch_full(self, uid: str) -> dict:
+        """
+        Fetch complete message with parsed body for viewing.
+        
+        Args:
+            uid: Message UID.
+            
+        Returns:
+            Dict with headers and body (text and/or html).
+        """
+        raw = self.fetch_raw(uid)
+        msg = email.message_from_bytes(raw)
+        
+        result = {
+            "uid": uid,
+            "subject": self._decode_header(msg.get("Subject", "")),
+            "from": self._decode_header(msg.get("From", "")),
+            "to": self._decode_header(msg.get("To", "")),
+            "cc": self._decode_header(msg.get("Cc", "")),
+            "date": msg.get("Date", ""),
+            "message_id": msg.get("Message-ID", ""),
+            "text_body": None,
+            "html_body": None,
+            "attachments": [],
+        }
+        
+        # Parse body
+        if msg.is_multipart():
+            for part in msg.walk():
+                content_type = part.get_content_type()
+                content_disposition = str(part.get("Content-Disposition", ""))
+                
+                # Skip attachments for body extraction
+                if "attachment" in content_disposition:
+                    filename = part.get_filename()
+                    if filename:
+                        result["attachments"].append({
+                            "filename": self._decode_header(filename),
+                            "content_type": content_type,
+                            "size": len(part.get_payload(decode=True) or b""),
+                        })
+                    continue
+                
+                if content_type == "text/plain" and not result["text_body"]:
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        charset = part.get_content_charset() or "utf-8"
+                        result["text_body"] = payload.decode(charset, errors="replace")
+                
+                elif content_type == "text/html" and not result["html_body"]:
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        charset = part.get_content_charset() or "utf-8"
+                        result["html_body"] = payload.decode(charset, errors="replace")
+        else:
+            # Simple message
+            content_type = msg.get_content_type()
+            payload = msg.get_payload(decode=True)
+            if payload:
+                charset = msg.get_content_charset() or "utf-8"
+                body = payload.decode(charset, errors="replace")
+                if content_type == "text/html":
+                    result["html_body"] = body
+                else:
+                    result["text_body"] = body
+        
+        return result
+    
     def _decode_header(self, header: str) -> str:
         """Decode RFC 2047 encoded header."""
         if not header:
