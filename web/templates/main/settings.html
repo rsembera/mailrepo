@@ -282,6 +282,101 @@ details[open] .settings-section-header .arrow {
     color: var(--color-primary-dark);
 }
 
+/* Font Controls */
+.font-controls {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+}
+
+.font-select-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+}
+
+.font-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-md);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-background);
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 90px;
+}
+
+.font-option:hover {
+    border-color: var(--color-primary-light);
+    background: var(--color-background-secondary);
+}
+
+.font-option.active {
+    border-color: var(--color-primary);
+    background: var(--color-primary-lighter);
+}
+
+.font-preview {
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: var(--color-text-heading);
+}
+
+.font-name {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+}
+
+.font-option.active .font-name {
+    color: var(--color-primary-dark);
+}
+
+.font-size-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.size-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text);
+}
+
+.size-toggle {
+    display: flex;
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.size-btn {
+    padding: var(--space-sm) var(--space-md);
+    border: none;
+    background: var(--color-background);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.size-btn:not(:last-child) {
+    border-right: 1px solid var(--color-border);
+}
+
+.size-btn:hover {
+    background: var(--color-background-secondary);
+}
+
+.size-btn.active {
+    background: var(--color-primary);
+    color: white;
+}
+
 /* About section */
 .about-info {
     display: flex;
@@ -488,6 +583,34 @@ details[open] .settings-section-header .arrow {
                         <span class="theme-swatch" style="background: #1e1e2e;"></span>
                         <span class="theme-name">Dark</span>
                     </button>
+                </div>
+            </div>
+            
+            <div class="appearance-group">
+                <label class="appearance-label">Font</label>
+                <div class="font-controls">
+                    <div class="font-select-grid" id="fontGrid">
+                        <button class="font-option" data-font="lexend" style="font-family: 'Lexend', sans-serif;">
+                            <span class="font-preview">Aa</span>
+                            <span class="font-name">Lexend</span>
+                        </button>
+                        <button class="font-option" data-font="inter" style="font-family: 'Inter', sans-serif;">
+                            <span class="font-preview">Aa</span>
+                            <span class="font-name">Inter</span>
+                        </button>
+                        <button class="font-option" data-font="system" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+                            <span class="font-preview">Aa</span>
+                            <span class="font-name">System</span>
+                        </button>
+                    </div>
+                    <div class="font-size-controls">
+                        <span class="size-label">Size</span>
+                        <div class="size-toggle" id="sizeToggle">
+                            <button class="size-btn" data-size="s">S</button>
+                            <button class="size-btn" data-size="m">M</button>
+                            <button class="size-btn" data-size="l">L</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -717,6 +840,76 @@ document.getElementById('themeGrid')?.addEventListener('click', (e) => {
     const btn = e.target.closest('.theme-option');
     if (btn) {
         setTheme(btn.dataset.theme);
+    }
+});
+
+// ============================================
+// FONT SWITCHING
+// ============================================
+
+// Initialize font on page load
+document.addEventListener('DOMContentLoaded', () => {
+    const savedFont = localStorage.getItem('mailrepo-font') || 'lexend';
+    const savedSize = localStorage.getItem('mailrepo-font-size') || 'm';
+    setFont(savedFont, false);
+    setFontSize(savedSize, false);
+});
+
+function setFont(font, save = true) {
+    // Update CSS variable
+    const fontFamilies = {
+        'lexend': "'Lexend', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        'inter': "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        'system': "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    };
+    document.documentElement.style.setProperty('--font-ui', fontFamilies[font] || fontFamilies['lexend']);
+    document.documentElement.style.setProperty('--font-body', fontFamilies[font] || fontFamilies['lexend']);
+    
+    // Update active state on buttons
+    document.querySelectorAll('.font-option').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.font === font);
+    });
+    
+    // Save to localStorage
+    if (save) {
+        localStorage.setItem('mailrepo-font', font);
+    }
+}
+
+function setFontSize(size, save = true) {
+    // Update base font size
+    const sizes = {
+        's': '14px',
+        'm': '16px',
+        'l': '18px'
+    };
+    document.documentElement.style.setProperty('--base-font-size', sizes[size] || sizes['m']);
+    document.body.style.fontSize = sizes[size] || sizes['m'];
+    
+    // Update active state on buttons
+    document.querySelectorAll('.size-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.size === size);
+    });
+    
+    // Save to localStorage
+    if (save) {
+        localStorage.setItem('mailrepo-font-size', size);
+    }
+}
+
+// Font button clicks
+document.getElementById('fontGrid')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.font-option');
+    if (btn) {
+        setFont(btn.dataset.font);
+    }
+});
+
+// Size button clicks
+document.getElementById('sizeToggle')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.size-btn');
+    if (btn) {
+        setFontSize(btn.dataset.size);
     }
 });
 </script>

@@ -22,15 +22,31 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     {% block styles %}{% endblock %}
     
-    <!-- Apply theme early to prevent flash -->
+    <!-- Apply theme and font early to prevent flash -->
     <script>
         (function() {
+            // Theme
             const theme = localStorage.getItem('mailrepo-theme') || 'teal';
             document.documentElement.setAttribute('data-theme', theme);
+            
+            // Font family
+            const font = localStorage.getItem('mailrepo-font') || 'lexend';
+            const fontFamilies = {
+                'lexend': "'Lexend', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+                'inter': "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+                'system': "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+            };
+            document.documentElement.style.setProperty('--font-ui', fontFamilies[font] || fontFamilies['lexend']);
+            document.documentElement.style.setProperty('--font-body', fontFamilies[font] || fontFamilies['lexend']);
+            
+            // Font size
+            const size = localStorage.getItem('mailrepo-font-size') || 'm';
+            const sizes = { 's': '14px', 'm': '16px', 'l': '18px' };
+            document.documentElement.style.setProperty('--base-font-size', sizes[size] || '16px');
         })();
     </script>
 </head>
-<body class="{% block body_class %}{% endblock %}" data-theme="teal">
+<body class="{% block body_class %}{% endblock %}" data-theme="teal" style="font-size: var(--base-font-size, 16px);">
     {% block body %}
         {% block content %}{% endblock %}
     {% endblock %}
@@ -41,6 +57,10 @@
     <script>
         // Apply theme to body as well (html already has it from head script)
         document.body.setAttribute('data-theme', localStorage.getItem('mailrepo-theme') || 'teal');
+        // Apply font size to body
+        const savedSize = localStorage.getItem('mailrepo-font-size') || 'm';
+        const sizes = { 's': '14px', 'm': '16px', 'l': '18px' };
+        document.body.style.fontSize = sizes[savedSize] || '16px';
         lucide.createIcons();
     </script>
 </body>
