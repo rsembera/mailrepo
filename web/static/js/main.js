@@ -123,12 +123,23 @@ function handleTreeItemClick(e, row) {
     const type = row.dataset.type;
     const id = row.dataset.id;
     
-    // Handle account expansion
+    // Handle account expansion - also auto-select INBOX
     if (type === 'account') {
+        const wasExpanded = row.classList.contains('expanded');
         row.classList.toggle('expanded');
         const children = row.nextElementSibling;
         if (children?.classList.contains('tree-children')) {
             children.style.display = row.classList.contains('expanded') ? 'block' : 'none';
+        }
+        
+        // If expanding (not collapsing), auto-select INBOX
+        if (!wasExpanded) {
+            // Update active state
+            document.querySelectorAll('.tree-item-row').forEach(r => r.classList.remove('active'));
+            row.classList.add('active');
+            
+            // Select INBOX view for this account
+            selectView({ type: 'account', id: id, folder: 'INBOX' });
         }
         return;
     }
