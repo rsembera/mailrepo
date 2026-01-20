@@ -1,6 +1,6 @@
 /* ============================================
    MAILREPO THEME SYSTEM
-   Five themes: Teal (default), Slate, Plum, Amber, Dark
+   Three themes: Teal (default), Slate, Dark
    ============================================ */
 
 /* ============================================
@@ -74,78 +74,6 @@
     --color-border: #e2e8f0;
     --color-border-focus: #475569;
     --shadow-focus: 0 0 0 3px rgba(71, 85, 105, 0.15);
-}
-
-/* ============================================
-   THEME: PLUM
-   Muted purple tones, subdued and professional
-   ============================================ */
-[data-theme="plum"] {
-    /* Rail */
-    --rail-bg: #5a4a7a;
-    --rail-logo-bg: #e0dae8;
-    --rail-text: rgba(255, 255, 255, 0.7);
-    --rail-text-active: #ffffff;
-    --rail-btn-hover: rgba(255, 255, 255, 0.1);
-    --rail-btn-active: rgba(255, 255, 255, 0.2);
-    
-    /* Primary accent */
-    --color-primary: #5a4a7a;
-    --color-primary-light: #8a7aa8;
-    --color-primary-lighter: #edeaf2;
-    --color-primary-dark: #463a60;
-    
-    /* Backgrounds */
-    --color-background: #FBFAFC;
-    --color-background-secondary: #F7F5F9;
-    --color-background-page: #F0EDF4;
-    
-    /* Text */
-    --color-text: #3d3651;
-    --color-text-heading: #2d2840;
-    --color-text-muted: #6b6080;
-    --color-text-light: #8a809c;
-    
-    /* Borders & focus */
-    --color-border: #e2dce9;
-    --color-border-focus: #5a4a7a;
-    --shadow-focus: 0 0 0 3px rgba(90, 74, 122, 0.15);
-}
-
-/* ============================================
-   THEME: AMBER
-   Muted warm brown/bronze, understated warmth
-   ============================================ */
-[data-theme="amber"] {
-    /* Rail */
-    --rail-bg: #8b6344;
-    --rail-logo-bg: #f0e4d8;
-    --rail-text: rgba(255, 255, 255, 0.8);
-    --rail-text-active: #ffffff;
-    --rail-btn-hover: rgba(255, 255, 255, 0.1);
-    --rail-btn-active: rgba(255, 255, 255, 0.2);
-    
-    /* Primary accent */
-    --color-primary: #8b6344;
-    --color-primary-light: #b8987a;
-    --color-primary-lighter: #f5efe8;
-    --color-primary-dark: #6b4d35;
-    
-    /* Backgrounds */
-    --color-background: #FCFBF9;
-    --color-background-secondary: #F9F6F2;
-    --color-background-page: #F2EDE6;
-    
-    /* Text */
-    --color-text: #4a443c;
-    --color-text-heading: #332e28;
-    --color-text-muted: #736a5e;
-    --color-text-light: #9a9088;
-    
-    /* Borders & focus */
-    --color-border: #e5dfd6;
-    --color-border-focus: #8b6344;
-    --shadow-focus: 0 0 0 3px rgba(139, 99, 68, 0.15);
 }
 
 /* ============================================
