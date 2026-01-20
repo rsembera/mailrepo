@@ -38,7 +38,7 @@
     align-items: center;
     justify-content: center;
     margin-bottom: var(--space-md);
-    background: rgba(255, 255, 255, 0.95);
+    background: #b2ebf2;
     border-radius: 50%;
 }
 
