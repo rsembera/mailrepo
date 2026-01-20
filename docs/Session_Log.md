@@ -4,6 +4,55 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## TODO Before Release
+
+- [ ] **Consolidate database migrations** — Push all migrations into the base schema in `database.py` so fresh installs don't need to run migrations. Currently schema v2 with migration from v1.
+
+---
+
+## January 20, 2026 — Lunch Session (~12:00 PM)
+
+**Participants:** Rick, Claude
+
+**Work Done:**
+
+1. **Replaced Gmail OAuth with IMAP:**
+   - Deleted `core/gmail.py`
+   - Created `core/imap.py` — full IMAP client with connection, auth, folder listing, email fetching
+   - Created `core/importer.py` — mbox and .eml import functionality
+   - Updated `api.py` — all Gmail endpoints replaced with IMAP + import endpoints
+   - Removed Google dependencies from `requirements.txt`
+
+2. **Updated Settings Page for IMAP:**
+   - IMAP credentials form instead of OAuth
+   - Auto-detect server from email domain
+   - Added import section for .mbox and .eml files
+   - Replaced all browser `alert()` and `confirm()` with styled modals
+
+3. **Fixed Main View for IMAP:**
+   - Changed "labels" to "folders" throughout
+   - Updated folder loading to use IMAP folder list
+   - Fixed email ID handling (uid vs id)
+
+4. **Added Folder Caching:**
+   - Database migration v1→v2: added `cached_folders` and `cached_folders_at` columns
+   - Cache folder list for 1 hour, return stale cache on connection errors
+   - First load slow, subsequent loads instant
+
+5. **Added Email Viewer:**
+   - Slide-out panel when clicking on an email
+   - Displays full headers, text/HTML body, attachment list
+   - HTML content rendered in sandboxed iframe
+
+**Commits:**
+- `cf5fdda` — Replace Gmail OAuth with IMAP, add mbox/eml import, styled modals
+- `5209eb3` — Fix IMAP folder loading in main view
+- `2e2a37e` — Add folder caching, email viewer panel
+
+**Status:** IMAP working, folder caching in place, email viewer functional. Ready for testing.
+
+---
+
 ## January 19, 2026 — Evening Session (~9:30 PM)
 
 **Participants:** Rick, Claude
@@ -208,18 +257,15 @@ All major design decisions have been resolved. Ready to continue building.
 
 ## What's Next to Build
 
-1. Gmail OAuth integration (credentials.json, token storage)
-2. Email fetching and display in index view
-3. Folder tree UI with 🔒/📁 icons
-4. Staging workflow JavaScript
-5. Review page
-6. Commit workflow with progress indicator
+1. Test IMAP workflow end-to-end
+2. Test mbox import
+3. ZIP export functionality
+4. Search within archive
 
 ---
 
 ## Parking Lot (Future Ideas)
 
-- IMAP support (Phase 2)
 - Auto-suggest folders based on sender/subject patterns
 - AI categorization
 - EdgeCase integration (link folders to client files)
