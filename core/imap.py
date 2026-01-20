@@ -161,7 +161,7 @@ class IMAP:
             raise IMAPError("Not connected")
         
         try:
-            status, data = self.connection.select(folder)
+            status, data = self.connection.select(f'"{folder}"')
             if status != "OK":
                 raise IMAPError(f"Failed to select folder: {folder}")
             

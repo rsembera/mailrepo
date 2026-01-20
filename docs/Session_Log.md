@@ -10,6 +10,24 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## January 20, 2026 — Afternoon Session (~2:00 PM)
+
+**Participants:** Rick, Claude
+
+**Work Done:**
+
+1. **Fixed IMAP folder selection bug:**
+   - Folder names with spaces (e.g., "Rabbit Vets") failed with parse error
+   - Root cause: IMAP SELECT command requires quoted folder names
+   - Fix: Changed `self.connection.select(folder)` to `self.connection.select(f'"{folder}"')` in `core/imap.py`
+
+**Commits:**
+- (pending) — Fix IMAP folder quoting for names with spaces
+
+**Status:** Bug fix complete. Ready for continued testing.
+
+---
+
 ## January 20, 2026 — Lunch Session (~12:00 PM)
 
 **Participants:** Rick, Claude
