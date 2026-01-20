@@ -4,6 +4,46 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## January 19, 2026 — Evening Session (~9:30 PM)
+
+**Participants:** Rick, Claude
+
+**Work Done:**
+
+1. **Settings Page Polish:**
+   - Made About modal logo larger (240px), removed redundant "MailRepo" text
+   - Tightened About modal spacing
+   - All settings sections start collapsed
+
+2. **Simplified Appearance Options:**
+   - Reduced themes from 5 to 3: Teal (default), Slate, Dark
+   - Removed Plum and Amber themes (too bright, not adding value)
+   - Reduced fonts from 5 to 3: Lexend, Libre Baskerville, Source Sans
+   - Removed Lora and Literata fonts
+   - Updated font sizes to match Synesius: S=16px, M=18px, L=20px
+
+3. **Major Refactoring — Extracted Inline CSS/JS:**
+   - `settings.html`: 916 → 240 lines (extracted to `settings.css` + `settings.js`)
+   - `review.html`: 654 → 69 lines (extracted to `review.css` + `review.js`)
+   - Deleted 6 unused font files (Lora-*.ttf, Literata-*.ttf)
+   - Removed dead theme code from `themes.css`
+   - Removed dead font declarations from `shared.css`
+
+4. **Final Codebase Stats:**
+   - All templates under 250 lines (clean HTML only)
+   - CSS/JS properly separated into static files
+   - No dead code remaining
+
+**Commits:**
+- `61886c2` — Simplify appearance settings
+- `e4d8e76` — Start with all sections collapsed  
+- `964c237` — Refactor settings.html
+- `2459638` — Refactor review.html
+
+**Status:** Codebase is clean and well-organized. Ready for next phase of work.
+
+---
+
 ## January 18, 2026 — Late Evening Session (~10:00 PM)
 
 **Participants:** Rick, Claude

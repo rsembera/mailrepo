@@ -1,12 +1,12 @@
 # MailRepo — Navigation Map
 
-**Last Updated:** January 18, 2026, 10:30 PM
+**Last Updated:** January 19, 2026, 10:00 PM
 
 ---
 
-## Project Status: MVP Backend Complete, UI Functional
+## Project Status: MVP Complete, UI Polished
 
-Gmail integration is working. The full Stage → Review → Commit workflow is implemented. Main remaining work is polish and .mbox import.
+Gmail integration working. Stage → Review → Commit workflow complete. Settings page with theme/font customization done. Codebase refactored and tidy.
 
 ---
 
@@ -24,49 +24,63 @@ Gmail integration is working. The full Stage → Review → Commit workflow is i
 
 ### Core Module (`/core/`)
 
-| File | Status | What It Does |
-|------|--------|--------------|
-| `config.py` | ✅ Done | Paths, constants, Flask config |
-| `database.py` | ✅ Done | SQLite connection, schema |
-| `encryption.py` | ✅ Done | Fernet encryption, PBKDF2 key derivation |
-| `gmail.py` | ✅ Done | OAuth flow, email fetching, archive/trash/delete |
+| File | Lines | Status | What It Does |
+|------|-------|--------|--------------|
+| `config.py` | 112 | ✅ Done | Paths, constants, Flask config |
+| `database.py` | 248 | ✅ Done | SQLite connection, schema |
+| `encryption.py` | 234 | ✅ Done | Fernet encryption, PBKDF2 key derivation |
+| `gmail.py` | 340 | ✅ Done | OAuth flow, email fetching, archive/trash/delete |
 
 ### Web Module (`/web/`)
 
-| File | Status | What It Does |
-|------|--------|--------------|
-| `app.py` | ✅ Done | Flask factory, blueprint registration |
-| `blueprints/auth.py` | ✅ Done | Setup, login, logout |
-| `blueprints/main.py` | ✅ Done | Index, create_archive, review, settings routes |
-| `blueprints/api.py` | ✅ Done | Full API: folders, accounts, Gmail, commit |
+| File | Lines | Status | What It Does |
+|------|-------|--------|--------------|
+| `app.py` | 97 | ✅ Done | Flask factory, blueprint registration |
+| `blueprints/auth.py` | 92 | ✅ Done | Setup, login, logout |
+| `blueprints/main.py` | 98 | ✅ Done | Index, create_archive, review, settings routes |
+| `blueprints/api.py` | 527 | ✅ Done | Full API: folders, accounts, Gmail, commit |
 
 ### Templates (`/web/templates/`)
 
-| File | Status | What It Does |
-|------|--------|--------------|
-| `base.html` | ✅ Done | Base layout |
-| `auth/setup.html` | ✅ Done | Password setup |
-| `auth/login.html` | ✅ Done | Login form |
-| `main/index.html` | ✅ Done | Dashboard with folder tree, email list |
-| `main/create_archive.html` | ✅ Done | First-run archive creation |
-| `main/review.html` | ✅ Done | Review staged emails, commit |
+| File | Lines | Status | What It Does |
+|------|-------|--------|--------------|
+| `base.html` | 78 | ✅ Done | Base layout, theme/font init |
+| `auth/setup.html` | 65 | ✅ Done | Password setup |
+| `auth/login.html` | 50 | ✅ Done | Login form |
+| `main/index.html` | 217 | ✅ Done | Dashboard with folder tree, email list |
+| `main/create_archive.html` | 78 | ✅ Done | First-run archive creation |
+| `main/review.html` | 69 | ✅ Done | Review staged emails, commit |
+| `main/settings.html` | 240 | ✅ Done | Appearance, accounts, security, import |
 
 ### Static Assets (`/web/static/`)
 
-| File | Status | What It Does |
-|------|--------|--------------|
-| `css/shared.css` | ✅ Done | Buttons, forms, modals, cards |
-| `css/main.css` | ✅ Done | App layout, email list, folder tree |
-| `js/main.js` | ✅ Done | Staging workflow, folder selection |
+| File | Lines | Status | What It Does |
+|------|-------|--------|--------------|
+| `css/shared.css` | 558 | ✅ Done | Design tokens, buttons, forms, utilities |
+| `css/themes.css` | 240 | ✅ Done | Teal, Slate, Dark themes |
+| `css/main.css` | 680 | ✅ Done | App layout, email list, folder tree |
+| `css/settings.css` | 434 | ✅ Done | Settings page styles |
+| `css/review.css` | 263 | ✅ Done | Review page styles |
+| `js/main.js` | 680 | ✅ Done | Staging workflow, folder selection |
+| `js/settings.js` | 231 | ✅ Done | Theme/font switching, account management |
+| `js/review.js` | 324 | ✅ Done | Review page logic, commit workflow |
+
+### Fonts (`/web/static/fonts/`)
+
+| Font | Files | Usage |
+|------|-------|-------|
+| Lexend | 4 | Default UI font (Regular, Medium, SemiBold, Bold) |
+| Libre Baskerville | 3 | Serif option (Regular, Bold, Italic) |
+| Source Sans 3 | 3 | Sans-serif option (Regular, Bold, Italic) |
 
 ---
 
 ## What's NOT Built Yet
 
-- [ ] Settings page UI (template exists but is minimal)
 - [ ] .mbox import
 - [ ] ZIP export
-- [ ] Search functionality (client-side filtering exists)
+- [ ] Search functionality (basic client-side filtering exists)
+- [ ] Change master password
 
 ---
 
@@ -74,6 +88,7 @@ Gmail integration is working. The full Stage → Review → Commit workflow is i
 
 ```bash
 cd /Users/rick/apps/mailrepo
+source venv/bin/activate
 python main.py
 # Opens at http://127.0.0.1:5050
 ```
@@ -90,7 +105,7 @@ python main.py
 
 ### Prerequisites
 
-1. Python 3.13+ with requirements installed: `pip install -r requirements.txt`
+1. Python 3.13+ with venv: `source venv/bin/activate && pip install -r requirements.txt`
 2. Gmail API credentials: Download `credentials.json` from Google Cloud Console, place in `~/mailrepo/config/`
 
 ---
@@ -108,6 +123,7 @@ python main.py
 | POST | `/api/accounts/<id>/authorize` | Run Gmail OAuth |
 | GET | `/api/accounts/<id>/emails` | Fetch emails from Gmail |
 | GET | `/api/accounts/<id>/labels` | Get Gmail labels |
+| DELETE | `/api/accounts/<id>` | Remove account |
 | POST | `/api/commit` | Commit staged emails |
 
 ---
