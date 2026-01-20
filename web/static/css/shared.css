@@ -175,9 +175,9 @@
 /* ============================================
    FONT SIZE CLASSES (applied to html element)
    ============================================ */
-html.font-size-s { font-size: 14px; }
-html.font-size-m { font-size: 16px; }
-html.font-size-l { font-size: 18px; }
+html.font-size-s { font-size: 16px; }
+html.font-size-m { font-size: 18px; }
+html.font-size-l { font-size: 20px; }
 
 /* ============================================
    RESET & BASE STYLES

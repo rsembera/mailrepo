@@ -299,6 +299,7 @@ details[open] .settings-section-header .arrow {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: var(--space-xs);
     padding: var(--space-md);
     border: 2px solid var(--color-border);
@@ -307,6 +308,7 @@ details[open] .settings-section-header .arrow {
     cursor: pointer;
     transition: all 0.2s;
     min-width: 90px;
+    height: 90px;
 }
 
 .font-option:hover {
@@ -323,6 +325,11 @@ details[open] .settings-section-header .arrow {
     font-size: 1.5rem;
     font-weight: 500;
     color: var(--color-text-heading);
+    line-height: 1;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .font-name {
@@ -418,8 +425,8 @@ details[open] .settings-section-header .arrow {
 }
 
 .about-logo {
-    width: 120px;
-    margin-bottom: var(--space-lg);
+    width: 240px;
+    margin-bottom: var(--space-md);
 }
 
 .about-modal-content h2 {
@@ -431,19 +438,19 @@ details[open] .settings-section-header .arrow {
 .about-version {
     color: var(--color-primary);
     font-weight: 600;
-    margin-bottom: var(--space-md);
+    margin-bottom: var(--space-sm);
 }
 
 .about-credits {
     color: var(--color-text-muted);
     font-size: 0.875rem;
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.125rem;
 }
 
 .about-tagline {
     color: var(--color-text);
     font-style: italic;
-    margin: var(--space-lg) 0;
+    margin: var(--space-md) 0;
 }
 </style>
 {% endblock %}
@@ -460,6 +467,65 @@ details[open] .settings-section-header .arrow {
             Back
         </a>
     </header>
+    
+    <!-- Appearance Section -->
+    <details class="settings-section" open>
+        <summary class="settings-section-header">
+            <i data-lucide="chevron-right" class="arrow"></i>
+            <i data-lucide="palette" class="header-icon"></i>
+            <div class="header-text">
+                <h3>Appearance</h3>
+                <p>Customize the look and feel of MailRepo</p>
+            </div>
+        </summary>
+        <div class="settings-section-content">
+            <div class="appearance-group">
+                <label class="appearance-label">Theme</label>
+                <div class="theme-grid" id="themeGrid">
+                    <button class="theme-option" data-theme="teal" title="Teal">
+                        <span class="theme-swatch" style="background: #1F8F74;"></span>
+                        <span class="theme-name">Teal</span>
+                    </button>
+                    <button class="theme-option" data-theme="slate" title="Slate">
+                        <span class="theme-swatch" style="background: #475569;"></span>
+                        <span class="theme-name">Slate</span>
+                    </button>
+                    <button class="theme-option" data-theme="dark" title="Dark">
+                        <span class="theme-swatch" style="background: #1e1e2e; border: 2px solid #45475a;"></span>
+                        <span class="theme-name">Dark</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="appearance-group">
+                <label class="appearance-label">Font</label>
+                <div class="font-controls">
+                    <div class="font-select-grid" id="fontGrid">
+                        <button class="font-option" data-font="lexend" style="font-family: 'Lexend', sans-serif;">
+                            <span class="font-preview">Aa</span>
+                            <span class="font-name">Lexend</span>
+                        </button>
+                        <button class="font-option" data-font="libre-baskerville" style="font-family: 'Libre Baskerville', serif;">
+                            <span class="font-preview">Aa</span>
+                            <span class="font-name">Libre Baskerville</span>
+                        </button>
+                        <button class="font-option" data-font="source-sans" style="font-family: 'Source Sans 3', sans-serif;">
+                            <span class="font-preview">Aa</span>
+                            <span class="font-name">Source Sans</span>
+                        </button>
+                    </div>
+                    <div class="font-size-controls">
+                        <span class="size-label">Size</span>
+                        <div class="size-toggle" id="sizeToggle">
+                            <button class="size-btn" data-size="s">S</button>
+                            <button class="size-btn" data-size="m">M</button>
+                            <button class="size-btn" data-size="l">L</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </details>
     
     <!-- Email Accounts Section -->
     <details class="settings-section">
@@ -549,81 +615,6 @@ details[open] .settings-section-header .arrow {
         </div>
     </details>
     
-    <!-- Appearance Section -->
-    <details class="settings-section" open>
-        <summary class="settings-section-header">
-            <i data-lucide="chevron-right" class="arrow"></i>
-            <i data-lucide="palette" class="header-icon"></i>
-            <div class="header-text">
-                <h3>Appearance</h3>
-                <p>Customize the look and feel of MailRepo</p>
-            </div>
-        </summary>
-        <div class="settings-section-content">
-            <div class="appearance-group">
-                <label class="appearance-label">Theme</label>
-                <div class="theme-grid" id="themeGrid">
-                    <button class="theme-option" data-theme="teal" title="Teal">
-                        <span class="theme-swatch" style="background: #1F8F74;"></span>
-                        <span class="theme-name">Teal</span>
-                    </button>
-                    <button class="theme-option" data-theme="slate" title="Slate">
-                        <span class="theme-swatch" style="background: #475569;"></span>
-                        <span class="theme-name">Slate</span>
-                    </button>
-                    <button class="theme-option" data-theme="plum" title="Plum">
-                        <span class="theme-swatch" style="background: #6d28d9;"></span>
-                        <span class="theme-name">Plum</span>
-                    </button>
-                    <button class="theme-option" data-theme="amber" title="Amber">
-                        <span class="theme-swatch" style="background: #b45309;"></span>
-                        <span class="theme-name">Amber</span>
-                    </button>
-                    <button class="theme-option" data-theme="dark" title="Dark">
-                        <span class="theme-swatch" style="background: #1e1e2e; border: 2px solid #45475a;"></span>
-                        <span class="theme-name">Dark</span>
-                    </button>
-                </div>
-            </div>
-            
-            <div class="appearance-group">
-                <label class="appearance-label">Font</label>
-                <div class="font-controls">
-                    <div class="font-select-grid" id="fontGrid">
-                        <button class="font-option" data-font="lexend" style="font-family: 'Lexend', sans-serif;">
-                            <span class="font-preview">Aa</span>
-                            <span class="font-name">Lexend</span>
-                        </button>
-                        <button class="font-option" data-font="libre-baskerville" style="font-family: 'Libre Baskerville', serif;">
-                            <span class="font-preview">Aa</span>
-                            <span class="font-name">Libre Baskerville</span>
-                        </button>
-                        <button class="font-option" data-font="lora" style="font-family: 'Lora', serif;">
-                            <span class="font-preview">Aa</span>
-                            <span class="font-name">Lora</span>
-                        </button>
-                        <button class="font-option" data-font="source-sans" style="font-family: 'Source Sans 3', sans-serif;">
-                            <span class="font-preview">Aa</span>
-                            <span class="font-name">Source Sans</span>
-                        </button>
-                        <button class="font-option" data-font="literata" style="font-family: 'Literata', serif;">
-                            <span class="font-preview">Aa</span>
-                            <span class="font-name">Literata</span>
-                        </button>
-                    </div>
-                    <div class="font-size-controls">
-                        <span class="size-label">Size</span>
-                        <div class="size-toggle" id="sizeToggle">
-                            <button class="size-btn" data-size="s">S</button>
-                            <button class="size-btn" data-size="m">M</button>
-                            <button class="size-btn" data-size="l">L</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </details>
-    
     <!-- Import Section -->
     <details class="settings-section">
         <summary class="settings-section-header">
@@ -657,7 +648,6 @@ details[open] .settings-section-header .arrow {
 <div class="modal-overlay" id="aboutModal">
     <div class="modal-content about-modal-content">
         <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="MailRepo Logo" class="about-logo">
-        <h2>{{ app_name }}</h2>
         <p class="about-version">v{{ app_version }} "Enigma"</p>
         <p class="about-credits">Designed by Richard Sembera</p>
         <p class="about-credits">Coded by Claude Opus 4.5</p>
@@ -868,12 +858,16 @@ function setFont(font, save = true) {
     const fontFamilies = {
         'lexend': "var(--font-lexend)",
         'libre-baskerville': "var(--font-libre)",
-        'lora': "var(--font-lora)",
-        'source-sans': "var(--font-source-sans)",
-        'literata': "var(--font-literata)"
+        'source-sans': "var(--font-source-sans)"
     };
-    document.documentElement.style.setProperty('--font-ui', fontFamilies[font] || fontFamilies['lexend']);
-    document.documentElement.style.setProperty('--font-body', fontFamilies[font] || fontFamilies['lexend']);
+    const fontFamily = fontFamilies[font] || fontFamilies['lexend'];
+    document.documentElement.style.setProperty('--font-ui', fontFamily);
+    document.documentElement.style.setProperty('--font-body', fontFamily);
+    
+    // Update theme names to use selected font
+    document.querySelectorAll('.theme-name').forEach(el => {
+        el.style.fontFamily = fontFamily;
+    });
     
     // Update active state on buttons
     document.querySelectorAll('.font-option').forEach(btn => {
