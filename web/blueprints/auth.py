@@ -6,10 +6,17 @@ Handles master password setup, login, and logout.
 
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
 
-from core import Encryption, InvalidPasswordError, EncryptionError
+from core import Encryption, InvalidPasswordError, EncryptionError, Database
 
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
+
+
+def init_database():
+    """Initialize the database with the encryption key."""
+    db_key = Encryption.get_db_key()
+    Database.set_key(db_key)
+    Database.initialize()
 
 
 @auth_bp.route("/setup", methods=["GET", "POST"])
@@ -42,6 +49,7 @@ def setup():
         # Initialize encryption
         try:
             Encryption.initialize(password)
+            init_database()
             session["authenticated"] = True
             session.permanent = True
             flash("Master password created successfully.", "success")
@@ -72,6 +80,7 @@ def login():
         
         try:
             Encryption.unlock(password)
+            init_database()
             session["authenticated"] = True
             session.permanent = True
             return redirect(url_for("main.index"))
@@ -86,6 +95,7 @@ def login():
 @auth_bp.route("/logout", methods=["POST"])
 def logout():
     """Log out and lock encryption."""
+    Database.close()
     Encryption.lock()
     session.clear()
     flash("You have been logged out.", "info")

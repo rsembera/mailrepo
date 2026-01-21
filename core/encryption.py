@@ -2,7 +2,8 @@
 MailRepo - Encryption utilities.
 
 Handles master password verification, key derivation, and Fernet encryption
-for both archived emails and OAuth credentials.
+for both archived emails and OAuth credentials. Also provides the key for
+SQLCipher database encryption.
 """
 
 import os
@@ -31,7 +32,8 @@ class Encryption:
     """
     Handles all encryption operations for MailRepo.
     
-    Uses Fernet (AES-128-CBC) with PBKDF2 key derivation.
+    Uses Fernet (AES-128-CBC) with PBKDF2 key derivation for file encryption.
+    Derives a separate key for SQLCipher database encryption.
     The master password is never stored; only a verification hash.
     """
     
@@ -46,6 +48,7 @@ class Encryption:
     
     _fernet: Optional[Fernet] = None
     _salt: Optional[bytes] = None
+    _db_key: Optional[str] = None
     
     @classmethod
     def is_initialized(cls) -> bool:
@@ -72,6 +75,9 @@ class Encryption:
         # Derive key and create Fernet instance
         fernet = cls._derive_fernet(password, salt)
         
+        # Derive database key (separate derivation for SQLCipher)
+        db_key = cls._derive_db_key(password, salt)
+        
         # Encrypt verification token
         encrypted_verification = fernet.encrypt(cls.VERIFICATION_TOKEN)
         
@@ -83,6 +89,7 @@ class Encryption:
         # Store in memory for this session
         cls._salt = salt
         cls._fernet = fernet
+        cls._db_key = db_key
     
     @classmethod
     def unlock(cls, password: str) -> bool:
@@ -121,9 +128,13 @@ class Encryption:
         except InvalidToken:
             raise InvalidPasswordError("Invalid master password.")
         
+        # Derive database key
+        db_key = cls._derive_db_key(password, salt)
+        
         # Store in memory for this session
         cls._salt = salt
         cls._fernet = fernet
+        cls._db_key = db_key
         return True
     
     @classmethod
@@ -136,6 +147,22 @@ class Encryption:
         """Lock encryption (clear keys from memory)."""
         cls._fernet = None
         cls._salt = None
+        cls._db_key = None
+    
+    @classmethod
+    def get_db_key(cls) -> str:
+        """
+        Get the database encryption key.
+        
+        Returns:
+            Hex-encoded key for SQLCipher.
+            
+        Raises:
+            EncryptionError: If encryption is locked.
+        """
+        if cls._db_key is None:
+            raise EncryptionError("Encryption is locked. Call unlock() first.")
+        return cls._db_key
     
     @classmethod
     def encrypt(cls, data: bytes) -> bytes:
@@ -208,6 +235,33 @@ class Encryption:
         )
         key = base64.urlsafe_b64encode(kdf.derive(password.encode("utf-8")))
         return Fernet(key)
+    
+    @classmethod
+    def _derive_db_key(cls, password: str, salt: bytes) -> str:
+        """
+        Derive a database encryption key from password and salt.
+        
+        Uses a different salt suffix to ensure the DB key is different
+        from the Fernet key even with the same password.
+        
+        Args:
+            password: The master password.
+            salt: Random salt bytes.
+            
+        Returns:
+            Hex-encoded 32-byte key for SQLCipher.
+        """
+        # Use a different salt by appending a constant to differentiate from Fernet key
+        db_salt = salt + b"_MAILREPO_DB_KEY"
+        
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=db_salt,
+            iterations=cls.PBKDF2_ITERATIONS,
+        )
+        key_bytes = kdf.derive(password.encode("utf-8"))
+        return key_bytes.hex()
 
 
 def generate_flask_secret_key() -> str:

@@ -119,7 +119,7 @@ function toggleSection(header) {
 // SIDEBAR FOLDER UPDATES
 // ============================================
 
-function updateSidebarFolders(newFolder, encrypted) {
+function updateSidebarFolders(newFolder) {
     const archiveSection = document.getElementById('archiveSection');
     if (!archiveSection) return;
     
@@ -130,8 +130,8 @@ function updateSidebarFolders(newFolder, encrypted) {
     const folderItem = document.createElement('div');
     folderItem.className = 'tree-item folder-item';
     folderItem.innerHTML = `
-        <div class="tree-item-row" data-type="folder" data-id="${newFolder.id}" data-encrypted="${encrypted ? 1 : 0}">
-            <i data-lucide="${encrypted ? 'lock' : 'folder'}" class="tree-icon"></i>
+        <div class="tree-item-row" data-type="folder" data-id="${newFolder.id}">
+            <i data-lucide="folder" class="tree-icon"></i>
             <span class="tree-label">${escapeHtml(newFolder.name)}</span>
         </div>
     `;
@@ -574,7 +574,6 @@ function openNewFolderModal(fromStageModal = false) {
 
 async function createFolder(returnToStage) {
     const name = document.getElementById('newFolderName').value.trim();
-    const encrypted = document.querySelector('input[name="encryption"]:checked').value === '1';
     const fromStage = elements.newFolderModal.dataset.fromStage === 'true';
     
     if (!name) {
@@ -586,7 +585,7 @@ async function createFolder(returnToStage) {
         const response = await fetch('/api/folders', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, encrypted }),
+            body: JSON.stringify({ name }),
         });
         
         if (!response.ok) {
@@ -601,7 +600,7 @@ async function createFolder(returnToStage) {
         closeModal('newFolderModal');
         
         // Update sidebar archive section
-        updateSidebarFolders(data.folder, encrypted);
+        updateSidebarFolders(data.folder);
         
         if (fromStage) {
             // Add to stage modal folder list
@@ -610,7 +609,7 @@ async function createFolder(returnToStage) {
             newItem.className = 'folder-select-item selected';
             newItem.dataset.id = data.folder.id;
             newItem.innerHTML = `
-                <i data-lucide="${encrypted ? 'lock' : 'folder'}" class="folder-icon"></i>
+                <i data-lucide="folder" class="folder-icon"></i>
                 <span class="folder-name">${escapeHtml(name)}</span>
             `;
             list.appendChild(newItem);

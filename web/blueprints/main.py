@@ -45,7 +45,6 @@ def create_archive():
     """
     if request.method == "POST":
         name = request.form.get("name", "").strip()
-        encrypted = request.form.get("encrypted", "1") == "1"
         
         # Validation
         errors = []
@@ -69,8 +68,8 @@ def create_archive():
         
         # Create folder
         Database.execute(
-            "INSERT INTO folders (name, encrypted) VALUES (?, ?)",
-            (name, 1 if encrypted else 0),
+            "INSERT INTO folders (name) VALUES (?)",
+            (name,),
         )
         Database.commit()
         

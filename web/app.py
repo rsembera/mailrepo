@@ -35,8 +35,8 @@ def create_app(test_config: dict = None) -> Flask:
     # Ensure directories exist
     Config.ensure_directories()
     
-    # Initialize database
-    Database.initialize()
+    # NOTE: Database initialization is deferred until after authentication
+    # because we need the master password to derive the encryption key.
     
     # Register blueprints
     from .blueprints.auth import auth_bp

@@ -4,6 +4,9 @@ MailRepo - API blueprint.
 Provides JSON API endpoints for the frontend.
 """
 
+import email as email_lib
+import html
+import re
 import time
 from pathlib import Path
 from flask import Blueprint, jsonify, request
@@ -17,6 +20,68 @@ from core import (
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
 
+def extract_body_text(raw_email: bytes) -> str:
+    """
+    Extract plain text body from raw email for full-text indexing.
+    
+    Args:
+        raw_email: Raw RFC 2822 email bytes.
+        
+    Returns:
+        Plain text content suitable for FTS indexing.
+    """
+    msg = email_lib.message_from_bytes(raw_email)
+    
+    text_parts = []
+    
+    if msg.is_multipart():
+        for part in msg.walk():
+            content_type = part.get_content_type()
+            content_disposition = str(part.get("Content-Disposition", ""))
+            
+            # Skip attachments
+            if "attachment" in content_disposition:
+                continue
+            
+            if content_type == "text/plain":
+                payload = part.get_payload(decode=True)
+                if payload:
+                    charset = part.get_content_charset() or "utf-8"
+                    try:
+                        text_parts.append(payload.decode(charset, errors="replace"))
+                    except:
+                        pass
+            elif content_type == "text/html":
+                payload = part.get_payload(decode=True)
+                if payload:
+                    charset = part.get_content_charset() or "utf-8"
+                    try:
+                        html_content = payload.decode(charset, errors="replace")
+                        # Strip HTML tags for indexing
+                        text = html.unescape(html_content)
+                        text = re.sub(r'<[^>]+>', ' ', text)
+                        text = re.sub(r'\s+', ' ', text).strip()
+                        text_parts.append(text)
+                    except:
+                        pass
+    else:
+        content_type = msg.get_content_type()
+        payload = msg.get_payload(decode=True)
+        if payload:
+            charset = msg.get_content_charset() or "utf-8"
+            try:
+                text = payload.decode(charset, errors="replace")
+                if content_type == "text/html":
+                    text = html.unescape(text)
+                    text = re.sub(r'<[^>]+>', ' ', text)
+                    text = re.sub(r'\s+', ' ', text).strip()
+                text_parts.append(text)
+            except:
+                pass
+    
+    return "\n".join(text_parts)
+
+
 # ============================================
 # FOLDERS
 # ============================================
@@ -25,7 +90,7 @@ api_bp = Blueprint("api", __name__, url_prefix="/api")
 def list_folders():
     """Get all archive folders."""
     folders = Database.fetchall(
-        "SELECT id, name, parent_id, encrypted, created_at FROM folders ORDER BY name"
+        "SELECT id, name, parent_id, created_at FROM folders ORDER BY name"
     )
     
     return jsonify({
@@ -39,7 +104,6 @@ def create_folder():
     data = request.get_json()
     
     name = data.get("name", "").strip()
-    encrypted = data.get("encrypted", True)
     parent_id = data.get("parent_id")
     
     # Validation
@@ -64,16 +128,10 @@ def create_folder():
     if existing:
         return jsonify({"error": "A folder with this name already exists"}), 400
     
-    # If nested folder, inherit encryption from parent
-    if parent_id:
-        parent = Database.fetchone("SELECT encrypted FROM folders WHERE id = ?", (parent_id,))
-        if parent:
-            encrypted = bool(parent["encrypted"])
-    
     # Create folder
     cursor = Database.execute(
-        "INSERT INTO folders (name, parent_id, encrypted) VALUES (?, ?, ?)",
-        (name, parent_id, 1 if encrypted else 0)
+        "INSERT INTO folders (name, parent_id) VALUES (?, ?)",
+        (name, parent_id)
     )
     Database.commit()
     
@@ -84,7 +142,6 @@ def create_folder():
             "id": folder_id,
             "name": name,
             "parent_id": parent_id,
-            "encrypted": encrypted,
         }
     }), 201
 
@@ -93,7 +150,7 @@ def create_folder():
 def get_folder(folder_id):
     """Get a single folder."""
     folder = Database.fetchone(
-        "SELECT id, name, parent_id, encrypted, created_at FROM folders WHERE id = ?",
+        "SELECT id, name, parent_id, created_at FROM folders WHERE id = ?",
         (folder_id,)
     )
     
@@ -118,6 +175,72 @@ def delete_folder(folder_id):
     return jsonify({"success": True})
 
 
+@api_bp.route("/search", methods=["GET"])
+def search_emails():
+    """
+    Search archived emails using full-text search.
+    
+    Query params:
+        q: Search query (required)
+        folder_id: Limit search to a specific folder (optional)
+        limit: Max results (default: 50)
+    """
+    query = request.args.get("q", "").strip()
+    folder_id = request.args.get("folder_id")
+    limit = int(request.args.get("limit", 50))
+    
+    if not query:
+        return jsonify({"error": "Search query is required"}), 400
+    
+    # Build the FTS5 query
+    # Escape special characters for FTS5
+    fts_query = query.replace('"', '""')
+    
+    if folder_id:
+        results = Database.fetchall(
+            """
+            SELECT m.id, m.folder_id, m.subject, m.sender, m.date, f.name as folder_name
+            FROM messages m
+            JOIN messages_fts fts ON m.id = fts.rowid
+            JOIN folders f ON m.folder_id = f.id
+            WHERE messages_fts MATCH ? AND m.folder_id = ?
+            ORDER BY m.date DESC
+            LIMIT ?
+            """,
+            (fts_query, folder_id, limit)
+        )
+    else:
+        results = Database.fetchall(
+            """
+            SELECT m.id, m.folder_id, m.subject, m.sender, m.date, f.name as folder_name
+            FROM messages m
+            JOIN messages_fts fts ON m.id = fts.rowid
+            JOIN folders f ON m.folder_id = f.id
+            WHERE messages_fts MATCH ?
+            ORDER BY m.date DESC
+            LIMIT ?
+            """,
+            (fts_query, limit)
+        )
+    
+    emails = []
+    for r in results:
+        emails.append({
+            "id": r["id"],
+            "folder_id": r["folder_id"],
+            "folder_name": r["folder_name"],
+            "subject": r["subject"],
+            "sender": r["sender"],
+            "date": r["date"],
+        })
+    
+    return jsonify({
+        "query": query,
+        "count": len(emails),
+        "emails": emails,
+    })
+
+
 @api_bp.route("/folders/<int:folder_id>/emails", methods=["GET"])
 def get_folder_emails(folder_id):
     """Get all emails in an archive folder."""
@@ -128,7 +251,7 @@ def get_folder_emails(folder_id):
     
     messages = Database.fetchall(
         """
-        SELECT id, subject, sender, date, filepath, encrypted
+        SELECT id, subject, sender, date, filepath
         FROM messages 
         WHERE folder_id = ?
         ORDER BY date DESC
@@ -143,7 +266,6 @@ def get_folder_emails(folder_id):
             "subject": m["subject"],
             "sender": m["sender"],
             "date": m["date"],
-            "encrypted": bool(m["encrypted"]),
         })
     
     return jsonify({"emails": emails})
@@ -152,12 +274,11 @@ def get_folder_emails(folder_id):
 @api_bp.route("/folders/<int:folder_id>/emails/<int:message_id>", methods=["GET"])
 def get_archived_email(folder_id, message_id):
     """Get a single archived email with full content."""
-    import email as email_lib
     from email.header import decode_header
     
     message = Database.fetchone(
         """
-        SELECT id, folder_id, subject, sender, date, filepath, encrypted
+        SELECT id, folder_id, subject, sender, date, filepath
         FROM messages 
         WHERE id = ? AND folder_id = ?
         """,
@@ -175,9 +296,8 @@ def get_archived_email(folder_id, message_id):
     try:
         raw_bytes = filepath.read_bytes()
         
-        # Decrypt if needed
-        if message["encrypted"]:
-            raw_bytes = Encryption.decrypt(raw_bytes)
+        # All emails are now encrypted
+        raw_bytes = Encryption.decrypt(raw_bytes)
         
         # Parse the email
         msg = email_lib.message_from_bytes(raw_bytes)
@@ -639,7 +759,7 @@ def commit_staged():
                 try:
                     # Verify destination folder exists
                     folder = Database.fetchone(
-                        "SELECT id, encrypted FROM folders WHERE id = ?",
+                        "SELECT id FROM folders WHERE id = ?",
                         (folder_id,)
                     )
                     if not folder:
@@ -663,26 +783,26 @@ def commit_staged():
                     # Download raw email
                     raw_email = client.fetch_raw(uid)
                     
-                    # Determine filepath
+                    # Extract body text for full-text search
+                    body_text = extract_body_text(raw_email)
+                    
+                    # Determine filepath - always encrypted now
                     archive_path = Config.get_archive_path() / str(folder_id)
                     archive_path.mkdir(parents=True, exist_ok=True)
                     
                     # Use UID as filename base
                     safe_id = f"{account_id}_{uid}"
                     
-                    if folder["encrypted"]:
-                        encrypted_data = Encryption.encrypt(raw_email)
-                        filepath = archive_path / f"{safe_id}.eml.enc"
-                        filepath.write_bytes(encrypted_data)
-                    else:
-                        filepath = archive_path / f"{safe_id}.eml"
-                        filepath.write_bytes(raw_email)
+                    # Always encrypt .eml files
+                    encrypted_data = Encryption.encrypt(raw_email)
+                    filepath = archive_path / f"{safe_id}.eml.enc"
+                    filepath.write_bytes(encrypted_data)
                     
                     # Create database record
                     Database.execute(
                         """
                         INSERT INTO messages 
-                        (folder_id, source_account_id, message_id, subject, sender, date, filepath, encrypted)
+                        (folder_id, source_account_id, message_id, subject, sender, date, filepath, body_text)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
@@ -693,7 +813,7 @@ def commit_staged():
                             email_data.get("from", email_data.get("sender", "")),
                             email_data.get("date"),
                             str(filepath.relative_to(Config.get_base_path())),
-                            1 if folder["encrypted"] else 0,
+                            body_text,
                         )
                     )
                     
@@ -773,14 +893,14 @@ def import_mbox():
         return jsonify({"error": "File not found"}), 404
     
     folder = Database.fetchone(
-        "SELECT id, encrypted FROM folders WHERE id = ?",
+        "SELECT id FROM folders WHERE id = ?",
         (folder_id,)
     )
     if not folder:
         return jsonify({"error": "Folder not found"}), 404
     
     try:
-        result = import_mbox_file(path, folder_id, encrypted=bool(folder["encrypted"]))
+        result = import_mbox_file(path, folder_id)
         return jsonify({
             "success": True,
             "total": result["total"],
@@ -814,13 +934,13 @@ def import_eml():
         return jsonify({"error": "File not found"}), 404
     
     folder = Database.fetchone(
-        "SELECT id, encrypted FROM folders WHERE id = ?",
+        "SELECT id FROM folders WHERE id = ?",
         (folder_id,)
     )
     if not folder:
         return jsonify({"error": "Folder not found"}), 404
     
-    result = import_eml_file(path, folder_id, encrypted=bool(folder["encrypted"]))
+    result = import_eml_file(path, folder_id)
     
     if result["success"]:
         Database.commit()

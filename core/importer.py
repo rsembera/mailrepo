@@ -77,15 +77,15 @@ def parse_email_metadata(raw_bytes: bytes) -> dict:
 def import_eml_file(
     filepath: Path,
     folder_id: int,
-    encrypted: bool = True,
 ) -> dict:
     """
     Import a single .eml file into the archive.
     
+    All imported files are encrypted at rest.
+    
     Args:
         filepath: Path to .eml file.
         folder_id: Destination folder ID.
-        encrypted: Whether to encrypt the stored file.
         
     Returns:
         Dict with import result (success, message_id, error).
@@ -103,24 +103,20 @@ def import_eml_file(
             import hashlib
             safe_id = hashlib.sha256(raw_bytes).hexdigest()[:20]
         
-        # Save to archive
+        # Save to archive (always encrypted)
         archive_path = Config.get_archive_path() / str(folder_id)
         archive_path.mkdir(parents=True, exist_ok=True)
         
-        if encrypted:
-            encrypted_data = Encryption.encrypt(raw_bytes)
-            dest_path = archive_path / f"{safe_id}.eml.enc"
-            dest_path.write_bytes(encrypted_data)
-        else:
-            dest_path = archive_path / f"{safe_id}.eml"
-            dest_path.write_bytes(raw_bytes)
+        encrypted_data = Encryption.encrypt(raw_bytes)
+        dest_path = archive_path / f"{safe_id}.eml.enc"
+        dest_path.write_bytes(encrypted_data)
         
         # Create database record
         Database.execute(
             """
             INSERT INTO messages 
-            (folder_id, source_account_id, message_id, subject, sender, date, filepath, encrypted)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (folder_id, source_account_id, message_id, subject, sender, date, filepath)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 folder_id,
@@ -130,7 +126,6 @@ def import_eml_file(
                 metadata["sender"],
                 metadata["date"],
                 str(dest_path.relative_to(Config.get_base_path())),
-                1 if encrypted else 0,
             )
         )
         
@@ -151,16 +146,16 @@ def import_eml_file(
 def import_mbox_file(
     mbox_path: Path,
     folder_id: int,
-    encrypted: bool = True,
     progress_callback=None,
 ) -> dict:
     """
     Import all emails from an .mbox file into the archive.
     
+    All imported files are encrypted at rest.
+    
     Args:
         mbox_path: Path to .mbox file.
         folder_id: Destination folder ID.
-        encrypted: Whether to encrypt stored files.
         progress_callback: Optional callback(current, total) for progress updates.
         
     Returns:
@@ -196,29 +191,22 @@ def import_mbox_file(
                 base_id = safe_id
                 counter = 0
                 while True:
-                    if encrypted:
-                        dest_path = archive_path / f"{safe_id}.eml.enc"
-                    else:
-                        dest_path = archive_path / f"{safe_id}.eml"
-                    
+                    dest_path = archive_path / f"{safe_id}.eml.enc"
                     if not dest_path.exists():
                         break
                     counter += 1
                     safe_id = f"{base_id}_{counter}"
                 
-                # Save file
-                if encrypted:
-                    encrypted_data = Encryption.encrypt(raw_bytes)
-                    dest_path.write_bytes(encrypted_data)
-                else:
-                    dest_path.write_bytes(raw_bytes)
+                # Save file (always encrypted)
+                encrypted_data = Encryption.encrypt(raw_bytes)
+                dest_path.write_bytes(encrypted_data)
                 
                 # Create database record
                 Database.execute(
                     """
                     INSERT INTO messages 
-                    (folder_id, source_account_id, message_id, subject, sender, date, filepath, encrypted)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (folder_id, source_account_id, message_id, subject, sender, date, filepath)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         folder_id,
@@ -228,7 +216,6 @@ def import_mbox_file(
                         metadata["sender"],
                         metadata["date"],
                         str(dest_path.relative_to(Config.get_base_path())),
-                        1 if encrypted else 0,
                     )
                 )
                 

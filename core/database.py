@@ -1,10 +1,16 @@
 """
 MailRepo - Database management.
 
-Handles SQLite database connection, schema creation, and migrations.
+Handles SQLCipher encrypted database connection, schema creation, and migrations.
 """
 
-import sqlite3
+try:
+    from sqlcipher3 import dbapi2 as sqlite3
+    SQLCIPHER_AVAILABLE = True
+except ImportError:
+    import sqlite3
+    SQLCIPHER_AVAILABLE = False
+
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Generator, Optional
@@ -13,17 +19,35 @@ from .config import Config
 
 
 # Current schema version (increment when schema changes)
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class Database:
     """
-    SQLite database manager for MailRepo.
+    SQLCipher encrypted database manager for MailRepo.
     
     Provides connection management, schema creation, and query helpers.
+    The entire database is encrypted at rest using the master password.
     """
     
     _connection: Optional[sqlite3.Connection] = None
+    _db_key: Optional[str] = None
+    
+    @classmethod
+    def set_key(cls, key: str) -> None:
+        """
+        Set the database encryption key.
+        
+        Must be called before any database operations.
+        The key should be derived from the master password.
+        
+        Args:
+            key: Hex-encoded encryption key.
+        """
+        cls._db_key = key
+        # Close existing connection if key changes
+        if cls._connection is not None:
+            cls.close()
     
     @classmethod
     def get_connection(cls) -> sqlite3.Connection:
@@ -31,18 +55,24 @@ class Database:
         Get the database connection, creating it if necessary.
         
         Returns:
-            SQLite connection with row factory set to sqlite3.Row.
+            SQLite/SQLCipher connection with row factory set.
         """
         if cls._connection is None:
+            if cls._db_key is None:
+                raise RuntimeError("Database key not set. Call set_key() first.")
+            
             db_path = Config.get_database_path()
             db_path.parent.mkdir(parents=True, exist_ok=True)
             
             cls._connection = sqlite3.connect(
-                db_path,
-                check_same_thread=False,  # Flask uses multiple threads
-                detect_types=sqlite3.PARSE_DECLTYPES,
+                str(db_path),
+                check_same_thread=False,
             )
             cls._connection.row_factory = sqlite3.Row
+            
+            # Set encryption key (SQLCipher)
+            if SQLCIPHER_AVAILABLE:
+                cls._connection.execute(f"PRAGMA key = \"x'{cls._db_key}'\"")
             
             # Enable foreign keys
             cls._connection.execute("PRAGMA foreign_keys = ON")
@@ -59,10 +89,6 @@ class Database:
         Context manager for database transactions.
         
         Automatically commits on success, rolls back on exception.
-        
-        Usage:
-            with Database.transaction() as conn:
-                conn.execute("INSERT INTO ...")
         """
         conn = cls.get_connection()
         try:
@@ -166,6 +192,47 @@ class Database:
         if from_version < 2:
             conn.execute("ALTER TABLE accounts ADD COLUMN cached_folders TEXT")
             conn.execute("ALTER TABLE accounts ADD COLUMN cached_folders_at INTEGER")
+        
+        # Migration from version 2 to 3: add body_text for FTS, remove encrypted columns
+        if from_version < 3:
+            # Add body_text column for full-text search
+            conn.execute("ALTER TABLE messages ADD COLUMN body_text TEXT")
+            
+            # Create FTS5 virtual table
+            conn.execute("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+                    subject,
+                    sender,
+                    body_text,
+                    content='messages',
+                    content_rowid='id'
+                )
+            """)
+            
+            # Create triggers to keep FTS in sync
+            conn.execute("""
+                CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
+                    INSERT INTO messages_fts(rowid, subject, sender, body_text)
+                    VALUES (new.id, new.subject, new.sender, new.body_text);
+                END
+            """)
+            conn.execute("""
+                CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
+                    INSERT INTO messages_fts(messages_fts, rowid, subject, sender, body_text)
+                    VALUES ('delete', old.id, old.subject, old.sender, old.body_text);
+                END
+            """)
+            conn.execute("""
+                CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
+                    INSERT INTO messages_fts(messages_fts, rowid, subject, sender, body_text)
+                    VALUES ('delete', old.id, old.subject, old.sender, old.body_text);
+                    INSERT INTO messages_fts(rowid, subject, sender, body_text)
+                    VALUES (new.id, new.subject, new.sender, new.body_text);
+                END
+            """)
+            
+            # Note: We're keeping the 'encrypted' columns for now to avoid data loss
+            # They'll be ignored going forward (everything is encrypted)
 
 
 # SQL schema definition
@@ -173,24 +240,23 @@ SCHEMA_SQL = """
 -- Email accounts (Gmail, IMAP, etc.)
 CREATE TABLE IF NOT EXISTS accounts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,                    -- Display name: "Work Gmail", "Personal"
-    email TEXT NOT NULL,                   -- Email address
-    provider TEXT NOT NULL,                -- 'gmail' or 'imap'
-    credentials_encrypted TEXT,            -- Encrypted OAuth tokens or IMAP credentials
-    cached_folders TEXT,                   -- JSON cache of IMAP folder list
-    cached_folders_at INTEGER,             -- When folder cache was last updated
+    name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    credentials_encrypted TEXT,
+    cached_folders TEXT,
+    cached_folders_at INTEGER,
     created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
-    last_sync INTEGER,                     -- Last successful sync timestamp
+    last_sync INTEGER,
     UNIQUE(email, provider)
 );
 
 -- Archive folders (unified across all accounts)
 CREATE TABLE IF NOT EXISTS folders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,                    -- Folder name: "Client: John Smith"
-    parent_id INTEGER,                     -- Parent folder ID (NULL for root folders)
-    encrypted INTEGER NOT NULL DEFAULT 1,  -- 1 = encrypted, 0 = unencrypted
-    retention_days INTEGER,                -- Auto-delete after N days (NULL = keep forever)
+    name TEXT NOT NULL,
+    parent_id INTEGER,
+    retention_days INTEGER,
     created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
     FOREIGN KEY (parent_id) REFERENCES folders(id) ON DELETE CASCADE
 );
@@ -198,19 +264,46 @@ CREATE TABLE IF NOT EXISTS folders (
 -- Archived email messages
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    folder_id INTEGER NOT NULL,            -- Archive folder
-    source_account_id INTEGER,             -- Account message came from (NULL for imports)
-    message_id TEXT NOT NULL,              -- Email Message-ID header
-    subject TEXT,                          -- Email subject
-    sender TEXT,                           -- From address
-    recipients TEXT,                       -- JSON array of recipients
-    date INTEGER,                          -- Email date timestamp
-    filepath TEXT NOT NULL,                -- Path to .eml or .eml.enc file
-    encrypted INTEGER NOT NULL DEFAULT 1,  -- 1 = encrypted, 0 = unencrypted
+    folder_id INTEGER NOT NULL,
+    source_account_id INTEGER,
+    message_id TEXT NOT NULL,
+    subject TEXT,
+    sender TEXT,
+    recipients TEXT,
+    date INTEGER,
+    filepath TEXT NOT NULL,
+    body_text TEXT,
     filed_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
     FOREIGN KEY (folder_id) REFERENCES folders(id) ON DELETE CASCADE,
     FOREIGN KEY (source_account_id) REFERENCES accounts(id) ON DELETE SET NULL
 );
+
+-- Full-text search index
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+    subject,
+    sender,
+    body_text,
+    content='messages',
+    content_rowid='id'
+);
+
+-- Triggers to keep FTS in sync
+CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
+    INSERT INTO messages_fts(rowid, subject, sender, body_text)
+    VALUES (new.id, new.subject, new.sender, new.body_text);
+END;
+
+CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, subject, sender, body_text)
+    VALUES ('delete', old.id, old.subject, old.sender, old.body_text);
+END;
+
+CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, subject, sender, body_text)
+    VALUES ('delete', old.id, old.subject, old.sender, old.body_text);
+    INSERT INTO messages_fts(rowid, subject, sender, body_text)
+    VALUES (new.id, new.subject, new.sender, new.body_text);
+END;
 
 -- Indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_messages_folder ON messages(folder_id);

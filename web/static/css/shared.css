@@ -515,9 +515,22 @@ a:hover {
 }
 
 .security-note {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
     font-size: 0.8125rem;
     color: var(--color-text-muted);
-    margin: 0;
+    margin: var(--space-lg) 0;
+    padding: var(--space-md);
+    background: var(--color-background-alt);
+    border-radius: var(--radius-md);
+}
+
+.security-note svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    color: var(--color-success, #22c55e);
 }
 
 .link-muted {
