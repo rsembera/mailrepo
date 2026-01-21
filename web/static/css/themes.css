@@ -270,5 +270,5 @@
 
 [data-theme="dark"] .theme-swatch {
     box-shadow: none;
-    border: 2px solid var(--color-border);
+    border: none;
 }
