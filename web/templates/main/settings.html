@@ -81,7 +81,7 @@
     </details>
     
     <!-- Email Accounts Section -->
-    <details class="settings-section">
+    <details class="settings-section" id="emailAccountsSection">
         <summary class="settings-section-header">
             <i data-lucide="chevron-right" class="arrow"></i>
             <i data-lucide="mail" class="header-icon"></i>
@@ -136,7 +136,7 @@
             <div class="helper-box">
                 <strong>Note:</strong> For Gmail, iCloud, and other providers with 2FA, 
                 you'll need to use an <strong>app-specific password</strong> instead of your regular password.
-                <a href="https://support.google.com/accounts/answer/185833" target="_blank">Learn more</a>
+                <a href="javascript:void(0);" onclick="showAppPasswordInfo()">What's this?</a>
             </div>
         </div>
     </details>
@@ -289,10 +289,7 @@
             <select id="importFolder">
                 <option value="">Select a folder...</option>
                 {% for folder in folders %}
-                <option value="{{ folder.id }}">
-                    {% if folder.encrypted %}🔒{% else %}📁{% endif %} 
-                    {{ folder.name }}
-                </option>
+                <option value="{{ folder.id }}">{{ folder.name }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -334,6 +331,35 @@
         <p id="alertMessage"></p>
         <div class="modal-actions">
             <button class="btn btn-primary" onclick="closeModal('alertModal')" style="width: 100%;">OK</button>
+        </div>
+    </div>
+</div>
+
+<!-- App Password Info Modal -->
+<div class="modal-overlay" id="appPasswordModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>App-Specific Passwords</h2>
+        </div>
+        <div class="modal-body">
+            <p>If you use two-factor authentication (2FA) with your email provider, you'll need to generate an <strong>app-specific password</strong> for MailRepo.</p>
+            
+            <p>An app password is a one-time password that lets apps access your account without needing your main password or 2FA code.</p>
+            
+            <h4>How to get one:</h4>
+            <ul>
+                <li><strong>Gmail:</strong> Go to your Google Account → Security → 2-Step Verification → App passwords</li>
+                <li><strong>iCloud:</strong> Go to appleid.apple.com → Sign-In and Security → App-Specific Passwords</li>
+                <li><strong>Outlook/Hotmail:</strong> Go to account.microsoft.com → Security → Advanced security options → App passwords</li>
+                <li><strong>Other providers:</strong> Look for "App passwords" or "Third-party app access" in your account security settings</li>
+            </ul>
+            
+            <p style="margin-top: var(--space-lg); color: var(--color-text-muted); font-size: 0.875rem;">
+                If your email provider doesn't require 2FA, you can use your regular password.
+            </p>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-primary" onclick="closeModal('appPasswordModal')" style="width: 100%;">Got it</button>
         </div>
     </div>
 </div>

@@ -316,6 +316,10 @@ function showAboutModal() {
     document.getElementById('aboutModal').classList.add('active');
 }
 
+function showAppPasswordInfo() {
+    document.getElementById('appPasswordModal').classList.add('active');
+}
+
 function showAlert(title, message) {
     document.getElementById('alertTitle').textContent = title;
     document.getElementById('alertMessage').textContent = message;
@@ -362,6 +366,16 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('DOMContentLoaded', () => {
     const savedTheme = localStorage.getItem('mailrepo-theme') || 'teal';
     setTheme(savedTheme, false);
+    
+    // Auto-expand Email Accounts section if URL has ?accounts or #accounts
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('accounts') || window.location.hash === '#accounts') {
+        const section = document.getElementById('emailAccountsSection');
+        if (section) {
+            section.setAttribute('open', '');
+            section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
 });
 
 function setTheme(theme, save = true) {
