@@ -80,7 +80,6 @@
    THEME: DARK
    Dark mode for late-night archiving
    ============================================ */
-:root[data-theme="dark"],
 [data-theme="dark"] {
     /* Rail */
     --rail-bg: #1e1e2e;
@@ -238,35 +237,6 @@
 
 [data-theme="dark"] .icon-select-option.selected {
     background: var(--color-primary-lighter);
-}
-
-[data-theme="dark"] .theme-option {
-    background: var(--color-background-secondary);
-    border-color: var(--color-border);
-}
-
-[data-theme="dark"] .theme-option:hover {
-    background: var(--color-background);
-}
-
-[data-theme="dark"] .theme-option.active {
-    background: var(--color-primary-lighter);
-    border-color: var(--color-primary);
-}
-
-[data-theme="dark"] .font-option {
-    background: var(--color-background-secondary);
-    border-color: var(--color-border);
-    color: var(--color-text);
-}
-
-[data-theme="dark"] .font-option:hover {
-    background: var(--color-background);
-}
-
-[data-theme="dark"] .font-option.active {
-    background: var(--color-primary-lighter);
-    border-color: var(--color-primary);
 }
 
 [data-theme="dark"] .theme-swatch {
