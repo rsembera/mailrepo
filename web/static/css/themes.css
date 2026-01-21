@@ -80,6 +80,7 @@
    THEME: DARK
    Dark mode for late-night archiving
    ============================================ */
+:root[data-theme="dark"],
 [data-theme="dark"] {
     /* Rail */
     --rail-bg: #1e1e2e;
