@@ -267,3 +267,8 @@
     background: var(--color-primary-lighter);
     border-color: var(--color-primary);
 }
+
+[data-theme="dark"] .theme-swatch {
+    box-shadow: none;
+    border: 2px solid var(--color-border);
+}
