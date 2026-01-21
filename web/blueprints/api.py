@@ -149,6 +149,110 @@ def get_folder_emails(folder_id):
     return jsonify({"emails": emails})
 
 
+@api_bp.route("/folders/<int:folder_id>/emails/<int:message_id>", methods=["GET"])
+def get_archived_email(folder_id, message_id):
+    """Get a single archived email with full content."""
+    import email as email_lib
+    from email.header import decode_header
+    
+    message = Database.fetchone(
+        """
+        SELECT id, folder_id, subject, sender, date, filepath, encrypted
+        FROM messages 
+        WHERE id = ? AND folder_id = ?
+        """,
+        (message_id, folder_id)
+    )
+    
+    if not message:
+        return jsonify({"error": "Message not found"}), 404
+    
+    # Read the .eml file
+    filepath = Config.get_base_path() / message["filepath"]
+    if not filepath.exists():
+        return jsonify({"error": "Email file not found"}), 404
+    
+    try:
+        raw_bytes = filepath.read_bytes()
+        
+        # Decrypt if needed
+        if message["encrypted"]:
+            raw_bytes = Encryption.decrypt(raw_bytes)
+        
+        # Parse the email
+        msg = email_lib.message_from_bytes(raw_bytes)
+        
+        def decode_header_value(header):
+            if not header:
+                return ""
+            try:
+                parts = decode_header(header)
+                decoded = []
+                for content, charset in parts:
+                    if isinstance(content, bytes):
+                        decoded.append(content.decode(charset or "utf-8", errors="replace"))
+                    else:
+                        decoded.append(content)
+                return " ".join(decoded)
+            except:
+                return header
+        
+        result = {
+            "id": message["id"],
+            "subject": decode_header_value(msg.get("Subject", "")),
+            "from": decode_header_value(msg.get("From", "")),
+            "to": decode_header_value(msg.get("To", "")),
+            "cc": decode_header_value(msg.get("Cc", "")),
+            "date": msg.get("Date", ""),
+            "text_body": None,
+            "html_body": None,
+            "attachments": [],
+        }
+        
+        # Parse body
+        if msg.is_multipart():
+            for part in msg.walk():
+                content_type = part.get_content_type()
+                content_disposition = str(part.get("Content-Disposition", ""))
+                
+                if "attachment" in content_disposition:
+                    filename = part.get_filename()
+                    if filename:
+                        result["attachments"].append({
+                            "filename": decode_header_value(filename),
+                            "content_type": content_type,
+                            "size": len(part.get_payload(decode=True) or b""),
+                        })
+                    continue
+                
+                if content_type == "text/plain" and not result["text_body"]:
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        charset = part.get_content_charset() or "utf-8"
+                        result["text_body"] = payload.decode(charset, errors="replace")
+                
+                elif content_type == "text/html" and not result["html_body"]:
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        charset = part.get_content_charset() or "utf-8"
+                        result["html_body"] = payload.decode(charset, errors="replace")
+        else:
+            content_type = msg.get_content_type()
+            payload = msg.get_payload(decode=True)
+            if payload:
+                charset = msg.get_content_charset() or "utf-8"
+                body = payload.decode(charset, errors="replace")
+                if content_type == "text/html":
+                    result["html_body"] = body
+                else:
+                    result["text_body"] = body
+        
+        return jsonify({"email": result})
+        
+    except Exception as e:
+        return jsonify({"error": f"Failed to read email: {e}"}), 500
+
+
 # ============================================
 # ACCOUNTS (IMAP)
 # ============================================

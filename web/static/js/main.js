@@ -754,7 +754,7 @@ async function openEmailViewer(emailId) {
     overlay.classList.add('active');
     
     document.getElementById('viewerSubject').textContent = email.subject || '(no subject)';
-    document.getElementById('viewerFrom').textContent = email.from || '';
+    document.getElementById('viewerFrom').textContent = email.from || email.sender || '';
     document.getElementById('viewerTo').textContent = email.to || '';
     document.getElementById('viewerDate').textContent = email.date || '';
     document.getElementById('viewerBody').innerHTML = '<div class="loading-spinner">Loading...</div>';
@@ -766,30 +766,41 @@ async function openEmailViewer(emailId) {
         lucide.createIcons();
     }
     
-    // Fetch full email
-    if (state.currentView?.type === 'account') {
-        const accountId = state.currentView.id;
-        const folder = state.currentView.folder || 'INBOX';
-        const uid = email.uid || email.id;
+    // Fetch full email based on view type
+    try {
+        let response;
         
-        try {
-            const response = await fetch(
+        if (state.currentView?.type === 'account') {
+            // IMAP email
+            const accountId = state.currentView.id;
+            const folder = state.currentView.folder || 'INBOX';
+            const uid = email.uid || email.id;
+            
+            response = await fetch(
                 `/api/accounts/${accountId}/emails/${uid}?folder=${encodeURIComponent(folder)}`
             );
+        } else if (state.currentView?.type === 'folder') {
+            // Archived email
+            const folderId = state.currentView.id;
+            const messageId = email.id;
             
-            if (!response.ok) {
-                const data = await response.json();
-                throw new Error(data.error || 'Failed to load email');
-            }
-            
-            const data = await response.json();
-            renderEmailContent(data.email);
-            
-        } catch (error) {
-            console.error('Error loading email:', error);
-            document.getElementById('viewerBody').innerHTML = 
-                `<div class="error-message">Failed to load email: ${escapeHtml(error.message)}</div>`;
+            response = await fetch(`/api/folders/${folderId}/emails/${messageId}`);
+        } else {
+            throw new Error('Unknown view type');
         }
+        
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error || 'Failed to load email');
+        }
+        
+        const data = await response.json();
+        renderEmailContent(data.email);
+        
+    } catch (error) {
+        console.error('Error loading email:', error);
+        document.getElementById('viewerBody').innerHTML = 
+            `<div class="error-message">Failed to load email: ${escapeHtml(error.message)}</div>`;
     }
 }
 
