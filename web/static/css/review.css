@@ -2,73 +2,80 @@
    REVIEW PAGE STYLES
    ============================================ */
 
-.review-container {
-    max-width: 1000px;
-    margin: 0 auto;
-    padding: var(--space-xl);
+/* Sidebar header */
+.sidebar-header {
+    padding: var(--space-lg);
+    border-bottom: 1px solid var(--color-border);
 }
 
-.review-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: var(--space-xl);
-}
-
-.review-header h1 {
+.sidebar-header h2 {
     margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
 }
 
-.review-actions {
-    display: flex;
-    gap: var(--space-md);
+/* Tree count badge */
+.tree-count {
+    margin-left: auto;
+    background: var(--color-primary-lighter);
+    color: var(--color-primary-dark);
+    padding: 0.125rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
 }
 
+/* Review content area */
+.review-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-lg);
+}
+
+/* Review group (per account) */
 .review-group {
     background: white;
-    border-radius: var(--radius-xl);
-    margin-bottom: var(--space-xl);
-    overflow: hidden;
-    box-shadow: var(--shadow-sm);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-lg);
+    border: 1px solid var(--color-border);
 }
 
 .review-group-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: var(--space-lg) var(--space-xl);
+    padding: var(--space-md) var(--space-lg);
     background: var(--color-background-secondary);
     border-bottom: 1px solid var(--color-border);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
 .review-group-header h2 {
     margin: 0;
-    font-size: 1rem;
+    font-size: 0.9rem;
+    font-weight: 600;
 }
 
+/* Source action dropdown */
 .source-action {
     display: flex;
     align-items: center;
     gap: var(--space-sm);
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
 }
 
-.source-action select {
-    padding: var(--space-xs) var(--space-sm);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    font-size: 0.875rem;
-}
-
+/* Review list */
 .review-list {
-    padding: var(--space-md);
+    padding: var(--space-sm);
 }
 
+/* Review item row */
 .review-item {
     display: flex;
     align-items: center;
     gap: var(--space-md);
-    padding: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
     border-radius: var(--radius-md);
     transition: background 0.15s;
 }
@@ -78,48 +85,65 @@
 }
 
 .review-item.unchecked {
-    opacity: 0.5;
+    opacity: 0.4;
+}
+
+/* Checkbox */
+.review-checkbox {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
 }
 
 .review-checkbox input {
     width: 18px;
     height: 18px;
+    cursor: pointer;
 }
 
+/* Email content */
 .review-email {
     flex: 1;
     min-width: 0;
 }
 
-.review-email-header {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: var(--space-xs);
-}
-
-.review-sender {
-    font-weight: 600;
+.review-subject {
     font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
 }
 
-.review-date {
+.review-meta {
+    display: flex;
+    gap: var(--space-md);
     font-size: 0.75rem;
     color: var(--color-text-muted);
 }
 
-.review-subject {
-    font-size: 0.875rem;
-    color: var(--color-text);
+.review-sender {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.review-destination {
-    position: relative;
+.review-date {
+    flex-shrink: 0;
 }
 
-/* Custom Icon Select Dropdown */
+/* Destination folder selector */
+.review-destination {
+    flex-shrink: 0;
+}
+
+/* ============================================
+   ICON SELECT (Custom Dropdown)
+   ============================================ */
+
 .icon-select {
     position: relative;
 }
@@ -134,18 +158,20 @@
     background: white;
     cursor: pointer;
     font-size: 0.8125rem;
-    min-width: 160px;
-    max-width: 200px;
+    min-width: 140px;
+    max-width: 180px;
 }
 
 .icon-select-trigger:hover {
-    border-color: var(--color-border-hover, #999);
+    border-color: var(--color-text-muted);
 }
 
-.icon-select-trigger .folder-icon {
+.icon-select-trigger .folder-icon,
+.icon-select-trigger .action-icon {
     width: 14px;
     height: 14px;
     flex-shrink: 0;
+    color: var(--color-text-muted);
 }
 
 .icon-select-label {
@@ -179,7 +205,7 @@
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-lg);
     min-width: 100%;
-    max-height: 240px;
+    max-height: 200px;
     overflow-y: auto;
     z-index: 100;
 }
@@ -203,13 +229,14 @@
 }
 
 .icon-select-option.selected {
-    background: var(--color-primary-light, #e0f2fe);
+    background: var(--color-primary-lighter);
 }
 
 .icon-select-option i {
     width: 14px;
     height: 14px;
     flex-shrink: 0;
+    color: var(--color-text-muted);
 }
 
 .icon-select-option span {
@@ -218,7 +245,10 @@
     text-overflow: ellipsis;
 }
 
-/* Progress */
+/* ============================================
+   PROGRESS & RESULTS MODALS
+   ============================================ */
+
 .progress-container {
     padding: var(--space-lg) 0;
 }
@@ -242,22 +272,40 @@
     color: var(--color-text-muted);
 }
 
-/* Failed list */
+/* Results list */
 .failed-list {
     margin-top: var(--space-lg);
     padding: var(--space-md);
-    background: #FEE2E2;
+    background: var(--color-background-secondary);
     border-radius: var(--radius-md);
-}
-
-.failed-list h4 {
-    margin: 0 0 var(--space-sm) 0;
-    color: #DC2626;
+    max-height: 200px;
+    overflow-y: auto;
 }
 
 .failed-list ul {
     margin: 0;
-    padding-left: var(--space-xl);
+    padding: 0;
+    list-style: none;
     font-size: 0.875rem;
-    color: #991B1B;
+}
+
+.failed-list .list-header {
+    font-weight: 600;
+    color: var(--color-text-muted);
+    margin-top: var(--space-sm);
+    margin-bottom: var(--space-xs);
+}
+
+.failed-list .list-header:first-child {
+    margin-top: 0;
+}
+
+.failed-list .skipped-item {
+    color: var(--color-text-muted);
+    padding-left: var(--space-md);
+}
+
+.failed-list .failed-item {
+    color: var(--color-danger);
+    padding-left: var(--space-md);
 }

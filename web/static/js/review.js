@@ -4,9 +4,13 @@
 
 let stagedEmails = new Map();
 let folders = [];
-let sourceActions = {};  // { accountId-labelId: action }
+let accounts = [];
+let sourceActions = {};  // { accountId: action }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Load accounts from page data
+    accounts = window.accountsData || [];
+    
     // Load staged emails from sessionStorage
     const savedStaged = sessionStorage.getItem('stagedEmails');
     if (savedStaged) {
@@ -18,6 +22,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
     
+    // Update badge
+    document.getElementById('stagedBadge').textContent = stagedEmails.size;
+    
     if (stagedEmails.size === 0) {
         return;  // Show empty state
     }
@@ -25,7 +32,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Load folders
     await loadFolders();
     
-    // Render review list
+    // Render sidebar and review list
+    renderSidebar();
     renderReviewList();
     updateCommitButton();
 });
@@ -40,6 +48,45 @@ async function loadFolders() {
     } catch (e) {
         console.error('Failed to load folders:', e);
     }
+}
+
+function getAccountName(accountId) {
+    if (accountId === 'import') return 'Imported';
+    const account = accounts.find(a => a.id == accountId);
+    return account ? (account.name || account.email) : `Account ${accountId}`;
+}
+
+function renderSidebar() {
+    const section = document.getElementById('stagedAccountsSection');
+    
+    // Group by account
+    const byAccount = new Map();
+    stagedEmails.forEach((data, emailId) => {
+        const key = data.sourceAccountId || 'import';
+        if (!byAccount.has(key)) {
+            byAccount.set(key, []);
+        }
+        byAccount.get(key).push({ emailId, ...data });
+    });
+    
+    let html = '';
+    byAccount.forEach((emails, accountId) => {
+        const accountName = getAccountName(accountId);
+        html += `
+            <div class="tree-item-row active" data-account-id="${accountId}">
+                <i data-lucide="mail" class="tree-icon"></i>
+                <span class="tree-label">${escapeHtml(accountName)}</span>
+                <span class="tree-count">${emails.length}</span>
+            </div>
+        `;
+    });
+    
+    section.innerHTML = html;
+    
+    // Update meta
+    document.getElementById('reviewMeta').textContent = `${stagedEmails.size} emails staged`;
+    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 function renderReviewList() {
@@ -58,7 +105,7 @@ function renderReviewList() {
     let html = '';
     
     byAccount.forEach((emails, accountId) => {
-        const accountName = accountId === 'import' ? 'Imported' : `Account ${accountId}`;
+        const accountName = getAccountName(accountId);
         
         html += `
             <div class="review-group">
@@ -66,12 +113,31 @@ function renderReviewList() {
                     <h2>${escapeHtml(accountName)}</h2>
                     <div class="source-action">
                         <label>After commit:</label>
-                        <select onchange="setSourceAction('${accountId}', this.value)">
-                            <option value="leave">Leave in place</option>
-                            <option value="archive">Archive</option>
-                            <option value="trash">Move to trash</option>
-                            <option value="delete">Delete permanently</option>
-                        </select>
+                        <div class="icon-select action-select" data-account-id="${accountId}">
+                            <button class="icon-select-trigger" type="button">
+                                <i data-lucide="inbox" class="action-icon"></i>
+                                <span class="icon-select-label">Leave in place</span>
+                                <i data-lucide="chevron-down" class="icon-select-arrow"></i>
+                            </button>
+                            <div class="icon-select-dropdown">
+                                <div class="icon-select-option selected" data-value="leave" data-icon="inbox">
+                                    <i data-lucide="inbox"></i>
+                                    <span>Leave in place</span>
+                                </div>
+                                <div class="icon-select-option" data-value="archive" data-icon="archive">
+                                    <i data-lucide="archive"></i>
+                                    <span>Archive</span>
+                                </div>
+                                <div class="icon-select-option" data-value="trash" data-icon="trash-2">
+                                    <i data-lucide="trash-2"></i>
+                                    <span>Move to trash</span>
+                                </div>
+                                <div class="icon-select-option" data-value="delete" data-icon="x-circle">
+                                    <i data-lucide="x-circle"></i>
+                                    <span>Delete permanently</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="review-list">
@@ -84,18 +150,18 @@ function renderReviewList() {
             
             html += `
                 <div class="review-item" data-id="${item.emailId}">
-                    <div class="review-checkbox">
+                    <label class="review-checkbox">
                         <input type="checkbox" checked onchange="toggleReviewItem('${item.emailId}')">
-                    </div>
+                    </label>
                     <div class="review-email">
-                        <div class="review-email-header">
-                            <span class="review-sender">${escapeHtml(item.email.sender)}</span>
+                        <div class="review-subject">${escapeHtml(item.email.subject || '(no subject)')}</div>
+                        <div class="review-meta">
+                            <span class="review-sender">${escapeHtml(extractName(item.email.from || item.email.sender))}</span>
                             <span class="review-date">${formatDate(item.email.date)}</span>
                         </div>
-                        <div class="review-subject">${escapeHtml(item.email.subject)}</div>
                     </div>
                     <div class="review-destination">
-                        <div class="icon-select" data-email-id="${item.emailId}">
+                        <div class="icon-select folder-select" data-email-id="${item.emailId}">
                             <button class="icon-select-trigger" type="button">
                                 <i data-lucide="${folderIcon}" class="folder-icon"></i>
                                 <span class="icon-select-label">${escapeHtml(folderName)}</span>
@@ -124,70 +190,78 @@ function renderReviewList() {
     
     content.innerHTML = html;
     
-    // Render Lucide icons
-    if (typeof lucide !== 'undefined') {
-        lucide.createIcons();
-    }
+    if (typeof lucide !== 'undefined') lucide.createIcons();
     
-    // Initialize custom dropdowns
     initIconSelects();
 }
 
-// Custom icon-select dropdown handling
 function initIconSelects() {
-    document.querySelectorAll('.icon-select').forEach(select => {
-        const trigger = select.querySelector('.icon-select-trigger');
-        const dropdown = select.querySelector('.icon-select-dropdown');
-        
-        trigger.addEventListener('click', (e) => {
-            e.stopPropagation();
-            // Close other open dropdowns
-            document.querySelectorAll('.icon-select.open').forEach(s => {
-                if (s !== select) s.classList.remove('open');
-            });
-            select.classList.toggle('open');
-        });
-        
-        dropdown.querySelectorAll('.icon-select-option').forEach(option => {
-            option.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const emailId = select.dataset.emailId;
-                const folderId = option.dataset.value;
-                const icon = option.dataset.icon;
-                const label = option.querySelector('span').textContent;
-                
-                // Update trigger display
-                trigger.querySelector('.folder-icon').setAttribute('data-lucide', icon);
-                trigger.querySelector('.icon-select-label').textContent = label;
-                
-                // Update selected state
-                dropdown.querySelectorAll('.icon-select-option').forEach(o => o.classList.remove('selected'));
-                option.classList.add('selected');
-                
-                // Re-render icons and close
-                if (typeof lucide !== 'undefined') lucide.createIcons();
-                select.classList.remove('open');
-                
-                // Update data
-                changeDestination(emailId, folderId);
-            });
+    // Folder selects
+    document.querySelectorAll('.icon-select.folder-select').forEach(select => {
+        initDropdown(select, (value, icon, label) => {
+            const emailId = select.dataset.emailId;
+            changeDestination(emailId, value);
         });
     });
     
-    // Close dropdowns when clicking outside
-    document.addEventListener('click', () => {
-        document.querySelectorAll('.icon-select.open').forEach(s => s.classList.remove('open'));
+    // Action selects
+    document.querySelectorAll('.icon-select.action-select').forEach(select => {
+        initDropdown(select, (value, icon, label) => {
+            const accountId = select.dataset.accountId;
+            setSourceAction(accountId, value);
+        });
     });
 }
 
-function toggleReviewItem(emailId) {
-    const checkbox = document.querySelector(`.review-item[data-id="${emailId}"] input[type="checkbox"]`);
-    const item = document.querySelector(`.review-item[data-id="${emailId}"]`);
+function initDropdown(select, onChange) {
+    const trigger = select.querySelector('.icon-select-trigger');
+    const dropdown = select.querySelector('.icon-select-dropdown');
     
-    if (checkbox.checked) {
+    trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.querySelectorAll('.icon-select.open').forEach(s => {
+            if (s !== select) s.classList.remove('open');
+        });
+        select.classList.toggle('open');
+    });
+    
+    dropdown.querySelectorAll('.icon-select-option').forEach(option => {
+        option.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const value = option.dataset.value;
+            const icon = option.dataset.icon;
+            const label = option.querySelector('span').textContent;
+            
+            // Update trigger
+            const iconEl = trigger.querySelector('.folder-icon, .action-icon');
+            if (iconEl) iconEl.setAttribute('data-lucide', icon);
+            trigger.querySelector('.icon-select-label').textContent = label;
+            
+            // Update selected
+            dropdown.querySelectorAll('.icon-select-option').forEach(o => o.classList.remove('selected'));
+            option.classList.add('selected');
+            
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            select.classList.remove('open');
+            
+            onChange(value, icon, label);
+        });
+    });
+}
+
+// Close dropdowns on outside click
+document.addEventListener('click', () => {
+    document.querySelectorAll('.icon-select.open').forEach(s => s.classList.remove('open'));
+});
+
+function toggleReviewItem(emailId) {
+    const item = document.querySelector(`.review-item[data-id="${emailId}"]`);
+    const checkbox = item?.querySelector('input[type="checkbox"]');
+    
+    if (checkbox?.checked) {
         item.classList.remove('unchecked');
     } else {
-        item.classList.add('unchecked');
+        item?.classList.add('unchecked');
     }
     
     updateCommitButton();
@@ -196,7 +270,7 @@ function toggleReviewItem(emailId) {
 function changeDestination(emailId, folderId) {
     const data = stagedEmails.get(emailId);
     if (data) {
-        data.destinationFolderId = folderId;
+        data.destinationFolderId = parseInt(folderId);
         stagedEmails.set(emailId, data);
     }
 }
@@ -211,11 +285,14 @@ function updateCommitButton() {
     document.getElementById('commitBtn').disabled = checkedCount === 0;
 }
 
-// Commit button handler
+function goBack() {
+    window.location.href = '/';
+}
+
+// Commit handler
 document.getElementById('commitBtn').addEventListener('click', commitEmails);
 
 async function commitEmails() {
-    // Gather checked emails
     const toCommit = [];
     document.querySelectorAll('.review-item').forEach(item => {
         const checkbox = item.querySelector('input[type="checkbox"]');
@@ -227,6 +304,7 @@ async function commitEmails() {
                     email: data.email,
                     destinationFolderId: data.destinationFolderId,
                     sourceAccountId: data.sourceAccountId,
+                    sourceFolder: data.sourceFolder,
                     sourceAction: sourceActions[data.sourceAccountId] || 'leave',
                 });
             }
@@ -235,7 +313,6 @@ async function commitEmails() {
     
     if (toCommit.length === 0) return;
     
-    // Show progress modal
     const progressModal = document.getElementById('progressModal');
     const progressFill = document.getElementById('progressFill');
     const progressText = document.getElementById('progressText');
@@ -252,52 +329,47 @@ async function commitEmails() {
         });
         
         const data = await response.json();
-        
-        // Hide progress, show results
         progressModal.classList.remove('active');
         
         const resultsModal = document.getElementById('resultsModal');
-        const resultsTitle = document.getElementById('resultsTitle');
-        const resultsMessage = document.getElementById('resultsMessage');
-        const failedList = document.getElementById('failedList');
-        const failedItems = document.getElementById('failedItems');
-        const retryBtn = document.getElementById('retryBtn');
-        
         const successCount = data.results.success.length;
         const failedCount = data.results.failed.length;
         const skippedCount = data.results.skipped?.length || 0;
         
-        resultsTitle.textContent = failedCount === 0 ? 'Success!' : 'Complete';
-        resultsMessage.textContent = data.message;
+        document.getElementById('resultsTitle').textContent = failedCount === 0 ? 'Success!' : 'Complete';
+        document.getElementById('resultsMessage').textContent = data.message;
+        
+        const failedList = document.getElementById('failedList');
+        const failedItems = document.getElementById('failedItems');
         
         if (failedCount > 0 || skippedCount > 0) {
             failedList.classList.remove('hidden');
             let listHtml = '';
             
             if (skippedCount > 0) {
-                listHtml += '<li class="skipped-header">Skipped (already in archive):</li>';
+                listHtml += '<li class="list-header">Skipped (already archived):</li>';
                 listHtml += data.results.skipped.map(s => 
                     `<li class="skipped-item">${escapeHtml(s.subject || s.uid)}</li>`
                 ).join('');
             }
             
             if (failedCount > 0) {
-                if (skippedCount > 0) listHtml += '<li class="failed-header">Failed:</li>';
+                listHtml += '<li class="list-header">Failed:</li>';
                 listHtml += data.results.failed.map(f => 
                     `<li class="failed-item">${escapeHtml(f.uid)}: ${escapeHtml(f.error)}</li>`
                 ).join('');
             }
             
             failedItems.innerHTML = listHtml;
-            retryBtn.classList.toggle('hidden', failedCount === 0);
+            document.getElementById('retryBtn').classList.toggle('hidden', failedCount === 0);
         } else {
             failedList.classList.add('hidden');
-            retryBtn.classList.add('hidden');
+            document.getElementById('retryBtn').classList.add('hidden');
         }
         
         resultsModal.classList.add('active');
         
-        // Remove successful and skipped emails from staged
+        // Remove committed emails
         data.results.success.forEach(id => stagedEmails.delete(id));
         if (data.results.skipped) {
             data.results.skipped.forEach(s => stagedEmails.delete(s.uid));
@@ -317,6 +389,7 @@ document.getElementById('doneBtn').addEventListener('click', () => {
         window.location.href = '/';
     } else {
         document.getElementById('resultsModal').classList.remove('active');
+        renderSidebar();
         renderReviewList();
         updateCommitButton();
     }
@@ -335,8 +408,31 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
-function formatDate(timestamp) {
-    if (!timestamp) return '';
-    const date = new Date(timestamp * 1000);
-    return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+function extractName(sender) {
+    if (!sender) return '';
+    const match = sender.match(/^([^<]+)</);
+    return match ? match[1].trim() : sender;
 }
+
+function formatDate(dateStr) {
+    if (!dateStr) return '';
+    
+    try {
+        // Handle both string dates and timestamps
+        let date;
+        if (typeof dateStr === 'number') {
+            date = new Date(dateStr * 1000);
+        } else {
+            date = new Date(dateStr);
+        }
+        
+        if (isNaN(date.getTime())) return '';
+        
+        return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch {
+        return '';
+    }
+}
+
+// Global
+window.toggleReviewItem = toggleReviewItem;

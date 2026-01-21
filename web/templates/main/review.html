@@ -2,68 +2,117 @@
 
 {% block title %}Review Staged Emails - {{ app_name }}{% endblock %}
 
-{% block body_class %}review-page{% endblock %}
+{% block body_class %}main-page{% endblock %}
 
 {% block styles %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/review.css') }}">
 {% endblock %}
 
 {% block content %}
-<div class="review-container">
-    <header class="review-header">
-        <h1>Review Staged Emails</h1>
-        <div class="review-actions">
-            <button class="btn btn-secondary" onclick="history.back()"><i data-lucide="arrow-left"></i> Back</button>
-            <button class="btn btn-primary" id="commitBtn" disabled>
-                Commit <span id="commitCount">0</span> Emails
+<div class="app-container">
+    <!-- Pane 1: Left Rail -->
+    <nav class="left-rail">
+        <div class="rail-top">
+            <div class="rail-logo">
+                <img src="{{ url_for('static', filename='assets/icon.png') }}" alt="MailRepo" class="logo-icon">
+            </div>
+            <button class="rail-btn" onclick="window.location.href='/'" title="Mail">
+                <i data-lucide="inbox"></i>
+            </button>
+            <button class="rail-btn active" title="Staged Emails">
+                <i data-lucide="package"></i>
+                <span class="rail-badge" id="stagedBadge">0</span>
             </button>
         </div>
-    </header>
-    
-    <div class="review-content" id="reviewContent">
-        <!-- Emails grouped by source will be rendered here -->
-        <div class="empty-state">
-            <i data-lucide="mail-x" class="empty-icon"></i>
-            <h3>No Staged Emails</h3>
-            <p>Go back and stage some emails first.</p>
+        <div class="rail-bottom">
+            <button class="rail-btn" onclick="window.location.href='/settings'" title="Settings">
+                <i data-lucide="settings"></i>
+            </button>
         </div>
-    </div>
-    
-    <!-- Progress Modal -->
-    <div class="modal-overlay" id="progressModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Filing Emails...</h2>
-            </div>
-            <div class="progress-container">
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progressFill"></div>
+    </nav>
+
+    <!-- Pane 2: Sidebar (Staged summary) -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h2>Staged Emails</h2>
+        </div>
+        <div class="sidebar-section">
+            <div class="section-content expanded" id="stagedAccountsSection">
+                <!-- Account groups rendered by JS -->
+                <div class="sidebar-empty">
+                    <p>No staged emails</p>
                 </div>
-                <p class="progress-text" id="progressText">Preparing...</p>
             </div>
         </div>
+    </aside>
+
+    <!-- Pane 3: Main Content -->
+    <main class="main-content">
+        <header class="content-header">
+            <div class="header-context">
+                <h1>Review Staged Emails</h1>
+                <span class="header-meta" id="reviewMeta"></span>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-secondary" onclick="goBack()">
+                    <i data-lucide="arrow-left"></i>
+                    Back
+                </button>
+                <button class="btn btn-primary" id="commitBtn" disabled>
+                    <i data-lucide="check-circle"></i>
+                    Commit <span id="commitCount">0</span> Emails
+                </button>
+            </div>
+        </header>
+        
+        <div class="review-content" id="reviewContent">
+            <!-- Emails will be rendered here -->
+            <div class="empty-state">
+                <i data-lucide="package-x" class="empty-icon"></i>
+                <h3>No Staged Emails</h3>
+                <p>Go back and stage some emails first.</p>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Progress Modal -->
+<div class="modal-overlay" id="progressModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Filing Emails...</h2>
+        </div>
+        <div class="progress-container">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <p class="progress-text" id="progressText">Preparing...</p>
+        </div>
     </div>
-    
-    <!-- Results Modal -->
-    <div class="modal-overlay" id="resultsModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="resultsTitle">Complete</h2>
-            </div>
-            <p id="resultsMessage"></p>
-            <div class="failed-list hidden" id="failedList">
-                <h4>Failed:</h4>
-                <ul id="failedItems"></ul>
-            </div>
-            <div class="modal-actions">
-                <button class="btn btn-secondary hidden" id="retryBtn">Retry Failed</button>
-                <button class="btn btn-primary" id="doneBtn">Done</button>
-            </div>
+</div>
+
+<!-- Results Modal -->
+<div class="modal-overlay" id="resultsModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="resultsTitle">Complete</h2>
+        </div>
+        <p id="resultsMessage"></p>
+        <div class="failed-list hidden" id="failedList">
+            <ul id="failedItems"></ul>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary hidden" id="retryBtn">Retry Failed</button>
+            <button class="btn btn-primary" id="doneBtn">Done</button>
         </div>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
+<script>
+    // Pass accounts data to JS
+    window.accountsData = {{ accounts | tojson }};
+</script>
 <script src="{{ url_for('static', filename='js/review.js') }}"></script>
 {% endblock %}

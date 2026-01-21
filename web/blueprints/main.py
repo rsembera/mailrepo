@@ -88,7 +88,8 @@ def create_archive():
 def review():
     """Review staged emails before committing."""
     folders = Database.fetchall("SELECT * FROM folders ORDER BY name")
-    return render_template("main/review.html", folders=folders)
+    accounts = Database.fetchall("SELECT * FROM accounts ORDER BY name")
+    return render_template("main/review.html", folders=folders, accounts=accounts)
 
 
 @main_bp.route("/settings")
