@@ -116,6 +116,54 @@ function toggleSection(header) {
 }
 
 // ============================================
+// SIDEBAR FOLDER UPDATES
+// ============================================
+
+function updateSidebarFolders(newFolder, encrypted) {
+    const archiveSection = document.getElementById('archiveSection');
+    if (!archiveSection) return;
+    
+    // Find the "New Folder" button to insert before it
+    const addBtn = archiveSection.querySelector('.add-folder-btn');
+    
+    // Create the new folder element
+    const folderItem = document.createElement('div');
+    folderItem.className = 'tree-item folder-item';
+    folderItem.innerHTML = `
+        <div class="tree-item-row" data-type="folder" data-id="${newFolder.id}" data-encrypted="${encrypted ? 1 : 0}">
+            <i data-lucide="${encrypted ? 'lock' : 'folder'}" class="tree-icon"></i>
+            <span class="tree-label">${escapeHtml(newFolder.name)}</span>
+        </div>
+    `;
+    
+    // Insert before the add button
+    if (addBtn) {
+        archiveSection.insertBefore(folderItem, addBtn);
+    } else {
+        archiveSection.appendChild(folderItem);
+    }
+    
+    // Add click handler
+    const row = folderItem.querySelector('.tree-item-row');
+    row.addEventListener('click', (e) => handleTreeItemClick(e, row));
+    
+    // Update folder count
+    const countEl = document.getElementById('folderCount');
+    if (countEl) {
+        countEl.textContent = state.folders.length;
+    }
+    
+    // Remove empty state if present
+    const emptyState = archiveSection.querySelector('.sidebar-empty');
+    if (emptyState) {
+        emptyState.remove();
+    }
+    
+    // Re-render icons
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// ============================================
 // TREE NAVIGATION
 // ============================================
 
@@ -552,6 +600,9 @@ async function createFolder(returnToStage) {
         
         closeModal('newFolderModal');
         
+        // Update sidebar archive section
+        updateSidebarFolders(data.folder, encrypted);
+        
         if (fromStage) {
             // Add to stage modal folder list
             const list = document.getElementById('folderSelectList');
@@ -570,6 +621,9 @@ async function createFolder(returnToStage) {
             
             selectedDestinationFolder = data.folder.id;
             document.getElementById('confirmStageBtn').disabled = false;
+            
+            // Re-render icons
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         } else {
             location.reload();
         }
