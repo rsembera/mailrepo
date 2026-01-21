@@ -265,16 +265,31 @@ async function commitEmails() {
         
         const successCount = data.results.success.length;
         const failedCount = data.results.failed.length;
+        const skippedCount = data.results.skipped?.length || 0;
         
         resultsTitle.textContent = failedCount === 0 ? 'Success!' : 'Complete';
         resultsMessage.textContent = data.message;
         
-        if (failedCount > 0) {
+        if (failedCount > 0 || skippedCount > 0) {
             failedList.classList.remove('hidden');
-            failedItems.innerHTML = data.results.failed.map(f => 
-                `<li>${escapeHtml(f.id)}: ${escapeHtml(f.error)}</li>`
-            ).join('');
-            retryBtn.classList.remove('hidden');
+            let listHtml = '';
+            
+            if (skippedCount > 0) {
+                listHtml += '<li class="skipped-header">Skipped (already in archive):</li>';
+                listHtml += data.results.skipped.map(s => 
+                    `<li class="skipped-item">${escapeHtml(s.subject || s.uid)}</li>`
+                ).join('');
+            }
+            
+            if (failedCount > 0) {
+                if (skippedCount > 0) listHtml += '<li class="failed-header">Failed:</li>';
+                listHtml += data.results.failed.map(f => 
+                    `<li class="failed-item">${escapeHtml(f.uid)}: ${escapeHtml(f.error)}</li>`
+                ).join('');
+            }
+            
+            failedItems.innerHTML = listHtml;
+            retryBtn.classList.toggle('hidden', failedCount === 0);
         } else {
             failedList.classList.add('hidden');
             retryBtn.classList.add('hidden');
@@ -282,8 +297,11 @@ async function commitEmails() {
         
         resultsModal.classList.add('active');
         
-        // Remove successful emails from staged
+        // Remove successful and skipped emails from staged
         data.results.success.forEach(id => stagedEmails.delete(id));
+        if (data.results.skipped) {
+            data.results.skipped.forEach(s => stagedEmails.delete(s.uid));
+        }
         sessionStorage.setItem('stagedEmails', JSON.stringify([...stagedEmails.entries()]));
         
     } catch (error) {

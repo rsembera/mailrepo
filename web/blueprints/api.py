@@ -471,6 +471,7 @@ def commit_staged():
     results = {
         "success": [],
         "failed": [],
+        "skipped": [],
     }
     
     # Group by account for efficiency
@@ -540,6 +541,21 @@ def commit_staged():
                     if not folder:
                         raise ValueError(f"Folder {folder_id} not found")
                     
+                    # Check for duplicate by Message-ID in destination folder
+                    message_id = email_data.get("message_id", "")
+                    if message_id:
+                        existing = Database.fetchone(
+                            "SELECT id FROM messages WHERE folder_id = ? AND message_id = ?",
+                            (folder_id, message_id)
+                        )
+                        if existing:
+                            results["skipped"].append({
+                                "uid": uid,
+                                "reason": "duplicate",
+                                "subject": email_data.get("subject", ""),
+                            })
+                            continue
+                    
                     # Download raw email
                     raw_email = client.fetch_raw(uid)
                     
@@ -590,9 +606,16 @@ def commit_staged():
     
     Database.commit()
     
+    # Build message
+    msg_parts = [f"{len(results['success'])} emails filed successfully"]
+    if results["skipped"]:
+        msg_parts.append(f"{len(results['skipped'])} skipped (already archived)")
+    if results["failed"]:
+        msg_parts.append(f"{len(results['failed'])} failed")
+    
     return jsonify({
         "results": results,
-        "message": f"{len(results['success'])} emails filed successfully. {len(results['failed'])} failed."
+        "message": ". ".join(msg_parts) + "."
     })
 
 
