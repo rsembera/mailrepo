@@ -88,8 +88,10 @@ def create_archive():
 def review():
     """Review staged emails before committing."""
     folders = Database.fetchall("SELECT * FROM folders ORDER BY name")
-    accounts = Database.fetchall("SELECT * FROM accounts ORDER BY name")
-    return render_template("main/review.html", folders=folders, accounts=accounts)
+    accounts = Database.fetchall("SELECT id, name, email FROM accounts ORDER BY name")
+    # Convert Row objects to dicts for JSON serialization
+    accounts_list = [dict(a) for a in accounts]
+    return render_template("main/review.html", folders=folders, accounts=accounts_list)
 
 
 @main_bp.route("/settings")
