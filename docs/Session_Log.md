@@ -344,8 +344,22 @@ All major design decisions have been resolved. Ready to continue building.
 2. ~~Viewing archived emails~~ ✅ Working!
 3. **Migrate to SQLCipher** — Full database encryption (security priority)
 4. **Full-text search** — FTS5 indexing inside encrypted DB
-5. Import UI for .eml and .mbox files (backend ready in `core/importer.py`)
-6. ZIP export functionality
+5. **Unstage emails** — Click staged rail button to view/manage staged emails, unstage individually or clear all
+6. **Archive folder management** — In Settings: rename, delete, create subfolders (parent_id already exists)
+7. **Attachments** — View/download attachments from emails (server and archived)
+8. **Archived email operations** — Move, delete, export as .eml, print (open in new window)
+9. Import UI for .eml and .mbox files (backend ready in `core/importer.py`)
+10. ZIP export for folders
+
+---
+
+## Terminology
+
+- **Archive** — The root container; the entire local email archive system
+- **Folder** — Top-level container within the archive (e.g., "Client: Smith", "Personal")
+- **Subfolder** — Nested folder within a folder (e.g., "2024", "Litigation")
+- **Stage** — Select emails to be included in the next commit (Git analogy)
+- **Commit** — File staged emails to the archive permanently
 
 ---
 
