@@ -24,14 +24,15 @@ class Config:
         """
         Get the base path for all MailRepo data.
         
-        Defaults to ~/mailrepo, can be overridden with MAILREPO_DATA_DIR.
+        Defaults to the application directory, can be overridden with MAILREPO_DATA_DIR.
         """
         if cls._base_path is None:
             env_path = os.environ.get("MAILREPO_DATA_DIR")
             if env_path:
                 cls._base_path = Path(env_path)
             else:
-                cls._base_path = Path.home() / "mailrepo"
+                # Default to application directory (where this file lives)
+                cls._base_path = Path(__file__).parent.parent
         return cls._base_path
     
     @classmethod
