@@ -6,19 +6,18 @@ Encrypted email archiving for solo practitioners.
 
 ## Features
 
-- Connect Gmail accounts via OAuth
-- Browse and file emails into organized folders
-- Choose encrypted or unencrypted storage per folder tree
-- Batch filing with Stage → Review → Commit workflow
-- Import existing .mbox archives
-- Export archives as ZIP files
-- Search across archived emails
+- **Full encryption at rest** — Database and all archived emails encrypted with your master password using SQLCipher
+- **IMAP support** — Connect to Gmail, iCloud, Fastmail, or any IMAP server
+- **Batch filing workflow** — Stage → Review → Commit emails to organized folders
+- **Full-text search** — Search across subjects, senders, and email content (FTS5)
+- **Import existing archives** — Import .mbox and .eml files
+- **Export as ZIP** — Export archives as standard .eml files
 
 ## Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/mailrepo.git
+git clone https://github.com/rsembera/mailrepo.git
 cd mailrepo
 
 # Create virtual environment
@@ -32,22 +31,26 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Then open http://localhost:5000 in your browser.
+Then open http://localhost:5050 in your browser.
 
-## Gmail API Setup
+## First Run
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project (or select existing)
-3. Enable the Gmail API
-4. Create OAuth 2.0 credentials (Desktop app type)
-5. Download `credentials.json` to the `config/` directory
+1. **Create master password** — This encrypts your entire database and all archived emails
+2. **Create your first archive folder** — e.g., "Client Files", "Personal"
+3. **Connect an email account** — Enter IMAP credentials (auto-detects server for common providers)
 
-## Configuration
+## Security Model
 
-On first run, you'll be prompted to:
-1. Create a master password (encrypts OAuth tokens and secure archives)
-2. Create your first archive folder (choose encrypted or unencrypted)
-3. Connect your Gmail account
+MailRepo uses defense in depth:
+
+| Data | Protection |
+|------|------------|
+| Database | SQLCipher (AES-256 encryption) |
+| Archived emails | Fernet encryption (AES-128-CBC) |
+| IMAP credentials | Fernet encryption |
+| Master password | PBKDF2 key derivation (480,000 iterations) |
+
+The master password is never stored — only a verification token encrypted with the derived key.
 
 ## Data Storage
 
@@ -55,12 +58,22 @@ All data is stored locally in `~/mailrepo/`:
 
 ```
 ~/mailrepo/
-├── data/mailrepo.db      # SQLite database
-├── archive/              # Archived emails (.eml or .eml.enc)
-├── config/               # OAuth credentials
-└── backups/              # Manual/auto backups
+├── data/
+│   ├── mailrepo.db          # SQLCipher encrypted database
+│   ├── .salt                # Password salt + verification
+│   └── .secret_key          # Flask session key
+├── archive/
+│   └── {folder_id}/
+│       └── *.eml.enc        # Encrypted email files
+├── config/                  # (reserved for future use)
+└── backups/                 # Manual/auto backups
 ```
+
+## Requirements
+
+- Python 3.11+
+- SQLCipher libraries (bundled with `sqlcipher3` package on most platforms)
 
 ## License
 
-MIT License - See LICENSE file for details.
+MIT License — See LICENSE file for details.

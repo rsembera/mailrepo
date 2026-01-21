@@ -1,9 +1,8 @@
 # MailRepo — Project Plan
 
 **Created:** January 16, 2026  
-**Updated:** January 18, 2026  
-**Status:** Planning  
-**Priority:** Post-EdgeCase launch (after Feb 1, 2026)
+**Updated:** January 21, 2026  
+**Status:** In Development
 
 ---
 
@@ -47,35 +46,35 @@ Solo practitioners (therapists, lawyers, accountants, doctors, consultants) need
 
 ## Core Features
 
-### MVP (Phase 1)
+### MVP (Phase 1) — Current
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| IMAP Support | ✅ Done | Connect to any IMAP server (Gmail, iCloud, Fastmail, etc.) |
+| Inbox Browser | ✅ Done | View emails in a clean web interface |
+| Folder System | ✅ Done | Create/manage archive folders (unified across accounts) |
+| Stage → Review → Commit | ✅ Done | Batch filing workflow with review step |
+| Full Encryption | ✅ Done | SQLCipher database + Fernet email files |
+| Full-Text Search | ✅ Done | FTS5 search across subject, sender, body |
+| Duplicate Detection | ✅ Done | Skip emails already in destination folder |
+| Multi-Account | ✅ Done | Support multiple IMAP accounts |
+
+### Phase 2 — Next
 
 | Feature | Description |
 |---------|-------------|
-| Gmail OAuth | Connect to Gmail accounts via API |
-| Inbox Browser | View emails in a clean web interface |
-| Folder System | Create/manage client folders (unified across accounts) |
-| Stage → Review → Commit | Batch filing workflow with review step |
-| Encryption Options | Choose encrypted or unencrypted folder trees |
-| Search | Search within archived emails |
-| Multi-Account | Support multiple email accounts |
-| .mbox Import | Import existing email archives |
+| .mbox Import | Import existing email archives (backend ready) |
 | ZIP Export | Export archives/folders as unencrypted ZIP files |
+| Unstage UI | View and manage staged emails |
+| Attachments | View/download email attachments |
 
-### Phase 2
+### Phase 3 — Future
 
 | Feature | Description |
 |---------|-------------|
-| IMAP Support | Connect to any IMAP server (iCloud, Fastmail, etc.) |
 | Auto-Suggest | Suggest folder based on sender/subject patterns |
-| Export Options | Export as PDF, encrypted backup, or unencrypted ZIP |
 | Retention | Auto-archive or delete based on folder rules |
-
-### Phase 3 (Future)
-
-| Feature | Description |
-|---------|-------------|
 | AI Categorization | Suggest folder based on content analysis |
-| Full-Text Search | Search across all archived content |
 | EdgeCase Integration | Link MailRepo folders to EdgeCase client files |
 
 ---
@@ -87,11 +86,11 @@ Solo practitioners (therapists, lawyers, accountants, doctors, consultants) need
 | Component | Technology |
 |-----------|------------|
 | Backend | Python 3.13, Flask |
-| Database | SQLite (folder metadata, account config) |
-| Encryption | Fernet (cryptography library) |
-| Email Access | Gmail API, imaplib (for IMAP) |
+| Database | SQLCipher (encrypted SQLite) |
+| Encryption | Fernet (cryptography library) + SQLCipher (AES-256) |
+| Email Access | imaplib (IMAP) |
 | Frontend | HTML, CSS, vanilla JavaScript |
-| PDF Generation | ReportLab (for exports) |
+| Search | FTS5 (inside encrypted database) |
 | .mbox Parsing | Python `mailbox` module (stdlib) |
 
 ### Storage Structure
@@ -99,30 +98,30 @@ Solo practitioners (therapists, lawyers, accountants, doctors, consultants) need
 ```
 ~/mailrepo/
 ├── data/
-│   └── mailrepo.db          # SQLite: accounts, folders, metadata
+│   ├── mailrepo.db          # SQLCipher encrypted database
+│   ├── .salt                # Password salt + verification token
+│   └── .secret_key          # Flask session key
 ├── archive/
-│   ├── {folder_id}/
-│   │   ├── {message_id}.eml.enc    # Encrypted .eml files
-│   │   ├── {message_id}.eml        # Unencrypted .eml files
-│   │   └── ...
-│   └── ...
-├── config/
-│   └── credentials.json     # OAuth tokens (encrypted)
+│   └── {folder_id}/
+│       └── *.eml.enc        # Fernet encrypted .eml files
+├── config/                  # (reserved for future use)
 └── backups/
 ```
 
-**Note:** Archive is organized by folder (unified), not by account. Messages from any account can be filed to any folder. File extension indicates encryption status (.eml.enc vs .eml).
+**Note:** All emails are encrypted. The database stores metadata (subject, sender, body text for search) and is fully encrypted with SQLCipher. Email files are encrypted with Fernet.
 
-### Database Schema (Draft)
+### Database Schema
 
 ```sql
--- Email accounts
+-- Email accounts (IMAP)
 CREATE TABLE accounts (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,           -- "Work Gmail", "Personal"
     email TEXT NOT NULL,
-    provider TEXT NOT NULL,       -- 'gmail', 'imap'
-    credentials_encrypted TEXT,   -- OAuth tokens or IMAP creds
+    provider TEXT NOT NULL,       -- 'imap'
+    credentials_encrypted TEXT,   -- Fernet-encrypted IMAP credentials
+    cached_folders TEXT,          -- JSON array of folder names
+    cached_folders_at INTEGER,    -- Cache timestamp
     created_at INTEGER,
     last_sync INTEGER
 );
@@ -132,7 +131,6 @@ CREATE TABLE folders (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,           -- "Client: John Smith"
     parent_id INTEGER,            -- For nested folders
-    encrypted INTEGER DEFAULT 1,  -- 1 = encrypted, 0 = unencrypted (inherited from root)
     retention_days INTEGER,       -- NULL = keep forever
     created_at INTEGER,
     FOREIGN KEY (parent_id) REFERENCES folders(id)
@@ -148,14 +146,20 @@ CREATE TABLE messages (
     sender TEXT,
     recipients TEXT,              -- JSON array
     date INTEGER,                 -- Email date timestamp
-    filepath TEXT NOT NULL,       -- Path to .eml or .eml.enc file
-    encrypted INTEGER DEFAULT 1,  -- 1 = encrypted, 0 = unencrypted
+    filepath TEXT NOT NULL,       -- Path to .eml.enc file
+    body_text TEXT,               -- Plain text for FTS indexing
     filed_at INTEGER,
     FOREIGN KEY (folder_id) REFERENCES folders(id),
     FOREIGN KEY (source_account_id) REFERENCES accounts(id)
 );
 
--- Settings
+-- Full-text search index
+CREATE VIRTUAL TABLE messages_fts USING fts5(
+    subject, sender, body_text,
+    content='messages', content_rowid='id'
+);
+
+-- Application settings (key-value store)
 CREATE TABLE settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -364,52 +368,25 @@ for message in mbox:
 
 ---
 
-## Gmail API Setup
-
-### Prerequisites
-
-1. Google Cloud Console project
-2. Enable Gmail API
-3. Create OAuth 2.0 credentials (Desktop app type)
-4. Download credentials.json
-
-### Scopes Required
-
-```python
-SCOPES = [
-    'https://www.googleapis.com/auth/gmail.readonly',    # Read emails
-    'https://www.googleapis.com/auth/gmail.modify',      # Mark as read, archive, trash
-    'https://www.googleapis.com/auth/gmail.labels',      # Manage labels
-]
-```
-
-### OAuth Flow
-
-1. First run: Open browser for Google sign-in
-2. User authorizes app
-3. Store refresh token (encrypted) in database
-4. Use refresh token for subsequent access
-
----
-
 ## Security Model
 
 ### Encryption
 
 | Data | Protection |
 |------|------------|
-| Encrypted folder emails | Fernet encryption (AES-128-CBC) |
-| Unencrypted folder emails | Plain .eml files |
-| OAuth tokens | Always Fernet encrypted |
-| Database | SQLCipher (optional, Phase 2) |
-| In transit | HTTPS (Gmail API), TLS (IMAP) |
+| Database | SQLCipher (AES-256) — entire DB encrypted at rest |
+| Archived emails | Fernet encryption (AES-128-CBC) |
+| IMAP credentials | Fernet encrypted in database |
+| FTS index | Inside SQLCipher — encrypted with database |
+| In transit | TLS (IMAP) |
 
 ### Master Password
 
 - **Always required** on startup (modal before anything loads)
-- Required even if user only has unencrypted folders (protects OAuth tokens)
-- Derives Fernet key via PBKDF2
-- Same pattern as EdgeCase
+- Derives two separate keys via PBKDF2 (480,000 iterations):
+  - Fernet key for email/credential encryption
+  - SQLCipher key for database encryption
+- Password never stored; only verification token
 
 ### Access Control
 
@@ -424,15 +401,16 @@ SCOPES = [
 | Question | Decision | Rationale |
 |----------|----------|-----------|
 | Archive structure | Unified folder tree | Client might email from multiple accounts |
-| Gmail labels | Separate system | Labels for Gmail workflow, folders for archive |
-| Deduplication | Allow duplicates | Different contexts; can add warning later |
+| Deduplication | Skip duplicates | Check Message-ID before archiving |
 | Attachment handling | Keep in .eml | Simplicity; extract on view |
 | EdgeCase integration | Build later | Standalone first |
 | Filing UX | Stage → Review → Commit | Batch-first, matches real workflow |
 | Folder creation | Modal-in-modal | Stay in flow when staging |
-| Encryption scope | Per-folder-tree | Root folder sets encryption; children inherit |
-| Password requirement | Always required | Protects OAuth tokens regardless of folder encryption |
+| Encryption scope | Everything encrypted | SQLCipher DB + Fernet files; no unencrypted option |
+| Password requirement | Always required | Needed to decrypt database |
 | First-run flow | Create archive first | Forces deliberate decision before filing |
+| Email protocol | IMAP only | Simpler than OAuth; works with any provider |
+| Search | FTS5 in SQLCipher | Full-text search inside encrypted database |
 
 ---
 

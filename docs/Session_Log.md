@@ -6,9 +6,69 @@ Running record of planning sessions and decisions. Most recent first.
 
 ## TODO Before Release
 
-- [ ] **Migrate to SQLCipher** — Replace SQLite with SQLCipher for full database encryption. Currently subject/sender are stored in plaintext which undermines the security model. SQLCipher encrypts the entire DB at rest using the master password.
-- [ ] **Implement full-text search** — After SQLCipher migration, add FTS5 indexing for subject, sender, and email body content. Secure because the entire index lives inside the encrypted database.
-- [ ] **Consolidate database migrations** — Push all migrations into the base schema in `database.py` so fresh installs don't need to run migrations. Currently schema v2 with migration from v1.
+- [x] ~~**Migrate to SQLCipher**~~ ✅ Done Jan 21, 2026
+- [x] ~~**Implement full-text search**~~ ✅ Done Jan 21, 2026 (FTS5)
+- [x] ~~**Consolidate database migrations**~~ ✅ Schema v3 is now the base
+- [ ] **Unstage emails** — Click staged rail button to view/manage staged emails
+- [ ] **Archive folder management** — Rename, delete, create subfolders in Settings
+- [ ] **Attachments** — View/download attachments from emails
+- [ ] **Archived email operations** — Move, delete, export as .eml
+- [ ] **Import UI** — File picker for .eml and .mbox import (backend ready)
+- [ ] **ZIP export** — Export folders as unencrypted ZIP
+
+---
+
+## January 21, 2026 — Afternoon Session
+
+**Participants:** Rick, Claude
+
+**Work Done:**
+
+1. **Migrated to SQLCipher for full database encryption:**
+   - Replaced standard SQLite with SQLCipher (`sqlcipher3` package)
+   - Database now fully encrypted at rest using master password
+   - Added `_derive_db_key()` in encryption.py for separate DB key derivation
+   - Database initialization deferred until after authentication
+
+2. **Implemented FTS5 full-text search:**
+   - Added `messages_fts` virtual table for subject, sender, body_text
+   - Created triggers to keep FTS index in sync with messages table
+   - Added `extract_body_text()` helper to parse email content for indexing
+   - Added `/api/search` endpoint for searching archived emails
+
+3. **Removed per-folder encryption choice:**
+   - All emails now encrypted (database + files)
+   - Removed `encrypted` column references throughout codebase
+   - Simplified folder creation UI (no encryption radio buttons)
+   - Updated `create_archive.html` with security note instead
+
+4. **Schema updated to v3:**
+   - Added `body_text` column to messages table
+   - Migration path from v2 preserved for existing installs
+   - Fresh installs get complete schema with FTS
+
+5. **Updated documentation:**
+   - README.md rewritten with current feature set
+   - Session_Log.md updated with completed TODOs
+
+**Files Changed:**
+- `core/database.py` — SQLCipher support, FTS5 schema, v3 migration
+- `core/encryption.py` — Added `_derive_db_key()` and `get_db_key()`
+- `core/importer.py` — Removed encrypted parameter (always encrypt)
+- `web/app.py` — Deferred DB init until after auth
+- `web/blueprints/auth.py` — Init DB after login/setup
+- `web/blueprints/api.py` — Removed encrypted refs, added search endpoint
+- `web/blueprints/main.py` — Removed encrypted handling
+- `web/templates/main/index.html` — Removed lock icons from folder list
+- `web/templates/main/create_archive.html` — Replaced encryption choice with security note
+- `web/static/css/shared.css` — Added security-note styling
+- `requirements.txt` — Added sqlcipher3
+- `README.md` — Complete rewrite
+
+**Commits:**
+- `9f136c6` — Migrate to SQLCipher for full database encryption
+
+**Status:** Core security model complete. Database and all emails encrypted at rest. Full-text search working.
 
 ---
 
