@@ -18,6 +18,55 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## January 21, 2026 — Afternoon Session (Continued)
+
+**Participants:** Rick, Claude
+
+**Work Done:**
+
+1. **Cloned repo to Mercury (Linux dev machine):**
+   - Set up development environment on Mercury ThinkPad
+   - Configured git user for commits
+   - All dependencies installed including SQLCipher
+
+2. **UI/UX improvements for Add Account flow:**
+   - Removed redundant "Connect Gmail Account" button from main view
+   - Added `?accounts` URL parameter to auto-expand Email Accounts section
+   - Replaced Google "Learn more" link with app-specific password info modal
+   - Cleaned up import dropdown (removed old encrypted emoji references)
+
+3. **Fixed button styling:**
+   - Fixed `a.btn` elements getting link underline on hover
+   - Changed btn-secondary text color from muted to normal for better visibility
+
+4. **Dark mode fixes:**
+   - Fixed theme switching to update both `<html>` and `<body>` elements
+   - Replaced hardcoded `white` backgrounds with CSS variables in settings.css
+   - Fixed theme swatch borders in dark mode
+   - Decided to keep theme/font selector cards light for consistent swatch visibility
+
+5. **New theme system - 5 themes:**
+   - Renamed Teal → **Lagoon** (`#1F8F74`)
+   - Renamed Slate → **Graphite** (`#475569`)
+   - Renamed Dark → **Midnight** (`#1e1e2e`)
+   - Added **Bloom** (`#3B6EA5`) - muted navy blue
+   - Added **Rose** (`#A65568`) - dusty rose
+   - Inspired by Zoom's theme naming (Bloom, Agave, Rose, Classic)
+
+**Commits:**
+- `2ce9c2a` — Improve add account UX and remove Gmail-specific references
+- `01e21fc` — Fix dark mode theme switching
+- `2c23258` — Fix theme/font option swatches in dark mode
+- `d2dc810` — Fix theme swatch borders in dark mode
+- `ce8cf27` — Remove shadow/border from theme swatches in dark mode
+- `2d58cde` — Fix dark mode CSS variable specificity
+- `17b225e` — Keep theme/font selectors light for consistent swatch visibility
+- `4a6ccb5` — Add Bloom and Rose themes, rename existing themes
+
+**Status:** Development environment working on Mercury. Theme system expanded with 5 professional themes.
+
+---
+
 ## January 21, 2026 — Afternoon Session
 
 **Participants:** Rick, Claude
