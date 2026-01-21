@@ -6,7 +6,62 @@ Running record of planning sessions and decisions. Most recent first.
 
 ## TODO Before Release
 
+- [ ] **Migrate to SQLCipher** — Replace SQLite with SQLCipher for full database encryption. Currently subject/sender are stored in plaintext which undermines the security model. SQLCipher encrypts the entire DB at rest using the master password.
+- [ ] **Implement full-text search** — After SQLCipher migration, add FTS5 indexing for subject, sender, and email body content. Secure because the entire index lives inside the encrypted database.
 - [ ] **Consolidate database migrations** — Push all migrations into the base schema in `database.py` so fresh installs don't need to run migrations. Currently schema v2 with migration from v1.
+
+---
+
+## January 20, 2026 — Evening Session (~9:00 PM)
+
+**Participants:** Rick, Claude
+
+**Work Done:**
+
+1. **Fixed beforeunload warning:**
+   - "Review & Commit" button was triggering "Are you sure you want to leave?" alert
+   - Fixed by removing the listener before intentional navigation
+
+2. **Fixed sidebar folder update:**
+   - Creating folder from stage modal now updates sidebar immediately
+   - Added `updateSidebarFolders()` function
+
+3. **Redesigned Review page:**
+   - Now uses three-pane layout consistent with main view
+   - Shows actual account names instead of "Account 2"
+   - Fixed date formatting (was showing "Invalid Date")
+   - Fixed checkbox alignment
+   - Replaced native select with custom icon-select dropdowns for "After commit" action
+
+4. **Added duplicate detection:**
+   - Checks Message-ID before archiving
+   - Skips emails already in destination folder
+   - Shows "X skipped (already archived)" in results
+
+5. **Added archive email viewing:**
+   - Click archive folder → loads archived emails
+   - Click archived email → opens viewer with decrypted content
+   - Added `/api/folders/<id>/emails/<id>` endpoint
+
+6. **Fixed JSON serialization error:**
+   - SQLite Row objects weren't JSON serializable for accounts data
+   - Convert to dicts before passing to template
+
+**Commits:**
+- `12ada1e` — Fix: disable beforeunload warning when navigating to Review page
+- `f9a64f7` — Update sidebar when creating folder from stage modal
+- `43fd722` — Redesign Review page: three-pane layout, account names, fix date/alignment, custom dropdowns
+- `5f84dc1` — Add duplicate detection - skip emails already in destination folder
+- `0f50dbc` — Fix: convert Row objects to dicts for JSON serialization in review page
+- `e0f4b48` — Add ability to view archived emails with decryption support
+
+**Discussion — Security & Search:**
+- Identified that subject/sender are stored unencrypted in SQLite — security gap
+- Discussed full-text search options; FTS5 needs plaintext which conflicts with encryption
+- Decision: Migrate to SQLCipher for full database encryption, then implement FTS5 inside the encrypted DB
+- This maintains security promise while enabling full content search
+
+**Status:** Core archiving workflow complete and tested. Security enhancement (SQLCipher) is next priority.
 
 ---
 
@@ -286,10 +341,11 @@ All major design decisions have been resolved. Ready to continue building.
 ## What's Next to Build
 
 1. ~~Test IMAP workflow end-to-end~~ ✅ Working!
-2. Import UI for .eml and .mbox files (backend ready in `core/importer.py`)
-3. ZIP export functionality
-4. Search within archive
-5. Viewing archived emails (archive folder browser)
+2. ~~Viewing archived emails~~ ✅ Working!
+3. **Migrate to SQLCipher** — Full database encryption (security priority)
+4. **Full-text search** — FTS5 indexing inside encrypted DB
+5. Import UI for .eml and .mbox files (backend ready in `core/importer.py`)
+6. ZIP export functionality
 
 ---
 
@@ -302,5 +358,4 @@ All major design decisions have been resolved. Ready to continue building.
 - Auto-suggest folders based on sender/subject patterns
 - AI categorization
 - EdgeCase integration (link folders to client files)
-- Full-text search across archive
 - Encrypted backup export (keep .eml.enc intact)
