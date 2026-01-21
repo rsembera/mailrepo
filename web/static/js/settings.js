@@ -364,7 +364,7 @@ document.addEventListener('keydown', (e) => {
 // ============================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    const savedTheme = localStorage.getItem('mailrepo-theme') || 'teal';
+    const savedTheme = localStorage.getItem('mailrepo-theme') || 'lagoon';
     setTheme(savedTheme, false);
     
     // Auto-expand Email Accounts section if URL has ?accounts or #accounts

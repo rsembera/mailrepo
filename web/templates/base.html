@@ -21,7 +21,7 @@
     <script>
         (function() {
             // Theme
-            const theme = localStorage.getItem('mailrepo-theme') || 'teal';
+            const theme = localStorage.getItem('mailrepo-theme') || 'lagoon';
             document.documentElement.setAttribute('data-theme', theme);
             
             // Font family
@@ -42,7 +42,7 @@
         })();
     </script>
 </head>
-<body class="{% block body_class %}{% endblock %}" data-theme="teal">
+<body class="{% block body_class %}{% endblock %}" data-theme="lagoon">
     {% block body %}
         {% block content %}{% endblock %}
     {% endblock %}
@@ -52,7 +52,7 @@
     {% block scripts %}{% endblock %}
     <script>
         // Apply theme to body as well (html already has it from head script)
-        document.body.setAttribute('data-theme', localStorage.getItem('mailrepo-theme') || 'teal');
+        document.body.setAttribute('data-theme', localStorage.getItem('mailrepo-theme') || 'lagoon');
         lucide.createIcons();
     </script>
 </body>

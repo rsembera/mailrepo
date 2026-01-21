@@ -1,14 +1,14 @@
 /* ============================================
    MAILREPO THEME SYSTEM
-   Three themes: Teal (default), Slate, Dark
+   Five themes: Lagoon (default), Graphite, Bloom, Rose, Midnight
    ============================================ */
 
 /* ============================================
-   THEME: TEAL (Default)
-   Professional and calm - the original look
+   THEME: LAGOON (Default)
+   Professional teal - calm and focused
    ============================================ */
 :root,
-[data-theme="teal"] {
+[data-theme="lagoon"] {
     /* Rail */
     --rail-bg: #1F8F74;
     --rail-logo-bg: #b2ebf2;
@@ -41,10 +41,10 @@
 }
 
 /* ============================================
-   THEME: SLATE
-   Neutral gray/blue, understated and professional
+   THEME: GRAPHITE
+   Neutral gray/blue - understated and professional
    ============================================ */
-[data-theme="slate"] {
+[data-theme="graphite"] {
     /* Rail */
     --rail-bg: #475569;
     --rail-logo-bg: #cbd5e1;
@@ -77,10 +77,82 @@
 }
 
 /* ============================================
-   THEME: DARK
+   THEME: BLOOM
+   Calm blue - focused and serene
+   ============================================ */
+[data-theme="bloom"] {
+    /* Rail */
+    --rail-bg: #3B6EA5;
+    --rail-logo-bg: #a8c5e2;
+    --rail-text: rgba(255, 255, 255, 0.7);
+    --rail-text-active: #ffffff;
+    --rail-btn-hover: rgba(255, 255, 255, 0.1);
+    --rail-btn-active: rgba(255, 255, 255, 0.2);
+    
+    /* Primary accent */
+    --color-primary: #3B6EA5;
+    --color-primary-light: #7BA3C9;
+    --color-primary-lighter: #D4E4F2;
+    --color-primary-dark: #2A5080;
+    
+    /* Backgrounds */
+    --color-background: #FBFCFD;
+    --color-background-secondary: #F5F9FC;
+    --color-background-page: #EBF2F8;
+    
+    /* Text */
+    --color-text: #2D3A47;
+    --color-text-heading: #1E2A36;
+    --color-text-muted: #5A6A7A;
+    --color-text-light: #7A8A9A;
+    
+    /* Borders & focus */
+    --color-border: #D6E2ED;
+    --color-border-focus: #3B6EA5;
+    --shadow-focus: 0 0 0 3px rgba(59, 110, 165, 0.15);
+}
+
+/* ============================================
+   THEME: ROSE
+   Dusty rose - warm and sophisticated
+   ============================================ */
+[data-theme="rose"] {
+    /* Rail */
+    --rail-bg: #A65568;
+    --rail-logo-bg: #e2b8c0;
+    --rail-text: rgba(255, 255, 255, 0.7);
+    --rail-text-active: #ffffff;
+    --rail-btn-hover: rgba(255, 255, 255, 0.1);
+    --rail-btn-active: rgba(255, 255, 255, 0.2);
+    
+    /* Primary accent */
+    --color-primary: #A65568;
+    --color-primary-light: #C98A98;
+    --color-primary-lighter: #F2E0E4;
+    --color-primary-dark: #8A4557;
+    
+    /* Backgrounds */
+    --color-background: #FDFBFC;
+    --color-background-secondary: #FAF5F7;
+    --color-background-page: #F5EDEF;
+    
+    /* Text */
+    --color-text: #3D2F33;
+    --color-text-heading: #2E2326;
+    --color-text-muted: #6B5A5F;
+    --color-text-light: #8A7A7F;
+    
+    /* Borders & focus */
+    --color-border: #E8DDE0;
+    --color-border-focus: #A65568;
+    --shadow-focus: 0 0 0 3px rgba(166, 85, 104, 0.15);
+}
+
+/* ============================================
+   THEME: MIDNIGHT
    Dark mode for late-night archiving
    ============================================ */
-[data-theme="dark"] {
+[data-theme="midnight"] {
     /* Rail */
     --rail-bg: #1e1e2e;
     --rail-logo-bg: #45475a;
@@ -128,7 +200,7 @@
    DARK THEME OVERRIDES
    Additional styles needed for dark mode
    ============================================ */
-[data-theme="dark"] {
+[data-theme="midnight"] {
     /* Cards and modals */
     --card-bg: #1e1e2e;
     --modal-bg: #1e1e2e;
@@ -141,105 +213,105 @@
 }
 
 /* Dark mode specific element overrides */
-[data-theme="dark"] .sidebar {
+[data-theme="midnight"] .sidebar {
     background: var(--sidebar-bg);
     border-right-color: var(--color-border);
 }
 
-[data-theme="dark"] .content-header,
-[data-theme="dark"] .content-toolbar {
+[data-theme="midnight"] .content-header,
+[data-theme="midnight"] .content-toolbar {
     background: var(--color-background);
     border-bottom-color: var(--color-border);
 }
 
-[data-theme="dark"] .email-item {
+[data-theme="midnight"] .email-item {
     border-bottom-color: var(--color-border);
 }
 
-[data-theme="dark"] .email-item:hover {
+[data-theme="midnight"] .email-item:hover {
     background: var(--color-background-secondary);
 }
 
-[data-theme="dark"] .modal-content {
+[data-theme="midnight"] .modal-content {
     background: var(--modal-bg);
 }
 
-[data-theme="dark"] .auth-card {
+[data-theme="midnight"] .auth-card {
     background: var(--card-bg);
 }
 
-[data-theme="dark"] input,
-[data-theme="dark"] select,
-[data-theme="dark"] textarea {
+[data-theme="midnight"] input,
+[data-theme="midnight"] select,
+[data-theme="midnight"] textarea {
     background: var(--input-bg);
     color: var(--color-text);
     border-color: var(--color-border);
 }
 
-[data-theme="dark"] .btn-secondary {
+[data-theme="midnight"] .btn-secondary {
     background: #313244;
     color: var(--color-text);
 }
 
-[data-theme="dark"] .btn-secondary:hover:not(:disabled) {
+[data-theme="midnight"] .btn-secondary:hover:not(:disabled) {
     background: #45475a;
 }
 
-[data-theme="dark"] .section-header {
+[data-theme="midnight"] .section-header {
     color: var(--color-text);
 }
 
-[data-theme="dark"] .tree-item-row:hover {
+[data-theme="midnight"] .tree-item-row:hover {
     background: var(--color-background-secondary);
 }
 
-[data-theme="dark"] .tree-item-row.active {
+[data-theme="midnight"] .tree-item-row.active {
     background: var(--color-primary-lighter);
     color: var(--color-primary);
 }
 
-[data-theme="dark"] .folder-select-item:hover {
+[data-theme="midnight"] .folder-select-item:hover {
     background: var(--color-background-secondary);
 }
 
-[data-theme="dark"] .radio-label {
+[data-theme="midnight"] .radio-label {
     border-color: var(--color-border);
 }
 
-[data-theme="dark"] .radio-label:hover {
+[data-theme="midnight"] .radio-label:hover {
     background: var(--color-background-secondary);
     border-color: var(--color-primary);
 }
 
 /* Settings page cards in dark mode */
-[data-theme="dark"] .settings-section {
+[data-theme="midnight"] .settings-section {
     background: var(--card-bg);
 }
 
-[data-theme="dark"] .account-card {
+[data-theme="midnight"] .account-card {
     background: var(--color-background-secondary);
 }
 
-[data-theme="dark"] .icon-select-dropdown {
+[data-theme="midnight"] .icon-select-dropdown {
     background: var(--card-bg);
     border-color: var(--color-border);
 }
 
-[data-theme="dark"] .icon-select-trigger {
+[data-theme="midnight"] .icon-select-trigger {
     background: var(--input-bg);
     border-color: var(--color-border);
     color: var(--color-text);
 }
 
-[data-theme="dark"] .icon-select-option:hover {
+[data-theme="midnight"] .icon-select-option:hover {
     background: var(--color-background-secondary);
 }
 
-[data-theme="dark"] .icon-select-option.selected {
+[data-theme="midnight"] .icon-select-option.selected {
     background: var(--color-primary-lighter);
 }
 
-[data-theme="dark"] .theme-swatch {
+[data-theme="midnight"] .theme-swatch {
     box-shadow: none;
     border: none;
 }
