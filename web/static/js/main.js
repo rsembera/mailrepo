@@ -509,6 +509,7 @@ function goToReview() {
     if (state.staged.size === 0) return;
     
     sessionStorage.setItem('stagedEmails', JSON.stringify([...state.staged.entries()]));
+    window.removeEventListener('beforeunload', handleBeforeUnload);
     window.location.href = '/review';
 }
 
