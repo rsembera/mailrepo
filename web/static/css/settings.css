@@ -31,7 +31,7 @@
 
 /* Collapsible Sections */
 .settings-section {
-    background: white;
+    background: var(--color-background, white);
     border-radius: var(--radius-xl);
     margin-bottom: var(--space-lg);
     box-shadow: var(--shadow-sm);
@@ -196,7 +196,7 @@ details[open] .settings-section-header .arrow {
 }
 
 .helper-box code {
-    background: white;
+    background: var(--color-background, white);
     padding: 0.125rem 0.375rem;
     border-radius: var(--radius-sm);
     font-size: 0.8125rem;
@@ -531,7 +531,7 @@ select {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     font-size: 1rem;
-    background: white;
+    background: var(--color-background, white);
     cursor: pointer;
 }
 

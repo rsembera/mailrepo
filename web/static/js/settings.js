@@ -379,6 +379,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setTheme(theme, save = true) {
+    // Set on both html and body to ensure all CSS selectors work
+    document.documentElement.setAttribute('data-theme', theme);
     document.body.setAttribute('data-theme', theme);
     
     document.querySelectorAll('.theme-option').forEach(btn => {

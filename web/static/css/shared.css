@@ -172,6 +172,15 @@ a:hover {
     text-decoration: underline;
 }
 
+/* Buttons styled as links should not get link styles */
+a.btn {
+    text-decoration: none;
+}
+
+a.btn:hover {
+    text-decoration: none;
+}
+
 /* ============================================
    BUTTONS
    ============================================ */
@@ -216,7 +225,7 @@ a:hover {
 
 .btn-secondary {
     background: #E5E7EB;
-    color: var(--color-text-light);
+    color: var(--color-text);
 }
 
 .btn-secondary:hover:not(:disabled) {
