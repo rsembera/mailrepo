@@ -96,7 +96,7 @@ Solo practitioners (therapists, lawyers, accountants, doctors, consultants) need
 ### Storage Structure
 
 ```
-~/mailrepo/
+mailrepo/                    # Application directory
 ├── data/
 │   ├── mailrepo.db          # SQLCipher encrypted database
 │   ├── .salt                # Password salt + verification token
@@ -107,6 +107,8 @@ Solo practitioners (therapists, lawyers, accountants, doctors, consultants) need
 ├── config/                  # (reserved for future use)
 └── backups/
 ```
+
+Data location can be overridden with `MAILREPO_DATA_DIR` environment variable.
 
 **Note:** All emails are encrypted. The database stores metadata (subject, sender, body text for search) and is fully encrypted with SQLCipher. Email files are encrypted with Fernet.
 

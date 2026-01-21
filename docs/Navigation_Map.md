@@ -106,7 +106,7 @@ python main.py
 ### Prerequisites
 
 1. Python 3.13+ with venv: `source venv/bin/activate && pip install -r requirements.txt`
-2. Gmail API credentials: Download `credentials.json` from Google Cloud Console, place in `~/mailrepo/config/`
+2. IMAP credentials for your email account(s)
 
 ---
 

@@ -54,10 +54,10 @@ The master password is never stored — only a verification token encrypted with
 
 ## Data Storage
 
-All data is stored locally in `~/mailrepo/`:
+All data is stored in the application directory:
 
 ```
-~/mailrepo/
+mailrepo/
 ├── data/
 │   ├── mailrepo.db          # SQLCipher encrypted database
 │   ├── .salt                # Password salt + verification
@@ -68,6 +68,8 @@ All data is stored locally in `~/mailrepo/`:
 ├── config/                  # (reserved for future use)
 └── backups/                 # Manual/auto backups
 ```
+
+To use a different location, set the `MAILREPO_DATA_DIR` environment variable.
 
 ## Requirements
 
