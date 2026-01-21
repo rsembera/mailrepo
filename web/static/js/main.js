@@ -746,7 +746,7 @@ function handleBeforeUnload(e) {
 // ============================================
 
 async function openEmailViewer(emailId) {
-    const email = state.emails.find(e => e.uid === emailId || e.id === emailId);
+    const email = state.emails.find(e => e.uid == emailId || e.id == emailId);
     if (!email) return;
     
     // Show overlay with loading state
