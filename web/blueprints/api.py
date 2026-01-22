@@ -228,7 +228,7 @@ def update_folder(folder_id):
 def restore_folder(folder_id):
     """Restore a folder from trash."""
     folder = Database.fetchone(
-        "SELECT id, parent_id, deleted_at FROM folders WHERE id = ?",
+        "SELECT id, name, parent_id, deleted_at FROM folders WHERE id = ?",
         (folder_id,)
     )
     
@@ -238,28 +238,60 @@ def restore_folder(folder_id):
     if not folder["deleted_at"]:
         return jsonify({"error": "Folder is not in trash"}), 400
     
+    # Determine target parent_id
+    target_parent_id = folder["parent_id"]
+    
     # Check if parent still exists and is not deleted
-    if folder["parent_id"]:
+    if target_parent_id:
         parent = Database.fetchone(
             "SELECT id, deleted_at FROM folders WHERE id = ?",
-            (folder["parent_id"],)
+            (target_parent_id,)
         )
         if not parent or parent["deleted_at"]:
-            # Parent was permanently deleted or is still in trash - move to root
-            Database.execute(
-                "UPDATE folders SET deleted_at = NULL, parent_id = NULL WHERE id = ?",
-                (folder_id,)
-            )
-        else:
-            Database.execute(
-                "UPDATE folders SET deleted_at = NULL WHERE id = ?",
-                (folder_id,)
-            )
-    else:
-        Database.execute(
-            "UPDATE folders SET deleted_at = NULL WHERE id = ?",
-            (folder_id,)
+            # Parent was permanently deleted or is still in trash - restore to root
+            target_parent_id = None
+    
+    # Check for name conflict at target location
+    folder_name = folder["name"]
+    if target_parent_id:
+        conflict = Database.fetchone(
+            "SELECT id FROM folders WHERE name = ? AND parent_id = ? AND deleted_at IS NULL",
+            (folder_name, target_parent_id)
         )
+    else:
+        conflict = Database.fetchone(
+            "SELECT id FROM folders WHERE name = ? AND parent_id IS NULL AND deleted_at IS NULL",
+            (folder_name,)
+        )
+    
+    # If conflict exists, generate a unique name
+    if conflict:
+        base_name = folder_name
+        counter = 2
+        while True:
+            new_name = f"{base_name} ({counter})"
+            if target_parent_id:
+                existing = Database.fetchone(
+                    "SELECT id FROM folders WHERE name = ? AND parent_id = ? AND deleted_at IS NULL",
+                    (new_name, target_parent_id)
+                )
+            else:
+                existing = Database.fetchone(
+                    "SELECT id FROM folders WHERE name = ? AND parent_id IS NULL AND deleted_at IS NULL",
+                    (new_name,)
+                )
+            if not existing:
+                folder_name = new_name
+                break
+            counter += 1
+            if counter > 100:  # Safety limit
+                return jsonify({"error": "Could not generate unique folder name"}), 500
+    
+    # Restore the folder
+    Database.execute(
+        "UPDATE folders SET deleted_at = NULL, parent_id = ?, name = ? WHERE id = ?",
+        (target_parent_id, folder_name, folder_id)
+    )
     
     # Also restore children
     Database.execute(
@@ -269,7 +301,15 @@ def restore_folder(folder_id):
     
     Database.commit()
     
-    return jsonify({"success": True})
+    # Return the possibly-renamed folder info
+    return jsonify({
+        "success": True,
+        "folder": {
+            "id": folder_id,
+            "name": folder_name,
+            "renamed": folder_name != folder["name"]
+        }
+    })
 
 
 @api_bp.route("/folders/<int:folder_id>/permanent", methods=["DELETE"])

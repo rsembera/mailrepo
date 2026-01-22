@@ -1655,8 +1655,9 @@ async function restoreFolder(folderId) {
             method: 'POST',
         });
         
+        const data = await response.json();
+        
         if (!response.ok) {
-            const data = await response.json();
             showAlert('Error', data.error || 'Failed to restore folder');
             return;
         }
@@ -1665,12 +1666,21 @@ async function restoreFolder(folderId) {
         const folder = state.folders.find(f => f.id == folderId);
         if (folder) {
             folder.deleted_at = null;
+            // Update name if it was renamed due to conflict
+            if (data.folder && data.folder.name) {
+                folder.name = data.folder.name;
+            }
             // Also restore children
             state.folders.filter(f => f.parent_id == folderId).forEach(c => c.deleted_at = null);
         }
         
         showTrashView();
         updateSidebarAfterRestore(folder);
+        
+        // Notify user if folder was renamed
+        if (data.folder && data.folder.renamed) {
+            showAlert('Folder Restored', `Folder restored as "${data.folder.name}" to avoid a naming conflict.`);
+        }
         
     } catch (error) {
         console.error('Error restoring folder:', error);
