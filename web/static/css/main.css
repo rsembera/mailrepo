@@ -874,7 +874,7 @@
 
 .folder-management-header {
     display: grid;
-    grid-template-columns: 1fr 80px 120px;
+    grid-template-columns: 1fr 80px 150px;
     gap: var(--space-md);
     padding: var(--space-sm) var(--space-md);
     font-size: 0.75rem;
@@ -892,7 +892,7 @@
 
 .folder-management-item {
     display: grid;
-    grid-template-columns: 1fr 80px 120px;
+    grid-template-columns: 1fr 80px 150px;
     gap: var(--space-md);
     align-items: center;
     padding: var(--space-sm) var(--space-md);
@@ -1219,4 +1219,20 @@
 .btn-danger:hover {
     background: #dc2626;
     border-color: #dc2626;
+}
+
+
+/* Current location badge in move modal */
+.folder-select-item.current-location {
+    opacity: 0.6;
+}
+
+.current-badge {
+    font-size: 0.7rem;
+    padding: 0.125rem 0.5rem;
+    background: var(--color-background-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    margin-left: auto;
 }

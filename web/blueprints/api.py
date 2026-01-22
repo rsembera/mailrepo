@@ -211,6 +211,42 @@ def update_folder(folder_id):
         updates.append("color = ?")
         params.append(color)
     
+    if "parent_id" in data:
+        new_parent_id = data["parent_id"]
+        
+        # Validate: can't move folder into itself
+        if new_parent_id == folder_id:
+            return jsonify({"error": "Cannot move folder into itself"}), 400
+        
+        # Validate: can't move folder into one of its descendants
+        if new_parent_id is not None:
+            # Check if new_parent_id is a descendant of folder_id
+            def is_descendant(parent_id, target_id):
+                children = Database.fetchall(
+                    "SELECT id FROM folders WHERE parent_id = ? AND deleted_at IS NULL",
+                    (parent_id,)
+                )
+                for child in children:
+                    if child["id"] == target_id:
+                        return True
+                    if is_descendant(child["id"], target_id):
+                        return True
+                return False
+            
+            if is_descendant(folder_id, new_parent_id):
+                return jsonify({"error": "Cannot move folder into one of its subfolders"}), 400
+            
+            # Validate: new parent exists and is not deleted
+            new_parent = Database.fetchone(
+                "SELECT id, deleted_at FROM folders WHERE id = ?",
+                (new_parent_id,)
+            )
+            if not new_parent or new_parent["deleted_at"]:
+                return jsonify({"error": "Destination folder not found"}), 404
+        
+        updates.append("parent_id = ?")
+        params.append(new_parent_id)
+    
     if not updates:
         return jsonify({"error": "No updates provided"}), 400
     

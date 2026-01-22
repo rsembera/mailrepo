@@ -1407,6 +1407,9 @@ function renderFolderManagementItem(folder, depth = 0) {
                 <button class="btn btn-sm btn-icon" onclick="renameFolder(${folder.id})" title="Rename">
                     <i data-lucide="pencil"></i>
                 </button>
+                <button class="btn btn-sm btn-icon" onclick="openMoveFolder(${folder.id})" title="Move">
+                    <i data-lucide="folder-input"></i>
+                </button>
                 <button class="btn btn-sm btn-icon" onclick="createSubfolder(${folder.id})" title="Add subfolder">
                     <i data-lucide="folder-plus"></i>
                 </button>
@@ -1477,6 +1480,138 @@ async function createSubfolder(parentId) {
     }
 }
 window.createSubfolder = createSubfolder;
+
+// ============================================
+// MOVE FOLDER
+// ============================================
+
+let movingFolderId = null;
+let moveDestinationId = null;
+
+function openMoveFolder(folderId) {
+    const folder = state.folders.find(f => f.id == folderId);
+    if (!folder) return;
+    
+    movingFolderId = folderId;
+    moveDestinationId = null;
+    
+    document.getElementById('moveFolderName').textContent = folder.name;
+    document.getElementById('confirmMoveBtn').disabled = true;
+    
+    // Get all descendants of this folder (can't move into itself or children)
+    const descendants = getDescendantIds(folderId);
+    
+    // Build folder list
+    const list = document.getElementById('moveFolderList');
+    let html = `
+        <div class="folder-select-item" data-id="root">
+            <i data-lucide="home"></i>
+            <span>Root level (no parent)</span>
+        </div>
+    `;
+    
+    // Add all valid folders (not the folder itself, not its descendants, not deleted)
+    const validFolders = state.folders.filter(f => 
+        !f.deleted_at && 
+        f.id != folderId && 
+        !descendants.includes(f.id)
+    );
+    
+    // Render as flat list with indentation showing hierarchy
+    function renderFolderOption(f, depth) {
+        const indent = depth * 16;
+        const isCurrentParent = (folder.parent_id === f.id) || (folder.parent_id === null && f.id === 'root');
+        html += `
+            <div class="folder-select-item ${isCurrentParent ? 'current-location' : ''}" data-id="${f.id}" style="padding-left: ${12 + indent}px">
+                <i data-lucide="folder"></i>
+                <span>${escapeHtml(f.name)}</span>
+                ${isCurrentParent ? '<span class="current-badge">current</span>' : ''}
+            </div>
+        `;
+        // Render children
+        const children = validFolders.filter(c => c.parent_id == f.id);
+        children.forEach(child => renderFolderOption(child, depth + 1));
+    }
+    
+    // Render top-level folders
+    validFolders.filter(f => !f.parent_id).forEach(f => renderFolderOption(f, 0));
+    
+    list.innerHTML = html;
+    
+    // Mark root as current if folder is at root level
+    if (folder.parent_id === null) {
+        list.querySelector('[data-id="root"]')?.classList.add('current-location');
+        const rootItem = list.querySelector('[data-id="root"]');
+        if (rootItem && !rootItem.querySelector('.current-badge')) {
+            rootItem.innerHTML += '<span class="current-badge">current</span>';
+        }
+    }
+    
+    // Add click handlers
+    list.querySelectorAll('.folder-select-item').forEach(item => {
+        item.addEventListener('click', () => {
+            list.querySelectorAll('.folder-select-item').forEach(i => i.classList.remove('selected'));
+            item.classList.add('selected');
+            moveDestinationId = item.dataset.id;
+            document.getElementById('confirmMoveBtn').disabled = false;
+        });
+    });
+    
+    document.getElementById('moveFolderModal').classList.add('active');
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+window.openMoveFolder = openMoveFolder;
+
+function getDescendantIds(folderId) {
+    const descendants = [];
+    function collect(parentId) {
+        state.folders.filter(f => f.parent_id == parentId && !f.deleted_at).forEach(child => {
+            descendants.push(child.id);
+            collect(child.id);
+        });
+    }
+    collect(folderId);
+    return descendants;
+}
+
+async function confirmMoveFolder() {
+    if (!movingFolderId || moveDestinationId === null) return;
+    
+    const newParentId = moveDestinationId === 'root' ? null : parseInt(moveDestinationId);
+    const folder = state.folders.find(f => f.id == movingFolderId);
+    
+    // Check if actually moving
+    if (folder.parent_id === newParentId) {
+        closeModal('moveFolderModal');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/folders/${movingFolderId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ parent_id: newParentId }),
+        });
+        
+        if (!response.ok) {
+            const data = await response.json();
+            showAlert('Error', data.error || 'Failed to move folder');
+            return;
+        }
+        
+        // Update local state
+        folder.parent_id = newParentId;
+        
+        closeModal('moveFolderModal');
+        showFolderManagementView();
+        refreshSidebarFolders();
+        
+    } catch (error) {
+        console.error('Error moving folder:', error);
+        showAlert('Error', 'Failed to move folder');
+    }
+}
+window.confirmMoveFolder = confirmMoveFolder;
 
 async function deleteFolder(folderId) {
     const folder = state.folders.find(f => f.id == folderId);

@@ -274,6 +274,23 @@
         </div>
     </div>
 </div>
+
+<!-- Move Folder Modal -->
+<div class="modal-overlay" id="moveFolderModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Move "<span id="moveFolderName"></span>"</h2>
+        </div>
+        <p>Select destination:</p>
+        <div class="folder-select-list" id="moveFolderList">
+            <!-- Populated by JS -->
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeModal('moveFolderModal')">Cancel</button>
+            <button class="btn btn-primary" id="confirmMoveBtn" disabled onclick="confirmMoveFolder()">Move</button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
