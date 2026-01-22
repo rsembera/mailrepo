@@ -1,0 +1,209 @@
+/* MailRepo - Folder Management View Styles */
+
+/* ============================================
+   FOLDER MANAGEMENT VIEW
+   ============================================ */
+
+.folder-management-list {
+    padding: var(--space-md);
+    padding-left: var(--space-xl);
+    padding-right: var(--space-xl);
+}
+
+.folder-management-header {
+    display: grid;
+    grid-template-columns: 1fr 80px 150px;
+    gap: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.folder-management-header span:nth-child(2),
+.folder-management-header span:nth-child(3) {
+    text-align: center;
+}
+
+.folder-management-item {
+    display: grid;
+    grid-template-columns: 1fr 80px 150px;
+    gap: var(--space-md);
+    align-items: center;
+    padding: var(--space-sm) var(--space-md);
+    transition: background 0.15s;
+}
+
+/* Zebra striping */
+.folder-management-item:nth-child(odd) {
+    background: var(--color-background-secondary);
+}
+
+.folder-management-item:hover {
+    background: var(--color-background-tertiary, rgba(0,0,0,0.06));
+}
+
+.folder-management-name {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    min-width: 0;
+}
+
+.folder-management-name .folder-icon {
+    width: 18px;
+    height: 18px;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+}
+
+.folder-management-name .folder-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.folder-management-color {
+    display: flex;
+    justify-content: center;
+}
+
+.folder-management-actions {
+    display: flex;
+    gap: var(--space-xs);
+    justify-content: center;
+}
+
+.folder-management-add {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    margin-top: var(--space-sm);
+    color: var(--color-primary);
+    background: transparent;
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    width: 100%;
+    font-size: inherit;
+    transition: all 0.15s;
+}
+
+.folder-management-add:hover {
+    background: var(--color-background-secondary);
+    border-color: var(--color-primary);
+}
+
+.folder-management-add i {
+    width: 18px;
+    height: 18px;
+}
+
+/* Color dots */
+.color-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.color-dot-none {
+    background: var(--color-border);
+}
+
+/* Color picker button */
+.color-picker-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+}
+
+.color-picker-btn:hover {
+    border-color: var(--color-primary);
+    background: var(--color-background-secondary);
+}
+
+.color-picker-btn i {
+    width: 16px;
+    height: 16px;
+    color: var(--color-text-muted);
+}
+
+.color-picker-btn .color-swatch {
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+}
+
+/* Color picker popup */
+.color-picker-popup {
+    position: fixed;
+    z-index: 1000;
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    padding: var(--space-sm);
+    display: flex;
+    gap: var(--space-xs);
+    flex-wrap: wrap;
+    width: 180px;
+}
+
+.color-option {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: var(--radius-sm);
+    background: var(--color-background);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+}
+
+.color-option span {
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+}
+
+.color-option i {
+    width: 16px;
+    height: 16px;
+    color: var(--color-text-muted);
+}
+
+.color-option:hover {
+    border-color: var(--color-border);
+}
+
+.color-option.selected {
+    border-color: var(--color-primary);
+}
+
+/* Button variants */
+.btn-danger-subtle {
+    color: var(--color-danger);
+    background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+    border-color: transparent;
+}
+
+.btn-danger-subtle:hover {
+    background: color-mix(in srgb, var(--color-danger) 20%, transparent);
+    border-color: transparent;
+}

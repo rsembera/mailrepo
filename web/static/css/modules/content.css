@@ -1,0 +1,91 @@
+/* MailRepo - Main Content Area Styles */
+
+/* ============================================
+   PANE 3: MAIN CONTENT
+   ============================================ */
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+}
+
+/* Content Header */
+.content-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-lg) var(--space-xl);
+    background: white;
+    border-bottom: 1px solid var(--color-border);
+    gap: var(--space-lg);
+}
+
+.header-context {
+    min-width: 0;
+}
+
+.header-context h1 {
+    font-size: 1.25rem;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.header-meta {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+}
+
+.header-actions {
+    display: flex;
+    gap: var(--space-sm);
+    flex-shrink: 0;
+}
+
+/* Content Toolbar */
+.content-toolbar {
+    display: flex;
+    align-items: center;
+    padding: var(--space-sm) var(--space-xl);
+    background: white;
+    border-bottom: 1px solid var(--color-border);
+    gap: var(--space-md);
+}
+
+.toolbar-spacer {
+    flex: 1;
+}
+
+.search-box {
+    position: relative;
+}
+
+.search-box input {
+    padding: var(--space-sm) var(--space-md);
+    padding-left: 2.25rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    width: 250px;
+}
+
+.search-box input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+}
+
+.search-box::before {
+    content: "";
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 14px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23718096' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'%3E%3C/circle%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'%3E%3C/line%3E%3C/svg%3E");
+    background-size: contain;
+    background-repeat: no-repeat;
+}

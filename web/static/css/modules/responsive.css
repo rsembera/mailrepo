@@ -1,0 +1,84 @@
+/* MailRepo - Responsive Styles */
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 1024px) {
+    .sidebar {
+        width: 240px;
+    }
+    
+    .search-box input {
+        width: 200px;
+    }
+}
+
+@media (max-width: 768px) {
+    .left-rail {
+        width: 50px;
+    }
+    
+    .rail-btn {
+        width: 38px;
+        height: 38px;
+    }
+    
+    .sidebar {
+        position: absolute;
+        left: 50px;
+        top: 0;
+        bottom: 0;
+        z-index: 100;
+        transform: translateX(-100%);
+        transition: transform 0.2s;
+    }
+    
+    .sidebar.open {
+        transform: translateX(0);
+    }
+    
+    .content-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .header-actions {
+        width: 100%;
+    }
+    
+    .header-actions .btn {
+        flex: 1;
+    }
+    
+    .content-toolbar {
+        flex-wrap: wrap;
+    }
+    
+    .search-box {
+        width: 100%;
+        order: -1;
+    }
+    
+    .search-box input {
+        width: 100%;
+    }
+}
+
+/* Spinner animation for loading icon */
+.empty-icon.spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Loading indicator */
+.loading-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-xl);
+    color: var(--color-text-muted);
+}

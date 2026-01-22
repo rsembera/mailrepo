@@ -1,0 +1,248 @@
+/* MailRepo - Sidebar Styles */
+
+/* ============================================
+   PANE 2: SIDEBAR
+   ============================================ */
+.sidebar {
+    width: 280px;
+    min-width: 280px;
+    max-width: 420px;
+    background: white;
+    border-right: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow: hidden;
+    position: relative;
+}
+
+.sidebar-resize-handle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 4px;
+    height: 100%;
+    cursor: col-resize;
+    background: transparent;
+    transition: background 0.2s;
+    z-index: 10;
+}
+
+.sidebar-resize-handle:hover,
+.sidebar-resize-handle.dragging {
+    background: var(--color-primary);
+}
+
+.sidebar-search {
+    padding: var(--space-md);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.sidebar-search input {
+    width: 100%;
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+}
+
+.sidebar-search input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+}
+
+/* Sidebar Sections */
+.sidebar-section {
+    border-bottom: 1px solid var(--color-border);
+}
+
+.section-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-md) var(--space-lg);
+    background: var(--color-background-secondary);
+    border: none;
+    cursor: pointer;
+    font-family: var(--font-ui);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    text-align: left;
+}
+
+.section-header:hover {
+    background: var(--color-border);
+}
+
+.section-header .chevron {
+    width: 16px;
+    height: 16px;
+    transition: transform 0.2s;
+    flex-shrink: 0;
+}
+
+.tree-item-row .chevron {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    transition: transform 0.2s;
+}
+
+.section-header.collapsed .chevron {
+    transform: rotate(0deg);
+}
+
+.section-header:not(.collapsed) .chevron {
+    transform: rotate(90deg);
+}
+
+.section-count {
+    margin-left: auto;
+    background: var(--color-border);
+    padding: 0.125rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.7rem;
+}
+
+.section-content {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.2s ease-out;
+}
+
+.section-content.expanded {
+    max-height: 500px;
+    overflow-y: auto;
+    overflow-x: auto;
+}
+
+/* Tree Items */
+.tree-item {
+    /* Container for nested items */
+}
+
+.tree-item-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-lg);
+    cursor: pointer;
+    transition: background 0.1s;
+    font-size: 0.9rem;
+    color: var(--color-text);
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+}
+
+.tree-item-row:hover {
+    background: var(--color-background-secondary);
+}
+
+.tree-item-row.active {
+    background: var(--color-primary-lighter);
+    color: var(--color-primary-dark);
+}
+
+.tree-item-row .chevron {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    transition: transform 0.2s;
+}
+
+.tree-item-row.expanded .chevron {
+    transform: rotate(90deg);
+}
+
+.tree-icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+}
+
+.tree-item-row.active .tree-icon {
+    color: var(--color-primary-dark);
+}
+
+.tree-label {
+    flex: 1;
+    white-space: nowrap;
+}
+
+.tree-children {
+    display: none;
+    padding-left: var(--space-lg);
+}
+
+.tree-item-row.expanded + .tree-children {
+    display: block;
+}
+
+.tree-loading {
+    padding: var(--space-sm) var(--space-lg);
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    font-style: italic;
+}
+
+/* IMAP Folder Tree */
+.imap-tree-item {
+    /* Container for IMAP folder with children */
+}
+
+.imap-folder-chevron {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: transform 0.15s;
+    color: var(--color-text-muted);
+}
+
+.imap-folder-chevron:hover {
+    color: var(--color-text);
+}
+
+.chevron-spacer {
+    width: 16px;
+    flex-shrink: 0;
+}
+
+.imap-tree-children {
+    /* Children container */
+}
+
+/* Add folder button */
+.add-folder-btn {
+    color: var(--color-primary);
+    font-weight: 500;
+}
+
+.add-folder-btn:hover {
+    background: var(--color-primary-lighter);
+}
+
+/* Sidebar empty state */
+.sidebar-empty {
+    padding: var(--space-lg);
+    text-align: center;
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+}
+
+.sidebar-empty p {
+    margin: 0 0 var(--space-md) 0;
+}
+
+.btn-sm {
+    padding: var(--space-xs) var(--space-md);
+    font-size: 0.8rem;
+    height: auto;
+}

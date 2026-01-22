@@ -1,0 +1,97 @@
+/* MailRepo - Layout & Rail Styles */
+/* Three-pane layout: Rail | Sidebar | Content */
+
+/* ============================================
+   APP CONTAINER (Three-Pane Layout)
+   ============================================ */
+.app-container {
+    display: flex;
+    min-height: 100vh;
+    background: var(--color-background-page);
+}
+
+/* ============================================
+   PANE 1: LEFT RAIL
+   ============================================ */
+.left-rail {
+    width: 60px;
+    background: var(--rail-bg);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: var(--space-md) 0;
+    flex-shrink: 0;
+}
+
+.rail-top,
+.rail-bottom {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.rail-logo {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: var(--space-md);
+    background: var(--rail-logo-bg);
+    border-radius: 50%;
+}
+
+.logo-icon {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+}
+
+.rail-btn {
+    width: 44px;
+    height: 44px;
+    border: none;
+    background: transparent;
+    color: var(--rail-text);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    position: relative;
+}
+
+.rail-btn i,
+.rail-btn svg {
+    width: 22px;
+    height: 22px;
+}
+
+.rail-btn:hover {
+    background: var(--rail-btn-hover);
+    color: var(--rail-text-active);
+}
+
+.rail-btn.active {
+    background: var(--rail-btn-active);
+    color: var(--rail-text-active);
+}
+
+.rail-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    background: var(--color-danger);
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 700;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}

@@ -1,0 +1,124 @@
+/* MailRepo - Folder Selection View Styles (bulk staging) */
+
+/* ============================================
+   FOLDER SELECTION VIEW (bulk staging)
+   ============================================ */
+
+.folder-selection-view {
+    padding: var(--space-md);
+}
+
+.folder-selection-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm) var(--space-md);
+    margin-bottom: var(--space-md);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.select-all-folders {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.select-all-folders input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.folder-selection-list {
+    padding: var(--space-sm);
+}
+
+.folder-selection-item {
+    /* Container for folder row + children */
+}
+
+.folder-selection-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
+    transition: background 0.1s;
+}
+
+.folder-selection-row:hover {
+    background: var(--color-background-secondary);
+}
+
+.folder-selection-chevron {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    transition: transform 0.15s;
+    flex-shrink: 0;
+}
+
+.folder-selection-chevron:hover {
+    color: var(--color-text);
+}
+
+.folder-checkbox {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.folder-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.folder-selection-name {
+    flex: 1;
+    font-size: 0.95rem;
+}
+
+.folder-selection-children {
+    /* Visible by default, toggle via JS */
+}
+
+.folder-selection-actions {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+/* ============================================
+   STAGED VIEW
+   ============================================ */
+
+.staged-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.staged-item .email-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.staged-item .unstage-btn {
+    flex-shrink: 0;
+}
+
+.staged-destination {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    color: var(--color-text-muted);
+    font-size: 0.8125rem;
+}
+
+.staged-destination i {
+    width: 14px;
+    height: 14px;
+}

@@ -1,0 +1,214 @@
+/* MailRepo - Modal Styles */
+
+/* ============================================
+   MODALS
+   ============================================ */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+}
+
+.modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-content {
+    background: white;
+    border-radius: var(--radius-xl);
+    padding: var(--space-xl);
+    max-width: 450px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-lg);
+    transform: scale(0.95);
+    transition: transform 0.2s;
+}
+
+.modal-overlay.active .modal-content {
+    transform: scale(1);
+}
+
+.modal-header {
+    margin-bottom: var(--space-lg);
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-sm);
+    margin-top: var(--space-xl);
+}
+
+/* Folder Selection */
+.folder-select-list {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    margin-top: var(--space-md);
+}
+
+.folder-select-item-wrapper {
+    /* Container for folder item and its children */
+}
+
+.folder-select-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    cursor: pointer;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.9rem;
+    transition: background 0.1s;
+}
+
+.folder-select-item-wrapper:last-child > .folder-select-item {
+    border-bottom: none;
+}
+
+.folder-select-item:hover {
+    background: var(--color-background-secondary);
+}
+
+.folder-select-item.selected {
+    background: var(--color-primary-lighter);
+}
+
+.folder-select-item.new-folder {
+    color: var(--color-primary);
+    font-weight: 600;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.folder-select-item.new-folder:hover {
+    background: var(--color-primary-lighter);
+}
+
+.folder-select-chevron,
+.tree-chevron {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    transition: transform 0.15s;
+}
+
+.folder-select-chevron:hover,
+.tree-chevron:hover {
+    color: var(--color-text);
+}
+
+.folder-select-item-children {
+    /* Children container */
+}
+
+.folder-select-item-children .folder-select-item {
+    border-bottom: none;
+}
+
+.folder-select-item-children .folder-select-item:not(:last-child) {
+    border-bottom: 1px solid var(--color-border-light, rgba(0,0,0,0.05));
+}
+
+/* ============================================
+   MODAL VARIANTS
+   ============================================ */
+
+.modal-sm {
+    max-width: 400px;
+}
+
+.modal-sm .form-group {
+    margin-bottom: var(--space-md);
+}
+
+.modal-sm .form-group input {
+    width: 100%;
+}
+
+/* Danger button */
+.btn-danger {
+    background: var(--color-danger);
+    border-color: var(--color-danger);
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #dc2626;
+    border-color: #dc2626;
+}
+
+/* Current location badge in move modal */
+.folder-select-item.current-location {
+    opacity: 0.6;
+}
+
+.current-badge {
+    font-size: 0.7rem;
+    padding: 0.125rem 0.5rem;
+    background: var(--color-background-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    margin-left: auto;
+}
+
+/* Folder commit section in review */
+.folder-commit-info {
+    padding: var(--space-lg);
+    background: var(--color-background-secondary);
+    border-radius: var(--radius-md);
+    margin: var(--space-md) 0;
+}
+
+.folder-commit-info p {
+    margin: 0 0 var(--space-sm) 0;
+}
+
+.folder-commit-info .info-note {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-md);
+}
+
+.folders-to-commit {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.folders-to-commit li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs) 0;
+    font-size: 0.9rem;
+}
+
+.folders-to-commit li i {
+    width: 16px;
+    height: 16px;
+    color: var(--color-text-muted);
+}
