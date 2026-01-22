@@ -356,7 +356,7 @@ function renderImapFolderTree(nodes, accountId, depth) {
         html += `<div class="tree-item-row" data-type="imap-folder" data-account-id="${accountId}" data-folder="${escapeHtml(node.fullPath)}" style="padding-left: ${indent}px">`;
         
         if (hasChildren) {
-            html += `<i data-lucide="chevron-right" class="imap-folder-chevron" style="transform: rotate(90deg)"></i>`;
+            html += `<i data-lucide="chevron-right" class="imap-folder-chevron"></i>`;
         } else {
             html += `<span class="chevron-spacer"></span>`;
         }
@@ -366,7 +366,7 @@ function renderImapFolderTree(nodes, accountId, depth) {
         html += `</div>`;
         
         if (hasChildren) {
-            html += `<div class="imap-tree-children">`;
+            html += `<div class="imap-tree-children" style="display: none;">`;
             html += renderImapFolderTree(node.children, accountId, depth + 1);
             html += `</div>`;
         }

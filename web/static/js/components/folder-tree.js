@@ -7,8 +7,8 @@
  * - Destination folder modal (selectable for staging target)
  */
 
-import { escapeHtml } from './utils.js';
-import { state } from './state.js';
+import { escapeHtml } from '../utils.js';
+import { state } from '../state.js';
 
 /**
  * Configuration options for folder tree rendering.

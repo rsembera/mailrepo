@@ -13,6 +13,7 @@ import { state, loadFolders } from '../state.js';
 import { closeModal, showPrompt, showConfirm, showAlert } from '../modals.js';
 import { refreshSidebarFolders, buildImapFolderTree, getFolderIcon } from '../components/sidebar.js';
 import { updateStagedBadge } from '../components/staging.js';
+import { updateTrashBadge } from './trash.js';
 
 // Module state
 let movingFolderId = null;
@@ -320,7 +321,7 @@ export async function confirmMoveFolder() {
 }
 window.confirmMoveFolder = confirmMoveFolder;
 
-export async function deleteFolder(folderId, updateTrashBadge) {
+export async function deleteFolder(folderId) {
     const folder = state.folders.find(f => f.id == folderId);
     if (!folder) return;
     
@@ -347,13 +348,14 @@ export async function deleteFolder(folderId, updateTrashBadge) {
         children.forEach(c => c.deleted_at = Date.now() / 1000);
         
         showFolderManagementView();
-        if (updateTrashBadge) updateTrashBadge();
+        updateTrashBadge();
         updateSidebarFoldersAfterDelete(folderId);
     } catch (error) {
         console.error('Error deleting folder:', error);
         showAlert('Error', 'Failed to delete folder');
     }
 }
+window.deleteFolder = deleteFolder;
 
 function updateSidebarFoldersAfterDelete(folderId) {
     const archiveSection = document.getElementById('archiveSection');
