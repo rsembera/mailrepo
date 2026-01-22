@@ -99,7 +99,9 @@ document.getElementById('createAccountBtn')?.addEventListener('click', async () 
         }
         
         closeModal('addAccountModal');
-        location.reload();
+        // Reload with hash to keep accounts section open
+        window.location.href = window.location.pathname + '#emailAccountsSection';
+        window.location.reload();
         
     } catch (error) {
         console.error('Error:', error);
@@ -408,6 +410,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const savedSize = localStorage.getItem('mailrepo-font-size') || 'm';
     setFont(savedFont, false);
     setFontSize(savedSize, false);
+    
+    // Open section if hash is present (e.g., #accounts)
+    if (window.location.hash) {
+        const sectionId = window.location.hash.slice(1);
+        const section = document.getElementById(sectionId);
+        if (section && section.tagName === 'DETAILS') {
+            section.setAttribute('open', '');
+        }
+    }
 });
 
 function setFont(font, save = true) {
