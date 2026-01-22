@@ -90,7 +90,7 @@ def extract_body_text(raw_email: bytes) -> str:
 def list_folders():
     """Get all archive folders."""
     folders = Database.fetchall(
-        "SELECT id, name, parent_id, created_at FROM folders ORDER BY name"
+        "SELECT id, name, parent_id, color, deleted_at, created_at FROM folders ORDER BY name"
     )
     
     return jsonify({
@@ -162,17 +162,199 @@ def get_folder(folder_id):
 
 @api_bp.route("/folders/<int:folder_id>", methods=["DELETE"])
 def delete_folder(folder_id):
-    """Delete a folder and its contents."""
+    """Soft-delete a folder (move to trash)."""
     folder = Database.fetchone("SELECT id FROM folders WHERE id = ?", (folder_id,))
     
     if not folder:
         return jsonify({"error": "Folder not found"}), 404
     
-    # Delete folder (CASCADE will delete messages)
-    Database.execute("DELETE FROM folders WHERE id = ?", (folder_id,))
+    # Soft delete - set deleted_at timestamp
+    now = int(time.time())
+    Database.execute(
+        "UPDATE folders SET deleted_at = ? WHERE id = ?",
+        (now, folder_id)
+    )
+    # Also soft-delete children
+    Database.execute(
+        "UPDATE folders SET deleted_at = ? WHERE parent_id = ?",
+        (now, folder_id)
+    )
     Database.commit()
     
     return jsonify({"success": True})
+
+
+@api_bp.route("/folders/<int:folder_id>", methods=["PATCH"])
+def update_folder(folder_id):
+    """Update folder properties (name, color)."""
+    folder = Database.fetchone("SELECT id, name FROM folders WHERE id = ?", (folder_id,))
+    
+    if not folder:
+        return jsonify({"error": "Folder not found"}), 404
+    
+    data = request.get_json()
+    updates = []
+    params = []
+    
+    if "name" in data:
+        name = data["name"].strip()
+        if not name:
+            return jsonify({"error": "Folder name cannot be empty"}), 400
+        if len(name) > 100:
+            return jsonify({"error": "Folder name must be 100 characters or less"}), 400
+        updates.append("name = ?")
+        params.append(name)
+    
+    if "color" in data:
+        # Allow None/null to remove color
+        color = data["color"]
+        updates.append("color = ?")
+        params.append(color)
+    
+    if not updates:
+        return jsonify({"error": "No updates provided"}), 400
+    
+    params.append(folder_id)
+    Database.execute(
+        f"UPDATE folders SET {', '.join(updates)} WHERE id = ?",
+        tuple(params)
+    )
+    Database.commit()
+    
+    return jsonify({"success": True})
+
+
+@api_bp.route("/folders/<int:folder_id>/restore", methods=["POST"])
+def restore_folder(folder_id):
+    """Restore a folder from trash."""
+    folder = Database.fetchone(
+        "SELECT id, parent_id, deleted_at FROM folders WHERE id = ?",
+        (folder_id,)
+    )
+    
+    if not folder:
+        return jsonify({"error": "Folder not found"}), 404
+    
+    if not folder["deleted_at"]:
+        return jsonify({"error": "Folder is not in trash"}), 400
+    
+    # Check if parent still exists and is not deleted
+    if folder["parent_id"]:
+        parent = Database.fetchone(
+            "SELECT id, deleted_at FROM folders WHERE id = ?",
+            (folder["parent_id"],)
+        )
+        if not parent or parent["deleted_at"]:
+            # Parent was permanently deleted or is still in trash - move to root
+            Database.execute(
+                "UPDATE folders SET deleted_at = NULL, parent_id = NULL WHERE id = ?",
+                (folder_id,)
+            )
+        else:
+            Database.execute(
+                "UPDATE folders SET deleted_at = NULL WHERE id = ?",
+                (folder_id,)
+            )
+    else:
+        Database.execute(
+            "UPDATE folders SET deleted_at = NULL WHERE id = ?",
+            (folder_id,)
+        )
+    
+    # Also restore children
+    Database.execute(
+        "UPDATE folders SET deleted_at = NULL WHERE parent_id = ?",
+        (folder_id,)
+    )
+    
+    Database.commit()
+    
+    return jsonify({"success": True})
+
+
+@api_bp.route("/folders/<int:folder_id>/permanent", methods=["DELETE"])
+def permanently_delete_folder(folder_id):
+    """Permanently delete a folder from trash."""
+    folder = Database.fetchone(
+        "SELECT id, deleted_at FROM folders WHERE id = ?",
+        (folder_id,)
+    )
+    
+    if not folder:
+        return jsonify({"error": "Folder not found"}), 404
+    
+    # For safety, only allow permanent delete if already in trash
+    if not folder["deleted_at"]:
+        return jsonify({"error": "Folder must be in trash before permanent deletion"}), 400
+    
+    # Get all message filepaths before deleting
+    messages = Database.fetchall(
+        "SELECT filepath FROM messages WHERE folder_id = ? OR folder_id IN (SELECT id FROM folders WHERE parent_id = ?)",
+        (folder_id, folder_id)
+    )
+    
+    # Delete files from disk
+    for msg in messages:
+        try:
+            filepath = Config.get_base_path() / msg["filepath"]
+            if filepath.exists():
+                filepath.unlink()
+        except Exception as e:
+            # Log but continue
+            print(f"Warning: Could not delete file {msg['filepath']}: {e}")
+    
+    # Delete folder directory if empty
+    try:
+        folder_path = Config.get_archive_path() / str(folder_id)
+        if folder_path.exists() and folder_path.is_dir():
+            folder_path.rmdir()  # Only removes if empty
+    except:
+        pass
+    
+    # Delete from database (CASCADE will handle messages)
+    Database.execute("DELETE FROM folders WHERE id = ? OR parent_id = ?", (folder_id, folder_id))
+    Database.commit()
+    
+    return jsonify({"success": True})
+
+
+@api_bp.route("/trash/empty", methods=["POST"])
+def empty_trash():
+    """Permanently delete all items in trash."""
+    # Get all trashed folders
+    trashed = Database.fetchall(
+        "SELECT id FROM folders WHERE deleted_at IS NOT NULL"
+    )
+    
+    if not trashed:
+        return jsonify({"success": True, "deleted": 0})
+    
+    # Get all message filepaths
+    folder_ids = [f["id"] for f in trashed]
+    placeholders = ",".join(["?" for _ in folder_ids])
+    
+    messages = Database.fetchall(
+        f"SELECT filepath FROM messages WHERE folder_id IN ({placeholders})",
+        tuple(folder_ids)
+    )
+    
+    # Delete files
+    for msg in messages:
+        try:
+            filepath = Config.get_base_path() / msg["filepath"]
+            if filepath.exists():
+                filepath.unlink()
+        except Exception as e:
+            print(f"Warning: Could not delete file {msg['filepath']}: {e}")
+    
+    # Delete folders from database
+    Database.execute(
+        f"DELETE FROM folders WHERE id IN ({placeholders})",
+        tuple(folder_ids)
+    )
+    Database.commit()
+    
+    return jsonify({"success": True, "deleted": len(trashed)})
 
 
 @api_bp.route("/search", methods=["GET"])

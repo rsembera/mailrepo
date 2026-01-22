@@ -56,7 +56,9 @@ const elements = {
 
 document.addEventListener('DOMContentLoaded', () => {
     initEventListeners();
-    loadFolders();
+    loadFolders().then(() => {
+        updateTrashBadge();
+    });
     updateStagedBadge();
     
     // Load labels for each account
@@ -958,3 +960,632 @@ window.closeEmailViewer = closeEmailViewer;
         localStorage.setItem('mailrepo-sidebar-width', sidebar.offsetWidth);
     });
 })();
+
+// ============================================
+// LEFT RAIL VIEW SWITCHING
+// ============================================
+
+const FOLDER_COLORS = [
+    { name: 'Gray', value: null },
+    { name: 'Red', value: '#e53935' },
+    { name: 'Orange', value: '#fb8c00' },
+    { name: 'Yellow', value: '#fdd835' },
+    { name: 'Green', value: '#43a047' },
+    { name: 'Teal', value: '#00897b' },
+    { name: 'Blue', value: '#1e88e5' },
+    { name: 'Purple', value: '#8e24aa' },
+    { name: 'Pink', value: '#d81b60' },
+];
+
+(function() {
+    const railBtns = document.querySelectorAll('.rail-btn[data-view]');
+    
+    railBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const view = btn.dataset.view;
+            
+            // Update active state
+            railBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            // Switch view
+            switch(view) {
+                case 'mail':
+                    showMailView();
+                    break;
+                case 'staged':
+                    showStagedView();
+                    break;
+                case 'folders':
+                    showFolderManagementView();
+                    break;
+                case 'trash':
+                    showTrashView();
+                    break;
+            }
+        });
+    });
+})();
+
+function showMailView() {
+    // Restore normal mail view
+    const sidebar = document.getElementById('sidebar');
+    const toolbar = document.querySelector('.content-toolbar');
+    const headerActions = document.querySelector('.header-actions');
+    
+    sidebar.style.display = '';
+    if (toolbar) toolbar.style.display = '';
+    if (headerActions) headerActions.style.display = '';
+    
+    // Clear selection and show default
+    state.currentView = null;
+    elements.contextTitle.textContent = 'Select a folder';
+    elements.contextMeta.textContent = '';
+    elements.emailList.innerHTML = `
+        <div class="empty-state">
+            <i data-lucide="arrow-left" class="empty-icon"></i>
+            <h3>No Folder Selected</h3>
+            <p>Select an account or archive folder from the sidebar to view emails.</p>
+        </div>
+    `;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function showStagedView() {
+    const sidebar = document.getElementById('sidebar');
+    const toolbar = document.querySelector('.content-toolbar');
+    const headerActions = document.querySelector('.header-actions');
+    
+    sidebar.style.display = 'none';
+    if (toolbar) toolbar.style.display = 'none';
+    if (headerActions) headerActions.style.display = '';
+    
+    elements.contextTitle.textContent = 'Staged Emails';
+    elements.contextMeta.textContent = `${state.staged.size} email${state.staged.size !== 1 ? 's' : ''} staged`;
+    
+    if (state.staged.size === 0) {
+        elements.emailList.innerHTML = `
+            <div class="empty-state">
+                <i data-lucide="package" class="empty-icon"></i>
+                <h3>No Staged Emails</h3>
+                <p>Select emails from your inbox and click "Stage" to prepare them for archiving.</p>
+            </div>
+        `;
+    } else {
+        renderStagedList();
+    }
+    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function renderStagedList() {
+    const stagedArray = [...state.staged.entries()];
+    
+    elements.emailList.innerHTML = stagedArray.map(([emailId, data]) => {
+        const email = data.email;
+        const folder = state.folders.find(f => f.id == data.destinationFolderId);
+        
+        return `
+            <div class="email-item staged-item" data-id="${emailId}">
+                <div class="email-content">
+                    <div class="email-header">
+                        <span class="email-sender">${escapeHtml(extractName(email.from || email.sender))}</span>
+                        <span class="email-date">${formatDate(email.date)}</span>
+                    </div>
+                    <div class="email-subject">${escapeHtml(email.subject || '(no subject)')}</div>
+                    <div class="email-preview staged-destination">
+                        <i data-lucide="folder"></i>
+                        <span>→ ${escapeHtml(folder?.name || 'Unknown folder')}</span>
+                    </div>
+                </div>
+                <button class="btn btn-sm btn-secondary unstage-btn" onclick="unstageEmail('${emailId}')">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+        `;
+    }).join('');
+    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function unstageEmail(emailId) {
+    state.staged.delete(emailId);
+    updateStagedBadge();
+    
+    // Re-render if still in staged view
+    const activeBtn = document.querySelector('.rail-btn.active');
+    if (activeBtn?.dataset.view === 'staged') {
+        showStagedView();
+    }
+}
+window.unstageEmail = unstageEmail;
+
+// ============================================
+// FOLDER MANAGEMENT VIEW
+// ============================================
+
+async function showFolderManagementView() {
+    const sidebar = document.getElementById('sidebar');
+    const toolbar = document.querySelector('.content-toolbar');
+    const headerActions = document.querySelector('.header-actions');
+    
+    sidebar.style.display = 'none';
+    if (toolbar) toolbar.style.display = 'none';
+    if (headerActions) headerActions.style.display = 'none';
+    
+    elements.contextTitle.textContent = 'Manage Folders';
+    elements.contextMeta.textContent = '';
+    
+    // Reload folders first
+    await loadFolders();
+    
+    if (state.folders.length === 0) {
+        elements.emailList.innerHTML = `
+            <div class="empty-state">
+                <i data-lucide="folder" class="empty-icon"></i>
+                <h3>No Folders</h3>
+                <p>Create your first folder to start archiving emails.</p>
+                <button class="btn btn-primary" onclick="openNewFolderModal(false)">
+                    <i data-lucide="plus"></i> New Folder
+                </button>
+            </div>
+        `;
+    } else {
+        renderFolderManagementList();
+    }
+    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function renderFolderManagementList() {
+    // Build folder tree (top-level only for now)
+    const topLevelFolders = state.folders.filter(f => !f.parent_id && !f.deleted_at);
+    
+    let html = `
+        <div class="folder-management-list">
+            <div class="folder-management-header">
+                <span>Folder</span>
+                <span>Color</span>
+                <span>Actions</span>
+            </div>
+    `;
+    
+    topLevelFolders.forEach(folder => {
+        html += renderFolderManagementItem(folder);
+        
+        // Render children
+        const children = state.folders.filter(f => f.parent_id == folder.id && !f.deleted_at);
+        children.forEach(child => {
+            html += renderFolderManagementItem(child, 1);
+        });
+    });
+    
+    html += `
+            <button class="folder-management-add" onclick="openNewFolderModal(false)">
+                <i data-lucide="plus"></i>
+                <span>New Folder</span>
+            </button>
+        </div>
+    `;
+    
+    elements.emailList.innerHTML = html;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function renderFolderManagementItem(folder, depth = 0) {
+    const colorDot = folder.color ? 
+        `<span class="color-dot" style="background: ${folder.color}"></span>` : 
+        `<span class="color-dot color-dot-none"></span>`;
+    
+    return `
+        <div class="folder-management-item" data-id="${folder.id}" style="padding-left: ${20 + depth * 24}px">
+            <div class="folder-management-name">
+                ${colorDot}
+                <i data-lucide="folder" class="folder-icon"></i>
+                <span class="folder-label" data-id="${folder.id}">${escapeHtml(folder.name)}</span>
+            </div>
+            <div class="folder-management-color">
+                <button class="color-picker-btn" onclick="openColorPicker(${folder.id}, event)" title="Change color">
+                    ${folder.color ? `<span class="color-swatch" style="background: ${folder.color}"></span>` : '<i data-lucide="palette"></i>'}
+                </button>
+            </div>
+            <div class="folder-management-actions">
+                <button class="btn btn-sm btn-icon" onclick="renameFolder(${folder.id})" title="Rename">
+                    <i data-lucide="pencil"></i>
+                </button>
+                <button class="btn btn-sm btn-icon" onclick="createSubfolder(${folder.id})" title="Add subfolder">
+                    <i data-lucide="folder-plus"></i>
+                </button>
+                <button class="btn btn-sm btn-icon btn-danger-subtle" onclick="deleteFolder(${folder.id})" title="Delete">
+                    <i data-lucide="trash-2"></i>
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+async function renameFolder(folderId) {
+    const folder = state.folders.find(f => f.id == folderId);
+    if (!folder) return;
+    
+    const newName = prompt('Rename folder:', folder.name);
+    if (!newName || newName.trim() === '' || newName === folder.name) return;
+    
+    try {
+        const response = await fetch(`/api/folders/${folderId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newName.trim() }),
+        });
+        
+        if (!response.ok) {
+            const data = await response.json();
+            alert(data.error || 'Failed to rename folder');
+            return;
+        }
+        
+        folder.name = newName.trim();
+        showFolderManagementView();
+        
+    } catch (error) {
+        console.error('Error renaming folder:', error);
+        alert('Failed to rename folder');
+    }
+}
+window.renameFolder = renameFolder;
+
+async function createSubfolder(parentId) {
+    const name = prompt('New subfolder name:');
+    if (!name || name.trim() === '') return;
+    
+    try {
+        const response = await fetch('/api/folders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name.trim(), parent_id: parentId }),
+        });
+        
+        if (!response.ok) {
+            const data = await response.json();
+            alert(data.error || 'Failed to create folder');
+            return;
+        }
+        
+        const data = await response.json();
+        state.folders.push(data.folder);
+        showFolderManagementView();
+        
+    } catch (error) {
+        console.error('Error creating subfolder:', error);
+        alert('Failed to create subfolder');
+    }
+}
+window.createSubfolder = createSubfolder;
+
+async function deleteFolder(folderId) {
+    const folder = state.folders.find(f => f.id == folderId);
+    if (!folder) return;
+    
+    // Count children and emails
+    const children = state.folders.filter(f => f.parent_id == folderId && !f.deleted_at);
+    
+    let message = `Move "${folder.name}" to trash?`;
+    if (children.length > 0) {
+        message = `Move "${folder.name}" and ${children.length} subfolder${children.length > 1 ? 's' : ''} to trash?`;
+    }
+    
+    if (!confirm(message)) return;
+    
+    try {
+        const response = await fetch(`/api/folders/${folderId}`, {
+            method: 'DELETE',
+        });
+        
+        if (!response.ok) {
+            const data = await response.json();
+            alert(data.error || 'Failed to delete folder');
+            return;
+        }
+        
+        // Update local state
+        folder.deleted_at = Date.now() / 1000;
+        children.forEach(c => c.deleted_at = Date.now() / 1000);
+        
+        showFolderManagementView();
+        updateTrashBadge();
+        updateSidebarFoldersAfterDelete(folderId);
+        
+    } catch (error) {
+        console.error('Error deleting folder:', error);
+        alert('Failed to delete folder');
+    }
+}
+window.deleteFolder = deleteFolder;
+
+function updateSidebarFoldersAfterDelete(folderId) {
+    const archiveSection = document.getElementById('archiveSection');
+    if (!archiveSection) return;
+    
+    const folderEl = archiveSection.querySelector(`.tree-item-row[data-id="${folderId}"]`);
+    if (folderEl) {
+        folderEl.closest('.tree-item')?.remove();
+    }
+    
+    // Update count
+    const countEl = document.getElementById('folderCount');
+    if (countEl) {
+        const visibleFolders = state.folders.filter(f => !f.deleted_at);
+        countEl.textContent = visibleFolders.length;
+    }
+}
+
+// Color picker
+function openColorPicker(folderId, event) {
+    event.stopPropagation();
+    
+    // Remove any existing picker
+    document.querySelector('.color-picker-popup')?.remove();
+    
+    const folder = state.folders.find(f => f.id == folderId);
+    const btn = event.currentTarget;
+    const rect = btn.getBoundingClientRect();
+    
+    const popup = document.createElement('div');
+    popup.className = 'color-picker-popup';
+    popup.style.top = `${rect.bottom + 4}px`;
+    popup.style.left = `${rect.left}px`;
+    
+    popup.innerHTML = FOLDER_COLORS.map(c => `
+        <button class="color-option ${folder?.color === c.value ? 'selected' : ''}" 
+                data-color="${c.value || ''}" 
+                title="${c.name}">
+            ${c.value ? `<span style="background: ${c.value}"></span>` : '<i data-lucide="x"></i>'}
+        </button>
+    `).join('');
+    
+    document.body.appendChild(popup);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    
+    // Handle selection
+    popup.addEventListener('click', async (e) => {
+        const option = e.target.closest('.color-option');
+        if (!option) return;
+        
+        const color = option.dataset.color || null;
+        await setFolderColor(folderId, color);
+        popup.remove();
+    });
+    
+    // Close on outside click
+    setTimeout(() => {
+        document.addEventListener('click', function closePopup(e) {
+            if (!popup.contains(e.target)) {
+                popup.remove();
+                document.removeEventListener('click', closePopup);
+            }
+        });
+    }, 10);
+}
+window.openColorPicker = openColorPicker;
+
+async function setFolderColor(folderId, color) {
+    try {
+        const response = await fetch(`/api/folders/${folderId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ color: color }),
+        });
+        
+        if (!response.ok) {
+            const data = await response.json();
+            alert(data.error || 'Failed to update color');
+            return;
+        }
+        
+        const folder = state.folders.find(f => f.id == folderId);
+        if (folder) folder.color = color;
+        
+        showFolderManagementView();
+        
+    } catch (error) {
+        console.error('Error updating folder color:', error);
+    }
+}
+
+// ============================================
+// TRASH VIEW
+// ============================================
+
+async function showTrashView() {
+    const sidebar = document.getElementById('sidebar');
+    const toolbar = document.querySelector('.content-toolbar');
+    const headerActions = document.querySelector('.header-actions');
+    
+    sidebar.style.display = 'none';
+    if (toolbar) toolbar.style.display = 'none';
+    if (headerActions) headerActions.style.display = 'none';
+    
+    elements.contextTitle.textContent = 'Trash';
+    elements.contextMeta.textContent = '';
+    
+    // Reload folders to get fresh deleted_at data
+    await loadFolders();
+    
+    // Get trashed folders (only top-level ones that were directly deleted)
+    const trashedFolders = state.folders.filter(f => f.deleted_at && !f.parent_id);
+    // Also include folders whose parent is deleted
+    const allTrashed = state.folders.filter(f => {
+        if (f.deleted_at) return true;
+        // Check if parent is deleted
+        if (f.parent_id) {
+            const parent = state.folders.find(p => p.id == f.parent_id);
+            return parent?.deleted_at;
+        }
+        return false;
+    });
+    
+    if (trashedFolders.length === 0) {
+        elements.emailList.innerHTML = `
+            <div class="empty-state">
+                <i data-lucide="trash-2" class="empty-icon"></i>
+                <h3>Trash is Empty</h3>
+                <p>Items you delete will appear here.</p>
+            </div>
+        `;
+    } else {
+        renderTrashList(trashedFolders);
+    }
+    
+    updateTrashBadge();
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function renderTrashList(trashedFolders) {
+    let html = `
+        <div class="trash-list">
+            <div class="trash-header">
+                <span>Deleted items</span>
+                <button class="btn btn-sm btn-danger" onclick="emptyTrash()">
+                    <i data-lucide="trash-2"></i> Empty Trash
+                </button>
+            </div>
+    `;
+    
+    trashedFolders.forEach(folder => {
+        const deletedDate = new Date(folder.deleted_at * 1000);
+        const children = state.folders.filter(f => f.parent_id == folder.id);
+        
+        html += `
+            <div class="trash-item" data-id="${folder.id}">
+                <div class="trash-item-info">
+                    <i data-lucide="folder" class="folder-icon"></i>
+                    <span class="folder-name">${escapeHtml(folder.name)}</span>
+                    ${children.length > 0 ? `<span class="subfolder-count">(+${children.length} subfolder${children.length > 1 ? 's' : ''})</span>` : ''}
+                    <span class="deleted-date">Deleted ${formatDate(deletedDate)}</span>
+                </div>
+                <div class="trash-item-actions">
+                    <button class="btn btn-sm btn-secondary" onclick="restoreFolder(${folder.id})">
+                        <i data-lucide="undo-2"></i> Restore
+                    </button>
+                    <button class="btn btn-sm btn-danger-subtle" onclick="permanentlyDeleteFolder(${folder.id})">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    elements.emailList.innerHTML = html;
+}
+
+async function restoreFolder(folderId) {
+    try {
+        const response = await fetch(`/api/folders/${folderId}/restore`, {
+            method: 'POST',
+        });
+        
+        if (!response.ok) {
+            const data = await response.json();
+            alert(data.error || 'Failed to restore folder');
+            return;
+        }
+        
+        // Update local state
+        const folder = state.folders.find(f => f.id == folderId);
+        if (folder) {
+            folder.deleted_at = null;
+            // Also restore children
+            state.folders.filter(f => f.parent_id == folderId).forEach(c => c.deleted_at = null);
+        }
+        
+        showTrashView();
+        updateSidebarAfterRestore(folder);
+        
+    } catch (error) {
+        console.error('Error restoring folder:', error);
+        alert('Failed to restore folder');
+    }
+}
+window.restoreFolder = restoreFolder;
+
+function updateSidebarAfterRestore(folder) {
+    if (!folder) return;
+    updateSidebarFolders(folder);
+}
+
+async function permanentlyDeleteFolder(folderId) {
+    const folder = state.folders.find(f => f.id == folderId);
+    if (!folder) return;
+    
+    const children = state.folders.filter(f => f.parent_id == folderId);
+    
+    let message = `Permanently delete "${folder.name}"? This cannot be undone.`;
+    if (children.length > 0) {
+        message = `Permanently delete "${folder.name}" and ${children.length} subfolder${children.length > 1 ? 's' : ''}? This cannot be undone.`;
+    }
+    
+    if (!confirm(message)) return;
+    
+    try {
+        const response = await fetch(`/api/folders/${folderId}/permanent`, {
+            method: 'DELETE',
+        });
+        
+        if (!response.ok) {
+            const data = await response.json();
+            alert(data.error || 'Failed to delete folder');
+            return;
+        }
+        
+        // Remove from local state
+        state.folders = state.folders.filter(f => f.id != folderId && f.parent_id != folderId);
+        
+        showTrashView();
+        
+    } catch (error) {
+        console.error('Error deleting folder:', error);
+        alert('Failed to delete folder');
+    }
+}
+window.permanentlyDeleteFolder = permanentlyDeleteFolder;
+
+async function emptyTrash() {
+    const trashedFolders = state.folders.filter(f => f.deleted_at && !f.parent_id);
+    if (trashedFolders.length === 0) return;
+    
+    if (!confirm(`Permanently delete ${trashedFolders.length} folder${trashedFolders.length > 1 ? 's' : ''} and all their contents? This cannot be undone.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/trash/empty', {
+            method: 'POST',
+        });
+        
+        if (!response.ok) {
+            const data = await response.json();
+            alert(data.error || 'Failed to empty trash');
+            return;
+        }
+        
+        // Remove all trashed folders from state
+        state.folders = state.folders.filter(f => !f.deleted_at);
+        
+        showTrashView();
+        
+    } catch (error) {
+        console.error('Error emptying trash:', error);
+        alert('Failed to empty trash');
+    }
+}
+window.emptyTrash = emptyTrash;
+
+function updateTrashBadge() {
+    const badge = document.getElementById('trashBadge');
+    if (!badge) return;
+    
+    const trashedCount = state.folders.filter(f => f.deleted_at && !f.parent_id).length;
+    badge.textContent = trashedCount;
+    badge.classList.toggle('hidden', trashedCount === 0);
+}

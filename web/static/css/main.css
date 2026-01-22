@@ -860,3 +860,323 @@
 .email-row:hover {
     background: var(--color-background-secondary);
 }
+
+
+/* ============================================
+   FOLDER MANAGEMENT VIEW
+   ============================================ */
+
+.folder-management-list {
+    padding: var(--space-md);
+}
+
+.folder-management-header {
+    display: grid;
+    grid-template-columns: 1fr 80px 120px;
+    gap: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: var(--space-sm);
+}
+
+.folder-management-item {
+    display: grid;
+    grid-template-columns: 1fr 80px 120px;
+    gap: var(--space-md);
+    align-items: center;
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-md);
+    transition: background 0.15s;
+}
+
+.folder-management-item:hover {
+    background: var(--color-background-secondary);
+}
+
+.folder-management-name {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    min-width: 0;
+}
+
+.folder-management-name .folder-icon {
+    width: 18px;
+    height: 18px;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+}
+
+.folder-management-name .folder-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.folder-management-color {
+    display: flex;
+    justify-content: center;
+}
+
+.folder-management-actions {
+    display: flex;
+    gap: var(--space-xs);
+    justify-content: flex-end;
+}
+
+.folder-management-add {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    margin-top: var(--space-sm);
+    color: var(--color-primary);
+    background: transparent;
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    width: 100%;
+    font-size: inherit;
+    transition: all 0.15s;
+}
+
+.folder-management-add:hover {
+    background: var(--color-background-secondary);
+    border-color: var(--color-primary);
+}
+
+.folder-management-add i {
+    width: 18px;
+    height: 18px;
+}
+
+/* Color dots */
+.color-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.color-dot-none {
+    background: var(--color-border);
+}
+
+/* Color picker button */
+.color-picker-btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-background);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+}
+
+.color-picker-btn:hover {
+    border-color: var(--color-primary);
+}
+
+.color-picker-btn i {
+    width: 16px;
+    height: 16px;
+    color: var(--color-text-muted);
+}
+
+.color-picker-btn .color-swatch {
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+}
+
+/* Color picker popup */
+.color-picker-popup {
+    position: fixed;
+    z-index: 1000;
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    padding: var(--space-sm);
+    display: flex;
+    gap: var(--space-xs);
+    flex-wrap: wrap;
+    width: 180px;
+}
+
+.color-option {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: var(--radius-sm);
+    background: var(--color-background);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+}
+
+.color-option span {
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+}
+
+.color-option i {
+    width: 16px;
+    height: 16px;
+    color: var(--color-text-muted);
+}
+
+.color-option:hover {
+    border-color: var(--color-border);
+}
+
+.color-option.selected {
+    border-color: var(--color-primary);
+}
+
+/* Button variants */
+.btn-icon {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-icon i {
+    width: 16px;
+    height: 16px;
+}
+
+.btn-danger-subtle {
+    color: var(--color-danger);
+    background: transparent;
+    border-color: transparent;
+}
+
+.btn-danger-subtle:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: transparent;
+}
+
+/* ============================================
+   TRASH VIEW
+   ============================================ */
+
+.trash-list {
+    padding: var(--space-md);
+}
+
+.trash-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm) var(--space-md);
+    margin-bottom: var(--space-md);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.trash-header span {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+.trash-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-md);
+    border-radius: var(--radius-md);
+    transition: background 0.15s;
+}
+
+.trash-item:hover {
+    background: var(--color-background-secondary);
+}
+
+.trash-item-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    min-width: 0;
+    flex: 1;
+}
+
+.trash-item-info .folder-icon {
+    width: 18px;
+    height: 18px;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+}
+
+.trash-item-info .folder-name {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.trash-item-info .subfolder-count {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+}
+
+.trash-item-info .deleted-date {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    margin-left: auto;
+    padding-left: var(--space-md);
+}
+
+.trash-item-actions {
+    display: flex;
+    gap: var(--space-xs);
+    flex-shrink: 0;
+}
+
+/* ============================================
+   STAGED VIEW
+   ============================================ */
+
+.staged-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.staged-item .email-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.staged-item .unstage-btn {
+    flex-shrink: 0;
+}
+
+.staged-destination {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    color: var(--color-text-muted);
+    font-size: 0.8125rem;
+}
+
+.staged-destination i {
+    width: 14px;
+    height: 14px;
+}

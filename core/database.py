@@ -257,6 +257,8 @@ CREATE TABLE IF NOT EXISTS folders (
     name TEXT NOT NULL,
     parent_id INTEGER,
     retention_days INTEGER,
+    color TEXT,
+    deleted_at INTEGER,
     created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
     FOREIGN KEY (parent_id) REFERENCES folders(id) ON DELETE CASCADE
 );
@@ -273,6 +275,7 @@ CREATE TABLE IF NOT EXISTS messages (
     date INTEGER,
     filepath TEXT NOT NULL,
     body_text TEXT,
+    deleted_at INTEGER,
     filed_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
     FOREIGN KEY (folder_id) REFERENCES folders(id) ON DELETE CASCADE,
     FOREIGN KEY (source_account_id) REFERENCES accounts(id) ON DELETE SET NULL
