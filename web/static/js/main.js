@@ -702,7 +702,13 @@ async function createFolder(returnToStage) {
             // Re-render icons
             if (typeof lucide !== 'undefined') lucide.createIcons();
         } else {
-            location.reload();
+            // Check if we're in folder management view
+            const activeView = document.querySelector('.rail-btn.active')?.dataset.view;
+            if (activeView === 'folders') {
+                showFolderManagementView();
+            } else {
+                location.reload();
+            }
         }
         
     } catch (error) {
