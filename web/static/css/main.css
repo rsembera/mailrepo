@@ -1180,3 +1180,32 @@
     width: 14px;
     height: 14px;
 }
+
+
+/* ============================================
+   MODAL VARIANTS
+   ============================================ */
+
+.modal-sm {
+    max-width: 400px;
+}
+
+.modal-sm .form-group {
+    margin-bottom: var(--space-md);
+}
+
+.modal-sm .form-group input {
+    width: 100%;
+}
+
+/* Danger button for destructive actions */
+.btn-danger {
+    background: var(--color-danger);
+    border-color: var(--color-danger);
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #dc2626;
+    border-color: #dc2626;
+}

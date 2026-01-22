@@ -131,8 +131,13 @@ function updateSidebarFolders(newFolder) {
     // Create the new folder element
     const folderItem = document.createElement('div');
     folderItem.className = 'tree-item folder-item';
+    
+    const colorDot = newFolder.color ? 
+        `<span class="color-dot" style="background: ${newFolder.color}"></span>` : '';
+    
     folderItem.innerHTML = `
-        <div class="tree-item-row" data-type="folder" data-id="${newFolder.id}">
+        <div class="tree-item-row" data-type="folder" data-id="${newFolder.id}" data-color="${newFolder.color || ''}">
+            ${colorDot}
             <i data-lucide="folder" class="tree-icon"></i>
             <span class="tree-label">${escapeHtml(newFolder.name)}</span>
         </div>
@@ -159,6 +164,77 @@ function updateSidebarFolders(newFolder) {
     const emptyState = archiveSection.querySelector('.sidebar-empty');
     if (emptyState) {
         emptyState.remove();
+    }
+    
+    // Re-render icons
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+/**
+ * Refresh the entire sidebar folder list from state.
+ * Used after operations that modify folder names or colors.
+ */
+function refreshSidebarFolders() {
+    const archiveSection = document.getElementById('archiveSection');
+    if (!archiveSection) return;
+    
+    // Remove all folder items (but keep the add button and empty state)
+    archiveSection.querySelectorAll('.folder-item').forEach(el => el.remove());
+    
+    // Get visible folders (not deleted, top-level)
+    const visibleFolders = state.folders.filter(f => !f.deleted_at && !f.parent_id);
+    
+    // Find the add button
+    const addBtn = archiveSection.querySelector('.add-folder-btn');
+    
+    if (visibleFolders.length === 0) {
+        // Show empty state if not already there
+        if (!archiveSection.querySelector('.sidebar-empty')) {
+            const empty = document.createElement('div');
+            empty.className = 'sidebar-empty';
+            empty.innerHTML = '<p>No archive folders</p>';
+            if (addBtn) {
+                archiveSection.insertBefore(empty, addBtn);
+            } else {
+                archiveSection.appendChild(empty);
+            }
+        }
+    } else {
+        // Remove empty state if present
+        archiveSection.querySelector('.sidebar-empty')?.remove();
+        
+        // Add folder items
+        visibleFolders.forEach(folder => {
+            const folderItem = document.createElement('div');
+            folderItem.className = 'tree-item folder-item';
+            
+            const colorDot = folder.color ? 
+                `<span class="color-dot" style="background: ${folder.color}"></span>` : '';
+            
+            folderItem.innerHTML = `
+                <div class="tree-item-row" data-type="folder" data-id="${folder.id}" data-color="${folder.color || ''}">
+                    ${colorDot}
+                    <i data-lucide="folder" class="tree-icon"></i>
+                    <span class="tree-label">${escapeHtml(folder.name)}</span>
+                </div>
+            `;
+            
+            if (addBtn) {
+                archiveSection.insertBefore(folderItem, addBtn);
+            } else {
+                archiveSection.appendChild(folderItem);
+            }
+            
+            // Add click handler
+            const row = folderItem.querySelector('.tree-item-row');
+            row.addEventListener('click', (e) => handleTreeItemClick(e, row));
+        });
+    }
+    
+    // Update folder count
+    const countEl = document.getElementById('folderCount');
+    if (countEl) {
+        countEl.textContent = visibleFolders.length;
     }
     
     // Re-render icons
@@ -592,7 +668,7 @@ async function createFolder(returnToStage) {
         
         if (!response.ok) {
             const data = await response.json();
-            alert(data.error || 'Failed to create folder');
+            showAlert('Error', data.error || 'Failed to create folder');
             return;
         }
         
@@ -631,7 +707,7 @@ async function createFolder(returnToStage) {
         
     } catch (error) {
         console.error('Error creating folder:', error);
-        alert('Failed to create folder');
+        showAlert('Error', 'Failed to create folder');
     }
 }
 
@@ -641,6 +717,91 @@ async function createFolder(returnToStage) {
 
 function closeModal(modalId) {
     document.getElementById(modalId)?.classList.remove('active');
+}
+
+// ============================================
+// MODAL HELPERS (replace native prompt/confirm/alert)
+// ============================================
+
+let promptResolver = null;
+let confirmResolver = null;
+
+/**
+ * Show a styled prompt modal (replaces native prompt)
+ * @param {string} title - Modal title
+ * @param {string} defaultValue - Default input value
+ * @returns {Promise<string|null>} - User input or null if cancelled
+ */
+function showPrompt(title, defaultValue = '') {
+    return new Promise(resolve => {
+        promptResolver = resolve;
+        document.getElementById('promptTitle').textContent = title;
+        document.getElementById('promptInput').value = defaultValue;
+        document.getElementById('promptModal').classList.add('active');
+        document.getElementById('promptInput').focus();
+        document.getElementById('promptInput').select();
+    });
+}
+
+function resolvePrompt(value) {
+    closeModal('promptModal');
+    if (promptResolver) {
+        promptResolver(value);
+        promptResolver = null;
+    }
+}
+window.resolvePrompt = resolvePrompt;
+
+// Handle Enter key in prompt
+document.getElementById('promptInput')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        resolvePrompt(e.target.value);
+    } else if (e.key === 'Escape') {
+        resolvePrompt(null);
+    }
+});
+
+/**
+ * Show a styled confirm modal (replaces native confirm)
+ * @param {string} title - Modal title
+ * @param {string} message - Confirmation message
+ * @param {object} options - Optional settings
+ * @param {string} options.okText - Text for OK button (default: "OK")
+ * @param {boolean} options.danger - Use danger styling for OK button
+ * @returns {Promise<boolean>} - true if confirmed, false if cancelled
+ */
+function showConfirm(title, message, options = {}) {
+    return new Promise(resolve => {
+        confirmResolver = resolve;
+        document.getElementById('confirmTitle').textContent = title;
+        document.getElementById('confirmMessage').textContent = message;
+        
+        const okBtn = document.getElementById('confirmOkBtn');
+        okBtn.textContent = options.okText || 'OK';
+        okBtn.className = options.danger ? 'btn btn-danger' : 'btn btn-primary';
+        
+        document.getElementById('confirmModal').classList.add('active');
+    });
+}
+
+function resolveConfirm(value) {
+    closeModal('confirmModal');
+    if (confirmResolver) {
+        confirmResolver(value);
+        confirmResolver = null;
+    }
+}
+window.resolveConfirm = resolveConfirm;
+
+/**
+ * Show a styled alert modal (replaces native alert)
+ * @param {string} title - Modal title
+ * @param {string} message - Alert message
+ */
+function showAlert(title, message) {
+    document.getElementById('alertTitle').textContent = title;
+    document.getElementById('alertMessage').textContent = message;
+    document.getElementById('alertModal').classList.add('active');
 }
 
 function showLoading() {
@@ -1208,7 +1369,7 @@ async function renameFolder(folderId) {
     const folder = state.folders.find(f => f.id == folderId);
     if (!folder) return;
     
-    const newName = prompt('Rename folder:', folder.name);
+    const newName = await showPrompt('Rename folder:', folder.name);
     if (!newName || newName.trim() === '' || newName === folder.name) return;
     
     try {
@@ -1220,22 +1381,23 @@ async function renameFolder(folderId) {
         
         if (!response.ok) {
             const data = await response.json();
-            alert(data.error || 'Failed to rename folder');
+            showAlert('Error', data.error || 'Failed to rename folder');
             return;
         }
         
         folder.name = newName.trim();
         showFolderManagementView();
+        refreshSidebarFolders();
         
     } catch (error) {
         console.error('Error renaming folder:', error);
-        alert('Failed to rename folder');
+        showAlert('Error', 'Failed to rename folder');
     }
 }
 window.renameFolder = renameFolder;
 
 async function createSubfolder(parentId) {
-    const name = prompt('New subfolder name:');
+    const name = await showPrompt('New subfolder name:', '');
     if (!name || name.trim() === '') return;
     
     try {
@@ -1247,7 +1409,7 @@ async function createSubfolder(parentId) {
         
         if (!response.ok) {
             const data = await response.json();
-            alert(data.error || 'Failed to create folder');
+            showAlert('Error', data.error || 'Failed to create folder');
             return;
         }
         
@@ -1257,7 +1419,7 @@ async function createSubfolder(parentId) {
         
     } catch (error) {
         console.error('Error creating subfolder:', error);
-        alert('Failed to create subfolder');
+        showAlert('Error', 'Failed to create subfolder');
     }
 }
 window.createSubfolder = createSubfolder;
@@ -1274,7 +1436,8 @@ async function deleteFolder(folderId) {
         message = `Move "${folder.name}" and ${children.length} subfolder${children.length > 1 ? 's' : ''} to trash?`;
     }
     
-    if (!confirm(message)) return;
+    const confirmed = await showConfirm('Delete Folder', message, { okText: 'Move to Trash' });
+    if (!confirmed) return;
     
     try {
         const response = await fetch(`/api/folders/${folderId}`, {
@@ -1283,7 +1446,7 @@ async function deleteFolder(folderId) {
         
         if (!response.ok) {
             const data = await response.json();
-            alert(data.error || 'Failed to delete folder');
+            showAlert('Error', data.error || 'Failed to delete folder');
             return;
         }
         
@@ -1297,7 +1460,7 @@ async function deleteFolder(folderId) {
         
     } catch (error) {
         console.error('Error deleting folder:', error);
-        alert('Failed to delete folder');
+        showAlert('Error', 'Failed to delete folder');
     }
 }
 window.deleteFolder = deleteFolder;
@@ -1378,7 +1541,7 @@ async function setFolderColor(folderId, color) {
         
         if (!response.ok) {
             const data = await response.json();
-            alert(data.error || 'Failed to update color');
+            showAlert('Error', data.error || 'Failed to update color');
             return;
         }
         
@@ -1386,6 +1549,7 @@ async function setFolderColor(folderId, color) {
         if (folder) folder.color = color;
         
         showFolderManagementView();
+        refreshSidebarFolders();
         
     } catch (error) {
         console.error('Error updating folder color:', error);
@@ -1487,7 +1651,7 @@ async function restoreFolder(folderId) {
         
         if (!response.ok) {
             const data = await response.json();
-            alert(data.error || 'Failed to restore folder');
+            showAlert('Error', data.error || 'Failed to restore folder');
             return;
         }
         
@@ -1504,7 +1668,7 @@ async function restoreFolder(folderId) {
         
     } catch (error) {
         console.error('Error restoring folder:', error);
-        alert('Failed to restore folder');
+        showAlert('Error', 'Failed to restore folder');
     }
 }
 window.restoreFolder = restoreFolder;
@@ -1525,7 +1689,8 @@ async function permanentlyDeleteFolder(folderId) {
         message = `Permanently delete "${folder.name}" and ${children.length} subfolder${children.length > 1 ? 's' : ''}? This cannot be undone.`;
     }
     
-    if (!confirm(message)) return;
+    const confirmed = await showConfirm('Permanent Delete', message, { okText: 'Delete Forever', danger: true });
+    if (!confirmed) return;
     
     try {
         const response = await fetch(`/api/folders/${folderId}/permanent`, {
@@ -1534,7 +1699,7 @@ async function permanentlyDeleteFolder(folderId) {
         
         if (!response.ok) {
             const data = await response.json();
-            alert(data.error || 'Failed to delete folder');
+            showAlert('Error', data.error || 'Failed to delete folder');
             return;
         }
         
@@ -1545,7 +1710,7 @@ async function permanentlyDeleteFolder(folderId) {
         
     } catch (error) {
         console.error('Error deleting folder:', error);
-        alert('Failed to delete folder');
+        showAlert('Error', 'Failed to delete folder');
     }
 }
 window.permanentlyDeleteFolder = permanentlyDeleteFolder;
@@ -1554,9 +1719,10 @@ async function emptyTrash() {
     const trashedFolders = state.folders.filter(f => f.deleted_at && !f.parent_id);
     if (trashedFolders.length === 0) return;
     
-    if (!confirm(`Permanently delete ${trashedFolders.length} folder${trashedFolders.length > 1 ? 's' : ''} and all their contents? This cannot be undone.`)) {
-        return;
-    }
+    const message = `Permanently delete ${trashedFolders.length} folder${trashedFolders.length > 1 ? 's' : ''} and all their contents? This cannot be undone.`;
+    
+    const confirmed = await showConfirm('Empty Trash', message, { okText: 'Empty Trash', danger: true });
+    if (!confirmed) return;
     
     try {
         const response = await fetch('/api/trash/empty', {
@@ -1565,7 +1731,7 @@ async function emptyTrash() {
         
         if (!response.ok) {
             const data = await response.json();
-            alert(data.error || 'Failed to empty trash');
+            showAlert('Error', data.error || 'Failed to empty trash');
             return;
         }
         
@@ -1576,7 +1742,7 @@ async function emptyTrash() {
         
     } catch (error) {
         console.error('Error emptying trash:', error);
-        alert('Failed to empty trash');
+        showAlert('Error', 'Failed to empty trash');
     }
 }
 window.emptyTrash = emptyTrash;

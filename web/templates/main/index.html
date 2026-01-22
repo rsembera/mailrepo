@@ -86,9 +86,12 @@
             </button>
             <div class="section-content expanded" id="archiveSection">
                 {% if folders %}
-                    {% for folder in folders if not folder.parent_id %}
+                    {% for folder in folders if not folder.parent_id and not folder.deleted_at %}
                     <div class="tree-item folder-item">
-                        <div class="tree-item-row" data-type="folder" data-id="{{ folder.id }}">
+                        <div class="tree-item-row" data-type="folder" data-id="{{ folder.id }}" data-color="{{ folder.color or '' }}">
+                            {% if folder.color %}
+                            <span class="color-dot" style="background: {{ folder.color }}"></span>
+                            {% endif %}
                             <i data-lucide="folder" class="tree-icon"></i>
                             <span class="tree-label">{{ folder.name }}</span>
                         </div>
@@ -225,6 +228,49 @@
         </div>
         <div class="email-viewer-body" id="viewerBody">
             <div class="loading-spinner">Loading...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Prompt Modal (replaces native prompt) -->
+<div class="modal-overlay" id="promptModal">
+    <div class="modal-content modal-sm">
+        <div class="modal-header">
+            <h2 id="promptTitle">Enter value</h2>
+        </div>
+        <div class="form-group">
+            <input type="text" id="promptInput" placeholder="">
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="resolvePrompt(null)">Cancel</button>
+            <button class="btn btn-primary" onclick="resolvePrompt(document.getElementById('promptInput').value)">OK</button>
+        </div>
+    </div>
+</div>
+
+<!-- Confirm Modal (replaces native confirm) -->
+<div class="modal-overlay" id="confirmModal">
+    <div class="modal-content modal-sm">
+        <div class="modal-header">
+            <h2 id="confirmTitle">Confirm</h2>
+        </div>
+        <p id="confirmMessage">Are you sure?</p>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="resolveConfirm(false)">Cancel</button>
+            <button class="btn btn-primary" id="confirmOkBtn" onclick="resolveConfirm(true)">OK</button>
+        </div>
+    </div>
+</div>
+
+<!-- Alert Modal (replaces native alert) -->
+<div class="modal-overlay" id="alertModal">
+    <div class="modal-content modal-sm">
+        <div class="modal-header">
+            <h2 id="alertTitle">Notice</h2>
+        </div>
+        <p id="alertMessage"></p>
+        <div class="modal-actions">
+            <button class="btn btn-primary" onclick="closeModal('alertModal')">OK</button>
         </div>
     </div>
 </div>
