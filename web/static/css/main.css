@@ -288,6 +288,33 @@
     font-style: italic;
 }
 
+/* IMAP Folder Tree */
+.imap-tree-item {
+    /* Container for IMAP folder with children */
+}
+
+.imap-folder-chevron {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: transform 0.15s;
+    color: var(--color-text-muted);
+}
+
+.imap-folder-chevron:hover {
+    color: var(--color-text);
+}
+
+.chevron-spacer {
+    width: 14px;
+    flex-shrink: 0;
+}
+
+.imap-tree-children {
+    /* Children container - expanded by default */
+}
+
 /* Add folder button */
 .add-folder-btn {
     color: var(--color-primary);

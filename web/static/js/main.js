@@ -362,32 +362,11 @@ async function loadAccountLabels(accountId) {
         const data = await response.json();
         const folders = data.folders || [];
         
-        // Common folder names to prioritize
-        const priorityFolders = ['INBOX', 'Sent', 'Sent Messages', 'Drafts', 'Trash', 'Junk', 'Spam', 'Archive'];
+        // Build folder tree from flat list
+        const tree = buildImapFolderTree(folders);
         
-        // Sort: priority folders first, then alphabetically
-        folders.sort((a, b) => {
-            const aIdx = priorityFolders.findIndex(p => a.name.toUpperCase().includes(p.toUpperCase()));
-            const bIdx = priorityFolders.findIndex(p => b.name.toUpperCase().includes(p.toUpperCase()));
-            
-            if (aIdx !== -1 && bIdx === -1) return -1;
-            if (aIdx === -1 && bIdx !== -1) return 1;
-            if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
-            return a.name.localeCompare(b.name);
-        });
-        
-        let html = '';
-        
-        // Show folders (limit to 15 to avoid overwhelming the sidebar)
-        folders.forEach(folder => {
-            html += `
-                <div class="tree-item-row" data-type="imap-folder" data-account-id="${accountId}" data-folder="${escapeHtml(folder.name)}">
-                    <i data-lucide="${getFolderIcon(folder.name)}" class="tree-icon"></i>
-                    <span class="tree-label">${escapeHtml(folder.name)}</span>
-                </div>
-            `;
-        });
-        
+        // Render the tree
+        const html = renderImapFolderTree(tree, accountId, 0);
         container.innerHTML = html || '<div class="tree-loading">No folders</div>';
         
         // Render Lucide icons
@@ -395,11 +374,25 @@ async function loadAccountLabels(accountId) {
             lucide.createIcons();
         }
         
-        // Add click handlers
-        container.querySelectorAll('.tree-item-row').forEach(row => {
+        // Add click handlers for folders
+        container.querySelectorAll('.tree-item-row[data-type="imap-folder"]').forEach(row => {
             row.addEventListener('click', (e) => {
                 e.stopPropagation();
                 handleTreeItemClick(e, row);
+            });
+        });
+        
+        // Add click handlers for chevrons (expand/collapse)
+        container.querySelectorAll('.imap-folder-chevron').forEach(chevron => {
+            chevron.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const treeItem = chevron.closest('.imap-tree-item');
+                const children = treeItem.querySelector('.imap-tree-children');
+                if (children) {
+                    const isExpanded = children.style.display !== 'none';
+                    children.style.display = isExpanded ? 'none' : 'block';
+                    chevron.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(90deg)';
+                }
             });
         });
         
@@ -407,6 +400,97 @@ async function loadAccountLabels(accountId) {
         console.error('Error loading folders:', error);
         container.innerHTML = '<div class="tree-loading">Error loading folders</div>';
     }
+}
+
+/**
+ * Build a tree structure from flat IMAP folder list.
+ * Handles various delimiters (/, .)
+ */
+function buildImapFolderTree(folders) {
+    // Detect delimiter from folder names (most common: / or .)
+    let delimiter = '/';
+    for (const folder of folders) {
+        if (folder.name.includes('/')) { delimiter = '/'; break; }
+        if (folder.name.includes('.') && !folder.name.startsWith('[')) { delimiter = '.'; break; }
+    }
+    
+    // Priority folders that should appear first
+    const priorityFolders = ['INBOX', 'Sent', 'Sent Messages', 'Drafts', 'Trash', 'Junk', 'Spam', 'Archive'];
+    
+    // Build tree
+    const root = { children: {} };
+    
+    folders.forEach(folder => {
+        const parts = folder.name.split(delimiter);
+        let current = root;
+        
+        parts.forEach((part, idx) => {
+            if (!current.children[part]) {
+                current.children[part] = {
+                    name: part,
+                    fullPath: parts.slice(0, idx + 1).join(delimiter),
+                    children: {}
+                };
+            }
+            current = current.children[part];
+        });
+    });
+    
+    // Convert to array and sort
+    function toArray(node) {
+        return Object.values(node.children)
+            .map(child => ({
+                ...child,
+                children: toArray(child)
+            }))
+            .sort((a, b) => {
+                // Priority folders first
+                const aIdx = priorityFolders.findIndex(p => a.name.toUpperCase().includes(p.toUpperCase()));
+                const bIdx = priorityFolders.findIndex(p => b.name.toUpperCase().includes(p.toUpperCase()));
+                
+                if (aIdx !== -1 && bIdx === -1) return -1;
+                if (aIdx === -1 && bIdx !== -1) return 1;
+                if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+                return a.name.localeCompare(b.name);
+            });
+    }
+    
+    return toArray(root);
+}
+
+/**
+ * Render IMAP folder tree as HTML.
+ */
+function renderImapFolderTree(nodes, accountId, depth) {
+    let html = '';
+    
+    nodes.forEach(node => {
+        const hasChildren = node.children && node.children.length > 0;
+        const indent = depth * 16;
+        
+        html += `<div class="imap-tree-item">`;
+        html += `<div class="tree-item-row" data-type="imap-folder" data-account-id="${accountId}" data-folder="${escapeHtml(node.fullPath)}" style="padding-left: ${indent}px">`;
+        
+        if (hasChildren) {
+            html += `<i data-lucide="chevron-right" class="imap-folder-chevron" style="transform: rotate(90deg)"></i>`;
+        } else {
+            html += `<span class="chevron-spacer"></span>`;
+        }
+        
+        html += `<i data-lucide="${getFolderIcon(node.name)}" class="tree-icon"></i>`;
+        html += `<span class="tree-label">${escapeHtml(node.name)}</span>`;
+        html += `</div>`;
+        
+        if (hasChildren) {
+            html += `<div class="imap-tree-children">`;
+            html += renderImapFolderTree(node.children, accountId, depth + 1);
+            html += `</div>`;
+        }
+        
+        html += `</div>`;
+    });
+    
+    return html;
 }
 
 function getFolderIcon(folderName) {
