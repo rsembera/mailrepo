@@ -901,3 +901,60 @@ window.toggleEmailSelection = toggleEmailSelection;
 window.closeModal = closeModal;
 window.openEmailViewer = openEmailViewer;
 window.closeEmailViewer = closeEmailViewer;
+
+// ============================================
+// SIDEBAR RESIZE
+// ============================================
+
+(function() {
+    const sidebar = document.getElementById('sidebar');
+    const handle = document.getElementById('sidebarResizeHandle');
+    if (!sidebar || !handle) return;
+    
+    const MIN_WIDTH = 280;
+    const MAX_WIDTH = 420;
+    let isResizing = false;
+    let startX, startWidth;
+    
+    // Load saved width
+    const savedWidth = localStorage.getItem('mailrepo-sidebar-width');
+    if (savedWidth) {
+        const width = parseInt(savedWidth, 10);
+        if (width >= MIN_WIDTH && width <= MAX_WIDTH) {
+            sidebar.style.width = width + 'px';
+        }
+    }
+    
+    handle.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        startX = e.clientX;
+        startWidth = sidebar.offsetWidth;
+        handle.classList.add('dragging');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        e.preventDefault();
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        
+        const delta = e.clientX - startX;
+        let newWidth = startWidth + delta;
+        
+        // Clamp to min/max
+        newWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth));
+        sidebar.style.width = newWidth + 'px';
+    });
+    
+    document.addEventListener('mouseup', () => {
+        if (!isResizing) return;
+        
+        isResizing = false;
+        handle.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        
+        // Save width
+        localStorage.setItem('mailrepo-sidebar-width', sidebar.offsetWidth);
+    });
+})();
