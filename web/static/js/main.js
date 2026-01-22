@@ -607,11 +607,11 @@ function openStageFoldersModal() {
         countEl.closest('p').innerHTML = `Select destination for <strong>${state.stagedFolders.folders.length}</strong> folder${state.stagedFolders.folders.length > 1 ? 's' : ''} (folder structure will be preserved)`;
     }
     
-    // Reset folder selection
+    // Render hierarchical folder tree
+    renderFolderSelectTree();
+    
+    // Reset folder selection (after rendering)
     selectedDestinationFolder = null;
-    document.querySelectorAll('.folder-select-item').forEach(item => {
-        item.classList.remove('selected');
-    });
     document.getElementById('confirmStageBtn').disabled = true;
     
     // Mark that we're staging folders, not emails
@@ -979,16 +979,154 @@ function openStageModal() {
     document.getElementById('stageCount').textContent = state.selectedEmails.size;
     selectedDestinationFolder = null;
     
-    // Reset folder selection
-    document.querySelectorAll('.folder-select-item').forEach(item => {
-        item.classList.remove('selected');
-    });
+    // Render hierarchical folder tree
+    renderFolderSelectTree();
+    
     document.getElementById('confirmStageBtn').disabled = true;
     
     elements.stageModal.classList.add('active');
 }
 
+/**
+ * Render hierarchical folder tree in the stage modal.
+ */
+function renderFolderSelectTree() {
+    const list = document.getElementById('folderSelectList');
+    if (!list) return;
+    
+    // Get visible folders (not deleted)
+    const visibleFolders = state.folders.filter(f => !f.deleted_at);
+    const topLevel = visibleFolders.filter(f => !f.parent_id);
+    
+    // Build the HTML
+    let html = `
+        <div class="folder-select-item new-folder" data-action="new">
+            <span class="chevron-spacer"></span>
+            <i data-lucide="plus"></i>
+            <span>New Folder</span>
+        </div>
+    `;
+    
+    // Sort top-level folders alphabetically
+    topLevel.sort((a, b) => a.name.localeCompare(b.name));
+    
+    // Render each top-level folder with children
+    topLevel.forEach(folder => {
+        html += renderFolderSelectItem(folder, visibleFolders, 0);
+    });
+    
+    list.innerHTML = html;
+    
+    // Add event listeners
+    attachFolderSelectListeners(list);
+    
+    // Re-render Lucide icons
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+/**
+ * Render a single folder item with its children recursively.
+ */
+function renderFolderSelectItem(folder, allFolders, depth) {
+    const children = allFolders.filter(f => f.parent_id == folder.id);
+    const hasChildren = children.length > 0;
+    const indent = depth * 20;
+    
+    // Sort children alphabetically
+    children.sort((a, b) => a.name.localeCompare(b.name));
+    
+    const colorDot = folder.color ? 
+        `<span class="color-dot" style="background: ${folder.color}"></span>` : '';
+    
+    let html = `<div class="folder-select-tree-item" data-folder-id="${folder.id}">`;
+    html += `<div class="folder-select-item" data-id="${folder.id}" style="padding-left: ${12 + indent}px">`;
+    
+    // Chevron for expand/collapse
+    if (hasChildren) {
+        html += `<i data-lucide="chevron-right" class="folder-select-chevron"></i>`;
+    } else {
+        html += `<span class="chevron-spacer"></span>`;
+    }
+    
+    // Color dot and folder icon
+    html += colorDot;
+    html += `<i data-lucide="folder" class="folder-icon"></i>`;
+    html += `<span class="folder-name">${escapeHtml(folder.name)}</span>`;
+    html += `</div>`;
+    
+    // Children container (hidden by default)
+    if (hasChildren) {
+        html += `<div class="folder-select-children" style="display: none;">`;
+        children.forEach(child => {
+            html += renderFolderSelectItem(child, allFolders, depth + 1);
+        });
+        html += `</div>`;
+    }
+    
+    html += `</div>`;
+    return html;
+}
+
+/**
+ * Attach event listeners to folder select items.
+ */
+function attachFolderSelectListeners(container) {
+    // Handle clicks on folder items (for selection)
+    container.querySelectorAll('.folder-select-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            // Check if "New Folder" was clicked
+            if (item.dataset.action === 'new') {
+                openNewFolderModal(true);
+                return;
+            }
+            
+            // Check if click was on chevron (expand/collapse only)
+            if (e.target.closest('.folder-select-chevron')) {
+                e.stopPropagation();
+                toggleFolderSelectExpand(item);
+                return;
+            }
+            
+            // Select this folder
+            container.querySelectorAll('.folder-select-item').forEach(i => i.classList.remove('selected'));
+            item.classList.add('selected');
+            selectedDestinationFolder = item.dataset.id;
+            document.getElementById('confirmStageBtn').disabled = false;
+        });
+    });
+    
+    // Handle chevron clicks
+    container.querySelectorAll('.folder-select-chevron').forEach(chevron => {
+        chevron.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const item = chevron.closest('.folder-select-item');
+            if (item) {
+                toggleFolderSelectExpand(item);
+            }
+        });
+    });
+}
+
+/**
+ * Toggle expand/collapse of a folder in the select tree.
+ */
+function toggleFolderSelectExpand(item) {
+    const chevron = item.querySelector('.folder-select-chevron');
+    const treeItem = item.closest('.folder-select-tree-item');
+    const children = treeItem?.querySelector('.folder-select-children');
+    
+    if (!children) return;
+    
+    const isExpanded = children.style.display !== 'none';
+    children.style.display = isExpanded ? 'none' : 'block';
+    
+    if (chevron) {
+        chevron.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(90deg)';
+    }
+}
+
 function handleFolderSelect(e) {
+    // Legacy handler - keeping for backward compatibility with inline onclick handlers
     const item = e.target.closest('.folder-select-item');
     if (!item) return;
     
@@ -1141,26 +1279,17 @@ async function createFolder(returnToStage) {
         updateSidebarFolders(data.folder);
         
         if (fromStage) {
-            // Add to stage modal folder list
-            const list = document.getElementById('folderSelectList');
-            const newItem = document.createElement('div');
-            newItem.className = 'folder-select-item selected';
-            newItem.dataset.id = data.folder.id;
-            newItem.innerHTML = `
-                <i data-lucide="folder" class="folder-icon"></i>
-                <span class="folder-name">${escapeHtml(name)}</span>
-            `;
-            list.appendChild(newItem);
+            // Re-render the hierarchical folder tree and select the new folder
+            renderFolderSelectTree();
             
-            document.querySelectorAll('.folder-select-item').forEach(i => {
-                if (i !== newItem) i.classList.remove('selected');
-            });
+            // Select the newly created folder
+            const newItem = document.querySelector(`.folder-select-item[data-id="${data.folder.id}"]`);
+            if (newItem) {
+                newItem.classList.add('selected');
+            }
             
             selectedDestinationFolder = data.folder.id;
             document.getElementById('confirmStageBtn').disabled = false;
-            
-            // Re-render icons
-            if (typeof lucide !== 'undefined') lucide.createIcons();
         } else {
             // Check if we're in folder management view
             const activeView = document.querySelector('.rail-btn.active')?.dataset.view;

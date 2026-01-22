@@ -616,24 +616,29 @@
 
 /* Folder Selection */
 .folder-select-list {
-    max-height: 250px;
+    max-height: 300px;
     overflow-y: auto;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     margin-top: var(--space-md);
 }
 
+.folder-select-tree-item {
+    /* Container for folder item and its children */
+}
+
 .folder-select-item {
     display: flex;
     align-items: center;
     gap: var(--space-sm);
-    padding: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
     cursor: pointer;
     border-bottom: 1px solid var(--color-border);
     font-size: 0.9rem;
+    transition: background 0.1s;
 }
 
-.folder-select-item:last-child {
+.folder-select-tree-item:last-child > .folder-select-item {
     border-bottom: none;
 }
 
@@ -648,6 +653,36 @@
 .folder-select-item.new-folder {
     color: var(--color-primary);
     font-weight: 600;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.folder-select-item.new-folder:hover {
+    background: var(--color-primary-lighter);
+}
+
+.folder-select-chevron {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    transition: transform 0.15s;
+}
+
+.folder-select-chevron:hover {
+    color: var(--color-text);
+}
+
+.folder-select-children {
+    /* Children container - hidden by default, shown via JS */
+}
+
+.folder-select-children .folder-select-item {
+    border-bottom: none;
+}
+
+.folder-select-children .folder-select-item:not(:last-child) {
+    border-bottom: 1px solid var(--color-border-light, rgba(0,0,0,0.05));
 }
 
 /* ============================================

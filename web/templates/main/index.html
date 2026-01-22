@@ -161,16 +161,7 @@
         </div>
         <p>Select destination folder:</p>
         <div class="folder-select-list" id="folderSelectList">
-            <div class="folder-select-item new-folder" data-action="new">
-                <i data-lucide="plus"></i>
-                <span>New Folder</span>
-            </div>
-            {% for folder in folders %}
-            <div class="folder-select-item" data-id="{{ folder.id }}">
-                <i data-lucide="folder" class="folder-icon"></i>
-                <span class="folder-name">{{ folder.name }}</span>
-            </div>
-            {% endfor %}
+            <!-- Populated dynamically by JavaScript -->
         </div>
         <div class="modal-actions">
             <button class="btn btn-secondary" onclick="closeModal('stageModal')">Cancel</button>
