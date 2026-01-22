@@ -868,12 +868,13 @@
 
 .folder-management-list {
     padding: var(--space-md);
+    max-width: 700px;
 }
 
 .folder-management-header {
     display: grid;
-    grid-template-columns: 1fr 80px 120px;
-    gap: var(--space-md);
+    grid-template-columns: 1fr 70px 100px;
+    gap: var(--space-sm);
     padding: var(--space-sm) var(--space-md);
     font-size: 0.75rem;
     font-weight: 600;
@@ -881,16 +882,20 @@
     letter-spacing: 0.05em;
     color: var(--color-text-muted);
     border-bottom: 1px solid var(--color-border);
-    margin-bottom: var(--space-sm);
+}
+
+.folder-management-header span:nth-child(2),
+.folder-management-header span:nth-child(3) {
+    text-align: center;
 }
 
 .folder-management-item {
     display: grid;
-    grid-template-columns: 1fr 80px 120px;
-    gap: var(--space-md);
+    grid-template-columns: 1fr 70px 100px;
+    gap: var(--space-sm);
     align-items: center;
-    padding: var(--space-sm) var(--space-md);
-    border-radius: var(--radius-md);
+    padding: var(--space-xs) var(--space-md);
+    border-bottom: 1px solid var(--color-border-light, rgba(0,0,0,0.06));
     transition: background 0.15s;
 }
 
@@ -926,7 +931,7 @@
 .folder-management-actions {
     display: flex;
     gap: var(--space-xs);
-    justify-content: flex-end;
+    justify-content: center;
 }
 
 .folder-management-add {
@@ -1055,6 +1060,18 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-icon:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: transparent;
 }
 
 .btn-icon i {
@@ -1063,14 +1080,15 @@
 }
 
 .btn-danger-subtle {
-    color: var(--color-danger);
     background: transparent;
-    border-color: transparent;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
 }
 
 .btn-danger-subtle:hover {
-    background: rgba(239, 68, 68, 0.1);
-    border-color: transparent;
+    border-color: var(--color-danger);
+    color: var(--color-danger);
+    background: transparent;
 }
 
 /* ============================================
