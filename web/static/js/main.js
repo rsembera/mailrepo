@@ -292,13 +292,28 @@ function handleTreeItemClick(e, row) {
     const type = row.dataset.type;
     const id = row.dataset.id;
     
-    // Handle account click - show folder selection view in main pane
+    // Handle account click
     if (type === 'account') {
-        // Toggle sidebar expansion
-        row.classList.toggle('expanded');
-        const children = row.nextElementSibling;
-        if (children?.classList.contains('tree-children')) {
-            children.style.display = row.classList.contains('expanded') ? 'block' : 'none';
+        // Check if click was on the chevron (expand/collapse sidebar only)
+        const clickedChevron = e.target.closest('.chevron');
+        if (clickedChevron) {
+            // Just toggle sidebar expansion, don't change main view
+            row.classList.toggle('expanded');
+            const children = row.nextElementSibling;
+            if (children?.classList.contains('tree-children')) {
+                children.style.display = row.classList.contains('expanded') ? 'block' : 'none';
+            }
+            return;
+        }
+        
+        // Click on account name - show folder selection view
+        // Expand sidebar if not already
+        if (!row.classList.contains('expanded')) {
+            row.classList.add('expanded');
+            const children = row.nextElementSibling;
+            if (children?.classList.contains('tree-children')) {
+                children.style.display = 'block';
+            }
         }
         
         // Update active state
@@ -364,6 +379,22 @@ async function showFolderSelectionView(accountId) {
     const toolbar = document.querySelector('.content-toolbar');
     if (toolbar) toolbar.style.display = 'none';
     
+    // Replace header actions with folder staging button
+    const headerActions = document.querySelector('.header-actions');
+    if (headerActions) {
+        headerActions.innerHTML = `
+            <button class="btn btn-outline-primary" id="stageFoldersBtn" disabled onclick="stageSelectedFolders()">
+                <i data-lucide="archive"></i>
+                <span>Stage Selected Folders</span>
+            </button>
+            <button class="btn btn-primary" id="reviewBtn" onclick="openReviewModal()">
+                <i data-lucide="check-circle"></i>
+                Review & Commit
+            </button>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+    
     // Show loading state
     elements.emailList.innerHTML = '<div class="loading-indicator">Loading folders...</div>';
     
@@ -398,12 +429,6 @@ function renderFolderSelectionView(tree, accountId) {
                     <input type="checkbox" id="selectAllFolders" onchange="toggleAllFolders(this.checked)">
                     <span>Select All</span>
                 </label>
-                <div class="folder-selection-actions">
-                    <button class="btn btn-primary" id="stageFoldersBtn" disabled onclick="stageSelectedFolders()">
-                        <i data-lucide="archive"></i>
-                        <span>Stage Selected Folders</span>
-                    </button>
-                </div>
             </div>
             <div class="folder-selection-list">
                 ${renderFolderSelectionTree(tree, accountId, 0)}
