@@ -1765,7 +1765,9 @@ async function showTrashView() {
     await loadFolders();
     
     // Get trashed folders (only top-level ones that were directly deleted)
-    const trashedFolders = state.folders.filter(f => f.deleted_at && !f.parent_id);
+    const trashedFolders = state.folders
+        .filter(f => f.deleted_at && !f.parent_id)
+        .sort((a, b) => b.deleted_at - a.deleted_at);  // Most recent first
     // Also include folders whose parent is deleted
     const allTrashed = state.folders.filter(f => {
         if (f.deleted_at) return true;
