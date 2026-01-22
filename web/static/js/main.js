@@ -360,6 +360,10 @@ async function showFolderSelectionView(accountId) {
     elements.contextTitle.textContent = accountName;
     elements.contextMeta.textContent = 'Select folders to archive';
     
+    // Hide the content toolbar (has its own Select All which we don't want)
+    const toolbar = document.querySelector('.content-toolbar');
+    if (toolbar) toolbar.style.display = 'none';
+    
     // Show loading state
     elements.emailList.innerHTML = '<div class="loading-indicator">Loading folders...</div>';
     
@@ -436,9 +440,9 @@ function renderFolderSelectionTree(nodes, accountId, depth) {
         html += `<div class="folder-selection-item" data-folder="${escapeHtml(folderPath)}">`;
         html += `<div class="folder-selection-row" style="padding-left: ${indent}px">`;
         
-        // Chevron for expand/collapse
+        // Chevron for expand/collapse (start collapsed)
         if (hasChildren) {
-            html += `<i data-lucide="chevron-right" class="folder-selection-chevron" style="transform: rotate(90deg)"></i>`;
+            html += `<i data-lucide="chevron-right" class="folder-selection-chevron"></i>`;
         } else {
             html += `<span class="chevron-spacer"></span>`;
         }
@@ -454,9 +458,9 @@ function renderFolderSelectionTree(nodes, accountId, depth) {
         
         html += `</div>`;
         
-        // Children
+        // Children (start collapsed with display:none)
         if (hasChildren) {
-            html += `<div class="folder-selection-children">`;
+            html += `<div class="folder-selection-children" style="display: none;">`;
             html += renderFolderSelectionTree(node.children, accountId, depth + 1);
             html += `</div>`;
         }
