@@ -309,9 +309,9 @@ After each phase, verify:
 
 | Phase | Step | Status | Commit |
 |-------|------|--------|--------|
-| 1 | 1.1 utils.js | ⬜ | |
-| 1 | 1.2 state.js | ⬜ | |
-| 1 | 1.3 modals.js | ⬜ | |
+| 1 | 1.1 utils.js | ✅ | c08e470 |
+| 1 | 1.2 state.js | ✅ | c08e470 |
+| 1 | 1.3 modals.js | ✅ | c08e470 |
 | 1 | 1.4 folder-tree.js | ⬜ | |
 | 1 | 1.5 email-list.js | ⬜ | |
 | 1 | 1.6 sidebar.js | ⬜ | |
