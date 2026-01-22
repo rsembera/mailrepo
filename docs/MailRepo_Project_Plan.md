@@ -1,7 +1,7 @@
 # MailRepo — Project Plan
 
 **Created:** January 16, 2026  
-**Updated:** January 21, 2026  
+**Updated:** January 22, 2026  
 **Status:** In Development
 
 ---
@@ -52,12 +52,15 @@ Solo practitioners (therapists, lawyers, accountants, doctors, consultants) need
 |---------|--------|-------------|
 | IMAP Support | ✅ Done | Connect to any IMAP server (Gmail, iCloud, Fastmail, etc.) |
 | Inbox Browser | ✅ Done | View emails in a clean web interface |
-| Folder System | ✅ Done | Create/manage archive folders (unified across accounts) |
+| Folder System | ✅ Done | Create/manage archive folders with hierarchy |
 | Stage → Review → Commit | ✅ Done | Batch filing workflow with review step |
 | Full Encryption | ✅ Done | SQLCipher database + Fernet email files |
 | Full-Text Search | ✅ Done | FTS5 search across subject, sender, body |
 | Duplicate Detection | ✅ Done | Skip emails already in destination folder |
 | Multi-Account | ✅ Done | Support multiple IMAP accounts |
+| Folder Management | ✅ Done | Rename, move, color-code, delete folders |
+| Trash System | ✅ Done | Soft-delete with restore capability |
+| Theme Support | ✅ Done | 5 themes including dark mode |
 
 ### Phase 2 — Next
 
@@ -65,8 +68,8 @@ Solo practitioners (therapists, lawyers, accountants, doctors, consultants) need
 |---------|-------------|
 | .mbox Import | Import existing email archives (backend ready) |
 | ZIP Export | Export archives/folders as unencrypted ZIP files |
-| Unstage UI | View and manage staged emails |
 | Attachments | View/download email attachments |
+| Archive View | Browse and manage archived emails |
 
 ### Phase 3 — Future
 
@@ -133,6 +136,8 @@ CREATE TABLE folders (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,           -- "Client: John Smith"
     parent_id INTEGER,            -- For nested folders
+    color TEXT,                   -- Hex color for folder dot
+    deleted_at INTEGER,           -- Soft-delete timestamp (NULL = active)
     retention_days INTEGER,       -- NULL = keep forever
     created_at INTEGER,
     FOREIGN KEY (parent_id) REFERENCES folders(id)
@@ -150,6 +155,7 @@ CREATE TABLE messages (
     date INTEGER,                 -- Email date timestamp
     filepath TEXT NOT NULL,       -- Path to .eml.enc file
     body_text TEXT,               -- Plain text for FTS indexing
+    deleted_at INTEGER,           -- Soft-delete timestamp
     filed_at INTEGER,
     FOREIGN KEY (folder_id) REFERENCES folders(id),
     FOREIGN KEY (source_account_id) REFERENCES accounts(id)
@@ -174,199 +180,68 @@ CREATE TABLE settings (
 
 ### Design System
 
-**Reuse from EdgeCase/Synesius:**
+**Reuse from EdgeCase:**
 - CSS custom properties (colors, spacing, shadows)
 - Button styles (.btn, .btn-primary, .btn-secondary, .btn-danger)
 - Form elements (inputs, selects, textareas with consistent styling)
 - Modal system
 - Card components
-- Responsive breakpoints
+- Lucide icons
 
-**Theme support:** Start with EdgeCase's "Tutti-Frutti" or "Slate" theme, can add more later.
+**Theme support:** 5 themes — Lagoon (default), Graphite, Bloom, Rose, Midnight (dark)
 
 **Typography:** Lexend for UI, Inter for body text (same as EdgeCase).
 
-### First-Run Experience
-
-1. **Master Password Setup**
-   - User creates master password
-   - Explanation: "This password encrypts your OAuth tokens and any encrypted archives"
-
-2. **Create First Archive**
-   - "Create an Archive" page appears after password setup
-   - User names their first archive folder
-   - Chooses: Encrypted or Unencrypted
-   - Helper text explains the difference:
-     - Encrypted: "For client correspondence, sensitive materials. Requires password to view."
-     - Unencrypted: "For personal emails, newsletters. Faster access, no decryption needed."
-
-3. **Connect First Account**
-   - Prompt to connect Gmail (or skip for now)
-   - OAuth flow
-
-### Main Layout
+### Main Layout (Three-Pane)
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  [Account Dropdown ▼]           [Stage (12)] [Review]       │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  FOLDERS              │  EMAIL LIST                         │
-│  ────────────────     │  ──────────────────────────────     │
-│  🔒 Client: Smith     │  ☐ From: alice@example.com          │
-│  🔒 Client: Jones     │    Subject: Re: Meeting notes       │
-│  📁 Personal          │    Jan 15, 2026                     │
-│  + New Folder         │                                     │
-│                       │  ☐ From: bob@corp.com               │
-│                       │    Subject: Invoice attached        │
-│                       │    Jan 14, 2026                     │
-│                       │                                     │
-│                       │  [Select All ☐]                     │
-│                       │                                     │
-└───────────────────────┴─────────────────────────────────────┘
+┌────┬──────────────┬─────────────────────────────────────────┐
+│    │              │  Context Header          [Stage] [Review]│
+│ R  │  SIDEBAR     ├─────────────────────────────────────────┤
+│ A  │              │                                         │
+│ I  │  Accounts    │  EMAIL LIST                             │
+│ L  │  > Gmail     │  ──────────────────────────────────     │
+│    │    INBOX     │  ☐ From: alice@example.com              │
+│ 📧 │    Sent      │    Subject: Re: Meeting notes           │
+│ 📦 │              │    Jan 15, 2026                         │
+│ 📁 │  Archive     │                                         │
+│ 🗑  │  > Client A  │  ☐ From: bob@corp.com                   │
+│    │    > Sub     │    Subject: Invoice attached            │
+│ ⚙  │  > Client B  │    Jan 14, 2026                         │
+│ ↪  │  + New       │                                         │
+└────┴──────────────┴─────────────────────────────────────────┘
 ```
 
-**Folder icons:** 🔒 for encrypted, 📁 for unencrypted.
+**Left Rail:** Mail view, Staged emails, Folder Management, Trash, Settings, Logout
 
-### Account Dropdown Options
+### Folder Management View
 
-- Work Gmail
-- Personal Gmail
-- (divider)
-- **Archive** ← Switch to archive browsing mode
-- (divider)
-- Import .mbox...
-- Export Archive...
-- Settings
+- Full-width view (sidebar hidden)
+- Zebra-striped rows for easy tracking
+- Columns: Folder (with hierarchy), Color, Actions
+- Actions: Rename, Move, Add Subfolder, Delete
+- Color picker with 9 preset colors
+- "New Folder" button at bottom
+
+### Trash View
+
+- Shows soft-deleted folders
+- Restore or permanently delete
+- "Empty Trash" for bulk deletion
+- Auto-rename on restore if name conflict exists
 
 ### Staging Workflow
 
-1. **Browse & Select**
-   - User views email list from selected account/folder
-   - Checkboxes next to each email
-   - "Select All" checkbox at top
-   - Persistent badge shows "12 emails staged" (always visible)
-
-2. **Stage to Folder**
-   - Click "Stage" button
-   - Modal shows folder tree with search
-   - "+ New Folder" option at top of list (can create encrypted or unencrypted)
-   - Select destination folder
-   - Emails are greyed out, remain in list
-   - Can continue browsing/staging from other folders
-
-3. **Navigation Warning**
-   - If navigating away with staged emails, show warning:
-   - "You have 12 staged emails. Clear selections or stay here?"
-   - Options: [Clear & Navigate] [Stay]
-
-4. **Review Page**
-   - Click "Review" button
-   - Shows all staged emails grouped by source account/folder
-   - Each email shows: Subject, From, Date, Destination Folder
-   - Can change destination folder inline (dropdown)
-   - Can unstage individual emails (uncheck)
-   - Per-source-folder action dropdown: "After commit..."
-     - Leave in place
-     - Archive (Gmail)
-     - Trash
-     - Delete permanently
-     - Move to folder... (Gmail labels)
-
-5. **Commit**
-   - Click "Commit" button
-   - Progress indicator: "Copying 12 of 50..."
-   - For each email:
-     - Download as .eml
-     - Encrypt with Fernet (if destination folder is encrypted)
-     - Save to archive folder
-     - Add metadata to database
-     - Execute source action (archive/trash/etc.)
-   - Error handling:
-     - Continue on individual failures
-     - Show summary: "47 filed successfully. 3 failed."
-     - Keep failed emails staged for retry
-     - "Retry Failed" button
-
-### Archive View
-
-When "Archive" is selected in dropdown:
-- Folder tree shows archive folders (with 🔒/📁 icons)
-- Email list shows archived emails in selected folder
-- Actions available:
-  - View email (modal or panel)
-  - Download as .eml
-  - Print
-  - Re-file to different folder
-  - Delete from archive
-
-### Export Archive
-
-**Export Options (from dropdown or right-click folder):**
-
-1. **Export as ZIP (Unencrypted)**
-   - Decrypts all .eml.enc files on the fly
-   - Produces standard .eml files anyone can open
-   - Warning: "This will create unencrypted copies of your emails"
-   - Use case: Moving to another system, sharing with lawyer, etc.
-
-2. **Export as Backup (Encrypted)** — Phase 2
-   - Keeps encryption intact
-   - Produces .zip with .eml.enc files + metadata
-   - Can be restored to another MailRepo installation
-
-**Scope:**
-- Entire archive
-- Selected folder tree
-- Individual folder
+1. **Browse & Select** — Checkboxes on emails, "Select All" option
+2. **Stage to Folder** — Modal with folder tree, can create new folders
+3. **Review & Commit** — Shows staged emails, destination folders, commit button
+4. **Progress** — Shows archiving progress with duplicate detection
 
 ### Settings View
 
-- **Accounts:** Add/remove Gmail accounts, IMAP accounts
-- **Security:** Change master password (always required, even if only unencrypted folders exist)
-- **Backup:** Configure backup location, manual backup button
-- **Import:** Import .mbox file (also accessible from dropdown)
-
-### Empty States
-
-- **First launch (no password):** Master password setup
-- **After password (no archives):** "Create an Archive" page
-- **No emails in folder:** "No emails in this folder"
-- **No staged emails:** Review button disabled, "Stage" badge hidden
-
-### Responsive Design
-
-- **Desktop (>1024px):** Full two-column layout
-- **Tablet (768-1024px):** Collapsible folder sidebar
-- **Mobile (<768px):** 
-  - Hamburger menu for folders
-  - Single-column email list
-  - Bottom sheet for staging actions
-
----
-
-## .mbox Import Flow
-
-1. User selects "Import .mbox..." from dropdown
-2. File picker opens
-3. Parse .mbox file using Python `mailbox.mbox()`
-4. Show preview: "Found 1,247 emails from 'Archive.mbox'"
-5. Options:
-   - Import all to new folder (name it, choose encrypted/unencrypted)
-   - Import all to existing folder
-   - Import to staging area (then file manually)
-6. Progress bar during import
-7. Success: "Imported 1,247 emails to 'Old Archive'"
-
-```python
-import mailbox
-
-mbox = mailbox.mbox('/path/to/archive.mbox')
-for message in mbox:
-    subject = message['subject']
-    sender = message['from']
-    raw_eml = message.as_bytes()  # Ready to encrypt (or not) and store
-```
+- **Accounts:** Add/edit/remove IMAP accounts with auto-detection
+- **Appearance:** Theme selection with live preview
+- **Security:** Change master password
 
 ---
 
@@ -413,61 +288,9 @@ for message in mbox:
 | First-run flow | Create archive first | Forces deliberate decision before filing |
 | Email protocol | IMAP only | Simpler than OAuth; works with any provider |
 | Search | FTS5 in SQLCipher | Full-text search inside encrypted database |
-
----
-
-## Domain Status
-
-| Domain | Status | Notes |
-|--------|--------|-------|
-| mailrepo.com | ❌ TAKEN | "The Mail Repository" — private mail service |
-| mailrepo.io | ❓ Check | Likely available |
-| mailrepo.app | ❓ Check | Likely available |
-| getmailrepo.com | ❓ Check | Alternative |
-
-**Action:** Check Namecheap/Cloudflare for .io and .app availability before building.
-
----
-
-## Development Timeline
-
-### Phase 1: MVP (3-4 weeks)
-
-| Week | Goals |
-|------|-------|
-| Week 1 | Flask app structure, Gmail OAuth, basic inbox view, folder sidebar |
-| Week 2 | Staging system, folder selection modal, navigation warnings |
-| Week 3 | Review page, commit workflow, encryption options, error handling |
-| Week 4 | Archive view, .mbox import, ZIP export, search, settings, polish |
-
-### Phase 2: IMAP + Polish (1-2 weeks)
-
-| Week | Goals |
-|------|-------|
-| Week 5 | IMAP support, auto-suggest folders |
-| Week 6 | Export options (PDF, encrypted backup), retention rules, documentation |
-
-### Phase 3: Distribution
-
-- GitHub release
-- README with setup instructions
-- Optional: Website for non-technical users
-
----
-
-## Comparison: MailRepo vs Alternatives
-
-| Feature | MailRepo | Thunderbird | MailSafe.co.uk | Enterprise |
-|---------|----------|-------------|----------------|------------|
-| Local storage | ✅ | ✅ | ❌ Cloud | ❌ Cloud |
-| Encryption at rest | ✅ Optional | ❌ | ❓ | ✅ |
-| Easy filing UI | ✅ | ❌ Clunky | ✅ | ✅ |
-| Batch filing | ✅ | ❌ | ❓ | ✅ |
-| Gmail support | ✅ | ✅ | ✅ | ✅ |
-| IMAP support | ✅ | ✅ | ❓ | ✅ |
-| Price | Free | Free | £££ | ££££ |
-| Self-hosted | ✅ | N/A | ❌ | ❌ |
-| Solo practitioner focus | ✅ | ❌ | ❌ | ❌ |
+| Folder hierarchy | Unlimited nesting | Subfolders with expand/collapse in sidebar |
+| Folder deletion | Soft-delete to trash | Recoverable with auto-rename on conflict |
+| Folder organization | Move via modal | Simpler than drag-and-drop, works on mobile |
 
 ---
 
@@ -483,11 +306,11 @@ for message in mbox:
 
 ## Notes
 
-- Don't overbuild — start with Gmail only, add IMAP if needed
+- Don't overbuild — IMAP works, no need for OAuth complexity
 - Don't compete with enterprise — different market, different values
 - Don't require cloud — local-first, Tailscale for remote
 - Don't forget Sentinel — backup archive to home server
-- Reuse EdgeCase/Synesius CSS patterns — don't reinvent the wheel
+- Reuse EdgeCase patterns — CSS, icons, components
 
 ---
 
