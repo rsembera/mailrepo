@@ -1101,6 +1101,206 @@ def commit_staged():
     })
 
 
+@api_bp.route("/commit-folders", methods=["POST"])
+def commit_folders():
+    """
+    Commit staged folders to archive.
+    
+    This fetches all emails from specified IMAP folders and archives them,
+    recreating the folder structure under the destination folder.
+    
+    Expects JSON body:
+    {
+        "accountId": 123,
+        "folders": ["INBOX/Work", "INBOX/Work/Projects"],
+        "destinationFolderId": 456
+    }
+    """
+    data = request.get_json()
+    account_id = data.get("accountId")
+    imap_folders = data.get("folders", [])
+    dest_folder_id = data.get("destinationFolderId")
+    
+    if not account_id or not imap_folders or not dest_folder_id:
+        return jsonify({"error": "Missing required fields"}), 400
+    
+    # Get account and credentials
+    account = Database.fetchone(
+        "SELECT id, credentials_encrypted FROM accounts WHERE id = ?",
+        (account_id,)
+    )
+    
+    if not account or not account["credentials_encrypted"]:
+        return jsonify({"error": "Account not found or not configured"}), 404
+    
+    # Verify destination folder exists
+    dest_folder = Database.fetchone(
+        "SELECT id, name FROM folders WHERE id = ? AND deleted_at IS NULL",
+        (dest_folder_id,)
+    )
+    if not dest_folder:
+        return jsonify({"error": "Destination folder not found"}), 404
+    
+    results = {
+        "success": 0,
+        "failed": 0,
+        "skipped": 0,
+        "folders_created": 0,
+    }
+    
+    client = None
+    try:
+        client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+        
+        # Get delimiter for this account
+        all_folders = client.list_folders()
+        delimiter = "/"
+        if all_folders and len(all_folders) > 0:
+            delimiter = all_folders[0].get("delimiter", "/")
+        
+        # Process each IMAP folder
+        for imap_folder in imap_folders:
+            try:
+                # Create corresponding archive folder structure
+                archive_folder_id = create_archive_folder_path(
+                    imap_folder, delimiter, dest_folder_id
+                )
+                if archive_folder_id != dest_folder_id:
+                    results["folders_created"] += 1
+                
+                # Select the IMAP folder
+                folder_info = client.select_folder(imap_folder)
+                message_count = folder_info.get("exists", 0)
+                
+                if message_count == 0:
+                    continue
+                
+                # Fetch all message UIDs in this folder
+                uids = client.search_emails()
+                
+                # Archive each email
+                for uid in uids:
+                    try:
+                        # Fetch the email
+                        email_data = client.fetch_email(uid, include_body=True)
+                        raw_email = client.fetch_raw(uid)
+                        
+                        if not raw_email:
+                            results["failed"] += 1
+                            continue
+                        
+                        # Check for duplicate
+                        message_id = email_data.get("message_id", "")
+                        if message_id:
+                            existing = Database.fetchone(
+                                "SELECT id FROM messages WHERE folder_id = ? AND message_id = ?",
+                                (archive_folder_id, message_id)
+                            )
+                            if existing:
+                                results["skipped"] += 1
+                                continue
+                        
+                        # Extract body text for search
+                        body_text = ""
+                        if email_data.get("body"):
+                            body_text = email_data["body"][:10000]  # Limit for FTS
+                        
+                        # Ensure archive directory exists
+                        archive_path = Config.get_base_path() / "archive" / str(archive_folder_id)
+                        archive_path.mkdir(parents=True, exist_ok=True)
+                        
+                        # Save encrypted email
+                        safe_id = f"{account_id}_{uid}"
+                        encrypted_data = Encryption.encrypt(raw_email)
+                        filepath = archive_path / f"{safe_id}.eml.enc"
+                        filepath.write_bytes(encrypted_data)
+                        
+                        # Create database record
+                        Database.execute(
+                            """
+                            INSERT INTO messages 
+                            (folder_id, source_account_id, message_id, subject, sender, date, filepath, body_text)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (
+                                archive_folder_id,
+                                account_id,
+                                message_id,
+                                email_data.get("subject", ""),
+                                email_data.get("from", email_data.get("sender", "")),
+                                email_data.get("date"),
+                                str(filepath.relative_to(Config.get_base_path())),
+                                body_text,
+                            )
+                        )
+                        
+                        results["success"] += 1
+                        
+                    except Exception as e:
+                        results["failed"] += 1
+                
+            except IMAPError as e:
+                # Failed to access this folder
+                results["failed"] += 1
+        
+        Database.commit()
+        
+    except Exception as e:
+        return jsonify({"error": f"Failed to connect: {e}"}), 500
+    finally:
+        if client:
+            client.disconnect()
+    
+    # Build message
+    msg_parts = [f"{results['success']} emails archived"]
+    if results["folders_created"]:
+        msg_parts.append(f"{results['folders_created']} folders created")
+    if results["skipped"]:
+        msg_parts.append(f"{results['skipped']} skipped (duplicates)")
+    if results["failed"]:
+        msg_parts.append(f"{results['failed']} failed")
+    
+    return jsonify({
+        "results": results,
+        "message": ". ".join(msg_parts) + "."
+    })
+
+
+def create_archive_folder_path(imap_folder: str, delimiter: str, parent_id: int) -> int:
+    """
+    Create archive folders to mirror the IMAP folder path.
+    
+    For example, if imap_folder is "Work/Projects/2025" and delimiter is "/",
+    this creates:
+      - "Work" under parent_id
+      - "Projects" under "Work"
+      - "2025" under "Projects"
+    
+    Returns the ID of the deepest folder.
+    """
+    parts = imap_folder.split(delimiter)
+    current_parent_id = parent_id
+    
+    for part in parts:
+        # Check if this folder already exists under current parent
+        existing = Database.fetchone(
+            "SELECT id FROM folders WHERE name = ? AND parent_id = ? AND deleted_at IS NULL",
+            (part, current_parent_id)
+        )
+        
+        if existing:
+            current_parent_id = existing["id"]
+        else:
+            # Create the folder
+            cursor = Database.execute(
+                "INSERT INTO folders (name, parent_id) VALUES (?, ?)",
+                (part, current_parent_id)
+            )
+            current_parent_id = cursor.lastrowid
+    
+    return current_parent_id
+
+
 # ============================================
 # IMPORT
 # ============================================

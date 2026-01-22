@@ -3,6 +3,7 @@
    ============================================ */
 
 let stagedEmails = new Map();
+let stagedFolders = null;  // { accountId, folders: [], destinationFolderId }
 let folders = [];
 let accounts = [];
 let sourceActions = {};  // { accountId: action }
@@ -22,10 +23,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
     
-    // Update badge
-    document.getElementById('stagedBadge').textContent = stagedEmails.size;
+    // Load staged folders from sessionStorage
+    const savedFolders = sessionStorage.getItem('stagedFolders');
+    if (savedFolders) {
+        try {
+            stagedFolders = JSON.parse(savedFolders);
+        } catch (e) {
+            console.error('Failed to parse staged folders:', e);
+        }
+    }
     
-    if (stagedEmails.size === 0) {
+    // Update badge
+    const totalCount = stagedEmails.size + (stagedFolders?.folders?.length || 0);
+    document.getElementById('stagedBadge').textContent = totalCount;
+    
+    if (stagedEmails.size === 0 && !stagedFolders) {
         return;  // Show empty state
     }
     
@@ -59,7 +71,7 @@ function getAccountName(accountId) {
 function renderSidebar() {
     const section = document.getElementById('stagedAccountsSection');
     
-    // Group by account
+    // Group emails by account
     const byAccount = new Map();
     stagedEmails.forEach((data, emailId) => {
         const key = data.sourceAccountId || 'import';
@@ -70,6 +82,20 @@ function renderSidebar() {
     });
     
     let html = '';
+    
+    // Show staged folders first
+    if (stagedFolders && stagedFolders.folders.length > 0) {
+        const accountName = getAccountName(stagedFolders.accountId);
+        html += `
+            <div class="tree-item-row active" data-type="folders" data-account-id="${stagedFolders.accountId}">
+                <i data-lucide="folders" class="tree-icon"></i>
+                <span class="tree-label">${escapeHtml(accountName)} (Folders)</span>
+                <span class="tree-count">${stagedFolders.folders.length}</span>
+            </div>
+        `;
+    }
+    
+    // Show staged emails by account
     byAccount.forEach((emails, accountId) => {
         const accountName = getAccountName(accountId);
         html += `
@@ -84,7 +110,12 @@ function renderSidebar() {
     section.innerHTML = html;
     
     // Update meta
-    document.getElementById('reviewMeta').textContent = `${stagedEmails.size} emails staged`;
+    const emailCount = stagedEmails.size;
+    const folderCount = stagedFolders?.folders?.length || 0;
+    let metaText = [];
+    if (emailCount > 0) metaText.push(`${emailCount} email${emailCount > 1 ? 's' : ''}`);
+    if (folderCount > 0) metaText.push(`${folderCount} folder${folderCount > 1 ? 's' : ''}`);
+    document.getElementById('reviewMeta').textContent = metaText.join(', ') + ' staged';
     
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
@@ -92,7 +123,31 @@ function renderSidebar() {
 function renderReviewList() {
     const content = document.getElementById('reviewContent');
     
-    // Group by source account
+    let html = '';
+    
+    // Render staged folders first
+    if (stagedFolders && stagedFolders.folders.length > 0) {
+        const accountName = getAccountName(stagedFolders.accountId);
+        const destFolder = folders.find(f => f.id == stagedFolders.destinationFolderId);
+        const destName = destFolder ? destFolder.name : 'Unknown';
+        
+        html += `
+            <div class="review-group folders-group">
+                <div class="review-group-header">
+                    <h2><i data-lucide="folders"></i> ${escapeHtml(accountName)} - Folder Archive</h2>
+                </div>
+                <div class="folder-commit-info">
+                    <p><strong>${stagedFolders.folders.length}</strong> folder(s) will be archived to <strong>${escapeHtml(destName)}</strong></p>
+                    <p class="info-note">Folder structure will be preserved. All emails in these folders will be archived.</p>
+                    <ul class="folders-to-commit">
+                        ${stagedFolders.folders.map(f => `<li><i data-lucide="folder"></i> ${escapeHtml(f)}</li>`).join('')}
+                    </ul>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Group emails by source account
     const byAccount = new Map();
     stagedEmails.forEach((data, emailId) => {
         const key = data.sourceAccountId || 'import';
@@ -101,8 +156,6 @@ function renderReviewList() {
         }
         byAccount.get(key).push({ emailId, ...data });
     });
-    
-    let html = '';
     
     byAccount.forEach((emails, accountId) => {
         const accountName = getAccountName(accountId);
@@ -281,8 +334,12 @@ function setSourceAction(accountId, action) {
 
 function updateCommitButton() {
     const checkedCount = document.querySelectorAll('.review-item input[type="checkbox"]:checked').length;
-    document.getElementById('commitCount').textContent = checkedCount;
-    document.getElementById('commitBtn').disabled = checkedCount === 0;
+    const hasFolders = stagedFolders && stagedFolders.folders.length > 0;
+    
+    // Show total count (emails + folders)
+    const totalCount = checkedCount + (hasFolders ? stagedFolders.folders.length : 0);
+    document.getElementById('commitCount').textContent = totalCount;
+    document.getElementById('commitBtn').disabled = totalCount === 0;
 }
 
 function goBack() {
@@ -290,13 +347,67 @@ function goBack() {
 }
 
 // Commit handler
-document.getElementById('commitBtn').addEventListener('click', commitEmails);
+document.getElementById('commitBtn').addEventListener('click', commitAll);
 
-async function commitEmails() {
+async function commitAll() {
+    const progressModal = document.getElementById('progressModal');
+    const progressFill = document.getElementById('progressFill');
+    const progressText = document.getElementById('progressText');
+    
+    progressModal.classList.add('active');
+    progressFill.style.width = '0%';
+    
+    let totalResults = {
+        success: 0,
+        failed: 0,
+        skipped: 0,
+        folders_created: 0,
+        messages: [],
+    };
+    
+    // Commit folders first
+    if (stagedFolders && stagedFolders.folders.length > 0) {
+        progressText.textContent = `Archiving ${stagedFolders.folders.length} folders...`;
+        
+        try {
+            const response = await fetch('/api/commit-folders', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    accountId: stagedFolders.accountId,
+                    folders: stagedFolders.folders,
+                    destinationFolderId: stagedFolders.destinationFolderId,
+                }),
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                totalResults.success += data.results.success;
+                totalResults.failed += data.results.failed;
+                totalResults.skipped += data.results.skipped;
+                totalResults.folders_created += data.results.folders_created;
+                totalResults.messages.push(data.message);
+                
+                // Clear staged folders
+                stagedFolders = null;
+                sessionStorage.removeItem('stagedFolders');
+            } else {
+                totalResults.messages.push(`Folder archive failed: ${data.error}`);
+                totalResults.failed += stagedFolders.folders.length;
+            }
+        } catch (error) {
+            console.error('Folder commit failed:', error);
+            totalResults.messages.push('Folder archive failed: Network error');
+            totalResults.failed += stagedFolders.folders.length;
+        }
+    }
+    
+    // Commit emails
     const toCommit = [];
     document.querySelectorAll('.review-item').forEach(item => {
         const checkbox = item.querySelector('input[type="checkbox"]');
-        if (checkbox.checked) {
+        if (checkbox?.checked) {
             const emailId = item.dataset.id;
             const data = stagedEmails.get(emailId);
             if (data) {
@@ -311,81 +422,65 @@ async function commitEmails() {
         }
     });
     
-    if (toCommit.length === 0) return;
-    
-    const progressModal = document.getElementById('progressModal');
-    const progressFill = document.getElementById('progressFill');
-    const progressText = document.getElementById('progressText');
-    
-    progressModal.classList.add('active');
-    progressFill.style.width = '0%';
-    progressText.textContent = `Filing 0 of ${toCommit.length}...`;
-    
-    try {
-        const response = await fetch('/api/commit', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ staged: toCommit }),
-        });
+    if (toCommit.length > 0) {
+        progressText.textContent = `Filing ${toCommit.length} emails...`;
         
-        const data = await response.json();
-        progressModal.classList.remove('active');
-        
-        const resultsModal = document.getElementById('resultsModal');
-        const successCount = data.results.success.length;
-        const failedCount = data.results.failed.length;
-        const skippedCount = data.results.skipped?.length || 0;
-        
-        document.getElementById('resultsTitle').textContent = failedCount === 0 ? 'Success!' : 'Complete';
-        document.getElementById('resultsMessage').textContent = data.message;
-        
-        const failedList = document.getElementById('failedList');
-        const failedItems = document.getElementById('failedItems');
-        
-        if (failedCount > 0 || skippedCount > 0) {
-            failedList.classList.remove('hidden');
-            let listHtml = '';
+        try {
+            const response = await fetch('/api/commit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ staged: toCommit }),
+            });
             
-            if (skippedCount > 0) {
-                listHtml += '<li class="list-header">Skipped (already archived):</li>';
-                listHtml += data.results.skipped.map(s => 
-                    `<li class="skipped-item">${escapeHtml(s.subject || s.uid)}</li>`
-                ).join('');
+            const data = await response.json();
+            
+            if (response.ok) {
+                totalResults.success += data.results.success.length;
+                totalResults.failed += data.results.failed.length;
+                totalResults.skipped += data.results.skipped?.length || 0;
+                totalResults.messages.push(data.message);
+                
+                // Remove committed emails
+                data.results.success.forEach(id => stagedEmails.delete(id));
+                if (data.results.skipped) {
+                    data.results.skipped.forEach(s => stagedEmails.delete(s.uid));
+                }
+                sessionStorage.setItem('stagedEmails', JSON.stringify([...stagedEmails.entries()]));
+            } else {
+                totalResults.messages.push(`Email archive failed: ${data.error}`);
             }
-            
-            if (failedCount > 0) {
-                listHtml += '<li class="list-header">Failed:</li>';
-                listHtml += data.results.failed.map(f => 
-                    `<li class="failed-item">${escapeHtml(f.uid)}: ${escapeHtml(f.error)}</li>`
-                ).join('');
-            }
-            
-            failedItems.innerHTML = listHtml;
-            document.getElementById('retryBtn').classList.toggle('hidden', failedCount === 0);
-        } else {
-            failedList.classList.add('hidden');
-            document.getElementById('retryBtn').classList.add('hidden');
+        } catch (error) {
+            console.error('Email commit failed:', error);
+            totalResults.messages.push('Email archive failed: Network error');
         }
-        
-        resultsModal.classList.add('active');
-        
-        // Remove committed emails
-        data.results.success.forEach(id => stagedEmails.delete(id));
-        if (data.results.skipped) {
-            data.results.skipped.forEach(s => stagedEmails.delete(s.uid));
-        }
-        sessionStorage.setItem('stagedEmails', JSON.stringify([...stagedEmails.entries()]));
-        
-    } catch (error) {
-        console.error('Commit failed:', error);
-        progressModal.classList.remove('active');
-        alert('Failed to commit emails. Please try again.');
     }
+    
+    progressModal.classList.remove('active');
+    
+    // Show results
+    const resultsModal = document.getElementById('resultsModal');
+    document.getElementById('resultsTitle').textContent = totalResults.failed === 0 ? 'Success!' : 'Complete';
+    document.getElementById('resultsMessage').textContent = totalResults.messages.join(' ');
+    
+    const failedList = document.getElementById('failedList');
+    if (totalResults.failed > 0 || totalResults.skipped > 0) {
+        failedList.classList.remove('hidden');
+        let summaryHtml = '';
+        if (totalResults.skipped > 0) summaryHtml += `<li>${totalResults.skipped} skipped (duplicates)</li>`;
+        if (totalResults.failed > 0) summaryHtml += `<li>${totalResults.failed} failed</li>`;
+        document.getElementById('failedItems').innerHTML = summaryHtml;
+    } else {
+        failedList.classList.add('hidden');
+    }
+    
+    document.getElementById('retryBtn').classList.add('hidden');
+    resultsModal.classList.add('active');
 }
 
 document.getElementById('doneBtn').addEventListener('click', () => {
-    if (stagedEmails.size === 0) {
+    if (stagedEmails.size === 0 && !stagedFolders) {
         sessionStorage.removeItem('stagedEmails');
+        sessionStorage.removeItem('stagedFolders');
         window.location.href = '/';
     } else {
         document.getElementById('resultsModal').classList.remove('active');

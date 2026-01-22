@@ -1071,14 +1071,30 @@ function updateButtonStates() {
         elements.stageBtn.disabled = !canStage;
     }
     if (elements.reviewBtn) {
-        elements.reviewBtn.disabled = state.staged.size === 0;
+        // Enable if we have staged emails OR staged folders
+        const hasEmails = state.staged.size > 0;
+        const hasFolders = state.stagedFolders?.destinationFolderId;
+        elements.reviewBtn.disabled = !hasEmails && !hasFolders;
     }
 }
 
 function goToReview() {
-    if (state.staged.size === 0) return;
+    // Check if we have staged emails or staged folders
+    const hasEmails = state.staged.size > 0;
+    const hasFolders = state.stagedFolders?.destinationFolderId;
     
-    sessionStorage.setItem('stagedEmails', JSON.stringify([...state.staged.entries()]));
+    if (!hasEmails && !hasFolders) return;
+    
+    // Store staged emails
+    if (hasEmails) {
+        sessionStorage.setItem('stagedEmails', JSON.stringify([...state.staged.entries()]));
+    }
+    
+    // Store staged folders
+    if (hasFolders) {
+        sessionStorage.setItem('stagedFolders', JSON.stringify(state.stagedFolders));
+    }
+    
     window.removeEventListener('beforeunload', handleBeforeUnload);
     window.location.href = '/review';
 }

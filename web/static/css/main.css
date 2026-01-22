@@ -1368,3 +1368,44 @@
     color: var(--color-text-muted);
     margin-left: auto;
 }
+
+
+/* Folder commit section in review */
+.folder-commit-info {
+    padding: var(--space-lg);
+    background: var(--color-background-secondary);
+    border-radius: var(--radius-md);
+    margin: var(--space-md) 0;
+}
+
+.folder-commit-info p {
+    margin: 0 0 var(--space-sm) 0;
+}
+
+.folder-commit-info .info-note {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-md);
+}
+
+.folders-to-commit {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.folders-to-commit li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs) 0;
+    font-size: 0.9rem;
+}
+
+.folders-to-commit li i {
+    width: 16px;
+    height: 16px;
+    color: var(--color-text-muted);
+}
