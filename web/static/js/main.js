@@ -16,6 +16,7 @@ const state = {
     currentView: null,      // { type: 'account'|'folder', id: number, label?: string }
     emails: [],
     staged: new Map(),      // Map<emailId, {email, destinationFolderId, sourceAccountId, sourceFolder}>
+    stagedFolders: null,    // { accountId, folders: [], destinationFolderId } for bulk folder staging
     selectedEmails: new Set(),
     folders: [],
     expandedAccounts: new Set(),
@@ -291,24 +292,21 @@ function handleTreeItemClick(e, row) {
     const type = row.dataset.type;
     const id = row.dataset.id;
     
-    // Handle account expansion - also auto-select INBOX
+    // Handle account click - show folder selection view in main pane
     if (type === 'account') {
-        const wasExpanded = row.classList.contains('expanded');
+        // Toggle sidebar expansion
         row.classList.toggle('expanded');
         const children = row.nextElementSibling;
         if (children?.classList.contains('tree-children')) {
             children.style.display = row.classList.contains('expanded') ? 'block' : 'none';
         }
         
-        // If expanding (not collapsing), auto-select INBOX
-        if (!wasExpanded) {
-            // Update active state
-            document.querySelectorAll('.tree-item-row').forEach(r => r.classList.remove('active'));
-            row.classList.add('active');
-            
-            // Select INBOX view for this account
-            selectView({ type: 'account', id: id, folder: 'INBOX' });
-        }
+        // Update active state
+        document.querySelectorAll('.tree-item-row').forEach(r => r.classList.remove('active'));
+        row.classList.add('active');
+        
+        // Show folder selection view in main pane
+        showFolderSelectionView(id);
         return;
     }
     
@@ -340,6 +338,243 @@ function selectView(view) {
     }
     
     updateButtonStates();
+}
+
+// ============================================
+// FOLDER SELECTION VIEW (for bulk folder staging)
+// ============================================
+
+// Track selected folders for staging
+let selectedFoldersForStaging = new Set();
+let currentFolderSelectionAccountId = null;
+let folderSelectionTree = []; // Store the tree for checkbox cascading
+
+async function showFolderSelectionView(accountId) {
+    currentFolderSelectionAccountId = accountId;
+    selectedFoldersForStaging.clear();
+    
+    // Get account name
+    const accountRow = document.querySelector(`.tree-item-row[data-type="account"][data-id="${accountId}"]`);
+    const accountName = accountRow?.querySelector('.tree-label')?.textContent || 'Account';
+    
+    elements.contextTitle.textContent = accountName;
+    elements.contextMeta.textContent = 'Select folders to archive';
+    
+    // Show loading state
+    elements.emailList.innerHTML = '<div class="loading-indicator">Loading folders...</div>';
+    
+    try {
+        const response = await fetch(`/api/accounts/${accountId}/folders`);
+        if (!response.ok) {
+            const data = await response.json();
+            elements.emailList.innerHTML = `<div class="empty-state"><p>Error: ${data.error || 'Failed to load folders'}</p></div>`;
+            return;
+        }
+        
+        const data = await response.json();
+        const folders = data.folders || [];
+        
+        // Build the folder tree
+        folderSelectionTree = buildImapFolderTree(folders);
+        
+        // Render folder selection UI
+        renderFolderSelectionView(folderSelectionTree, accountId);
+        
+    } catch (error) {
+        console.error('Error loading folders:', error);
+        elements.emailList.innerHTML = '<div class="empty-state"><p>Error loading folders</p></div>';
+    }
+}
+
+function renderFolderSelectionView(tree, accountId) {
+    let html = `
+        <div class="folder-selection-view">
+            <div class="folder-selection-toolbar">
+                <label class="select-all-folders">
+                    <input type="checkbox" id="selectAllFolders" onchange="toggleAllFolders(this.checked)">
+                    <span>Select All</span>
+                </label>
+                <div class="folder-selection-actions">
+                    <button class="btn btn-primary" id="stageFoldersBtn" disabled onclick="stageSelectedFolders()">
+                        <i data-lucide="archive"></i>
+                        <span>Stage Selected Folders</span>
+                    </button>
+                </div>
+            </div>
+            <div class="folder-selection-list">
+                ${renderFolderSelectionTree(tree, accountId, 0)}
+            </div>
+        </div>
+    `;
+    
+    elements.emailList.innerHTML = html;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    
+    // Add chevron click handlers for expand/collapse
+    document.querySelectorAll('.folder-selection-chevron').forEach(chevron => {
+        chevron.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const item = chevron.closest('.folder-selection-item');
+            const children = item.querySelector('.folder-selection-children');
+            if (children) {
+                const isExpanded = children.style.display !== 'none';
+                children.style.display = isExpanded ? 'none' : 'block';
+                chevron.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(90deg)';
+            }
+        });
+    });
+}
+
+function renderFolderSelectionTree(nodes, accountId, depth) {
+    let html = '';
+    
+    nodes.forEach(node => {
+        const hasChildren = node.children && node.children.length > 0;
+        const indent = depth * 20;
+        const folderPath = node.fullPath;
+        
+        html += `<div class="folder-selection-item" data-folder="${escapeHtml(folderPath)}">`;
+        html += `<div class="folder-selection-row" style="padding-left: ${indent}px">`;
+        
+        // Chevron for expand/collapse
+        if (hasChildren) {
+            html += `<i data-lucide="chevron-right" class="folder-selection-chevron" style="transform: rotate(90deg)"></i>`;
+        } else {
+            html += `<span class="chevron-spacer"></span>`;
+        }
+        
+        // Checkbox
+        html += `<label class="folder-checkbox">`;
+        html += `<input type="checkbox" data-folder="${escapeHtml(folderPath)}" onchange="handleFolderCheckbox(this, '${escapeHtml(folderPath)}')">`;
+        html += `</label>`;
+        
+        // Folder icon and name
+        html += `<i data-lucide="${getFolderIcon(node.name)}" class="tree-icon"></i>`;
+        html += `<span class="folder-selection-name">${escapeHtml(node.name)}</span>`;
+        
+        html += `</div>`;
+        
+        // Children
+        if (hasChildren) {
+            html += `<div class="folder-selection-children">`;
+            html += renderFolderSelectionTree(node.children, accountId, depth + 1);
+            html += `</div>`;
+        }
+        
+        html += `</div>`;
+    });
+    
+    return html;
+}
+
+function handleFolderCheckbox(checkbox, folderPath) {
+    const isChecked = checkbox.checked;
+    
+    // Update selection set
+    if (isChecked) {
+        selectedFoldersForStaging.add(folderPath);
+    } else {
+        selectedFoldersForStaging.delete(folderPath);
+    }
+    
+    // Cascade to children
+    const item = checkbox.closest('.folder-selection-item');
+    const childCheckboxes = item.querySelectorAll('.folder-selection-children input[type="checkbox"]');
+    childCheckboxes.forEach(child => {
+        child.checked = isChecked;
+        const childPath = child.dataset.folder;
+        if (isChecked) {
+            selectedFoldersForStaging.add(childPath);
+        } else {
+            selectedFoldersForStaging.delete(childPath);
+        }
+    });
+    
+    // Update parent checkboxes (indeterminate state)
+    updateParentCheckboxes();
+    
+    // Update button state
+    updateStageFoldersButton();
+}
+
+function updateParentCheckboxes() {
+    // Walk up the tree and update parent checkbox states
+    document.querySelectorAll('.folder-selection-item').forEach(item => {
+        const children = item.querySelector('.folder-selection-children');
+        if (!children) return;
+        
+        const checkbox = item.querySelector(':scope > .folder-selection-row input[type="checkbox"]');
+        if (!checkbox) return;
+        
+        const childCheckboxes = children.querySelectorAll('input[type="checkbox"]');
+        const checkedCount = Array.from(childCheckboxes).filter(c => c.checked).length;
+        
+        if (checkedCount === 0) {
+            checkbox.checked = false;
+            checkbox.indeterminate = false;
+        } else if (checkedCount === childCheckboxes.length) {
+            checkbox.checked = true;
+            checkbox.indeterminate = false;
+        } else {
+            checkbox.checked = false;
+            checkbox.indeterminate = true;
+        }
+    });
+}
+
+function toggleAllFolders(checked) {
+    document.querySelectorAll('.folder-selection-list input[type="checkbox"]').forEach(cb => {
+        cb.checked = checked;
+        const folderPath = cb.dataset.folder;
+        if (checked) {
+            selectedFoldersForStaging.add(folderPath);
+        } else {
+            selectedFoldersForStaging.delete(folderPath);
+        }
+    });
+    updateStageFoldersButton();
+}
+
+function updateStageFoldersButton() {
+    const btn = document.getElementById('stageFoldersBtn');
+    if (btn) {
+        btn.disabled = selectedFoldersForStaging.size === 0;
+        const count = selectedFoldersForStaging.size;
+        btn.querySelector('span').textContent = count > 0 
+            ? `Stage ${count} Folder${count > 1 ? 's' : ''}` 
+            : 'Stage Selected Folders';
+    }
+}
+
+function stageSelectedFolders() {
+    if (selectedFoldersForStaging.size === 0) return;
+    
+    // Store the folder selection for staging
+    state.stagedFolders = {
+        accountId: currentFolderSelectionAccountId,
+        folders: Array.from(selectedFoldersForStaging)
+    };
+    
+    // Open the staging modal to select destination
+    openStageFoldersModal();
+}
+
+function openStageFoldersModal() {
+    // Reuse the existing stage modal but customize for folders
+    const modal = document.getElementById('stageModal');
+    if (!modal) return;
+    
+    // Update modal title
+    const title = modal.querySelector('.modal-header h2');
+    if (title) {
+        const count = state.stagedFolders.folders.length;
+        title.textContent = `Archive ${count} Folder${count > 1 ? 's' : ''} to...`;
+    }
+    
+    // Populate folder selection (reuse existing logic)
+    populateFolderSelect();
+    
+    modal.classList.add('active');
 }
 
 // ============================================
