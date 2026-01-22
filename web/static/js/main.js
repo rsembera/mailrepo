@@ -19,6 +19,7 @@ import { renderFolderTree } from './components/folder-tree.js';
 import { initEmailList, renderEmailList, toggleEmailSelection, handleSelectAll, updateSelectAllState } from './components/email-list.js';
 import { initSidebar, toggleSection, handleTreeItemClick, updateSidebarFolders, refreshSidebarFolders, loadAccountLabels, buildImapFolderTree, getFolderIcon } from './components/sidebar.js';
 import { initMailView, selectView, loadAccountEmails, loadFolderEmails, openEmailViewer, closeEmailViewer, showLoading, showError } from './views/mail.js';
+import { initStaging, openStageModal, renderFolderSelectTree, handleFolderSelect, confirmStage, updateStagedBadge, updateButtonStates, goToReview, setSelectedDestinationFolder } from './components/staging.js';
 
 // ============================================
 // DOM ELEMENTS
@@ -67,6 +68,16 @@ document.addEventListener('DOMContentLoaded', () => {
         contextMeta: elements.contextMeta,
         emailList: elements.emailList,
         onButtonStatesUpdate: updateButtonStates,
+    });
+    
+    // Initialize staging component
+    initStaging({
+        stageModal: elements.stageModal,
+        stagedBadge: elements.stagedBadge,
+        stageBtn: elements.stageBtn,
+        reviewBtn: elements.reviewBtn,
+        onOpenNewFolderModal: openNewFolderModal,
+        beforeUnloadHandler: handleBeforeUnload,
     });
     
     // Initialize sidebar component
@@ -125,155 +136,6 @@ function initEventListeners() {
     
     // Navigation warning
     window.addEventListener('beforeunload', handleBeforeUnload);
-// ============================================
-// STAGING
-// ============================================
-
-let selectedDestinationFolder = null;
-
-function openStageModal() {
-    if (state.selectedEmails.size === 0) return;
-    
-    document.getElementById('stageCount').textContent = state.selectedEmails.size;
-    selectedDestinationFolder = null;
-    
-    // Render hierarchical folder tree
-    renderFolderSelectTree();
-    
-    document.getElementById('confirmStageBtn').disabled = true;
-    
-    elements.stageModal.classList.add('active');
-}
-
-/**
- * Render hierarchical folder tree in the stage modal.
- */
-function renderFolderSelectTree() {
-    const list = document.getElementById('folderSelectList');
-    if (!list) return;
-    
-    renderFolderTree(list, {
-        showNewFolder: true,
-        itemClass: 'folder-select-item',
-        onSelect: (id) => {
-            selectedDestinationFolder = id;
-            document.getElementById('confirmStageBtn').disabled = false;
-        },
-        onNewFolder: () => openNewFolderModal(true),
-    });
-}
-
-function handleFolderSelect(e) {
-    // Legacy handler - keeping for backward compatibility with inline onclick handlers
-    const item = e.target.closest('.folder-select-item');
-    if (!item) return;
-    
-    if (item.dataset.action === 'new') {
-        openNewFolderModal(true);
-        return;
-    }
-    
-    document.querySelectorAll('.folder-select-item').forEach(i => i.classList.remove('selected'));
-    item.classList.add('selected');
-    
-    selectedDestinationFolder = item.dataset.id;
-    document.getElementById('confirmStageBtn').disabled = false;
-}
-
-function confirmStage() {
-    if (!selectedDestinationFolder) return;
-    
-    const modal = document.getElementById('stageModal');
-    const stagingMode = modal?.dataset.stagingMode;
-    
-    if (stagingMode === 'folders') {
-        // Staging entire folders
-        if (!state.stagedFolders) return;
-        
-        state.stagedFolders.destinationFolderId = selectedDestinationFolder;
-        
-        // Clear modal mode
-        modal.dataset.stagingMode = '';
-        closeModal('stageModal');
-        
-        // Update badge to show folders are staged
-        updateStagedBadge();
-        
-        // Show feedback
-        showAlert('Folders Staged', `${state.stagedFolders.folders.length} folder(s) staged for archiving. Click "Review & Commit" to proceed.`);
-        return;
-    }
-    
-    // Normal email staging
-    if (!state.currentView) return;
-    
-    state.selectedEmails.forEach(emailId => {
-        const email = state.emails.find(e => (e.uid || e.id) === emailId);
-        if (email) {
-            state.staged.set(emailId, {
-                email,
-                destinationFolderId: selectedDestinationFolder,
-                sourceAccountId: state.currentView.type === 'account' ? state.currentView.id : null,
-                sourceFolder: state.currentView.folder || 'INBOX',
-            });
-        }
-    });
-    
-    state.selectedEmails.clear();
-    closeModal('stageModal');
-    
-    updateStagedBadge();
-    updateButtonStates();
-    renderEmailList();
-}
-
-function updateStagedBadge() {
-    if (!elements.stagedBadge) return;
-    
-    // Count staged emails plus staged folders
-    let count = state.staged.size;
-    if (state.stagedFolders?.destinationFolderId) {
-        count += state.stagedFolders.folders.length;
-    }
-    
-    elements.stagedBadge.textContent = count;
-    elements.stagedBadge.classList.toggle('hidden', count === 0);
-}
-
-function updateButtonStates() {
-    if (elements.stageBtn) {
-        // Only enable stage for account views (not archive)
-        const canStage = state.currentView?.type === 'account' && state.selectedEmails.size > 0;
-        elements.stageBtn.disabled = !canStage;
-    }
-    if (elements.reviewBtn) {
-        // Enable if we have staged emails OR staged folders
-        const hasEmails = state.staged.size > 0;
-        const hasFolders = state.stagedFolders?.destinationFolderId;
-        elements.reviewBtn.disabled = !hasEmails && !hasFolders;
-    }
-}
-
-function goToReview() {
-    // Check if we have staged emails or staged folders
-    const hasEmails = state.staged.size > 0;
-    const hasFolders = state.stagedFolders?.destinationFolderId;
-    
-    if (!hasEmails && !hasFolders) return;
-    
-    // Store staged emails
-    if (hasEmails) {
-        sessionStorage.setItem('stagedEmails', JSON.stringify([...state.staged.entries()]));
-    }
-    
-    // Store staged folders
-    if (hasFolders) {
-        sessionStorage.setItem('stagedFolders', JSON.stringify(state.stagedFolders));
-    }
-    
-    window.removeEventListener('beforeunload', handleBeforeUnload);
-    window.location.href = '/review';
-}
 
 // ============================================
 // NEW FOLDER
@@ -347,29 +209,6 @@ async function createFolder(returnToStage) {
 // ============================================
 // UTILITIES
 // ============================================
-
-function showLoading() {
-    if (!elements.emailList) return;
-    elements.emailList.innerHTML = `
-        <div class="empty-state">
-            <i data-lucide="loader" class="empty-icon spin"></i>
-            <h3>Loading...</h3>
-        </div>
-    `;
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-}
-
-function showError(message) {
-    if (!elements.emailList) return;
-    elements.emailList.innerHTML = `
-        <div class="empty-state">
-            <i data-lucide="alert-triangle" class="empty-icon"></i>
-            <h3>Error</h3>
-            <p>${escapeHtml(message)}</p>
-        </div>
-    `;
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-}
 
 function handleSearch(e) {
     const query = e.target.value.toLowerCase().trim();
