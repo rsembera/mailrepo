@@ -58,7 +58,7 @@ export function handleTreeItemClick(e, row) {
     if (type === 'account') {
         const clickedChevron = e.target.closest('.chevron');
         if (clickedChevron) {
-            // Just toggle sidebar expansion
+            // Toggle sidebar expansion only when clicking chevron
             row.classList.toggle('expanded');
             const children = row.nextElementSibling;
             if (children?.classList.contains('tree-children')) {
@@ -67,16 +67,7 @@ export function handleTreeItemClick(e, row) {
             return;
         }
         
-        // Expand sidebar if not already
-        if (!row.classList.contains('expanded')) {
-            row.classList.add('expanded');
-            const children = row.nextElementSibling;
-            if (children?.classList.contains('tree-children')) {
-                children.style.display = 'block';
-            }
-        }
-        
-        // Update active state
+        // Clicking account name loads folder selection in main pane (doesn't expand sidebar)
         document.querySelectorAll('.tree-item-row').forEach(r => r.classList.remove('active'));
         row.classList.add('active');
         

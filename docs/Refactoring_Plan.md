@@ -320,6 +320,6 @@ After each phase, verify:
 | 1 | 1.9 folder-mgmt.js | ✅ | 0b219f4 |
 | 1 | 1.10 trash.js | ✅ | b02e1b2 |
 | 1 | 1.11 app.js | ✅ | 335620a |
-| 2 | CSS split | ⬜ | |
+| 2 | CSS split | ✅ | 4530587 |
 | 3 | API split | ⬜ | |
 | 4 | Cleanup | ⬜ | |
