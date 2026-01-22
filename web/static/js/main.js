@@ -16,6 +16,7 @@ import { escapeHtml, extractName, formatDate, debounce } from './utils.js';
 import { state, loadFolders } from './state.js';
 import { closeModal, showPrompt, showConfirm, showAlert, initModalListeners } from './modals.js';
 import { renderFolderTree } from './components/folder-tree.js';
+import { initEmailList, renderEmailList, toggleEmailSelection, handleSelectAll, updateSelectAllState } from './components/email-list.js';
 
 // ============================================
 // DOM ELEMENTS
@@ -51,6 +52,13 @@ const elements = {
 // ============================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize email list component
+    initEmailList({
+        emailList: elements.emailList,
+        selectAll: elements.selectAll,
+        onSelectionChange: updateButtonStates,
+    });
+    
     initEventListeners();
     initModalListeners();
     loadFolders().then(() => {
@@ -855,104 +863,6 @@ async function loadFolderEmails(folderId) {
 
 
 // ============================================
-// RENDER EMAIL LIST
-// ============================================
-
-function renderEmailList() {
-    if (!elements.emailList) return;
-    
-    if (state.emails.length === 0) {
-        elements.emailList.innerHTML = `
-            <div class="empty-state">
-                <i data-lucide="mail-x" class="empty-icon"></i>
-                <h3>No Emails</h3>
-                <p>This folder is empty.</p>
-            </div>
-        `;
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-        return;
-    }
-    
-    elements.emailList.innerHTML = state.emails.map(email => {
-        const emailId = email.uid || email.id;
-        const isStaged = state.staged.has(emailId);
-        const isSelected = state.selectedEmails.has(emailId);
-        
-        return `
-            <div class="email-item ${isStaged ? 'staged' : ''} ${isSelected ? 'selected' : ''}" 
-                 data-id="${emailId}">
-                <div class="email-checkbox" onclick="event.stopPropagation()">
-                    <input type="checkbox" 
-                           ${isSelected ? 'checked' : ''} 
-                           ${isStaged ? 'disabled' : ''}
-                           onchange="toggleEmailSelection('${emailId}')">
-                </div>
-                <div class="email-content" onclick="openEmailViewer('${emailId}')">
-                    <div class="email-header">
-                        <span class="email-sender">${escapeHtml(extractName(email.from || email.sender))}</span>
-                        <span class="email-date">${formatDate(email.date)}</span>
-                    </div>
-                    <div class="email-subject">${escapeHtml(email.subject || '(no subject)')}</div>
-                    ${email.snippet ? `<div class="email-preview">${escapeHtml(email.snippet)}</div>` : ''}
-                </div>
-            </div>
-        `;
-    }).join('');
-    
-    updateSelectAllState();
-}
-
-function toggleEmailSelection(emailId) {
-    if (state.staged.has(emailId)) return;
-    
-    if (state.selectedEmails.has(emailId)) {
-        state.selectedEmails.delete(emailId);
-    } else {
-        state.selectedEmails.add(emailId);
-    }
-    
-    // Update UI
-    const item = document.querySelector(`.email-item[data-id="${emailId}"]`);
-    if (item) {
-        item.classList.toggle('selected', state.selectedEmails.has(emailId));
-        item.querySelector('input[type="checkbox"]').checked = state.selectedEmails.has(emailId);
-    }
-    
-    updateButtonStates();
-    updateSelectAllState();
-}
-
-function handleSelectAll(e) {
-    const checked = e.target.checked;
-    
-    state.emails.forEach(email => {
-        const emailId = email.uid || email.id;
-        if (!state.staged.has(emailId)) {
-            if (checked) {
-                state.selectedEmails.add(emailId);
-            } else {
-                state.selectedEmails.delete(emailId);
-            }
-        }
-    });
-    
-    renderEmailList();
-    updateButtonStates();
-}
-
-function updateSelectAllState() {
-    if (!elements.selectAll) return;
-    
-    const available = state.emails.filter(e => !state.staged.has(e.id));
-    const selectedCount = [...state.selectedEmails].filter(id => 
-        available.some(e => e.id === id)
-    ).length;
-    
-    elements.selectAll.checked = available.length > 0 && selectedCount === available.length;
-    elements.selectAll.indeterminate = selectedCount > 0 && selectedCount < available.length;
-}
-
-// ============================================
 // STAGING
 // ============================================
 
@@ -1383,7 +1293,6 @@ document.addEventListener('keydown', (e) => {
 });
 
 // Global functions for inline handlers
-window.toggleEmailSelection = toggleEmailSelection;
 window.closeModal = closeModal;
 window.openEmailViewer = openEmailViewer;
 window.closeEmailViewer = closeEmailViewer;
