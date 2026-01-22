@@ -58,6 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initEventListeners();
     loadFolders().then(() => {
         updateTrashBadge();
+        refreshSidebarFolders(); // Render folder tree with hierarchy
     });
     updateStagedBadge();
     
@@ -172,73 +173,114 @@ function updateSidebarFolders(newFolder) {
 
 /**
  * Refresh the entire sidebar folder list from state.
- * Used after operations that modify folder names or colors.
+ * Renders hierarchical folder tree with expand/collapse for parents.
  */
 function refreshSidebarFolders() {
     const archiveSection = document.getElementById('archiveSection');
     if (!archiveSection) return;
     
-    // Remove all folder items (but keep the add button and empty state)
+    // Remove all folder items (but keep the add button)
     archiveSection.querySelectorAll('.folder-item').forEach(el => el.remove());
+    archiveSection.querySelector('.sidebar-empty')?.remove();
     
-    // Get visible folders (not deleted, top-level)
-    const visibleFolders = state.folders.filter(f => !f.deleted_at && !f.parent_id);
+    // Get visible folders (not deleted)
+    const visibleFolders = state.folders.filter(f => !f.deleted_at);
+    const topLevel = visibleFolders.filter(f => !f.parent_id);
     
     // Find the add button
     const addBtn = archiveSection.querySelector('.add-folder-btn');
     
-    if (visibleFolders.length === 0) {
-        // Show empty state if not already there
-        if (!archiveSection.querySelector('.sidebar-empty')) {
-            const empty = document.createElement('div');
-            empty.className = 'sidebar-empty';
-            empty.innerHTML = '<p>No archive folders</p>';
-            if (addBtn) {
-                archiveSection.insertBefore(empty, addBtn);
-            } else {
-                archiveSection.appendChild(empty);
-            }
+    if (topLevel.length === 0) {
+        // Show empty state
+        const empty = document.createElement('div');
+        empty.className = 'sidebar-empty';
+        empty.innerHTML = '<p>No archive folders</p>';
+        if (addBtn) {
+            archiveSection.insertBefore(empty, addBtn);
+        } else {
+            archiveSection.appendChild(empty);
         }
     } else {
-        // Remove empty state if present
-        archiveSection.querySelector('.sidebar-empty')?.remove();
-        
-        // Add folder items
-        visibleFolders.forEach(folder => {
-            const folderItem = document.createElement('div');
-            folderItem.className = 'tree-item folder-item';
-            
-            const colorDot = folder.color ? 
-                `<span class="color-dot" style="background: ${folder.color}"></span>` : '';
-            
-            folderItem.innerHTML = `
-                <div class="tree-item-row" data-type="folder" data-id="${folder.id}" data-color="${folder.color || ''}">
-                    ${colorDot}
-                    <i data-lucide="folder" class="tree-icon"></i>
-                    <span class="tree-label">${escapeHtml(folder.name)}</span>
-                </div>
-            `;
+        // Render folder tree
+        topLevel.forEach(folder => {
+            const children = visibleFolders.filter(f => f.parent_id == folder.id);
+            const folderEl = createFolderTreeItem(folder, children, 0);
             
             if (addBtn) {
-                archiveSection.insertBefore(folderItem, addBtn);
+                archiveSection.insertBefore(folderEl, addBtn);
             } else {
-                archiveSection.appendChild(folderItem);
+                archiveSection.appendChild(folderEl);
             }
-            
-            // Add click handler
-            const row = folderItem.querySelector('.tree-item-row');
-            row.addEventListener('click', (e) => handleTreeItemClick(e, row));
         });
     }
     
-    // Update folder count
+    // Update folder count (only top-level for now)
     const countEl = document.getElementById('folderCount');
     if (countEl) {
-        countEl.textContent = visibleFolders.length;
+        countEl.textContent = topLevel.length;
     }
     
     // Re-render icons
     if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+/**
+ * Create a folder tree item with optional children.
+ */
+function createFolderTreeItem(folder, children, depth) {
+    const folderItem = document.createElement('div');
+    folderItem.className = 'tree-item folder-item';
+    folderItem.dataset.folderId = folder.id;
+    
+    const hasChildren = children && children.length > 0;
+    const colorDot = folder.color ? 
+        `<span class="color-dot" style="background: ${folder.color}"></span>` : '';
+    const chevron = hasChildren ? 
+        `<i data-lucide="chevron-right" class="chevron"></i>` : '';
+    const indent = depth > 0 ? `style="padding-left: ${12 + depth * 20}px"` : '';
+    
+    folderItem.innerHTML = `
+        <div class="tree-item-row ${hasChildren ? 'has-children' : ''}" data-type="folder" data-id="${folder.id}" data-color="${folder.color || ''}" ${indent}>
+            ${chevron}
+            ${colorDot}
+            <i data-lucide="folder" class="tree-icon"></i>
+            <span class="tree-label">${escapeHtml(folder.name)}</span>
+        </div>
+    `;
+    
+    // Add children container if has children
+    if (hasChildren) {
+        const childrenContainer = document.createElement('div');
+        childrenContainer.className = 'tree-children';
+        childrenContainer.style.display = 'none'; // Start collapsed
+        
+        children.forEach(child => {
+            // Get grandchildren
+            const grandchildren = state.folders.filter(f => f.parent_id == child.id && !f.deleted_at);
+            const childEl = createFolderTreeItem(child, grandchildren, depth + 1);
+            childrenContainer.appendChild(childEl);
+        });
+        
+        folderItem.appendChild(childrenContainer);
+    }
+    
+    // Add click handler
+    const row = folderItem.querySelector('.tree-item-row');
+    row.addEventListener('click', (e) => {
+        // Handle expansion for folders with children
+        if (hasChildren && (e.target.closest('.chevron') || e.target.classList.contains('chevron'))) {
+            e.stopPropagation();
+            row.classList.toggle('expanded');
+            const childContainer = folderItem.querySelector('.tree-children');
+            if (childContainer) {
+                childContainer.style.display = row.classList.contains('expanded') ? 'block' : 'none';
+            }
+            return;
+        }
+        handleTreeItemClick(e, row);
+    });
+    
+    return folderItem;
 }
 
 // ============================================
