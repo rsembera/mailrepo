@@ -1090,74 +1090,88 @@
 
 .trash-list {
     padding: var(--space-md);
+    padding-left: var(--space-xl);
+    padding-right: var(--space-xl);
 }
 
 .trash-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    display: grid;
+    grid-template-columns: 1fr 120px 80px;
+    gap: var(--space-md);
     padding: var(--space-sm) var(--space-md);
-    margin-bottom: var(--space-md);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
     border-bottom: 1px solid var(--color-border);
 }
 
-.trash-header span {
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--color-text-muted);
+.trash-header span:nth-child(2),
+.trash-header span:nth-child(3) {
+    text-align: center;
 }
 
 .trash-item {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 1fr 120px 80px;
+    gap: var(--space-md);
     align-items: center;
-    padding: var(--space-md);
-    border-radius: var(--radius-md);
+    padding: var(--space-sm) var(--space-md);
     transition: background 0.15s;
 }
 
-.trash-item:hover {
+/* Zebra striping */
+.trash-item:nth-child(odd) {
     background: var(--color-background-secondary);
 }
 
-.trash-item-info {
+.trash-item:hover {
+    background: var(--color-background-tertiary, rgba(0,0,0,0.06));
+}
+
+.trash-item-name {
     display: flex;
     align-items: center;
     gap: var(--space-sm);
     min-width: 0;
-    flex: 1;
 }
 
-.trash-item-info .folder-icon {
+.trash-item-name .folder-icon {
     width: 18px;
     height: 18px;
     color: var(--color-text-muted);
     flex-shrink: 0;
 }
 
-.trash-item-info .folder-name {
+.trash-item-name .folder-name {
     font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.trash-item-info .subfolder-count {
-    font-size: 0.8125rem;
+.trash-item-name .subfolder-count {
+    font-size: 0.8rem;
     color: var(--color-text-muted);
 }
 
-.trash-item-info .deleted-date {
-    font-size: 0.8125rem;
+.trash-item-date {
+    text-align: center;
+    font-size: 0.85rem;
     color: var(--color-text-muted);
-    margin-left: auto;
-    padding-left: var(--space-md);
 }
 
 .trash-item-actions {
     display: flex;
     gap: var(--space-xs);
-    flex-shrink: 0;
+    justify-content: center;
+}
+
+.trash-footer {
+    padding: var(--space-md);
+    padding-top: var(--space-lg);
+    text-align: right;
 }
 
 /* ============================================

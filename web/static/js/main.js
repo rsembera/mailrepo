@@ -1797,10 +1797,9 @@ function renderTrashList(trashedFolders) {
     let html = `
         <div class="trash-list">
             <div class="trash-header">
-                <span>Deleted items</span>
-                <button class="btn btn-sm btn-danger" onclick="emptyTrash()">
-                    <i data-lucide="trash-2"></i> Empty Trash
-                </button>
+                <span>Folder</span>
+                <span>Deleted</span>
+                <span>Actions</span>
             </div>
     `;
     
@@ -1810,17 +1809,19 @@ function renderTrashList(trashedFolders) {
         
         html += `
             <div class="trash-item" data-id="${folder.id}">
-                <div class="trash-item-info">
+                <div class="trash-item-name">
                     <i data-lucide="folder" class="folder-icon"></i>
                     <span class="folder-name">${escapeHtml(folder.name)}</span>
-                    ${children.length > 0 ? `<span class="subfolder-count">(+${children.length} subfolder${children.length > 1 ? 's' : ''})</span>` : ''}
-                    <span class="deleted-date">Deleted ${formatDate(deletedDate)}</span>
+                    ${children.length > 0 ? `<span class="subfolder-count">(+${children.length})</span>` : ''}
+                </div>
+                <div class="trash-item-date">
+                    ${formatDate(deletedDate)}
                 </div>
                 <div class="trash-item-actions">
-                    <button class="btn btn-sm btn-secondary" onclick="restoreFolder(${folder.id})">
-                        <i data-lucide="undo-2"></i> Restore
+                    <button class="btn btn-sm btn-icon" onclick="restoreFolder(${folder.id})" title="Restore">
+                        <i data-lucide="undo-2"></i>
                     </button>
-                    <button class="btn btn-sm btn-danger-subtle" onclick="permanentlyDeleteFolder(${folder.id})">
+                    <button class="btn btn-sm btn-icon btn-danger-subtle" onclick="permanentlyDeleteFolder(${folder.id})" title="Delete permanently">
                         <i data-lucide="x"></i>
                     </button>
                 </div>
@@ -1828,7 +1829,15 @@ function renderTrashList(trashedFolders) {
         `;
     });
     
-    html += '</div>';
+    // Empty Trash button at bottom
+    html += `
+            <div class="trash-footer">
+                <button class="btn btn-sm btn-danger" onclick="emptyTrash()">
+                    <i data-lucide="trash-2"></i> Empty Trash
+                </button>
+            </div>
+        </div>
+    `;
     elements.emailList.innerHTML = html;
 }
 
