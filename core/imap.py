@@ -121,7 +121,7 @@ class IMAP:
         Get list of IMAP folders (mailboxes).
         
         Returns:
-            List of folder dicts with 'name' and 'flags'.
+            List of folder dicts with 'name', 'delimiter', and 'raw'.
         """
         if not self.connection:
             raise IMAPError("Not connected")
@@ -135,13 +135,22 @@ class IMAP:
             for item in data:
                 if item is None:
                     continue
-                # Parse folder line: (\\Flags) "/" "FolderName"
+                # Parse folder line: (\\Flags) "delimiter" "FolderName"
+                # Example: (\HasNoChildren) "/" "INBOX/Subfolder"
+                # Example: (\HasNoChildren) "." "INBOX.Subfolder"
                 decoded = item.decode() if isinstance(item, bytes) else item
-                # Simple parsing - handle quoted names
+                
+                # Extract delimiter - it's between the flags and folder name
+                # Format: (flags) "delimiter" "name" or (flags) "delimiter" name
+                import re
+                match = re.match(r'\([^)]*\)\s+"(.)"|\s+NIL\s+', decoded)
+                delimiter = match.group(1) if match and match.group(1) else "/"
+                
+                # Extract folder name - it's after the delimiter specification
                 parts = decoded.rsplit('" ', 1)
                 if len(parts) == 2:
                     name = parts[1].strip('"')
-                    folders.append({"name": name, "raw": decoded})
+                    folders.append({"name": name, "delimiter": delimiter, "raw": decoded})
             
             return folders
         except Exception as e:

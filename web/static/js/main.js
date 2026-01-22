@@ -404,14 +404,24 @@ async function loadAccountLabels(accountId) {
 
 /**
  * Build a tree structure from flat IMAP folder list.
- * Handles various delimiters (/, .)
+ * Uses delimiter provided by server (usually / or .)
  */
 function buildImapFolderTree(folders) {
-    // Detect delimiter from folder names (most common: / or .)
-    let delimiter = '/';
+    // Get delimiter from first folder that has one (they should all be the same)
+    // Default to / but only use it if folders actually contain /
+    let delimiter = null;
     for (const folder of folders) {
-        if (folder.name.includes('/')) { delimiter = '/'; break; }
-        if (folder.name.includes('.') && !folder.name.startsWith('[')) { delimiter = '.'; break; }
+        if (folder.delimiter) {
+            delimiter = folder.delimiter;
+            break;
+        }
+    }
+    
+    // If no delimiter from server, try to detect from folder names
+    // but be conservative - only split on / if it looks like a path
+    if (!delimiter) {
+        const hasSlashPaths = folders.some(f => f.name.includes('/') && !f.name.startsWith('['));
+        delimiter = hasSlashPaths ? '/' : null;
     }
     
     // Priority folders that should appear first
@@ -421,14 +431,15 @@ function buildImapFolderTree(folders) {
     const root = { children: {} };
     
     folders.forEach(folder => {
-        const parts = folder.name.split(delimiter);
+        // If no delimiter, treat as flat list (no hierarchy)
+        const parts = delimiter ? folder.name.split(delimiter) : [folder.name];
         let current = root;
         
         parts.forEach((part, idx) => {
             if (!current.children[part]) {
                 current.children[part] = {
                     name: part,
-                    fullPath: parts.slice(0, idx + 1).join(delimiter),
+                    fullPath: delimiter ? parts.slice(0, idx + 1).join(delimiter) : folder.name,
                     children: {}
                 };
             }
