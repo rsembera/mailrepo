@@ -597,11 +597,25 @@ function openStageFoldersModal() {
     const title = modal.querySelector('.modal-header h2');
     if (title) {
         const count = state.stagedFolders.folders.length;
-        title.textContent = `Archive ${count} Folder${count > 1 ? 's' : ''} to...`;
+        title.textContent = `Stage ${count} Folder${count > 1 ? 's' : ''} to...`;
     }
     
-    // Populate folder selection (reuse existing logic)
-    populateFolderSelect();
+    // Update the count display
+    const countEl = document.getElementById('stageCount');
+    if (countEl) {
+        countEl.textContent = state.stagedFolders.folders.length;
+        countEl.closest('p').innerHTML = `Select destination for <strong>${state.stagedFolders.folders.length}</strong> folder${state.stagedFolders.folders.length > 1 ? 's' : ''} (folder structure will be preserved)`;
+    }
+    
+    // Reset folder selection
+    selectedDestinationFolder = null;
+    document.querySelectorAll('.folder-select-item').forEach(item => {
+        item.classList.remove('selected');
+    });
+    document.getElementById('confirmStageBtn').disabled = true;
+    
+    // Mark that we're staging folders, not emails
+    modal.dataset.stagingMode = 'folders';
     
     modal.classList.add('active');
 }
@@ -991,7 +1005,31 @@ function handleFolderSelect(e) {
 }
 
 function confirmStage() {
-    if (!selectedDestinationFolder || !state.currentView) return;
+    if (!selectedDestinationFolder) return;
+    
+    const modal = document.getElementById('stageModal');
+    const stagingMode = modal?.dataset.stagingMode;
+    
+    if (stagingMode === 'folders') {
+        // Staging entire folders
+        if (!state.stagedFolders) return;
+        
+        state.stagedFolders.destinationFolderId = selectedDestinationFolder;
+        
+        // Clear modal mode
+        modal.dataset.stagingMode = '';
+        closeModal('stageModal');
+        
+        // Update badge to show folders are staged
+        updateStagedBadge();
+        
+        // Show feedback
+        showAlert('Folders Staged', `${state.stagedFolders.folders.length} folder(s) staged for archiving. Click "Review & Commit" to proceed.`);
+        return;
+    }
+    
+    // Normal email staging
+    if (!state.currentView) return;
     
     state.selectedEmails.forEach(emailId => {
         const email = state.emails.find(e => (e.uid || e.id) === emailId);
@@ -1016,7 +1054,12 @@ function confirmStage() {
 function updateStagedBadge() {
     if (!elements.stagedBadge) return;
     
-    const count = state.staged.size;
+    // Count staged emails plus staged folders
+    let count = state.staged.size;
+    if (state.stagedFolders?.destinationFolderId) {
+        count += state.stagedFolders.folders.length;
+    }
+    
     elements.stagedBadge.textContent = count;
     elements.stagedBadge.classList.toggle('hidden', count === 0);
 }
