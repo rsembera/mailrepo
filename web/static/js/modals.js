@@ -1,0 +1,110 @@
+/**
+ * MailRepo - Modal Helpers
+ * Styled replacements for native prompt/confirm/alert
+ */
+
+let promptResolver = null;
+let confirmResolver = null;
+
+/**
+ * Close a modal by ID.
+ * @param {string} modalId - ID of modal element
+ */
+export function closeModal(modalId) {
+    document.getElementById(modalId)?.classList.remove('active');
+}
+
+/**
+ * Show a styled prompt modal.
+ * @param {string} title - Modal title
+ * @param {string} defaultValue - Default input value
+ * @returns {Promise<string|null>} User input or null if cancelled
+ */
+export function showPrompt(title, defaultValue = '') {
+    return new Promise(resolve => {
+        promptResolver = resolve;
+        document.getElementById('promptTitle').textContent = title;
+        document.getElementById('promptInput').value = defaultValue;
+        document.getElementById('promptModal').classList.add('active');
+        document.getElementById('promptInput').focus();
+        document.getElementById('promptInput').select();
+    });
+}
+
+/**
+ * Resolve the current prompt modal.
+ * @param {string|null} value - Value to resolve with
+ */
+export function resolvePrompt(value) {
+    closeModal('promptModal');
+    if (promptResolver) {
+        promptResolver(value);
+        promptResolver = null;
+    }
+}
+
+/**
+ * Show a styled confirm modal.
+ * @param {string} title - Modal title
+ * @param {string} message - Confirmation message
+ * @param {Object} options - Optional settings
+ * @param {string} options.okText - Text for OK button
+ * @param {boolean} options.danger - Use danger styling
+ * @returns {Promise<boolean>} True if confirmed
+ */
+export function showConfirm(title, message, options = {}) {
+    return new Promise(resolve => {
+        confirmResolver = resolve;
+        document.getElementById('confirmTitle').textContent = title;
+        document.getElementById('confirmMessage').textContent = message;
+        
+        const okBtn = document.getElementById('confirmOkBtn');
+        okBtn.textContent = options.okText || 'OK';
+        okBtn.className = options.danger ? 'btn btn-danger' : 'btn btn-primary';
+        
+        document.getElementById('confirmModal').classList.add('active');
+    });
+}
+
+/**
+ * Resolve the current confirm modal.
+ * @param {boolean} value - Value to resolve with
+ */
+export function resolveConfirm(value) {
+    closeModal('confirmModal');
+    if (confirmResolver) {
+        confirmResolver(value);
+        confirmResolver = null;
+    }
+}
+
+/**
+ * Show a styled alert modal.
+ * @param {string} title - Modal title
+ * @param {string} message - Alert message
+ */
+export function showAlert(title, message) {
+    document.getElementById('alertTitle').textContent = title;
+    document.getElementById('alertMessage').textContent = message;
+    document.getElementById('alertModal').classList.add('active');
+}
+
+/**
+ * Initialize modal event listeners.
+ * Call this once on DOMContentLoaded.
+ */
+export function initModalListeners() {
+    // Handle Enter key in prompt
+    document.getElementById('promptInput')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            resolvePrompt(e.target.value);
+        } else if (e.key === 'Escape') {
+            resolvePrompt(null);
+        }
+    });
+}
+
+// Expose to window for inline onclick handlers
+window.resolvePrompt = resolvePrompt;
+window.resolveConfirm = resolveConfirm;
+window.closeModal = closeModal;

@@ -9,18 +9,12 @@
  */
 
 // ============================================
-// STATE
+// IMPORTS
 // ============================================
 
-const state = {
-    currentView: null,      // { type: 'account'|'folder', id: number, label?: string }
-    emails: [],
-    staged: new Map(),      // Map<emailId, {email, destinationFolderId, sourceAccountId, sourceFolder}>
-    stagedFolders: null,    // { accountId, folders: [], destinationFolderId } for bulk folder staging
-    selectedEmails: new Set(),
-    folders: [],
-    expandedAccounts: new Set(),
-};
+import { escapeHtml, extractName, formatDate, debounce } from './utils.js';
+import { state, loadFolders } from './state.js';
+import { closeModal, showPrompt, showConfirm, showAlert, initModalListeners } from './modals.js';
 
 // ============================================
 // DOM ELEMENTS
@@ -57,6 +51,7 @@ const elements = {
 
 document.addEventListener('DOMContentLoaded', () => {
     initEventListeners();
+    initModalListeners();
     loadFolders().then(() => {
         updateTrashBadge();
         refreshSidebarFolders(); // Render folder tree with hierarchy
@@ -857,17 +852,6 @@ async function loadFolderEmails(folderId) {
     }
 }
 
-async function loadFolders() {
-    try {
-        const response = await fetch('/api/folders');
-        if (response.ok) {
-            const data = await response.json();
-            state.folders = data.folders || [];
-        }
-    } catch (e) {
-        console.error('Failed to load folders:', e);
-    }
-}
 
 // ============================================
 // RENDER EMAIL LIST
@@ -1310,95 +1294,6 @@ async function createFolder(returnToStage) {
 // UTILITIES
 // ============================================
 
-function closeModal(modalId) {
-    document.getElementById(modalId)?.classList.remove('active');
-}
-
-// ============================================
-// MODAL HELPERS (replace native prompt/confirm/alert)
-// ============================================
-
-let promptResolver = null;
-let confirmResolver = null;
-
-/**
- * Show a styled prompt modal (replaces native prompt)
- * @param {string} title - Modal title
- * @param {string} defaultValue - Default input value
- * @returns {Promise<string|null>} - User input or null if cancelled
- */
-function showPrompt(title, defaultValue = '') {
-    return new Promise(resolve => {
-        promptResolver = resolve;
-        document.getElementById('promptTitle').textContent = title;
-        document.getElementById('promptInput').value = defaultValue;
-        document.getElementById('promptModal').classList.add('active');
-        document.getElementById('promptInput').focus();
-        document.getElementById('promptInput').select();
-    });
-}
-
-function resolvePrompt(value) {
-    closeModal('promptModal');
-    if (promptResolver) {
-        promptResolver(value);
-        promptResolver = null;
-    }
-}
-window.resolvePrompt = resolvePrompt;
-
-// Handle Enter key in prompt
-document.getElementById('promptInput')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-        resolvePrompt(e.target.value);
-    } else if (e.key === 'Escape') {
-        resolvePrompt(null);
-    }
-});
-
-/**
- * Show a styled confirm modal (replaces native confirm)
- * @param {string} title - Modal title
- * @param {string} message - Confirmation message
- * @param {object} options - Optional settings
- * @param {string} options.okText - Text for OK button (default: "OK")
- * @param {boolean} options.danger - Use danger styling for OK button
- * @returns {Promise<boolean>} - true if confirmed, false if cancelled
- */
-function showConfirm(title, message, options = {}) {
-    return new Promise(resolve => {
-        confirmResolver = resolve;
-        document.getElementById('confirmTitle').textContent = title;
-        document.getElementById('confirmMessage').textContent = message;
-        
-        const okBtn = document.getElementById('confirmOkBtn');
-        okBtn.textContent = options.okText || 'OK';
-        okBtn.className = options.danger ? 'btn btn-danger' : 'btn btn-primary';
-        
-        document.getElementById('confirmModal').classList.add('active');
-    });
-}
-
-function resolveConfirm(value) {
-    closeModal('confirmModal');
-    if (confirmResolver) {
-        confirmResolver(value);
-        confirmResolver = null;
-    }
-}
-window.resolveConfirm = resolveConfirm;
-
-/**
- * Show a styled alert modal (replaces native alert)
- * @param {string} title - Modal title
- * @param {string} message - Alert message
- */
-function showAlert(title, message) {
-    document.getElementById('alertTitle').textContent = title;
-    document.getElementById('alertMessage').textContent = message;
-    document.getElementById('alertModal').classList.add('active');
-}
-
 function showLoading() {
     if (!elements.emailList) return;
     elements.emailList.innerHTML = `
@@ -1420,54 +1315,6 @@ function showError(message) {
         </div>
     `;
     if (typeof lucide !== 'undefined') lucide.createIcons();
-}
-
-function escapeHtml(str) {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
-
-function extractName(sender) {
-    if (!sender) return '';
-    // Extract name from "Name <email>" format
-    const match = sender.match(/^([^<]+)</);
-    return match ? match[1].trim() : sender;
-}
-
-function formatDate(dateStr) {
-    if (!dateStr) return '';
-    
-    try {
-        const date = new Date(dateStr);
-        const now = new Date();
-        
-        if (isNaN(date.getTime())) return dateStr;
-        
-        // Same day
-        if (date.toDateString() === now.toDateString()) {
-            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        }
-        
-        // This year
-        if (date.getFullYear() === now.getFullYear()) {
-            return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-        }
-        
-        // Other
-        return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
-    } catch {
-        return dateStr;
-    }
-}
-
-function debounce(fn, delay) {
-    let timeout;
-    return function(...args) {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => fn.apply(this, args), delay);
-    };
 }
 
 function handleSearch(e) {
