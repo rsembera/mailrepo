@@ -1347,7 +1347,7 @@ async function showFolderManagementView() {
 }
 
 function renderFolderManagementList() {
-    // Build folder tree (top-level only for now)
+    // Build folder tree
     const topLevelFolders = state.folders.filter(f => !f.parent_id && !f.deleted_at);
     
     let html = `
@@ -1359,14 +1359,19 @@ function renderFolderManagementList() {
             </div>
     `;
     
-    topLevelFolders.forEach(folder => {
-        html += renderFolderManagementItem(folder);
+    // Recursive function to render folder and all descendants
+    function renderFolderWithChildren(folder, depth) {
+        html += renderFolderManagementItem(folder, depth);
         
-        // Render children
+        // Render children recursively
         const children = state.folders.filter(f => f.parent_id == folder.id && !f.deleted_at);
         children.forEach(child => {
-            html += renderFolderManagementItem(child, 1);
+            renderFolderWithChildren(child, depth + 1);
         });
+    }
+    
+    topLevelFolders.forEach(folder => {
+        renderFolderWithChildren(folder, 0);
     });
     
     html += `
@@ -1464,6 +1469,7 @@ async function createSubfolder(parentId) {
         const data = await response.json();
         state.folders.push(data.folder);
         showFolderManagementView();
+        refreshSidebarFolders();
         
     } catch (error) {
         console.error('Error creating subfolder:', error);
