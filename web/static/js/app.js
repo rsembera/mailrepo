@@ -1,11 +1,13 @@
 /**
- * MailRepo - Main Application JavaScript
+ * MailRepo - Application Entry Point
  * 
- * Handles:
- * - Three-pane navigation
- * - Account/folder tree interactions
- * - Email list rendering
- * - Staging workflow
+ * Main entry point that initializes all components and handles:
+ * - DOM element references
+ * - Component initialization
+ * - Event listener setup
+ * - Left rail view switching
+ * - New folder modal
+ * - Search functionality
  */
 
 // ============================================
@@ -152,6 +154,7 @@ function initEventListeners() {
     
     // Navigation warning
     window.addEventListener('beforeunload', handleBeforeUnload);
+}
 
 // ============================================
 // NEW FOLDER

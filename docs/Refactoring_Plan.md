@@ -318,7 +318,7 @@ After each phase, verify:
 | 1 | 1.7 mail.js | ✅ | d4bdf1e |
 | 1 | 1.8 staging.js | ✅ | 0f93ce4 |
 | 1 | 1.9 folder-mgmt.js | ✅ | 0b219f4 |
-| 1 | 1.10 trash.js | ⬜ | |
+| 1 | 1.10 trash.js | ✅ | b02e1b2 |
 | 1 | 1.11 app.js | ⬜ | |
 | 2 | CSS split | ⬜ | |
 | 3 | API split | ⬜ | |
