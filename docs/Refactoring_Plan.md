@@ -313,7 +313,7 @@ After each phase, verify:
 | 1 | 1.2 state.js | ✅ | c08e470 |
 | 1 | 1.3 modals.js | ✅ | c08e470 |
 | 1 | 1.4 folder-tree.js | ✅ | ea49919 |
-| 1 | 1.5 email-list.js | ⬜ | |
+| 1 | 1.5 email-list.js | ✅ | 2270a1c |
 | 1 | 1.6 sidebar.js | ⬜ | |
 | 1 | 1.7 mail.js | ⬜ | |
 | 1 | 1.8 staging.js | ⬜ | |
