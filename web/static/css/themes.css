@@ -248,15 +248,6 @@
     border-color: var(--color-border);
 }
 
-[data-theme="midnight"] .btn-secondary {
-    background: #313244;
-    color: var(--color-text);
-}
-
-[data-theme="midnight"] .btn-secondary:hover:not(:disabled) {
-    background: #45475a;
-}
-
 [data-theme="midnight"] .section-header {
     color: var(--color-text);
 }
