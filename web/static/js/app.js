@@ -323,7 +323,21 @@ function showStagedView() {
     
     sidebar.style.display = 'none';
     if (toolbar) toolbar.style.display = 'none';
-    if (headerActions) headerActions.style.display = '';
+    
+    // Set header actions for staged view
+    if (headerActions) {
+        headerActions.innerHTML = `
+            <button class="btn btn-primary" id="reviewBtnStaged" ${(state.staged.size === 0 && !state.stagedFolders?.destinationFolderId) ? 'disabled' : ''}>
+                <i data-lucide="check-circle"></i>
+                Review & Commit
+            </button>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        
+        document.getElementById('reviewBtnStaged')?.addEventListener('click', () => {
+            import('./components/staging.js').then(m => m.goToReview());
+        });
+    }
     
     const emailCount = state.staged.size;
     const folderCount = state.stagedFolders?.folders?.length || 0;
