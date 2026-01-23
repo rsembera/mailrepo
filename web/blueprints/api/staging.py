@@ -242,14 +242,15 @@ def commit_folders():
                     results["folders_created"] += 1
                 
                 folder_info = client.select_folder(imap_folder)
-                if folder_info.get("exists", 0) == 0:
+                if folder_info.get("message_count", 0) == 0:
                     continue
                 
-                uids = client.search_emails()
+                # Get all emails in this folder (no limit for archiving)
+                uids = client.search(criteria="ALL", limit=10000)
                 
                 for uid in uids:
                     try:
-                        email_data = client.fetch_email(uid, include_body=True)
+                        email_data = client.fetch_full(uid)
                         raw_email = client.fetch_raw(uid)
                         
                         if not raw_email:
@@ -265,8 +266,8 @@ def commit_folders():
                             if existing:
                                 results["skipped"] += 1
                                 continue
-                        
-                        body_text = email_data.get("body", "")[:10000] if email_data.get("body") else ""
+                        # Extract body text for search indexing
+                        body_text = (email_data.get("text_body") or "")[:10000]
                         
                         archive_path = Config.get_base_path() / "archive" / str(archive_folder_id)
                         archive_path.mkdir(parents=True, exist_ok=True)
