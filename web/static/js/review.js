@@ -62,6 +62,37 @@ async function loadFolders() {
     }
 }
 
+/**
+ * Render hierarchical folder options for dropdown.
+ */
+function renderFolderOptions(selectedId) {
+    const topLevel = folders.filter(f => !f.parent_id && !f.deleted_at);
+    
+    function renderFolder(folder, depth) {
+        const indent = depth * 12;
+        const isSelected = folder.id == selectedId;
+        const icon = folder.encrypted ? 'lock' : 'folder';
+        
+        let html = `
+            <div class="icon-select-option ${isSelected ? 'selected' : ''}" 
+                 data-value="${folder.id}" data-icon="${icon}" style="padding-left: ${8 + indent}px">
+                <i data-lucide="${icon}"></i>
+                <span>${escapeHtml(folder.name)}</span>
+            </div>
+        `;
+        
+        // Render children
+        const children = folders.filter(f => f.parent_id == folder.id && !f.deleted_at);
+        children.forEach(child => {
+            html += renderFolder(child, depth + 1);
+        });
+        
+        return html;
+    }
+    
+    return topLevel.map(f => renderFolder(f, 0)).join('');
+}
+
 function getAccountName(accountId) {
     if (accountId === 'import') return 'Imported';
     const account = accounts.find(a => a.id == accountId);
@@ -221,13 +252,7 @@ function renderReviewList() {
                                 <i data-lucide="chevron-down" class="icon-select-arrow"></i>
                             </button>
                             <div class="icon-select-dropdown">
-                                ${folders.map(f => `
-                                    <div class="icon-select-option ${f.id == item.destinationFolderId ? 'selected' : ''}" 
-                                         data-value="${f.id}" data-icon="${f.encrypted ? 'lock' : 'folder'}">
-                                        <i data-lucide="${f.encrypted ? 'lock' : 'folder'}"></i>
-                                        <span>${escapeHtml(f.name)}</span>
-                                    </div>
-                                `).join('')}
+                                ${renderFolderOptions(item.destinationFolderId)}
                             </div>
                         </div>
                     </div>
