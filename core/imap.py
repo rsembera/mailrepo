@@ -164,7 +164,7 @@ class IMAP:
             folder: Folder name (default INBOX).
             
         Returns:
-            Dict with folder info (message count, etc.).
+            Dict with folder info (message count, uidvalidity, etc.).
         """
         if not self.connection:
             raise IMAPError("Not connected")
@@ -174,9 +174,19 @@ class IMAP:
             if status != "OK":
                 raise IMAPError(f"Failed to select folder: {folder}")
             
+            # Get UIDVALIDITY for cache validation
+            uidvalidity = None
+            try:
+                status, validity_data = self.connection.response('UIDVALIDITY')
+                if status == 'OK' and validity_data and validity_data[0]:
+                    uidvalidity = int(validity_data[0])
+            except:
+                pass
+            
             return {
                 "folder": folder,
                 "message_count": int(data[0]) if data else 0,
+                "uidvalidity": uidvalidity,
             }
         except Exception as e:
             raise IMAPError(f"Failed to select folder {folder}: {e}")

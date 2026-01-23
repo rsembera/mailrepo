@@ -19,7 +19,7 @@ from .config import Config
 
 
 # Current schema version (increment when schema changes)
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 class Database:
@@ -233,6 +233,30 @@ class Database:
             
             # Note: We're keeping the 'encrypted' columns for now to avoid data loss
             # They'll be ignored going forward (everything is encrypted)
+        
+        # Migration from version 3 to 4: add email header cache table
+        if from_version < 4:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS email_cache (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    account_id INTEGER NOT NULL,
+                    folder_name TEXT NOT NULL,
+                    uid TEXT NOT NULL,
+                    uidvalidity INTEGER NOT NULL,
+                    subject TEXT,
+                    sender TEXT,
+                    recipients TEXT,
+                    date TEXT,
+                    message_id TEXT,
+                    cached_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                    FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+                    UNIQUE(account_id, folder_name, uid, uidvalidity)
+                )
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_email_cache_folder 
+                ON email_cache(account_id, folder_name, uidvalidity)
+            """)
 
 
 # SQL schema definition
@@ -314,6 +338,24 @@ CREATE INDEX IF NOT EXISTS idx_messages_date ON messages(date);
 CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender);
 CREATE INDEX IF NOT EXISTS idx_messages_message_id ON messages(message_id);
 CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_id);
+
+-- Email header cache (for IMAP folder browsing)
+CREATE TABLE IF NOT EXISTS email_cache (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL,
+    folder_name TEXT NOT NULL,
+    uid TEXT NOT NULL,
+    uidvalidity INTEGER NOT NULL,
+    subject TEXT,
+    sender TEXT,
+    recipients TEXT,
+    date TEXT,
+    message_id TEXT,
+    cached_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+    UNIQUE(account_id, folder_name, uid, uidvalidity)
+);
+CREATE INDEX IF NOT EXISTS idx_email_cache_folder ON email_cache(account_id, folder_name, uidvalidity);
 
 -- Application settings (key-value store)
 CREATE TABLE IF NOT EXISTS settings (

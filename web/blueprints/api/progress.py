@@ -20,12 +20,75 @@ def sse_message(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
+def _get_cached_emails(account_id: int, folder: str, uidvalidity: int) -> list[dict]:
+    """Get cached email headers for a folder."""
+    rows = Database.fetchall(
+        """SELECT uid, subject, sender, recipients, date, message_id
+           FROM email_cache
+           WHERE account_id = ? AND folder_name = ? AND uidvalidity = ?
+           ORDER BY CAST(uid AS INTEGER) DESC""",
+        (account_id, folder, uidvalidity)
+    )
+    return [
+        {
+            "uid": row["uid"],
+            "subject": row["subject"],
+            "from": row["sender"],
+            "to": row["recipients"],
+            "date": row["date"],
+            "message_id": row["message_id"],
+        }
+        for row in rows
+    ]
+
+
+def _get_highest_cached_uid(account_id: int, folder: str, uidvalidity: int) -> int:
+    """Get the highest UID in cache for incremental sync."""
+    row = Database.fetchone(
+        """SELECT MAX(CAST(uid AS INTEGER)) as max_uid
+           FROM email_cache
+           WHERE account_id = ? AND folder_name = ? AND uidvalidity = ?""",
+        (account_id, folder, uidvalidity)
+    )
+    return row["max_uid"] if row and row["max_uid"] else 0
+
+
+def _clear_folder_cache(account_id: int, folder: str):
+    """Clear cache for a folder (when UIDVALIDITY changes)."""
+    Database.execute(
+        "DELETE FROM email_cache WHERE account_id = ? AND folder_name = ?",
+        (account_id, folder)
+    )
+    Database.commit()
+
+
+def _cache_email(account_id: int, folder: str, uidvalidity: int, email: dict):
+    """Cache a single email header."""
+    Database.execute(
+        """INSERT OR REPLACE INTO email_cache
+           (account_id, folder_name, uid, uidvalidity, subject, sender, recipients, date, message_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            account_id,
+            folder,
+            email.get("uid"),
+            uidvalidity,
+            email.get("subject"),
+            email.get("from"),
+            email.get("to"),
+            email.get("date"),
+            email.get("message_id"),
+        )
+    )
+
+
 @api_bp.route("/accounts/<int:account_id>/emails/stream", methods=["GET"])
 def stream_account_emails(account_id):
     """
     Stream emails from an IMAP account with progress updates.
     
     Uses Server-Sent Events to report progress as emails are fetched.
+    Implements caching with UIDVALIDITY for incremental sync.
     """
     account = Database.fetchone(
         "SELECT id, credentials_encrypted FROM accounts WHERE id = ?",
@@ -45,9 +108,7 @@ def stream_account_emails(account_id):
         )
     
     folder = request.args.get("folder", "INBOX")
-    limit_str = request.args.get("limit", "")
-    # No limit by default (fetch all emails) - set to 0 for unlimited
-    limit = int(limit_str) if limit_str else 0
+    force_refresh = request.args.get("refresh", "").lower() == "true"
     
     def generate():
         client = None
@@ -60,30 +121,93 @@ def stream_account_emails(account_id):
             yield sse_message("status", {"phase": "selecting", "message": f"Opening {folder}..."})
             
             folder_info = client.select_folder(folder)
+            uidvalidity = folder_info.get("uidvalidity")
+            
+            # Check cache validity
+            cached_emails = []
+            highest_cached_uid = 0
+            cache_valid = False
+            
+            if uidvalidity and not force_refresh:
+                # Check if we have valid cache
+                cached_emails = _get_cached_emails(account_id, folder, uidvalidity)
+                if cached_emails:
+                    cache_valid = True
+                    highest_cached_uid = _get_highest_cached_uid(account_id, folder, uidvalidity)
+                    yield sse_message("status", {
+                        "phase": "cache",
+                        "message": f"Found {len(cached_emails)} cached emails, checking for new..."
+                    })
+            
+            if force_refresh and uidvalidity:
+                _clear_folder_cache(account_id, folder)
+                cached_emails = []
+                cache_valid = False
             
             yield sse_message("status", {"phase": "searching", "message": "Finding emails..."})
             
-            uids = client.search("ALL", limit=limit)
-            total = len(uids)
+            # Get all UIDs from server
+            all_uids = client.search("ALL", limit=0)
             
-            yield sse_message("start", {"total": total, "folder": folder})
+            # Determine which UIDs are new (not in cache)
+            if cache_valid and highest_cached_uid > 0:
+                # Only fetch UIDs higher than our cached max
+                new_uids = [uid for uid in all_uids if int(uid) > highest_cached_uid]
+            else:
+                # Fetch everything - either no cache or cache invalid
+                new_uids = all_uids
+                if uidvalidity:
+                    # Clear any stale cache (different uidvalidity)
+                    _clear_folder_cache(account_id, folder)
             
-            # Fetch phase
-            emails = []
-            for i, uid in enumerate(uids):
-                headers = client.fetch_headers(uid)
-                emails.append(headers)
+            total_new = len(new_uids)
+            total_cached = len(cached_emails)
+            total = total_cached + total_new
+            
+            yield sse_message("start", {
+                "total": total,
+                "folder": folder,
+                "cached": total_cached,
+                "new": total_new,
+            })
+            
+            # Start with cached emails (already have them)
+            emails = list(cached_emails)
+            
+            # Fetch new emails
+            if total_new > 0:
+                for i, uid in enumerate(new_uids):
+                    headers = client.fetch_headers(uid)
+                    emails.insert(0, headers)  # Insert at beginning (newest first)
+                    
+                    # Cache the new email
+                    if uidvalidity:
+                        _cache_email(account_id, folder, uidvalidity, headers)
+                    
+                    # Send progress
+                    current = total_cached + i + 1
+                    yield sse_message("progress", {
+                        "current": current,
+                        "total": total,
+                        "percent": int(current / total * 100) if total > 0 else 100,
+                        "subject": headers.get("subject", "")[:50],
+                        "phase": "fetching",
+                    })
                 
-                # Send progress every email (or batch for very large sets)
-                yield sse_message("progress", {
-                    "current": i + 1,
-                    "total": total,
-                    "percent": int((i + 1) / total * 100) if total > 0 else 100,
-                    "subject": headers.get("subject", "")[:50],
-                })
+                # Commit cache updates
+                if uidvalidity:
+                    Database.commit()
+            
+            # Sort by UID descending (newest first)
+            emails.sort(key=lambda e: int(e.get("uid", 0)), reverse=True)
             
             # Complete
-            yield sse_message("complete", {"emails": emails, "total": total})
+            yield sse_message("complete", {
+                "emails": emails,
+                "total": len(emails),
+                "from_cache": total_cached,
+                "fetched": total_new,
+            })
             
         except IMAPError as e:
             yield sse_message("error", {"error": str(e)})

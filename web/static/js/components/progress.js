@@ -83,20 +83,27 @@ export function createProgress(container) {
         
         eventSource.addEventListener('start', (e) => {
             const data = JSON.parse(e.data);
+            let message = `Loading ${data.total} emails...`;
+            if (data.cached > 0 && data.new > 0) {
+                message = `${data.cached} cached, fetching ${data.new} new...`;
+            } else if (data.cached > 0 && data.new === 0) {
+                message = `Loading ${data.cached} emails from cache...`;
+            }
             render({
                 phase: 'loading',
-                message: `Loading ${data.total} emails...`,
-                current: 0,
+                message: message,
+                current: data.cached || 0,
                 total: data.total,
-                percent: 0,
+                percent: data.total > 0 ? Math.round((data.cached || 0) / data.total * 100) : 0,
             });
         });
         
         eventSource.addEventListener('progress', (e) => {
             const data = JSON.parse(e.data);
+            const message = data.phase === 'fetching' ? 'Fetching new emails...' : 'Fetching emails...';
             render({
                 phase: 'loading',
-                message: `Fetching emails...`,
+                message: message,
                 current: data.current,
                 total: data.total,
                 percent: data.percent,
