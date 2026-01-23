@@ -305,18 +305,26 @@ function showMailView() {
     if (toolbar) toolbar.style.display = '';
     if (headerActions) headerActions.style.display = '';
     
-    // Clear selection and show default
-    state.currentView = null;
-    elements.contextTitle.textContent = 'Select a folder';
-    elements.contextMeta.textContent = '';
-    elements.emailList.innerHTML = `
-        <div class="empty-state">
-            <i data-lucide="arrow-left" class="empty-icon"></i>
-            <h3>No Folder Selected</h3>
-            <p>Select an account or archive folder from the sidebar to view emails.</p>
-        </div>
-    `;
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+    // If we have a previously selected view, restore it
+    if (state.currentView) {
+        if (state.currentView.type === 'account') {
+            loadAccountEmails(state.currentView.id, state.currentView.folder);
+        } else if (state.currentView.type === 'folder') {
+            loadFolderEmails(state.currentView.id);
+        }
+    } else {
+        // No previous selection - show empty state
+        elements.contextTitle.textContent = 'Select a folder';
+        elements.contextMeta.textContent = '';
+        elements.emailList.innerHTML = `
+            <div class="empty-state">
+                <i data-lucide="arrow-left" class="empty-icon"></i>
+                <h3>No Folder Selected</h3>
+                <p>Select an account or archive folder from the sidebar to view emails.</p>
+            </div>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
 }
 
 function showStagedView() {

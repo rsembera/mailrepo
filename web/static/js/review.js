@@ -236,6 +236,9 @@ function renderReviewList() {
                                 ${renderFolderOptions(sf.destinationFolderId)}
                             </div>
                         </div>
+                        <button class="btn btn-sm btn-ghost unstage-btn" onclick="unstageFolder(${sf.index})" title="Remove from staging">
+                            <i data-lucide="x"></i>
+                        </button>
                     </li>
                 `;
             });
@@ -304,9 +307,6 @@ function renderReviewList() {
             
             html += `
                 <div class="review-item" data-id="${item.emailId}">
-                    <label class="review-checkbox">
-                        <input type="checkbox" checked onchange="toggleReviewItem('${item.emailId}')">
-                    </label>
                     <div class="review-email">
                         <div class="review-subject">${escapeHtml(item.email.subject || '(no subject)')}</div>
                         <div class="review-meta">
@@ -326,6 +326,9 @@ function renderReviewList() {
                             </div>
                         </div>
                     </div>
+                    <button class="btn btn-sm btn-ghost unstage-btn" onclick="unstageEmail('${item.emailId}')" title="Remove from staging">
+                        <i data-lucide="x"></i>
+                    </button>
                 </div>
             `;
         });
@@ -414,19 +417,6 @@ document.addEventListener('click', () => {
     document.querySelectorAll('.icon-select.open').forEach(s => s.classList.remove('open'));
 });
 
-function toggleReviewItem(emailId) {
-    const item = document.querySelector(`.review-item[data-id="${emailId}"]`);
-    const checkbox = item?.querySelector('input[type="checkbox"]');
-    
-    if (checkbox?.checked) {
-        item.classList.remove('unchecked');
-    } else {
-        item?.classList.add('unchecked');
-    }
-    
-    updateCommitButton();
-}
-
 function changeDestination(emailId, folderId) {
     const data = stagedEmails.get(emailId);
     if (data) {
@@ -439,12 +429,50 @@ function setSourceAction(accountId, action) {
     sourceActions[accountId] = action;
 }
 
-function updateCommitButton() {
-    const checkedCount = document.querySelectorAll('.review-item input[type="checkbox"]:checked').length;
-    const hasFolders = stagedFolders.length > 0;
+function unstageEmail(emailId) {
+    stagedEmails.delete(emailId);
+    sessionStorage.setItem('stagedEmails', JSON.stringify([...stagedEmails.entries()]));
+    updateBadgeAndRender();
+}
+window.unstageEmail = unstageEmail;
+
+function unstageFolder(index) {
+    if (index >= 0 && index < stagedFolders.length) {
+        stagedFolders.splice(index, 1);
+        sessionStorage.setItem('stagedFolders', JSON.stringify(stagedFolders));
+        updateBadgeAndRender();
+    }
+}
+window.unstageFolder = unstageFolder;
+
+function updateBadgeAndRender() {
+    const totalCount = stagedEmails.size + stagedFolders.length;
+    document.getElementById('stagedBadge').textContent = totalCount;
     
-    // Enable/disable based on having items to commit
-    const totalCount = checkedCount + stagedFolders.length;
+    if (totalCount === 0) {
+        // Show empty state
+        document.getElementById('reviewContent').innerHTML = `
+            <div class="empty-state">
+                <i data-lucide="package-x" class="empty-icon"></i>
+                <h3>No Staged Items</h3>
+                <p>Go back and stage some emails or folders first.</p>
+            </div>
+        `;
+        document.getElementById('stagedAccountsSection').innerHTML = `
+            <div class="sidebar-empty">
+                <p>No staged items</p>
+            </div>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    } else {
+        renderSidebar();
+        renderReviewList();
+    }
+    updateCommitButton();
+}
+
+function updateCommitButton() {
+    const totalCount = stagedEmails.size + stagedFolders.length;
     document.getElementById('commitBtn').disabled = totalCount === 0;
 }
 
@@ -526,23 +554,16 @@ async function commitAll() {
         sessionStorage.removeItem('stagedFolders');
     }
     
-    // Commit emails
+    // Commit emails - all staged emails (no checkboxes anymore)
     const toCommit = [];
-    document.querySelectorAll('.review-item').forEach(item => {
-        const checkbox = item.querySelector('input[type="checkbox"]');
-        if (checkbox?.checked) {
-            const emailId = item.dataset.id;
-            const data = stagedEmails.get(emailId);
-            if (data) {
-                toCommit.push({
-                    email: data.email,
-                    destinationFolderId: data.destinationFolderId,
-                    sourceAccountId: data.sourceAccountId,
-                    sourceFolder: data.sourceFolder,
-                    sourceAction: sourceActions[data.sourceAccountId] || 'leave',
-                });
-            }
-        }
+    stagedEmails.forEach((data, emailId) => {
+        toCommit.push({
+            email: data.email,
+            destinationFolderId: data.destinationFolderId,
+            sourceAccountId: data.sourceAccountId,
+            sourceFolder: data.sourceFolder,
+            sourceAction: sourceActions[data.sourceAccountId] || 'leave',
+        });
     });
     
     if (toCommit.length > 0) {
@@ -652,5 +673,4 @@ function formatDate(dateStr) {
     }
 }
 
-// Global
-window.toggleReviewItem = toggleReviewItem;
+// Global functions are defined with window.X = X inline above

@@ -84,8 +84,25 @@
     background: var(--color-background-secondary);
 }
 
-.review-item.unchecked {
-    opacity: 0.4;
+/* Unstage button */
+.review-item .unstage-btn,
+.folder-commit-item .unstage-btn {
+    opacity: 0;
+    transition: opacity 0.15s;
+    flex-shrink: 0;
+    padding: var(--space-xs);
+    color: var(--color-text-muted);
+}
+
+.review-item:hover .unstage-btn,
+.folder-commit-item:hover .unstage-btn {
+    opacity: 1;
+}
+
+.review-item .unstage-btn:hover,
+.folder-commit-item .unstage-btn:hover {
+    color: var(--color-danger);
+    background: var(--color-danger-light, rgba(239, 68, 68, 0.1));
 }
 
 /* Checkbox */
