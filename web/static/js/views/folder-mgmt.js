@@ -456,13 +456,9 @@ export async function showFolderSelectionView(accountId) {
     const headerActions = document.querySelector('.header-actions');
     if (headerActions) {
         headerActions.innerHTML = `
-            <button class="btn btn-outline-primary" id="stageFoldersBtn" disabled onclick="stageSelectedFolders()">
+            <button class="btn btn-primary" id="stageFoldersBtn" disabled onclick="stageSelectedFolders()">
                 <i data-lucide="archive"></i>
                 <span>Stage Selected Folders</span>
-            </button>
-            <button class="btn btn-primary" id="reviewBtn" onclick="goToReview()">
-                <i data-lucide="check-circle"></i>
-                Review & Commit
             </button>
         `;
         if (typeof lucide !== 'undefined') lucide.createIcons();

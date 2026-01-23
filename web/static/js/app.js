@@ -324,24 +324,24 @@ function showStagedView() {
     sidebar.style.display = 'none';
     if (toolbar) toolbar.style.display = 'none';
     
-    // Set header actions for staged view
+    const emailCount = state.staged.size;
+    const folderCount = state.stagedFolders?.folders?.length || 0;
+    const totalCount = emailCount + folderCount;
+    
+    // Set header action for staged view - commit button only
     if (headerActions) {
         headerActions.innerHTML = `
-            <button class="btn btn-primary" id="reviewBtnStaged" ${(state.staged.size === 0 && !state.stagedFolders?.destinationFolderId) ? 'disabled' : ''}>
-                <i data-lucide="check-circle"></i>
-                Review & Commit
+            <button class="btn btn-primary" id="commitBtnStaged" ${totalCount === 0 ? 'disabled' : ''}>
+                <i data-lucide="archive"></i>
+                Commit to Archive
             </button>
         `;
         if (typeof lucide !== 'undefined') lucide.createIcons();
         
-        document.getElementById('reviewBtnStaged')?.addEventListener('click', () => {
+        document.getElementById('commitBtnStaged')?.addEventListener('click', () => {
             import('./components/staging.js').then(m => m.goToReview());
         });
     }
-    
-    const emailCount = state.staged.size;
-    const folderCount = state.stagedFolders?.folders?.length || 0;
-    const totalCount = emailCount + folderCount;
     
     elements.contextTitle.textContent = 'Staged Items';
     

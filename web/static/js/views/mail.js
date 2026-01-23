@@ -21,7 +21,7 @@ let emailList = null;
 let onButtonStatesUpdate = null;
 
 /**
- * Restore default header actions (Stage Selected, Review & Commit).
+ * Restore default header actions for email list view (Stage Selected only).
  */
 function restoreDefaultHeaderActions() {
     const headerActions = document.querySelector('.header-actions');
@@ -32,35 +32,19 @@ function restoreDefaultHeaderActions() {
     if (sidebar) sidebar.style.display = '';
     if (toolbar) toolbar.style.display = '';
     
-    // Restore default buttons
+    // Stage button only - no Review & Commit (that's on the Staged Items page)
     if (headerActions) {
         headerActions.innerHTML = `
-            <button class="btn btn-secondary" id="stageBtn" disabled>
+            <button class="btn btn-primary" id="stageBtn" disabled>
                 <i data-lucide="package-plus"></i>
                 Stage Selected
-            </button>
-            <button class="btn btn-primary" id="reviewBtn" disabled>
-                <i data-lucide="check-circle"></i>
-                Review & Commit
             </button>
         `;
         if (typeof lucide !== 'undefined') lucide.createIcons();
         
-        // Re-attach event listeners
-        const stageBtn = document.getElementById('stageBtn');
-        const reviewBtn = document.getElementById('reviewBtn');
-        
-        if (stageBtn) {
-            stageBtn.addEventListener('click', () => {
-                // Import dynamically to avoid circular dependency
-                import('../components/staging.js').then(m => m.openStageModal());
-            });
-        }
-        if (reviewBtn) {
-            reviewBtn.addEventListener('click', () => {
-                import('../components/staging.js').then(m => m.goToReview());
-            });
-        }
+        document.getElementById('stageBtn')?.addEventListener('click', () => {
+            import('../components/staging.js').then(m => m.openStageModal());
+        });
     }
 }
 
