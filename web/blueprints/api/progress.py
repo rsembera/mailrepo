@@ -62,6 +62,28 @@ def _clear_folder_cache(account_id: int, folder: str):
     Database.commit()
 
 
+def _get_any_cached_emails(account_id: int, folder: str) -> list[dict]:
+    """Get cached emails regardless of UIDVALIDITY (for offline mode)."""
+    rows = Database.fetchall(
+        """SELECT uid, subject, sender, recipients, date, message_id
+           FROM email_cache
+           WHERE account_id = ? AND folder_name = ?
+           ORDER BY CAST(uid AS INTEGER) DESC""",
+        (account_id, folder)
+    )
+    return [
+        {
+            "uid": row["uid"],
+            "subject": row["subject"],
+            "from": row["sender"],
+            "to": row["recipients"],
+            "date": row["date"],
+            "message_id": row["message_id"],
+        }
+        for row in rows
+    ]
+
+
 def _cache_email(account_id: int, folder: str, uidvalidity: int, email: dict):
     """Cache a single email header."""
     Database.execute(
@@ -112,11 +134,34 @@ def stream_account_emails(account_id):
     
     def generate():
         client = None
+        connection_failed = False
+        cached_emails = []
+        
         try:
             # Connection phase
             yield sse_message("status", {"phase": "connecting", "message": "Connecting to server..."})
             
-            client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+            try:
+                client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+            except IMAPError as e:
+                # Connection failed - try to use cache
+                connection_failed = True
+                cached_emails = _get_any_cached_emails(account_id, folder)
+                if cached_emails:
+                    yield sse_message("status", {
+                        "phase": "offline",
+                        "message": f"Server unavailable. Showing {len(cached_emails)} cached emails."
+                    })
+                    yield sse_message("complete", {
+                        "emails": cached_emails,
+                        "total": len(cached_emails),
+                        "from_cache": len(cached_emails),
+                        "fetched": 0,
+                        "offline": True,
+                    })
+                    return
+                else:
+                    raise e  # No cache, propagate the error
             
             yield sse_message("status", {"phase": "selecting", "message": f"Opening {folder}..."})
             
@@ -124,7 +169,6 @@ def stream_account_emails(account_id):
             uidvalidity = folder_info.get("uidvalidity")
             
             # Check cache validity
-            cached_emails = []
             highest_cached_uid = 0
             cache_valid = False
             

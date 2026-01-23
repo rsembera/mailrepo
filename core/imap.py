@@ -174,14 +174,20 @@ class IMAP:
             if status != "OK":
                 raise IMAPError(f"Failed to select folder: {folder}")
             
-            # Get UIDVALIDITY for cache validation
+            # Get UIDVALIDITY using STATUS command (more reliable)
             uidvalidity = None
             try:
-                status, validity_data = self.connection.response('UIDVALIDITY')
-                if status == 'OK' and validity_data and validity_data[0]:
-                    uidvalidity = int(validity_data[0])
-            except:
-                pass
+                status, status_data = self.connection.status(f'"{folder}"', '(UIDVALIDITY)')
+                if status == 'OK' and status_data and status_data[0]:
+                    # Parse response like: b'"INBOX" (UIDVALIDITY 12345)'
+                    response = status_data[0].decode() if isinstance(status_data[0], bytes) else status_data[0]
+                    import re
+                    match = re.search(r'UIDVALIDITY\s+(\d+)', response)
+                    if match:
+                        uidvalidity = int(match.group(1))
+            except Exception as e:
+                # Log but don't fail - caching just won't work
+                print(f"Warning: Could not get UIDVALIDITY: {e}")
             
             return {
                 "folder": folder,
