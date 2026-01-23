@@ -105,36 +105,42 @@ export function selectView(view) {
 
 /**
  * Load emails from an IMAP account folder.
+ * Uses streaming for progress updates.
  */
 export async function loadAccountEmails(accountId, folder = 'INBOX') {
     // Restore default header actions and toolbar
     restoreDefaultHeaderActions();
     
-    if (contextTitle) contextTitle.textContent = 'Loading...';
-    if (contextMeta) contextMeta.textContent = '';
-    showLoading();
+    if (contextTitle) contextTitle.textContent = folder;
+    if (contextMeta) contextMeta.textContent = 'Loading...';
     
-    try {
-        const response = await fetch(`/api/accounts/${accountId}/emails?folder=${encodeURIComponent(folder)}`);
-        
-        if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.error || 'Failed to load emails');
-        }
-        
-        const data = await response.json();
-        state.emails = data.emails || [];
-        
-        if (contextTitle) contextTitle.textContent = folder;
-        if (contextMeta) contextMeta.textContent = `${state.emails.length} emails`;
-        
-        renderEmailList();
-        
-    } catch (error) {
-        console.error('Error loading emails:', error);
-        if (contextTitle) contextTitle.textContent = 'Error';
-        showError(error.message);
-    }
+    // Show progress UI
+    emailList.innerHTML = `
+        <div class="empty-state">
+            <div id="loadProgress"></div>
+        </div>
+    `;
+    
+    // Dynamically import progress component
+    const { createProgress } = await import('../components/progress.js');
+    const progressContainer = document.getElementById('loadProgress');
+    const progress = createProgress(progressContainer);
+    
+    // Start streaming
+    const streamUrl = `/api/accounts/${accountId}/emails/stream?folder=${encodeURIComponent(folder)}&limit=50`;
+    
+    progress.startStream(streamUrl, {
+        onComplete: (data) => {
+            state.emails = data.emails || [];
+            if (contextMeta) contextMeta.textContent = `${state.emails.length} emails`;
+            renderEmailList();
+        },
+        onError: (err) => {
+            if (contextTitle) contextTitle.textContent = 'Error';
+            if (contextMeta) contextMeta.textContent = '';
+            showError(err.error || 'Failed to load emails');
+        },
+    });
 }
 
 /**

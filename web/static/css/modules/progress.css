@@ -1,0 +1,108 @@
+/* MailRepo - Progress Component Styles */
+
+/* ============================================
+   PROGRESS DISPLAY
+   ============================================ */
+
+.progress-display {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    padding: var(--space-xl);
+    max-width: 400px;
+    margin: var(--space-xl) auto;
+}
+
+.progress-status {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    font-size: 0.9rem;
+    color: var(--color-text);
+}
+
+.progress-icon {
+    width: 20px;
+    height: 20px;
+    color: var(--color-primary);
+    flex-shrink: 0;
+}
+
+.progress-icon.spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.progress-message {
+    font-weight: 500;
+}
+
+/* Progress bar */
+.progress-bar-container {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.progress-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--color-border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--color-primary);
+    border-radius: 4px;
+    transition: width 0.2s ease-out;
+}
+
+.progress-count {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    min-width: 70px;
+    text-align: right;
+}
+
+/* Current item detail */
+.progress-detail {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.progress-subject {
+    font-style: italic;
+}
+
+/* ============================================
+   EMPTY STATE WITH PROGRESS
+   ============================================ */
+
+.empty-state .progress-display {
+    max-width: none;
+    margin: 0;
+    padding: var(--space-lg) 0;
+}
+
+.empty-state .progress-status {
+    justify-content: center;
+}
+
+.empty-state .progress-bar-container {
+    max-width: 300px;
+    margin: 0 auto;
+}
+
+.empty-state .progress-detail {
+    text-align: center;
+}
