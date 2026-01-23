@@ -59,6 +59,9 @@ const elements = {
 // ============================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Restore staged items from sessionStorage (e.g., when returning from review page)
+    restoreStagedFromSession();
+    
     // Initialize email list component
     initEmailList({
         emailList: elements.emailList,
@@ -469,3 +472,32 @@ function unstageEmail(emailId) {
 }
 window.unstageEmail = unstageEmail;
 
+
+window.unstageFolders = unstageFolders;
+
+/**
+ * Restore staged items from sessionStorage.
+ * Called on page load to preserve staged items when navigating back from review.
+ */
+function restoreStagedFromSession() {
+    // Restore staged emails
+    const savedEmails = sessionStorage.getItem('stagedEmails');
+    if (savedEmails) {
+        try {
+            const entries = JSON.parse(savedEmails);
+            state.staged = new Map(entries);
+        } catch (e) {
+            console.error('Failed to restore staged emails:', e);
+        }
+    }
+    
+    // Restore staged folders
+    const savedFolders = sessionStorage.getItem('stagedFolders');
+    if (savedFolders) {
+        try {
+            state.stagedFolders = JSON.parse(savedFolders);
+        } catch (e) {
+            console.error('Failed to restore staged folders:', e);
+        }
+    }
+}

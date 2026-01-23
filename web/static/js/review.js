@@ -161,14 +161,51 @@ function renderReviewList() {
         const accountName = getAccountName(stagedFolders.accountId);
         const destFolder = folders.find(f => f.id == stagedFolders.destinationFolderId);
         const destName = destFolder ? destFolder.name : 'Unknown';
+        const destIcon = destFolder?.encrypted ? 'lock' : 'folder';
         
         html += `
             <div class="review-group folders-group">
                 <div class="review-group-header">
                     <h2><i data-lucide="folders"></i> ${escapeHtml(accountName)} - Folder Archive</h2>
+                    <div class="source-action">
+                        <label>After commit:</label>
+                        <div class="icon-select action-select" data-account-id="${stagedFolders.accountId}-folders">
+                            <button class="icon-select-trigger" type="button">
+                                <i data-lucide="inbox" class="action-icon"></i>
+                                <span class="icon-select-label">Leave in place</span>
+                                <i data-lucide="chevron-down" class="icon-select-arrow"></i>
+                            </button>
+                            <div class="icon-select-dropdown">
+                                <div class="icon-select-option selected" data-value="leave" data-icon="inbox">
+                                    <i data-lucide="inbox"></i>
+                                    <span>Leave in place</span>
+                                </div>
+                                <div class="icon-select-option" data-value="archive" data-icon="archive">
+                                    <i data-lucide="archive"></i>
+                                    <span>Archive</span>
+                                </div>
+                                <div class="icon-select-option" data-value="trash" data-icon="trash-2">
+                                    <i data-lucide="trash-2"></i>
+                                    <span>Move to trash</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="folder-commit-info">
-                    <p><strong>${stagedFolders.folders.length}</strong> folder(s) will be archived to <strong>${escapeHtml(destName)}</strong></p>
+                    <div class="folder-destination-row">
+                        <span>Destination:</span>
+                        <div class="icon-select folder-dest-select">
+                            <button class="icon-select-trigger" type="button">
+                                <i data-lucide="${destIcon}" class="folder-icon"></i>
+                                <span class="icon-select-label">${escapeHtml(destName)}</span>
+                                <i data-lucide="chevron-down" class="icon-select-arrow"></i>
+                            </button>
+                            <div class="icon-select-dropdown">
+                                ${renderFolderOptions(stagedFolders.destinationFolderId)}
+                            </div>
+                        </div>
+                    </div>
                     <p class="info-note">Folder structure will be preserved. All emails in these folders will be archived.</p>
                     <ul class="folders-to-commit">
                         ${stagedFolders.folders.map(f => `<li><i data-lucide="folder"></i> ${escapeHtml(f)}</li>`).join('')}
@@ -274,11 +311,21 @@ function renderReviewList() {
 }
 
 function initIconSelects() {
-    // Folder selects
+    // Folder selects (for emails)
     document.querySelectorAll('.icon-select.folder-select').forEach(select => {
         initDropdown(select, (value, icon, label) => {
             const emailId = select.dataset.emailId;
             changeDestination(emailId, value);
+        });
+    });
+    
+    // Folder destination select (for bulk folder staging)
+    document.querySelectorAll('.icon-select.folder-dest-select').forEach(select => {
+        initDropdown(select, (value, icon, label) => {
+            if (stagedFolders) {
+                stagedFolders.destinationFolderId = parseInt(value);
+                sessionStorage.setItem('stagedFolders', JSON.stringify(stagedFolders));
+            }
         });
     });
     
@@ -361,9 +408,8 @@ function updateCommitButton() {
     const checkedCount = document.querySelectorAll('.review-item input[type="checkbox"]:checked').length;
     const hasFolders = stagedFolders && stagedFolders.folders.length > 0;
     
-    // Show total count (emails + folders)
+    // Enable/disable based on having items to commit
     const totalCount = checkedCount + (hasFolders ? stagedFolders.folders.length : 0);
-    document.getElementById('commitCount').textContent = totalCount;
     document.getElementById('commitBtn').disabled = totalCount === 0;
 }
 

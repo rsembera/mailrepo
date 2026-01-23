@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Review Staged Emails - {{ app_name }}{% endblock %}
+{% block title %}Review Staged Items - {{ app_name }}{% endblock %}
 
 {% block body_class %}main-page{% endblock %}
 
@@ -19,7 +19,7 @@
             <button class="rail-btn" onclick="window.location.href='/'" title="Mail">
                 <i data-lucide="inbox"></i>
             </button>
-            <button class="rail-btn active" title="Staged Emails">
+            <button class="rail-btn active" title="Staged Items">
                 <i data-lucide="package"></i>
                 <span class="rail-badge" id="stagedBadge">0</span>
             </button>
@@ -34,13 +34,13 @@
     <!-- Pane 2: Sidebar (Staged summary) -->
     <aside class="sidebar">
         <div class="sidebar-header">
-            <h2>Staged Emails</h2>
+            <h2>Staged Items</h2>
         </div>
         <div class="sidebar-section">
             <div class="section-content expanded" id="stagedAccountsSection">
                 <!-- Account groups rendered by JS -->
                 <div class="sidebar-empty">
-                    <p>No staged emails</p>
+                    <p>No staged items</p>
                 </div>
             </div>
         </div>
@@ -50,7 +50,7 @@
     <main class="main-content">
         <header class="content-header">
             <div class="header-context">
-                <h1>Review Staged Emails</h1>
+                <h1>Review Staged Items</h1>
                 <span class="header-meta" id="reviewMeta"></span>
             </div>
             <div class="header-actions">
@@ -60,7 +60,7 @@
                 </button>
                 <button class="btn btn-primary" id="commitBtn" disabled>
                     <i data-lucide="check-circle"></i>
-                    Commit <span id="commitCount">0</span> Emails
+                    Commit
                 </button>
             </div>
         </header>
