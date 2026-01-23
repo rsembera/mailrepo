@@ -252,7 +252,7 @@ def commit_folders():
                     continue
                 
                 # Get all emails in this folder (no limit for archiving)
-                uids = client.search(criteria="ALL", limit=10000)
+                uids = client.search(criteria="ALL", limit=0)
                 
                 for uid in uids:
                     try:

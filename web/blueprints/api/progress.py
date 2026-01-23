@@ -45,7 +45,9 @@ def stream_account_emails(account_id):
         )
     
     folder = request.args.get("folder", "INBOX")
-    limit = int(request.args.get("limit", 50))
+    limit_str = request.args.get("limit", "")
+    # No limit by default (fetch all emails) - set to 0 for unlimited
+    limit = int(limit_str) if limit_str else 0
     
     def generate():
         client = None

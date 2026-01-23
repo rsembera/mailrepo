@@ -126,8 +126,9 @@ export async function loadAccountEmails(accountId, folder = 'INBOX') {
     const progressContainer = document.getElementById('loadProgress');
     const progress = createProgress(progressContainer);
     
-    // Start streaming
-    const streamUrl = `/api/accounts/${accountId}/emails/stream?folder=${encodeURIComponent(folder)}&limit=50`;
+    // Start streaming - fetch all emails (or use a large limit)
+    // The backend can handle large numbers efficiently with streaming
+    const streamUrl = `/api/accounts/${accountId}/emails/stream?folder=${encodeURIComponent(folder)}`;
     
     progress.startStream(streamUrl, {
         onComplete: (data) => {

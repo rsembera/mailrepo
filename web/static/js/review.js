@@ -564,35 +564,73 @@ async function commitAll() {
     });
     
     if (toCommit.length > 0) {
-        progressText.textContent = `Filing ${toCommit.length} emails...`;
+        progressText.textContent = `Filing 0 of ${toCommit.length} emails...`;
         
         try {
-            const response = await fetch('/api/commit', {
+            // Use SSE streaming for real-time progress
+            const response = await fetch('/api/commit/stream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ staged: toCommit }),
             });
             
-            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
             
-            if (response.ok) {
-                totalResults.success += data.results.success.length;
-                totalResults.failed += data.results.failed.length;
-                totalResults.skipped += data.results.skipped?.length || 0;
-                totalResults.messages.push(data.message);
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let currentEvent = null;
+            let streamResults = null;
+            
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+                
+                for (const line of lines) {
+                    if (line.startsWith('event: ')) {
+                        currentEvent = line.slice(7);
+                    } else if (line.startsWith('data: ') && currentEvent) {
+                        const data = JSON.parse(line.slice(6));
+                        
+                        if (currentEvent === 'progress') {
+                            // Update progress bar and text
+                            const percent = data.percent || 0;
+                            progressFill.style.width = `${percent}%`;
+                            const statusText = data.status === 'skipped' ? ' (duplicate)' :
+                                              data.status === 'failed' ? ' (failed)' : '';
+                            progressText.textContent = `Filing ${data.current} of ${data.total} emails...${statusText}`;
+                        } else if (currentEvent === 'complete') {
+                            streamResults = data;
+                        } else if (currentEvent === 'error') {
+                            throw new Error(data.error || 'Commit failed');
+                        }
+                        currentEvent = null;
+                    }
+                }
+            }
+            
+            if (streamResults) {
+                totalResults.success += streamResults.results.success.length;
+                totalResults.failed += streamResults.results.failed.length;
+                totalResults.skipped += streamResults.results.skipped?.length || 0;
+                totalResults.messages.push(streamResults.message);
                 
                 // Remove committed emails
-                data.results.success.forEach(id => stagedEmails.delete(id));
-                if (data.results.skipped) {
-                    data.results.skipped.forEach(s => stagedEmails.delete(s.uid));
+                streamResults.results.success.forEach(id => stagedEmails.delete(id));
+                if (streamResults.results.skipped) {
+                    streamResults.results.skipped.forEach(s => stagedEmails.delete(s.uid));
                 }
                 sessionStorage.setItem('stagedEmails', JSON.stringify([...stagedEmails.entries()]));
-            } else {
-                totalResults.messages.push(`Email archive failed: ${data.error}`);
             }
         } catch (error) {
             console.error('Email commit failed:', error);
-            totalResults.messages.push('Email archive failed: Network error');
+            totalResults.messages.push(`Email archive failed: ${error.message || 'Network error'}`);
         }
     }
     

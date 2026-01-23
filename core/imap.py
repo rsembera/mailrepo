@@ -181,13 +181,13 @@ class IMAP:
         except Exception as e:
             raise IMAPError(f"Failed to select folder {folder}: {e}")
     
-    def search(self, criteria: str = "ALL", limit: int = 50) -> list[str]:
+    def search(self, criteria: str = "ALL", limit: int = 0) -> list[str]:
         """
         Search for messages in selected folder.
         
         Args:
             criteria: IMAP search criteria (default ALL).
-            limit: Maximum messages to return.
+            limit: Maximum messages to return (0 = no limit).
             
         Returns:
             List of message UIDs.
@@ -201,8 +201,11 @@ class IMAP:
                 raise IMAPError("Search failed")
             
             uids = data[0].split() if data[0] else []
-            # Return most recent first (reverse order), limited
-            uids = [uid.decode() for uid in reversed(uids)][:limit]
+            # Return most recent first (reverse order)
+            uids = [uid.decode() for uid in reversed(uids)]
+            # Apply limit only if specified (> 0)
+            if limit > 0:
+                uids = uids[:limit]
             return uids
         except Exception as e:
             raise IMAPError(f"Search failed: {e}")
