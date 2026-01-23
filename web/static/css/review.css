@@ -206,6 +206,7 @@
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-lg);
     min-width: 100%;
+    max-width: 280px;
     max-height: 200px;
     overflow-y: auto;
     z-index: 100;
@@ -223,6 +224,14 @@
     cursor: pointer;
     font-size: 0.8125rem;
     transition: background 0.1s;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.icon-select-option span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 }
 
 .icon-select-option:hover {
