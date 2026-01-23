@@ -163,14 +163,18 @@ export function updateStagedBadge() {
  * Update stage/review button states based on current selection.
  */
 export function updateButtonStates() {
-    if (stageBtn) {
+    // Re-query buttons in case they were recreated
+    const currentStageBtn = document.getElementById('stageBtn');
+    const currentReviewBtn = document.getElementById('reviewBtn');
+    
+    if (currentStageBtn) {
         const canStage = state.currentView?.type === 'account' && state.selectedEmails.size > 0;
-        stageBtn.disabled = !canStage;
+        currentStageBtn.disabled = !canStage;
     }
-    if (reviewBtn) {
+    if (currentReviewBtn) {
         const hasEmails = state.staged.size > 0;
         const hasFolders = state.stagedFolders?.destinationFolderId;
-        reviewBtn.disabled = !hasEmails && !hasFolders;
+        currentReviewBtn.disabled = !hasEmails && !hasFolders;
     }
 }
 

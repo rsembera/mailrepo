@@ -21,6 +21,68 @@ let emailList = null;
 let onButtonStatesUpdate = null;
 
 /**
+ * Restore default header actions (Stage Selected, Review & Commit).
+ */
+function restoreDefaultHeaderActions() {
+    const headerActions = document.querySelector('.header-actions');
+    const toolbar = document.querySelector('.content-toolbar');
+    const sidebar = document.getElementById('sidebar');
+    
+    // Show sidebar and toolbar
+    if (sidebar) sidebar.style.display = '';
+    if (toolbar) toolbar.style.display = '';
+    
+    // Restore default buttons
+    if (headerActions) {
+        headerActions.innerHTML = `
+            <button class="btn btn-secondary" id="stageBtn" disabled>
+                <i data-lucide="package-plus"></i>
+                Stage Selected
+            </button>
+            <button class="btn btn-primary" id="reviewBtn" disabled>
+                <i data-lucide="check-circle"></i>
+                Review & Commit
+            </button>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        
+        // Re-attach event listeners
+        const stageBtn = document.getElementById('stageBtn');
+        const reviewBtn = document.getElementById('reviewBtn');
+        
+        if (stageBtn) {
+            stageBtn.addEventListener('click', () => {
+                // Import dynamically to avoid circular dependency
+                import('../components/staging.js').then(m => m.openStageModal());
+            });
+        }
+        if (reviewBtn) {
+            reviewBtn.addEventListener('click', () => {
+                import('../components/staging.js').then(m => m.goToReview());
+            });
+        }
+    }
+}
+
+/**
+ * Clear header actions for archive view.
+ */
+function clearHeaderActions() {
+    const headerActions = document.querySelector('.header-actions');
+    const toolbar = document.querySelector('.content-toolbar');
+    const sidebar = document.getElementById('sidebar');
+    
+    // Show sidebar and toolbar
+    if (sidebar) sidebar.style.display = '';
+    if (toolbar) toolbar.style.display = '';
+    
+    // Clear buttons (archive view - no staging)
+    if (headerActions) {
+        headerActions.innerHTML = '';
+    }
+}
+
+/**
  * Initialize the mail view component.
  * @param {Object} config
  * @param {HTMLElement} config.contextTitle - Title element
@@ -61,6 +123,9 @@ export function selectView(view) {
  * Load emails from an IMAP account folder.
  */
 export async function loadAccountEmails(accountId, folder = 'INBOX') {
+    // Restore default header actions and toolbar
+    restoreDefaultHeaderActions();
+    
     if (contextTitle) contextTitle.textContent = 'Loading...';
     if (contextMeta) contextMeta.textContent = '';
     showLoading();
@@ -92,6 +157,9 @@ export async function loadAccountEmails(accountId, folder = 'INBOX') {
  * Load emails from an archive folder.
  */
 export async function loadFolderEmails(folderId) {
+    // Clear header actions for archive view (no staging needed)
+    clearHeaderActions();
+    
     if (contextTitle) contextTitle.textContent = 'Loading...';
     if (contextMeta) contextMeta.textContent = '';
     showLoading();
