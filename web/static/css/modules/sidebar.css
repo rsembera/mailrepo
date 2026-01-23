@@ -256,10 +256,10 @@
 }
 
 .unmount-btn {
-    display: none;
+    display: flex;
     padding: 2px;
     background: none;
-    border: none;
+    border: 1px solid var(--color-border);
     cursor: pointer;
     color: var(--color-text-muted);
     border-radius: var(--radius-sm);
@@ -273,11 +273,8 @@
 
 .unmount-btn:hover {
     color: var(--color-danger);
+    border-color: var(--color-danger);
     background: var(--color-background-secondary);
-}
-
-.import-item .tree-item-row:hover .unmount-btn {
-    display: flex;
 }
 
 .import-tree-item {

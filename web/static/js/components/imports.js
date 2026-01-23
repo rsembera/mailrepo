@@ -399,8 +399,10 @@ async function checkFolderForAppleMbox(path) {
 function handleFilePickerDblClick(item) {
     const type = item.dataset.type;
     const path = item.dataset.path;
+    
+    if (type === 'dir') {
         loadFilePickerDirectory(path);
-    } else if (filePickerMode === 'mbox') {
+    } else if (filePickerMode === 'mbox' && !isAppleMailMode()) {
         // Double-click on mbox file = select and confirm
         selectFile(path, item.dataset.name);
         confirmFilePicker();
