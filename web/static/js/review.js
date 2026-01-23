@@ -3,7 +3,7 @@
    ============================================ */
 
 let stagedEmails = new Map();
-let stagedFolders = null;  // { accountId, folders: [], destinationFolderId }
+let stagedFolders = [];  // Array<{accountId, folder, destinationFolderId}>
 let folders = [];
 let accounts = [];
 let sourceActions = {};  // { accountId: action }
@@ -27,17 +27,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const savedFolders = sessionStorage.getItem('stagedFolders');
     if (savedFolders) {
         try {
-            stagedFolders = JSON.parse(savedFolders);
+            const parsed = JSON.parse(savedFolders);
+            stagedFolders = Array.isArray(parsed) ? parsed : [];
         } catch (e) {
             console.error('Failed to parse staged folders:', e);
         }
     }
     
     // Update badge
-    const totalCount = stagedEmails.size + (stagedFolders?.folders?.length || 0);
+    const totalCount = stagedEmails.size + stagedFolders.length;
     document.getElementById('stagedBadge').textContent = totalCount;
     
-    if (stagedEmails.size === 0 && !stagedFolders) {
+    if (stagedEmails.size === 0 && stagedFolders.length === 0) {
         return;  // Show empty state
     }
     
@@ -114,16 +115,27 @@ function renderSidebar() {
     
     let html = '';
     
-    // Show staged folders first
-    if (stagedFolders && stagedFolders.folders.length > 0) {
-        const accountName = getAccountName(stagedFolders.accountId);
-        html += `
-            <div class="tree-item-row active" data-type="folders" data-account-id="${stagedFolders.accountId}">
-                <i data-lucide="folders" class="tree-icon"></i>
-                <span class="tree-label">${escapeHtml(accountName)} (Folders)</span>
-                <span class="tree-count">${stagedFolders.folders.length}</span>
-            </div>
-        `;
+    // Show staged folders first (grouped by account)
+    if (stagedFolders.length > 0) {
+        // Group folders by account
+        const foldersByAccount = new Map();
+        stagedFolders.forEach(sf => {
+            if (!foldersByAccount.has(sf.accountId)) {
+                foldersByAccount.set(sf.accountId, []);
+            }
+            foldersByAccount.get(sf.accountId).push(sf);
+        });
+        
+        foldersByAccount.forEach((folders, accountId) => {
+            const accountName = getAccountName(accountId);
+            html += `
+                <div class="tree-item-row active" data-type="folders" data-account-id="${accountId}">
+                    <i data-lucide="folders" class="tree-icon"></i>
+                    <span class="tree-label">${escapeHtml(accountName)} (Folders)</span>
+                    <span class="tree-count">${folders.length}</span>
+                </div>
+            `;
+        });
     }
     
     // Show staged emails by account
@@ -142,7 +154,7 @@ function renderSidebar() {
     
     // Update meta
     const emailCount = stagedEmails.size;
-    const folderCount = stagedFolders?.folders?.length || 0;
+    const folderCount = stagedFolders.length;
     let metaText = [];
     if (emailCount > 0) metaText.push(`${emailCount} email${emailCount > 1 ? 's' : ''}`);
     if (folderCount > 0) metaText.push(`${folderCount} folder${folderCount > 1 ? 's' : ''}`);
@@ -156,63 +168,84 @@ function renderReviewList() {
     
     let html = '';
     
-    // Render staged folders first
-    if (stagedFolders && stagedFolders.folders.length > 0) {
-        const accountName = getAccountName(stagedFolders.accountId);
-        const destFolder = folders.find(f => f.id == stagedFolders.destinationFolderId);
-        const destName = destFolder ? destFolder.name : 'Unknown';
-        const destIcon = destFolder?.encrypted ? 'lock' : 'folder';
+    // Render staged folders first (grouped by account)
+    if (stagedFolders.length > 0) {
+        // Group folders by account
+        const foldersByAccount = new Map();
+        stagedFolders.forEach((sf, index) => {
+            if (!foldersByAccount.has(sf.accountId)) {
+                foldersByAccount.set(sf.accountId, []);
+            }
+            foldersByAccount.get(sf.accountId).push({ ...sf, index });
+        });
         
-        html += `
-            <div class="review-group folders-group">
-                <div class="review-group-header">
-                    <h2><i data-lucide="folders"></i> ${escapeHtml(accountName)} - Folder Archive</h2>
-                    <div class="source-action">
-                        <label>After commit:</label>
-                        <div class="icon-select action-select" data-account-id="${stagedFolders.accountId}-folders">
-                            <button class="icon-select-trigger" type="button">
-                                <i data-lucide="inbox" class="action-icon"></i>
-                                <span class="icon-select-label">Leave in place</span>
-                                <i data-lucide="chevron-down" class="icon-select-arrow"></i>
-                            </button>
-                            <div class="icon-select-dropdown">
-                                <div class="icon-select-option selected" data-value="leave" data-icon="inbox">
-                                    <i data-lucide="inbox"></i>
-                                    <span>Leave in place</span>
-                                </div>
-                                <div class="icon-select-option" data-value="archive" data-icon="archive">
-                                    <i data-lucide="archive"></i>
-                                    <span>Archive</span>
-                                </div>
-                                <div class="icon-select-option" data-value="trash" data-icon="trash-2">
-                                    <i data-lucide="trash-2"></i>
-                                    <span>Move to trash</span>
+        foldersByAccount.forEach((accountFolders, accountId) => {
+            const accountName = getAccountName(accountId);
+            
+            html += `
+                <div class="review-group folders-group">
+                    <div class="review-group-header">
+                        <h2><i data-lucide="folders"></i> ${escapeHtml(accountName)} - Folder Archive</h2>
+                        <div class="source-action">
+                            <label>After commit:</label>
+                            <div class="icon-select action-select" data-account-id="${accountId}-folders">
+                                <button class="icon-select-trigger" type="button">
+                                    <i data-lucide="inbox" class="action-icon"></i>
+                                    <span class="icon-select-label">Leave in place</span>
+                                    <i data-lucide="chevron-down" class="icon-select-arrow"></i>
+                                </button>
+                                <div class="icon-select-dropdown">
+                                    <div class="icon-select-option selected" data-value="leave" data-icon="inbox">
+                                        <i data-lucide="inbox"></i>
+                                        <span>Leave in place</span>
+                                    </div>
+                                    <div class="icon-select-option" data-value="archive" data-icon="archive">
+                                        <i data-lucide="archive"></i>
+                                        <span>Archive</span>
+                                    </div>
+                                    <div class="icon-select-option" data-value="trash" data-icon="trash-2">
+                                        <i data-lucide="trash-2"></i>
+                                        <span>Move to trash</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
-                <div class="folder-commit-info">
-                    <div class="folder-destination-row">
-                        <span>Destination:</span>
-                        <div class="icon-select folder-dest-select">
+                    <div class="folder-commit-info">
+                        <p class="info-note">Folder structure will be preserved. All emails in these folders will be archived.</p>
+                        <ul class="folders-to-commit">
+            `;
+            
+            accountFolders.forEach(sf => {
+                const destFolder = folders.find(f => f.id == sf.destinationFolderId);
+                const destName = destFolder ? destFolder.name : 'Unknown';
+                const destIcon = destFolder?.encrypted ? 'lock' : 'folder';
+                
+                html += `
+                    <li class="folder-commit-item" data-index="${sf.index}">
+                        <i data-lucide="folder"></i>
+                        <span class="folder-name">${escapeHtml(sf.folder)}</span>
+                        <span class="folder-dest-arrow">→</span>
+                        <div class="icon-select folder-dest-select" data-folder-index="${sf.index}">
                             <button class="icon-select-trigger" type="button">
                                 <i data-lucide="${destIcon}" class="folder-icon"></i>
                                 <span class="icon-select-label">${escapeHtml(destName)}</span>
                                 <i data-lucide="chevron-down" class="icon-select-arrow"></i>
                             </button>
                             <div class="icon-select-dropdown">
-                                ${renderFolderOptions(stagedFolders.destinationFolderId)}
+                                ${renderFolderOptions(sf.destinationFolderId)}
                             </div>
                         </div>
+                    </li>
+                `;
+            });
+            
+            html += `
+                        </ul>
                     </div>
-                    <p class="info-note">Folder structure will be preserved. All emails in these folders will be archived.</p>
-                    <ul class="folders-to-commit">
-                        ${stagedFolders.folders.map(f => `<li><i data-lucide="folder"></i> ${escapeHtml(f)}</li>`).join('')}
-                    </ul>
                 </div>
-            </div>
-        `;
+            `;
+        });
     }
     
     // Group emails by source account
@@ -320,10 +353,12 @@ function initIconSelects() {
     });
     
     // Folder destination select (for bulk folder staging)
+    // Folder destination selects (per-folder)
     document.querySelectorAll('.icon-select.folder-dest-select').forEach(select => {
         initDropdown(select, (value, icon, label) => {
-            if (stagedFolders) {
-                stagedFolders.destinationFolderId = parseInt(value);
+            const folderIndex = parseInt(select.dataset.folderIndex);
+            if (!isNaN(folderIndex) && stagedFolders[folderIndex]) {
+                stagedFolders[folderIndex].destinationFolderId = parseInt(value);
                 sessionStorage.setItem('stagedFolders', JSON.stringify(stagedFolders));
             }
         });
@@ -406,10 +441,10 @@ function setSourceAction(accountId, action) {
 
 function updateCommitButton() {
     const checkedCount = document.querySelectorAll('.review-item input[type="checkbox"]:checked').length;
-    const hasFolders = stagedFolders && stagedFolders.folders.length > 0;
+    const hasFolders = stagedFolders.length > 0;
     
     // Enable/disable based on having items to commit
-    const totalCount = checkedCount + (hasFolders ? stagedFolders.folders.length : 0);
+    const totalCount = checkedCount + stagedFolders.length;
     document.getElementById('commitBtn').disabled = totalCount === 0;
 }
 
@@ -436,42 +471,59 @@ async function commitAll() {
         messages: [],
     };
     
-    // Commit folders first
-    if (stagedFolders && stagedFolders.folders.length > 0) {
-        progressText.textContent = `Archiving ${stagedFolders.folders.length} folders...`;
-        
-        try {
-            const response = await fetch('/api/commit-folders', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    accountId: stagedFolders.accountId,
-                    folders: stagedFolders.folders,
-                    destinationFolderId: stagedFolders.destinationFolderId,
-                }),
-            });
-            
-            const data = await response.json();
-            
-            if (response.ok) {
-                totalResults.success += data.results.success;
-                totalResults.failed += data.results.failed;
-                totalResults.skipped += data.results.skipped;
-                totalResults.folders_created += data.results.folders_created;
-                totalResults.messages.push(data.message);
-                
-                // Clear staged folders
-                stagedFolders = null;
-                sessionStorage.removeItem('stagedFolders');
-            } else {
-                totalResults.messages.push(`Folder archive failed: ${data.error}`);
-                totalResults.failed += stagedFolders.folders.length;
+    // Commit folders first - group by account and destination
+    if (stagedFolders.length > 0) {
+        // Group folders by account+destination combo
+        const folderGroups = new Map();
+        stagedFolders.forEach(sf => {
+            const key = `${sf.accountId}-${sf.destinationFolderId}`;
+            if (!folderGroups.has(key)) {
+                folderGroups.set(key, {
+                    accountId: sf.accountId,
+                    destinationFolderId: sf.destinationFolderId,
+                    folders: []
+                });
             }
-        } catch (error) {
-            console.error('Folder commit failed:', error);
-            totalResults.messages.push('Folder archive failed: Network error');
-            totalResults.failed += stagedFolders.folders.length;
+            folderGroups.get(key).folders.push(sf.folder);
+        });
+        
+        progressText.textContent = `Archiving ${stagedFolders.length} folders...`;
+        
+        // Commit each group
+        for (const group of folderGroups.values()) {
+            try {
+                const response = await fetch('/api/commit-folders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        accountId: group.accountId,
+                        folders: group.folders,
+                        destinationFolderId: group.destinationFolderId,
+                    }),
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    totalResults.success += data.results.success;
+                    totalResults.failed += data.results.failed;
+                    totalResults.skipped += data.results.skipped;
+                    totalResults.folders_created += data.results.folders_created;
+                    totalResults.messages.push(data.message);
+                } else {
+                    totalResults.messages.push(`Folder archive failed: ${data.error}`);
+                    totalResults.failed += group.folders.length;
+                }
+            } catch (error) {
+                console.error('Folder commit failed:', error);
+                totalResults.messages.push('Folder archive failed: Network error');
+                totalResults.failed += group.folders.length;
+            }
         }
+        
+        // Clear all staged folders
+        stagedFolders = [];
+        sessionStorage.removeItem('stagedFolders');
     }
     
     // Commit emails
@@ -549,7 +601,7 @@ async function commitAll() {
 }
 
 document.getElementById('doneBtn').addEventListener('click', () => {
-    if (stagedEmails.size === 0 && !stagedFolders) {
+    if (stagedEmails.size === 0 && stagedFolders.length === 0) {
         sessionStorage.removeItem('stagedEmails');
         sessionStorage.removeItem('stagedFolders');
         window.location.href = '/';

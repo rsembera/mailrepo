@@ -626,34 +626,35 @@ function updateStageFoldersButton() {
     }
 }
 
+// Track folders being staged in current modal session
+let pendingFolderStaging = null;
+
 export function stageSelectedFolders() {
     if (selectedFoldersForStaging.size === 0) return;
     
-    const newFolders = Array.from(selectedFoldersForStaging);
-    
-    // If already have staged folders from the same account, add to them
-    if (state.stagedFolders && state.stagedFolders.accountId === currentFolderSelectionAccountId) {
-        // Merge folders, avoiding duplicates
-        const existingSet = new Set(state.stagedFolders.folders);
-        newFolders.forEach(f => existingSet.add(f));
-        state.stagedFolders.folders = Array.from(existingSet);
-    } else {
-        // Different account or no existing staged folders - start fresh
-        state.stagedFolders = {
-            accountId: currentFolderSelectionAccountId,
-            folders: newFolders
-        };
-    }
+    // Store pending folders - will be added to stagedFolders after destination is chosen
+    pendingFolderStaging = {
+        accountId: currentFolderSelectionAccountId,
+        folders: Array.from(selectedFoldersForStaging)
+    };
     
     openStageFoldersModal();
 }
 window.stageSelectedFolders = stageSelectedFolders;
 
+export function getPendingFolderStaging() {
+    return pendingFolderStaging;
+}
+
+export function clearPendingFolderStaging() {
+    pendingFolderStaging = null;
+}
+
 function openStageFoldersModal() {
     const modal = document.getElementById('stageModal');
-    if (!modal) return;
+    if (!modal || !pendingFolderStaging) return;
     
-    const count = state.stagedFolders.folders.length;
+    const count = pendingFolderStaging.folders.length;
     
     // Set modal for folder staging
     const title = document.getElementById('stageModalTitle');

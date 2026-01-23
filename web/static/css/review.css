@@ -367,3 +367,31 @@
     font-size: 0.8125rem;
     margin: var(--space-sm) 0;
 }
+
+
+/* Folder commit items with individual destination dropdowns */
+.folder-commit-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) 0;
+    flex-wrap: wrap;
+}
+
+.folder-commit-item .folder-name {
+    flex: 1;
+    min-width: 150px;
+}
+
+.folder-commit-item .folder-dest-arrow {
+    color: var(--color-text-muted);
+}
+
+.folder-commit-item .folder-dest-select {
+    min-width: 180px;
+}
+
+.folder-commit-item .folder-dest-select .icon-select-trigger {
+    padding: var(--space-xs) var(--space-sm);
+    font-size: 0.8125rem;
+}

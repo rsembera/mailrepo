@@ -10,7 +10,7 @@ export const state = {
     currentView: null,      // { type: 'account'|'folder', id: number, label?: string }
     emails: [],
     staged: new Map(),      // Map<emailId, {email, destinationFolderId, sourceAccountId, sourceFolder}>
-    stagedFolders: null,    // { accountId, folders: [], destinationFolderId } for bulk folder staging
+    stagedFolders: [],      // Array<{accountId, folder, destinationFolderId}> for bulk folder staging
     selectedEmails: new Set(),
     folders: [],
     expandedAccounts: new Set(),

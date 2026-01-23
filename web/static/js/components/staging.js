@@ -12,6 +12,7 @@ import { state } from '../state.js';
 import { closeModal, showAlert } from '../modals.js';
 import { renderFolderTree } from '../components/folder-tree.js';
 import { renderEmailList } from '../components/email-list.js';
+import { getPendingFolderStaging, clearPendingFolderStaging } from '../views/folder-mgmt.js';
 
 // Module state
 let selectedDestinationFolder = null;
@@ -124,14 +125,30 @@ export function confirmStage() {
     
     if (stagingMode === 'folders') {
         // Staging entire folders
-        if (!state.stagedFolders) return;
+        const pending = getPendingFolderStaging();
+        if (!pending) return;
         
-        state.stagedFolders.destinationFolderId = selectedDestinationFolder;
+        // Add each folder as a separate entry with its destination
+        pending.folders.forEach(folder => {
+            // Check for duplicates (same account + folder)
+            const exists = state.stagedFolders.some(
+                sf => sf.accountId === pending.accountId && sf.folder === folder
+            );
+            if (!exists) {
+                state.stagedFolders.push({
+                    accountId: pending.accountId,
+                    folder: folder,
+                    destinationFolderId: selectedDestinationFolder
+                });
+            }
+        });
+        
+        clearPendingFolderStaging();
         modal.dataset.stagingMode = '';
         closeModal('stageModal');
         updateStagedBadge();
         updateButtonStates();
-        showAlert('Folders Staged', `${state.stagedFolders.folders.length} folder(s) staged for archiving. Go to Staged Items to commit.`);
+        showAlert('Folders Staged', `${pending.folders.length} folder(s) staged for archiving. Go to Staged Items to commit.`);
         return;
     }
     
@@ -164,10 +181,7 @@ export function confirmStage() {
 export function updateStagedBadge() {
     if (!stagedBadge) return;
     
-    let count = state.staged.size;
-    if (state.stagedFolders?.destinationFolderId) {
-        count += state.stagedFolders.folders.length;
-    }
+    let count = state.staged.size + state.stagedFolders.length;
     
     stagedBadge.textContent = count;
     stagedBadge.classList.toggle('hidden', count === 0);
@@ -202,7 +216,7 @@ export function updateButtonStates() {
  */
 export function goToReview() {
     const hasEmails = state.staged.size > 0;
-    const hasFolders = state.stagedFolders?.destinationFolderId;
+    const hasFolders = state.stagedFolders.length > 0;
     
     if (!hasEmails && !hasFolders) return;
     

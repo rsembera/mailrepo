@@ -328,7 +328,7 @@ function showStagedView() {
     if (toolbar) toolbar.style.display = 'none';
     
     const emailCount = state.staged.size;
-    const folderCount = state.stagedFolders?.folders?.length || 0;
+    const folderCount = state.stagedFolders.length;
     const totalCount = emailCount + folderCount;
     
     // Set header action for staged view - commit button only
@@ -372,10 +372,7 @@ function renderStagedList() {
     let html = '';
     
     // Render staged folders first
-    if (state.stagedFolders?.folders?.length > 0) {
-        const destFolder = state.folders.find(f => f.id == state.stagedFolders.destinationFolderId);
-        const destName = destFolder?.name || 'Unknown folder';
-        
+    if (state.stagedFolders.length > 0) {
         html += `
             <div class="staged-section">
                 <div class="staged-section-header">
@@ -388,11 +385,14 @@ function renderStagedList() {
                 <div class="staged-items-list">
         `;
         
-        state.stagedFolders.folders.forEach((folderPath, index) => {
+        state.stagedFolders.forEach((sf, index) => {
+            const destFolder = state.folders.find(f => f.id == sf.destinationFolderId);
+            const destName = destFolder?.name || 'Unknown folder';
+            
             html += `
                 <div class="staged-list-item">
                     <i data-lucide="folder" class="item-icon"></i>
-                    <span class="item-name">${escapeHtml(folderPath)}</span>
+                    <span class="item-name">${escapeHtml(sf.folder)}</span>
                     <span class="item-destination">→ ${escapeHtml(destName)}</span>
                     <button class="btn btn-sm btn-ghost unstage-btn" onclick="unstageFolder(${index})" title="Remove">
                         <i data-lucide="x"></i>
@@ -452,7 +452,8 @@ function renderStagedList() {
 }
 
 function unstageFolders() {
-    state.stagedFolders = null;
+    state.stagedFolders = [];
+    sessionStorage.removeItem('stagedFolders');
     updateStagedBadge();
     
     const activeBtn = document.querySelector('.rail-btn.active');
@@ -463,17 +464,12 @@ function unstageFolders() {
 window.unstageFolders = unstageFolders;
 
 function unstageFolder(index) {
-    if (!state.stagedFolders?.folders) return;
+    if (!state.stagedFolders.length) return;
     
-    state.stagedFolders.folders.splice(index, 1);
-    
-    // If no folders left, clear the whole object
-    if (state.stagedFolders.folders.length === 0) {
-        state.stagedFolders = null;
-    }
+    state.stagedFolders.splice(index, 1);
     
     // Update sessionStorage
-    if (state.stagedFolders) {
+    if (state.stagedFolders.length > 0) {
         sessionStorage.setItem('stagedFolders', JSON.stringify(state.stagedFolders));
     } else {
         sessionStorage.removeItem('stagedFolders');
@@ -523,7 +519,9 @@ function restoreStagedFromSession() {
     const savedFolders = sessionStorage.getItem('stagedFolders');
     if (savedFolders) {
         try {
-            state.stagedFolders = JSON.parse(savedFolders);
+            const parsed = JSON.parse(savedFolders);
+            // Ensure it's an array (handle old format)
+            state.stagedFolders = Array.isArray(parsed) ? parsed : [];
         } catch (e) {
             console.error('Failed to restore staged folders:', e);
         }
