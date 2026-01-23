@@ -54,14 +54,13 @@ export function openStageModal() {
     const modal = document.getElementById('stageModal');
     if (!modal) return;
     
-    // Reset modal header for email staging
-    const header = modal.querySelector('.modal-header h2');
-    if (header) {
-        header.innerHTML = `Stage <span id="stageCount">${state.selectedEmails.size}</span> Email(s)`;
+    // Reset modal for email staging
+    const title = document.getElementById('stageModalTitle');
+    if (title) {
+        title.innerHTML = `Stage <span id="stageCount">${state.selectedEmails.size}</span> Email(s)`;
     }
     
-    // Reset description paragraph
-    const desc = modal.querySelector('.modal-content > p');
+    const desc = document.getElementById('stageModalDesc');
     if (desc) {
         desc.textContent = 'Select destination folder:';
     }

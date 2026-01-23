@@ -642,16 +642,17 @@ function openStageFoldersModal() {
     const modal = document.getElementById('stageModal');
     if (!modal) return;
     
-    const title = modal.querySelector('.modal-header h2');
+    const count = state.stagedFolders.folders.length;
+    
+    // Set modal for folder staging
+    const title = document.getElementById('stageModalTitle');
     if (title) {
-        const count = state.stagedFolders.folders.length;
         title.textContent = `Stage ${count} Folder${count > 1 ? 's' : ''} to...`;
     }
     
-    const countEl = document.getElementById('stageCount');
-    if (countEl) {
-        countEl.textContent = state.stagedFolders.folders.length;
-        countEl.closest('p').innerHTML = `Select destination for <strong>${state.stagedFolders.folders.length}</strong> folder${state.stagedFolders.folders.length > 1 ? 's' : ''} (folder structure will be preserved)`;
+    const desc = document.getElementById('stageModalDesc');
+    if (desc) {
+        desc.innerHTML = `Select destination for <strong>${count}</strong> folder${count > 1 ? 's' : ''} (folder structure will be preserved)`;
     }
     
     // Import renderFolderSelectTree dynamically to avoid circular dependency
