@@ -129,7 +129,7 @@ function renderSidebar() {
         foldersByAccount.forEach((folders, accountId) => {
             const accountName = getAccountName(accountId);
             html += `
-                <div class="tree-item-row active" data-type="folders" data-account-id="${accountId}">
+                <div class="tree-item-row staged-source-item" data-type="folders" data-account-id="${accountId}">
                     <i data-lucide="folders" class="tree-icon"></i>
                     <span class="tree-label">${escapeHtml(accountName)} (Folders)</span>
                     <span class="tree-count">${folders.length}</span>
@@ -142,7 +142,7 @@ function renderSidebar() {
     byAccount.forEach((emails, accountId) => {
         const accountName = getAccountName(accountId);
         html += `
-            <div class="tree-item-row active" data-account-id="${accountId}">
+            <div class="tree-item-row staged-source-item" data-account-id="${accountId}">
                 <i data-lucide="mail" class="tree-icon"></i>
                 <span class="tree-label">${escapeHtml(accountName)}</span>
                 <span class="tree-count">${emails.length}</span>
@@ -225,7 +225,7 @@ function renderReviewList() {
                     <li class="folder-commit-item" data-index="${sf.index}">
                         <i data-lucide="folder"></i>
                         <span class="folder-name">${escapeHtml(sf.folder)}</span>
-                        <span class="folder-dest-arrow">→</span>
+                        <i data-lucide="arrow-right" class="dest-arrow"></i>
                         <div class="icon-select folder-dest-select" data-folder-index="${sf.index}">
                             <button class="icon-select-trigger" type="button">
                                 <i data-lucide="${destIcon}" class="folder-icon"></i>
@@ -289,10 +289,6 @@ function renderReviewList() {
                                     <i data-lucide="trash-2"></i>
                                     <span>Move to trash</span>
                                 </div>
-                                <div class="icon-select-option" data-value="delete" data-icon="x-circle">
-                                    <i data-lucide="x-circle"></i>
-                                    <span>Delete permanently</span>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -314,6 +310,7 @@ function renderReviewList() {
                             <span class="review-date">${formatDate(item.email.date)}</span>
                         </div>
                     </div>
+                    <i data-lucide="arrow-right" class="dest-arrow"></i>
                     <div class="review-destination">
                         <div class="icon-select folder-select" data-email-id="${item.emailId}">
                             <button class="icon-select-trigger" type="button">

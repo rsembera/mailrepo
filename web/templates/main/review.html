@@ -19,14 +19,23 @@
             <button class="rail-btn" onclick="window.location.href='/'" title="Mail">
                 <i data-lucide="inbox"></i>
             </button>
-            <button class="rail-btn active" title="Staged Items">
+            <button class="rail-btn active" title="Review Staged Items">
                 <i data-lucide="package"></i>
                 <span class="rail-badge" id="stagedBadge">0</span>
+            </button>
+            <button class="rail-btn" onclick="window.location.href='/?view=folders'" title="Manage Folders">
+                <i data-lucide="folder-cog"></i>
+            </button>
+            <button class="rail-btn" onclick="window.location.href='/?view=trash'" title="Trash">
+                <i data-lucide="trash-2"></i>
             </button>
         </div>
         <div class="rail-bottom">
             <button class="rail-btn" onclick="window.location.href='/settings'" title="Settings">
                 <i data-lucide="settings"></i>
+            </button>
+            <button class="rail-btn" onclick="window.location.href='/logout'" title="Logout">
+                <i data-lucide="log-out"></i>
             </button>
         </div>
     </nav>

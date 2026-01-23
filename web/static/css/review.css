@@ -25,6 +25,16 @@
     font-weight: 600;
 }
 
+/* Staged source items - non-interactive labels */
+.staged-source-item {
+    cursor: default;
+    opacity: 0.9;
+}
+
+.staged-source-item:hover {
+    background: transparent;
+}
+
 /* Review content area */
 .review-content {
     flex: 1;
@@ -141,6 +151,15 @@
 
 /* Destination folder selector */
 .review-destination {
+    flex-shrink: 0;
+    width: 180px;
+}
+
+/* Destination arrow icon */
+.dest-arrow {
+    width: 16px;
+    height: 16px;
+    color: var(--color-text-muted);
     flex-shrink: 0;
 }
 
@@ -392,10 +411,16 @@
 }
 
 .folder-commit-item .folder-dest-select {
-    min-width: 180px;
+    width: 180px;
+    flex-shrink: 0;
 }
 
 .folder-commit-item .folder-dest-select .icon-select-trigger {
     padding: var(--space-xs) var(--space-sm);
     font-size: 0.8125rem;
+}
+
+/* Remove old text arrow styles since we use icons now */
+.folder-commit-item .folder-dest-arrow {
+    display: none;
 }
