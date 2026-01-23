@@ -325,15 +325,23 @@ function showStagedView() {
     if (toolbar) toolbar.style.display = 'none';
     if (headerActions) headerActions.style.display = '';
     
-    elements.contextTitle.textContent = 'Staged Emails';
-    elements.contextMeta.textContent = `${state.staged.size} email${state.staged.size !== 1 ? 's' : ''} staged`;
+    const emailCount = state.staged.size;
+    const folderCount = state.stagedFolders?.folders?.length || 0;
+    const totalCount = emailCount + folderCount;
     
-    if (state.staged.size === 0) {
+    elements.contextTitle.textContent = 'Staged Items';
+    
+    let metaParts = [];
+    if (emailCount > 0) metaParts.push(`${emailCount} email${emailCount !== 1 ? 's' : ''}`);
+    if (folderCount > 0) metaParts.push(`${folderCount} folder${folderCount !== 1 ? 's' : ''}`);
+    elements.contextMeta.textContent = metaParts.length > 0 ? metaParts.join(', ') + ' staged' : 'Nothing staged';
+    
+    if (totalCount === 0) {
         elements.emailList.innerHTML = `
             <div class="empty-state">
                 <i data-lucide="package" class="empty-icon"></i>
-                <h3>No Staged Emails</h3>
-                <p>Select emails from your inbox and click "Stage" to prepare them for archiving.</p>
+                <h3>Nothing Staged</h3>
+                <p>Select emails or folders to prepare them for archiving.</p>
             </div>
         `;
     } else {
@@ -344,34 +352,96 @@ function showStagedView() {
 }
 
 function renderStagedList() {
-    const stagedArray = [...state.staged.entries()];
+    let html = '';
     
-    elements.emailList.innerHTML = stagedArray.map(([emailId, data]) => {
-        const email = data.email;
-        const folder = state.folders.find(f => f.id == data.destinationFolderId);
+    // Render staged folders first
+    if (state.stagedFolders?.folders?.length > 0) {
+        const destFolder = state.folders.find(f => f.id == state.stagedFolders.destinationFolderId);
+        const destName = destFolder?.name || 'Unknown folder';
         
-        return `
-            <div class="email-item staged-item" data-id="${emailId}">
-                <div class="email-content">
-                    <div class="email-header">
-                        <span class="email-sender">${escapeHtml(extractName(email.from || email.sender))}</span>
-                        <span class="email-date">${formatDate(email.date)}</span>
-                    </div>
-                    <div class="email-subject">${escapeHtml(email.subject || '(no subject)')}</div>
-                    <div class="email-preview staged-destination">
-                        <i data-lucide="folder"></i>
-                        <span>→ ${escapeHtml(folder?.name || 'Unknown folder')}</span>
-                    </div>
+        html += `
+            <div class="staged-section">
+                <div class="staged-section-header">
+                    <i data-lucide="folders"></i>
+                    <span>Folders to Archive</span>
+                    <button class="btn btn-sm btn-secondary" onclick="unstageFolders()">
+                        <i data-lucide="x"></i> Clear
+                    </button>
                 </div>
-                <button class="btn btn-sm btn-secondary unstage-btn" onclick="unstageEmail('${emailId}')">
-                    <i data-lucide="x"></i>
-                </button>
+                <div class="staged-folders-list">
+        `;
+        
+        state.stagedFolders.folders.forEach(folderPath => {
+            html += `
+                <div class="staged-folder-item">
+                    <i data-lucide="folder"></i>
+                    <span class="folder-path">${escapeHtml(folderPath)}</span>
+                    <span class="staged-destination">→ ${escapeHtml(destName)}</span>
+                </div>
+            `;
+        });
+        
+        html += `
+                </div>
             </div>
         `;
-    }).join('');
+    }
     
+    // Render staged emails
+    if (state.staged.size > 0) {
+        const stagedArray = [...state.staged.entries()];
+        
+        html += `<div class="staged-section">`;
+        if (state.stagedFolders?.folders?.length > 0) {
+            html += `
+                <div class="staged-section-header">
+                    <i data-lucide="mail"></i>
+                    <span>Emails to Archive</span>
+                </div>
+            `;
+        }
+        
+        html += stagedArray.map(([emailId, data]) => {
+            const email = data.email;
+            const folder = state.folders.find(f => f.id == data.destinationFolderId);
+            
+            return `
+                <div class="email-item staged-item" data-id="${emailId}">
+                    <div class="email-content">
+                        <div class="email-header">
+                            <span class="email-sender">${escapeHtml(extractName(email.from || email.sender))}</span>
+                            <span class="email-date">${formatDate(email.date)}</span>
+                        </div>
+                        <div class="email-subject">${escapeHtml(email.subject || '(no subject)')}</div>
+                        <div class="email-preview staged-destination">
+                            <i data-lucide="folder"></i>
+                            <span>→ ${escapeHtml(folder?.name || 'Unknown folder')}</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-sm btn-secondary unstage-btn" onclick="unstageEmail('${emailId}')">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
+            `;
+        }).join('');
+        
+        html += `</div>`;
+    }
+    
+    elements.emailList.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
+
+function unstageFolders() {
+    state.stagedFolders = null;
+    updateStagedBadge();
+    
+    const activeBtn = document.querySelector('.rail-btn.active');
+    if (activeBtn?.dataset.view === 'staged') {
+        showStagedView();
+    }
+}
+window.unstageFolders = unstageFolders;
 
 function unstageEmail(emailId) {
     state.staged.delete(emailId);
