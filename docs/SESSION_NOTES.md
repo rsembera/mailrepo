@@ -1,38 +1,43 @@
 # MailRepo Session Notes
 
-**Date:** January 22, 2026  
-**Last Updated:** Evening session complete
+**Date:** January 23, 2026  
+**Last Updated:** Session 10 in progress
 
 ---
 
-## Completed Today
+## Completed Today (Session 10)
 
-### Major Refactoring (All Phases Complete ✅)
+### SSE Progress Streaming Fixes
 
-**Phase 1: JavaScript Modules**
-- Split main.js (2,514 lines) into 11 focused modules
-- Structure: app.js, utils.js, state.js, modals.js, components/, views/
+**Email Loading:**
+- Removed hardcoded 50 email limit from frontend (`mail.js`)
+- Updated IMAP `search()` to treat `limit=0` as "no limit"
+- Updated streaming endpoint to default to no limit
 
-**Phase 2: CSS Modules**
-- Split main.css (1,538 lines) into 11 modules in css/modules/
+**Commit Operation:**
+- Added SSE streaming to review page commit workflow
+- Progress bar now updates in real-time as emails are archived
+- Shows current/total count and status (success/skipped/failed)
 
-**Phase 3: API Blueprint Split**
-- Split api.py (1,442 lines) into 5 route modules
-- folders.py, accounts.py, emails.py, staging.py, imports.py
+**Code Changes:**
+- `core/imap.py`: Updated search() limit parameter (0 = unlimited)
+- `web/blueprints/api/progress.py`: Default limit to 0 (unlimited)
+- `web/blueprints/api/staging.py`: Use limit=0 for folder archiving
+- `web/static/js/views/mail.js`: Remove hardcoded &limit=50
+- `web/static/js/review.js`: Use SSE streaming for commit progress
 
-**Phase 4: Cleanup**
-- Verified no dead code, all imports working
-- Updated documentation
+---
 
-### Bug Fixes
-- Fixed import paths in folder-tree.js (./state.js → ../state.js)
-- Fixed deleteFolder missing window binding
-- Added updateTrashBadge import to folder-mgmt.js
+## Previous Session (Session 09) Summary
 
-### UX Improvements
-- IMAP folders now start collapsed (click chevron to expand)
-- Clicking account name loads folder selection in main pane only
-- Chevron click toggles sidebar subfolder expansion separately
+- Fixed mail view not restoring folder selection
+- Fixed IMAP folder chevron expansion
+- Fixed folder commit not archiving emails
+- Fixed folder selection highlighting entire tree
+- Removed redundant "Staged Items" view
+- Added unstage buttons to Review page
+- Added full left rail to Review page
+- Created initial SSE progress streaming files
 
 ---
 
@@ -40,17 +45,18 @@
 
 - **Server:** Runs on port 5050
 - **All features working:** Email viewing, staging, folder management, trash
-- **Git:** 18 commits pushed to origin/main
-- **Codebase:** Clean, modular, well-organized
+- **Git:** Commits pushed to origin/main
+- **Last commit:** `0914571` - "Fix email limit and add SSE progress streaming to commit"
 
 ---
 
-## Ready for Next Session
+## TODO / Next Steps
 
-The refactoring is complete. Possible next tasks:
-1. Resume folder staging feature (was paused for refactor)
-2. Test full workflow end-to-end
-3. Any new features from the project plan
+1. ✅ Fix the 50 email limit in streaming endpoint
+2. ✅ Add progress streaming to commit operation  
+3. Test full workflow end-to-end with large folders
+4. Add progress streaming to folder commit (optional)
+5. Verify progress bar displays correctly during email loading
 
 ---
 
