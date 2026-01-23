@@ -103,11 +103,11 @@
     border-bottom: none;
 }
 
-.folder-select-item:hover {
+.folder-select-item:hover > .folder-tree-row {
     background: var(--color-background-secondary);
 }
 
-.folder-select-item.selected {
+.folder-select-item.selected > .folder-tree-row {
     background: var(--color-primary-lighter);
 }
 
