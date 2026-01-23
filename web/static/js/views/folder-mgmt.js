@@ -629,10 +629,21 @@ function updateStageFoldersButton() {
 export function stageSelectedFolders() {
     if (selectedFoldersForStaging.size === 0) return;
     
-    state.stagedFolders = {
-        accountId: currentFolderSelectionAccountId,
-        folders: Array.from(selectedFoldersForStaging)
-    };
+    const newFolders = Array.from(selectedFoldersForStaging);
+    
+    // If already have staged folders from the same account, add to them
+    if (state.stagedFolders && state.stagedFolders.accountId === currentFolderSelectionAccountId) {
+        // Merge folders, avoiding duplicates
+        const existingSet = new Set(state.stagedFolders.folders);
+        newFolders.forEach(f => existingSet.add(f));
+        state.stagedFolders.folders = Array.from(existingSet);
+    } else {
+        // Different account or no existing staged folders - start fresh
+        state.stagedFolders = {
+            accountId: currentFolderSelectionAccountId,
+            folders: newFolders
+        };
+    }
     
     openStageFoldersModal();
 }
