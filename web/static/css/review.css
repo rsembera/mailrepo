@@ -286,17 +286,19 @@
     padding: var(--space-lg) 0;
 }
 
-.progress-bar {
-    height: 8px;
+.progress-container .progress-bar {
+    height: 12px;
     background: var(--color-border);
-    border-radius: 4px;
+    border-radius: 6px;
     overflow: hidden;
+    border: 1px solid var(--color-text-muted);
 }
 
-.progress-fill {
+.progress-container .progress-fill {
     height: 100%;
     background: var(--color-primary);
-    transition: width 0.3s;
+    border-radius: 6px;
+    transition: width 0.15s ease-out;
 }
 
 .progress-text {
