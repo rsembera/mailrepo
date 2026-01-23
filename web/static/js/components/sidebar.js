@@ -77,6 +77,19 @@ export function handleTreeItemClick(e, row) {
     
     // Handle IMAP folder click
     if (type === 'label' || type === 'imap-folder') {
+        // Check if chevron was clicked - if so, toggle expansion only
+        const clickedChevron = e.target.closest('.imap-folder-chevron');
+        if (clickedChevron) {
+            const treeItem = row.closest('.imap-tree-item');
+            const children = treeItem?.querySelector('.imap-tree-children');
+            if (children) {
+                const isExpanded = children.style.display !== 'none';
+                children.style.display = isExpanded ? 'none' : 'block';
+                clickedChevron.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(90deg)';
+            }
+            return;
+        }
+        
         const accountId = row.dataset.accountId;
         const folder = row.dataset.label || row.dataset.folder;
         if (onImapFolderSelect) onImapFolderSelect(accountId, folder);
