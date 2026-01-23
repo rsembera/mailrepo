@@ -15,6 +15,9 @@
             <button class="rail-btn active" data-view="mail" title="Mail">
                 <i data-lucide="inbox"></i>
             </button>
+            <button class="rail-btn" id="importRailBtn" title="Import">
+                <i data-lucide="hard-drive-upload"></i>
+            </button>
             <button class="rail-btn" data-view="staged" title="Staged Emails" id="stagedRailBtn">
                 <i data-lucide="package"></i>
                 <span class="rail-badge hidden" id="stagedBadge">0</span>
@@ -25,9 +28,6 @@
             <button class="rail-btn" data-view="trash" title="Trash" id="trashRailBtn">
                 <i data-lucide="trash-2"></i>
                 <span class="rail-badge hidden" id="trashBadge">0</span>
-            </button>
-            <button class="rail-btn" id="importRailBtn" title="Import">
-                <i data-lucide="hard-drive-upload"></i>
             </button>
         </div>
         <div class="rail-bottom">
@@ -312,9 +312,9 @@
                 <span class="import-option-desc">Import an entire mailbox archive</span>
             </button>
             <button class="import-option" id="importEmlBtn">
-                <i data-lucide="file-text"></i>
-                <span class="import-option-title">Import .eml files</span>
-                <span class="import-option-desc">Import individual email files</span>
+                <i data-lucide="folder-open"></i>
+                <span class="import-option-title">Import folder of .eml files</span>
+                <span class="import-option-desc">Select a folder containing email files</span>
             </button>
         </div>
         <div class="modal-actions">
@@ -323,9 +323,44 @@
     </div>
 </div>
 
-<!-- Hidden file inputs for import -->
-<input type="file" id="mboxFileInput" accept=".mbox" style="display: none;">
-<input type="file" id="emlFileInput" accept=".eml" multiple style="display: none;">
+<!-- File Picker Modal -->
+<div class="modal-overlay" id="filePickerModal">
+    <div class="modal-content modal-lg">
+        <div class="modal-header">
+            <h2 id="filePickerTitle">Select File</h2>
+        </div>
+        <div class="file-picker">
+            <div class="file-picker-path">
+                <button class="btn btn-secondary btn-icon" id="filePickerUp" title="Go up">
+                    <i data-lucide="arrow-up"></i>
+                </button>
+                <input type="text" id="filePickerPathInput" readonly>
+            </div>
+            <div class="file-picker-options" id="filePickerMboxOptions" style="display: none;">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="filePickerAppleMode">
+                    <span>Apple Mail folder export</span>
+                </label>
+                <span class="file-picker-option-hint">Enable when importing a folder exported from Apple Mail with subfolders</span>
+            </div>
+            <div class="file-picker-list" id="filePickerList">
+                <!-- File listing appears here -->
+            </div>
+            <div class="file-picker-selected" id="filePickerSelected" style="display: none;">
+                <span>Selected: </span><span id="filePickerSelectedName"></span>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <label class="checkbox-label file-picker-hidden-toggle">
+                <input type="checkbox" id="filePickerShowHidden">
+                <span>Show hidden files</span>
+            </label>
+            <div class="spacer"></div>
+            <button class="btn btn-secondary" onclick="closeModal('filePickerModal')">Cancel</button>
+            <button class="btn btn-primary" id="filePickerConfirm" disabled>Select</button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}

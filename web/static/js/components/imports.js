@@ -3,10 +3,10 @@
  * 
  * Handles mounting/unmounting of .mbox and .eml files,
  * displaying them in the sidebar, and browsing their contents.
+ * Uses custom file picker for filesystem navigation.
  */
 
 import { escapeHtml } from '../utils.js';
-import { buildImapFolderTree, getFolderIcon } from './sidebar.js';
 
 // Mounted imports stored in memory (session-only)
 const mountedImports = new Map();
@@ -14,6 +14,13 @@ const mountedImports = new Map();
 // Callbacks
 let onImportSelect = null;
 let onImportFolderSelect = null;
+let onImportUnmount = null;
+
+// File picker state
+let filePickerMode = null; // 'mbox' or 'eml'
+let filePickerPath = null;
+let filePickerSelected = null;
+let filePickerResolve = null;
 
 /**
  * Initialize the imports component.
@@ -21,6 +28,7 @@ let onImportFolderSelect = null;
 export function initImports(config = {}) {
     onImportSelect = config.onImportSelect;
     onImportFolderSelect = config.onImportFolderSelect;
+    onImportUnmount = config.onImportUnmount;
     
     // Set up import button click
     const importBtn = document.getElementById('importRailBtn');
@@ -35,28 +43,19 @@ export function initImports(config = {}) {
     if (mboxBtn) {
         mboxBtn.addEventListener('click', () => {
             closeModal('importModal');
-            document.getElementById('mboxFileInput')?.click();
+            openFilePicker('mbox');
         });
     }
     
     if (emlBtn) {
         emlBtn.addEventListener('click', () => {
             closeModal('importModal');
-            document.getElementById('emlFileInput')?.click();
+            openFilePicker('eml');
         });
     }
     
-    // Set up file input handlers
-    const mboxInput = document.getElementById('mboxFileInput');
-    const emlInput = document.getElementById('emlFileInput');
-    
-    if (mboxInput) {
-        mboxInput.addEventListener('change', handleMboxSelect);
-    }
-    
-    if (emlInput) {
-        emlInput.addEventListener('change', handleEmlSelect);
-    }
+    // Set up file picker handlers
+    initFilePicker();
 }
 
 /**
@@ -81,205 +80,624 @@ function closeModal(id) {
 // Make closeModal available globally for onclick handlers
 window.closeModal = closeModal;
 
+// ============================================
+// FILE PICKER
+// ============================================
+
 /**
- * Handle .mbox file selection.
+ * Initialize file picker event handlers.
  */
-async function handleMboxSelect(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+function initFilePicker() {
+    const upBtn = document.getElementById('filePickerUp');
+    const confirmBtn = document.getElementById('filePickerConfirm');
+    const showHidden = document.getElementById('filePickerShowHidden');
+    const appleMode = document.getElementById('filePickerAppleMode');
     
-    // Reset input for re-selection
-    e.target.value = '';
+    upBtn?.addEventListener('click', () => {
+        navigateToParent();
+    });
+    
+    confirmBtn?.addEventListener('click', () => {
+        confirmFilePicker();
+    });
+    
+    showHidden?.addEventListener('change', () => {
+        loadFilePickerDirectory(filePickerPath);
+    });
+    
+    appleMode?.addEventListener('change', () => {
+        // Clear selection and reload when mode changes
+        clearSelection();
+        loadFilePickerDirectory(filePickerPath);
+    });
+}
+
+/**
+ * Check if Apple Mail mode is enabled.
+ */
+function isAppleMailMode() {
+    return document.getElementById('filePickerAppleMode')?.checked || false;
+}
+
+/**
+ * Open the file picker modal.
+ * @param {string} mode - 'mbox' or 'eml'
+ */
+async function openFilePicker(mode) {
+    filePickerMode = mode;
+    filePickerSelected = null;
+    
+    const modal = document.getElementById('filePickerModal');
+    const title = document.getElementById('filePickerTitle');
+    const confirmBtn = document.getElementById('filePickerConfirm');
+    const selectedDiv = document.getElementById('filePickerSelected');
+    const mboxOptions = document.getElementById('filePickerMboxOptions');
+    const appleMode = document.getElementById('filePickerAppleMode');
+    
+    if (mode === 'mbox') {
+        title.textContent = 'Select .mbox File';
+        confirmBtn.textContent = 'Import';
+        mboxOptions.style.display = 'flex';
+        appleMode.checked = false;
+    } else {
+        title.textContent = 'Select Folder with .eml Files';
+        confirmBtn.textContent = 'Import Folder';
+        mboxOptions.style.display = 'none';
+    }
+    
+    confirmBtn.disabled = true;
+    selectedDiv.style.display = 'none';
+    
+    modal.classList.add('active');
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    
+    // Start in home directory
+    await loadFilePickerDirectory(null);
+}
+
+/**
+ * Load directory contents into file picker.
+ */
+async function loadFilePickerDirectory(path) {
+    const list = document.getElementById('filePickerList');
+    const pathInput = document.getElementById('filePickerPathInput');
+    const showHidden = document.getElementById('filePickerShowHidden')?.checked || false;
+    const appleMode = isAppleMailMode();
+    
+    list.innerHTML = '<div class="file-picker-empty">Loading...</div>';
+    
+    // Update title based on mode
+    const title = document.getElementById('filePickerTitle');
+    const confirmBtn = document.getElementById('filePickerConfirm');
+    if (filePickerMode === 'mbox') {
+        if (appleMode) {
+            title.textContent = 'Select Apple Mail Export Folder';
+            confirmBtn.textContent = 'Import Folder';
+        } else {
+            title.textContent = 'Select .mbox File';
+            confirmBtn.textContent = 'Import';
+        }
+    }
     
     try {
-        // Get file path - for Electron/desktop this would be file.path
-        // For web, we need to use the File API and send the content
-        const importId = `mbox-${Date.now()}`;
+        // In Apple mode, show all directories; otherwise filter for mbox
+        const filter = (filePickerMode === 'mbox' && !appleMode) ? 'mbox' : null;
         
-        // Mount the mbox
-        const result = await mountMbox(file, importId);
-        if (result.success) {
-            renderImportsSection();
+        const response = await fetch('/api/filesystem/browse', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                path: path || '',
+                show_hidden: showHidden,
+                filter: filter,
+            }),
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            list.innerHTML = `<div class="file-picker-empty">${escapeHtml(data.error || 'Failed to load')}</div>`;
+            return;
         }
+        
+        filePickerPath = data.path;
+        pathInput.value = data.path;
+        
+        if (data.items.length === 0) {
+            const msg = filePickerMode === 'mbox' 
+                ? (appleMode ? 'No folders' : 'No folders or .mbox files')
+                : 'No items in this folder';
+            list.innerHTML = `<div class="file-picker-empty">${msg}</div>`;
+            return;
+        }
+        
+        let html = '';
+        for (const item of data.items) {
+            const icon = item.type === 'dir' ? 'folder' : 'file';
+            const sizeStr = item.size != null ? formatFileSize(item.size) : '';
+            const typeClass = item.type === 'dir' ? 'dir' : 'file';
+            
+            html += `
+                <div class="file-picker-item ${typeClass}" 
+                     data-path="${escapeHtml(item.path)}" 
+                     data-type="${item.type}"
+                     data-name="${escapeHtml(item.name)}">
+                    <i data-lucide="${icon}"></i>
+                    <span class="file-name">${escapeHtml(item.name)}</span>
+                    <span class="file-size">${sizeStr}</span>
+                </div>
+            `;
+        }
+        
+        list.innerHTML = html;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        
+        // Add click handlers
+        list.querySelectorAll('.file-picker-item').forEach(item => {
+            item.addEventListener('click', () => handleFilePickerClick(item));
+            item.addEventListener('dblclick', () => handleFilePickerDblClick(item));
+        });
+        
+        // In eml mode, auto-select current folder if it contains .eml files
+        if (filePickerMode === 'eml') {
+            checkCurrentFolderForEml(data.path);
+        }
+        
+        // In Apple mode, check if current folder has .mbox packages
+        if (filePickerMode === 'mbox' && appleMode) {
+            checkCurrentFolderForAppleMbox(data.path);
+        }
+        
     } catch (error) {
-        console.error('Failed to mount mbox:', error);
-        alert('Failed to import mbox file: ' + error.message);
+        console.error('File picker error:', error);
+        list.innerHTML = `<div class="file-picker-empty">Error: ${error.message}</div>`;
     }
 }
 
 /**
- * Handle .eml file selection.
+ * Check if current folder contains .eml files and auto-select if so.
  */
-async function handleEmlSelect(e) {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
+async function checkCurrentFolderForEml(path) {
+    try {
+        const response = await fetch('/api/filesystem/scan-eml', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path }),
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.count > 0) {
+            selectFolder(path, data.folder_name, data.count);
+        } else {
+            clearSelection();
+        }
+    } catch (error) {
+        console.error('Error scanning for eml:', error);
+    }
+}
+
+/**
+ * Check if current folder contains Apple Mail .mbox packages.
+ */
+async function checkCurrentFolderForAppleMbox(path) {
+    try {
+        const response = await fetch('/api/filesystem/scan-apple-mbox', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path }),
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.totalEmails > 0) {
+            const folderName = path.split('/').pop() || path;
+            selectAppleMboxFolder(path, folderName, data.totalEmails, data.tree);
+        } else {
+            clearSelection();
+        }
+    } catch (error) {
+        console.error('Error scanning for Apple mbox:', error);
+    }
+}
+
+/**
+ * Select an Apple Mail export folder.
+ */
+function selectAppleMboxFolder(path, name, emailCount, tree) {
+    filePickerSelected = { path, name, type: 'apple-mbox', emailCount, tree };
     
-    // Reset input for re-selection
-    e.target.value = '';
+    const selectedDiv = document.getElementById('filePickerSelected');
+    const selectedName = document.getElementById('filePickerSelectedName');
+    const confirmBtn = document.getElementById('filePickerConfirm');
+    
+    // Count folders in tree
+    function countFolders(node) {
+        let count = (node.emails && node.emails.length > 0) ? 1 : 0;
+        for (const child of node.children || []) {
+            count += countFolders(child);
+        }
+        return count;
+    }
+    const folderCount = countFolders(tree);
+    
+    selectedDiv.style.display = 'block';
+    selectedName.textContent = `${folderCount} folder${folderCount !== 1 ? 's' : ''}, ${emailCount} email${emailCount !== 1 ? 's' : ''}`;
+    confirmBtn.disabled = false;
+}
+
+/**
+ * Handle single click on file picker item.
+ */
+function handleFilePickerClick(item) {
+    const type = item.dataset.type;
+    const path = item.dataset.path;
+    const name = item.dataset.name;
+    const appleMode = isAppleMailMode();
+    
+    // Clear previous selection highlight
+    document.querySelectorAll('.file-picker-item.selected').forEach(el => {
+        el.classList.remove('selected');
+    });
+    
+    if (filePickerMode === 'mbox') {
+        if (appleMode) {
+            // Apple mode - clicking a folder scans it for .mbox packages
+            item.classList.add('selected');
+            if (type === 'dir') {
+                checkFolderForAppleMbox(path);
+            }
+        } else {
+            // Standard mode
+            if (type === 'file') {
+                // Select the mbox file
+                item.classList.add('selected');
+                selectFile(path, name);
+            } else {
+                // Single click on dir in mbox mode - just highlight, dblclick to enter
+                item.classList.add('selected');
+                clearSelection();
+            }
+        }
+    } else {
+        // eml mode - single click highlights, we scan for eml
+        item.classList.add('selected');
+        if (type === 'dir') {
+            // Preview what's in this folder
+            checkFolderForEml(path);
+        }
+    }
+}
+
+/**
+ * Check a specific folder for Apple mbox packages.
+ */
+async function checkFolderForAppleMbox(path) {
+    try {
+        const response = await fetch('/api/filesystem/scan-apple-mbox', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path }),
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.totalEmails > 0) {
+            selectAppleMboxFolder(path, data.tree.name, data.totalEmails, data.tree);
+        } else {
+            clearSelection();
+            showPickerMessage('No Apple Mail .mbox packages found');
+        }
+    } catch (error) {
+        console.error('Error checking folder:', error);
+    }
+}
+
+/**
+ * Handle double click on file picker item.
+ */
+function handleFilePickerDblClick(item) {
+    const type = item.dataset.type;
+    const path = item.dataset.path;
+        loadFilePickerDirectory(path);
+    } else if (filePickerMode === 'mbox') {
+        // Double-click on mbox file = select and confirm
+        selectFile(path, item.dataset.name);
+        confirmFilePicker();
+    }
+}
+
+/**
+ * Check a specific folder for .eml files.
+ */
+async function checkFolderForEml(path) {
+    try {
+        const response = await fetch('/api/filesystem/scan-eml', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path }),
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.count > 0) {
+            selectFolder(path, data.folder_name, data.count);
+        } else {
+            clearSelection();
+            showPickerMessage('No .eml files in this folder');
+        }
+    } catch (error) {
+        console.error('Error checking folder:', error);
+    }
+}
+
+/**
+ * Select a file (mbox mode).
+ */
+function selectFile(path, name) {
+    filePickerSelected = { path, name, type: 'file' };
+    
+    const selectedDiv = document.getElementById('filePickerSelected');
+    const selectedName = document.getElementById('filePickerSelectedName');
+    const confirmBtn = document.getElementById('filePickerConfirm');
+    
+    selectedDiv.style.display = 'block';
+    selectedName.textContent = name;
+    confirmBtn.disabled = false;
+}
+
+/**
+ * Select a folder (eml mode).
+ */
+function selectFolder(path, name, emlCount) {
+    filePickerSelected = { path, name, type: 'folder', emlCount };
+    
+    const selectedDiv = document.getElementById('filePickerSelected');
+    const selectedName = document.getElementById('filePickerSelectedName');
+    const confirmBtn = document.getElementById('filePickerConfirm');
+    
+    selectedDiv.style.display = 'block';
+    selectedName.textContent = `${name} (${emlCount} .eml file${emlCount !== 1 ? 's' : ''})`;
+    confirmBtn.disabled = false;
+}
+
+/**
+ * Clear selection.
+ */
+function clearSelection() {
+    filePickerSelected = null;
+    
+    const selectedDiv = document.getElementById('filePickerSelected');
+    const confirmBtn = document.getElementById('filePickerConfirm');
+    
+    selectedDiv.style.display = 'none';
+    confirmBtn.disabled = true;
+}
+
+/**
+ * Show a message in the picker selection area.
+ */
+function showPickerMessage(msg) {
+    const selectedDiv = document.getElementById('filePickerSelected');
+    const selectedName = document.getElementById('filePickerSelectedName');
+    
+    selectedDiv.style.display = 'block';
+    selectedName.textContent = msg;
+}
+
+/**
+ * Navigate to parent directory.
+ */
+async function navigateToParent() {
+    if (!filePickerPath) return;
+    
+    // Get parent from server
+    try {
+        const response = await fetch('/api/filesystem/browse', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: filePickerPath }),
+        });
+        
+        const data = await response.json();
+        if (data.parent) {
+            await loadFilePickerDirectory(data.parent);
+        }
+    } catch (error) {
+        console.error('Error navigating up:', error);
+    }
+}
+
+/**
+ * Confirm file picker selection and mount the import.
+ */
+async function confirmFilePicker() {
+    if (!filePickerSelected) return;
+    
+    closeModal('filePickerModal');
     
     try {
-        for (const file of files) {
-            const importId = `eml-${Date.now()}-${file.name}`;
-            await mountEml(file, importId);
+        if (filePickerMode === 'mbox') {
+            if (filePickerSelected.type === 'apple-mbox') {
+                // Apple Mail folder export
+                await mountAppleMboxFolder(filePickerSelected.path, filePickerSelected.name, filePickerSelected.tree);
+            } else {
+                // Standard mbox file
+                await mountMboxFromPath(filePickerSelected.path, filePickerSelected.name);
+            }
+        } else {
+            await mountEmlFolderFromPath(filePickerSelected.path, filePickerSelected.name);
         }
+        
         renderImportsSection();
     } catch (error) {
-        console.error('Failed to mount eml:', error);
-        alert('Failed to import eml file(s): ' + error.message);
+        console.error('Failed to mount import:', error);
+        alert('Failed to import: ' + error.message);
     }
 }
 
 /**
- * Mount an mbox file.
+ * Format file size for display.
  */
-async function mountMbox(file, importId) {
-    // Read and parse the mbox file
-    const content = await file.text();
-    const emails = parseMbox(content);
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+// ============================================
+// MOUNTING IMPORTS
+// ============================================
+
+/**
+ * Mount an mbox file from filesystem path.
+ * Uses server-side parsing for proper encoding support.
+ */
+async function mountMboxFromPath(path, name) {
+    const response = await fetch('/api/filesystem/parse-mbox', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+    });
     
-    // Detect folder structure (if any)
-    const folders = detectMboxFolders(emails);
+    if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to parse mbox');
+    }
     
+    const data = await response.json();
+    const emails = data.emails;
+    
+    // Store path with each email for later retrieval
+    emails.forEach(e => e.sourcePath = path);
+    
+    // Use server-detected folders, or null if none
+    const folders = data.folders ? data.folders.map(f => ({
+        ...f,
+        emails: emails.filter(e => f.emailUids.includes(e.uid)),
+        children: [],
+    })) : null;
+    
+    const importId = `mbox-${Date.now()}`;
     mountedImports.set(importId, {
         type: 'mbox',
-        name: file.name,
-        path: file.name,
+        name: name,
+        path: path,
         folders: folders,
         emails: emails,
         mountedAt: Date.now(),
     });
-    
-    return { success: true, emailCount: emails.length };
 }
 
 /**
- * Mount an eml file.
+ * Mount an Apple Mail folder export.
+ * The tree structure comes from the server scan.
  */
-async function mountEml(file, importId) {
-    const content = await file.text();
-    const email = parseEml(content);
+async function mountAppleMboxFolder(path, name, tree) {
+    // Convert tree to our folder structure
+    function convertTree(node, depth = 0) {
+        const result = {
+            name: node.name.replace(/\.mbox$/, ''),
+            fullPath: node.path,
+            emails: node.emails || [],
+            children: [],
+        };
+        
+        for (const child of node.children || []) {
+            result.children.push(convertTree(child, depth + 1));
+        }
+        
+        return result;
+    }
     
+    const folders = [];
+    
+    // If root has emails, add it as a folder
+    if (tree.emails && tree.emails.length > 0) {
+        folders.push(convertTree(tree));
+    } else {
+        // Just add the children
+        for (const child of tree.children || []) {
+            folders.push(convertTree(child));
+        }
+    }
+    
+    // Collect all emails from tree
+    function collectEmails(node) {
+        let all = [...(node.emails || [])];
+        for (const child of node.children || []) {
+            all = all.concat(collectEmails(child));
+        }
+        return all;
+    }
+    const allEmails = collectEmails(tree);
+    
+    const importId = `apple-${Date.now()}`;
     mountedImports.set(importId, {
-        type: 'eml',
-        name: file.name,
-        path: file.name,
-        emails: [email],
+        type: 'apple-mbox',
+        name: name.replace(/\.mbox$/, ''),
+        path: path,
+        folders: folders.length > 0 ? folders : null,
+        emails: allEmails,
         mountedAt: Date.now(),
     });
-    
-    return { success: true };
 }
 
 /**
- * Parse an mbox file into individual emails.
+ * Mount a folder of .eml files from filesystem path.
+ * Uses server-side parsing for proper encoding support.
  */
-function parseMbox(content) {
+async function mountEmlFolderFromPath(path, name) {
+    // Scan folder for .eml files
+    const scanResponse = await fetch('/api/filesystem/scan-eml', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+    });
+    
+    if (!scanResponse.ok) {
+        const data = await scanResponse.json();
+        throw new Error(data.error || 'Failed to scan folder');
+    }
+    
+    const scanData = await scanResponse.json();
+    
+    if (scanData.count === 0) {
+        throw new Error('No .eml files found in folder');
+    }
+    
+    // Parse each .eml file using server-side parser
     const emails = [];
-    // Split on "From " at start of line (mbox format)
-    const parts = content.split(/^From /m);
-    
-    for (let i = 1; i < parts.length; i++) {
-        const rawEmail = 'From ' + parts[i];
-        const email = parseEmailHeaders(rawEmail);
-        email.uid = `import-${i}`;
-        email.raw = rawEmail;
-        emails.push(email);
-    }
-    
-    return emails;
-}
-
-/**
- * Parse an eml file.
- */
-function parseEml(content) {
-    const email = parseEmailHeaders(content);
-    email.uid = `import-${Date.now()}`;
-    email.raw = content;
-    return email;
-}
-
-/**
- * Parse email headers from raw email content.
- */
-function parseEmailHeaders(raw) {
-    const lines = raw.split(/\r?\n/);
-    const headers = {};
-    let currentHeader = '';
-    let headersDone = false;
-    let bodyStart = 0;
-    
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        
-        // Empty line marks end of headers
-        if (!headersDone && line === '') {
-            headersDone = true;
-            bodyStart = i + 1;
-            continue;
-        }
-        
-        if (headersDone) break;
-        
-        // Continuation of previous header (starts with whitespace)
-        if (/^\s/.test(line) && currentHeader) {
-            headers[currentHeader] += ' ' + line.trim();
-            continue;
-        }
-        
-        // New header
-        const match = line.match(/^([^:]+):\s*(.*)$/);
-        if (match) {
-            currentHeader = match[1].toLowerCase();
-            headers[currentHeader] = match[2];
-        }
-    }
-    
-    return {
-        subject: decodeHeader(headers['subject'] || '(no subject)'),
-        from: decodeHeader(headers['from'] || ''),
-        to: decodeHeader(headers['to'] || ''),
-        date: headers['date'] || '',
-        message_id: headers['message-id'] || '',
-    };
-}
-
-/**
- * Decode RFC 2047 encoded header (basic implementation).
- */
-function decodeHeader(header) {
-    if (!header) return '';
-    
-    // Handle =?charset?encoding?text?= format
-    return header.replace(/=\?([^?]+)\?([BQ])\?([^?]+)\?=/gi, (match, charset, encoding, text) => {
+    for (const file of scanData.files) {
         try {
-            if (encoding.toUpperCase() === 'B') {
-                return atob(text);
-            } else if (encoding.toUpperCase() === 'Q') {
-                return text.replace(/_/g, ' ').replace(/=([0-9A-F]{2})/gi, (m, hex) => 
-                    String.fromCharCode(parseInt(hex, 16))
-                );
+            const response = await fetch('/api/filesystem/parse-eml', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: file.path }),
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                emails.push(data.email);
             }
-        } catch {
-            return text;
+        } catch (error) {
+            console.warn(`Failed to parse ${file.name}:`, error);
         }
-        return text;
+    }
+    
+    const importId = `eml-${Date.now()}`;
+    mountedImports.set(importId, {
+        type: 'eml',
+        name: name,
+        path: path,
+        emails: emails,
+        mountedAt: Date.now(),
     });
 }
 
-/**
- * Detect folder structure in mbox emails (based on X-Folder header or similar).
- */
-function detectMboxFolders(emails) {
-    // For now, just return a flat structure
-    // Could be enhanced to detect folders from headers
-    return [{
-        name: 'All Mail',
-        fullPath: 'All Mail',
-        emails: emails,
-        children: [],
-    }];
-}
+// ============================================
+// IMPORT MANAGEMENT
+// ============================================
 
 /**
  * Unmount an import.
@@ -287,6 +705,9 @@ function detectMboxFolders(emails) {
 export function unmountImport(importId) {
     mountedImports.delete(importId);
     renderImportsSection();
+    
+    // Notify app to clear main pane if needed
+    if (onImportUnmount) onImportUnmount(importId);
 }
 
 /**
@@ -310,10 +731,19 @@ export function getImportEmails(importId, folderPath = null) {
         return imp.emails;
     }
     
-    // For mbox, find the folder
+    // For mbox or apple-mbox, find the folder
     if (folderPath && imp.folders) {
         const folder = findFolder(imp.folders, folderPath);
-        return folder ? folder.emails : imp.emails;
+        return folder ? folder.emails : [];
+    }
+    
+    // If no folder specified, return all emails for flat imports
+    // or empty for tree imports (user should select a subfolder)
+    if (imp.folders && imp.folders.length > 0) {
+        // Has folder structure - if root has emails return those, otherwise empty
+        return imp.emails.length > 0 && !imp.folders.some(f => f.fullPath === imp.path) 
+            ? imp.emails 
+            : [];
     }
     
     return imp.emails;
@@ -332,6 +762,10 @@ function findFolder(folders, path) {
     }
     return null;
 }
+
+// ============================================
+// SIDEBAR RENDERING
+// ============================================
 
 /**
  * Render the imports section in the sidebar.
@@ -356,8 +790,8 @@ export function renderImportsSection() {
     let html = '';
     
     for (const imp of imports) {
-        const icon = imp.type === 'mbox' ? 'archive' : 'file-text';
-        const hasChildren = imp.type === 'mbox' && imp.folders && imp.folders.length > 0;
+        const icon = (imp.type === 'mbox' || imp.type === 'apple-mbox') ? 'archive' : 'folder-open';
+        const hasChildren = (imp.type === 'mbox' || imp.type === 'apple-mbox') && imp.folders && imp.folders.length > 0;
         
         html += `
             <div class="tree-item import-item" data-import-id="${imp.id}">

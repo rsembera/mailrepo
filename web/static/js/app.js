@@ -113,6 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initImports({
         onImportSelect: (importId) => loadImportEmails(importId),
         onImportFolderSelect: (importId, folder) => loadImportEmails(importId, folder),
+        onImportUnmount: (importId) => handleImportUnmount(importId),
     });
     
     initEventListeners();
@@ -287,10 +288,38 @@ function loadImportEmails(importId, folderPath = null) {
     
     // Store current view for returning from other views
     state.currentView = { type: 'import', id: importId, folder: folderPath };
+    state.currentSource = { type: 'import', importId };
     
-    // Render emails using existing email list component
-    renderEmailList(emails, { source: 'import', importId });
+    // Set emails in state and render
+    state.emails = emails;
+    renderEmailList();
     updateButtonStates();
+}
+
+/**
+ * Handle import unmount - clear main pane if viewing that import.
+ */
+function handleImportUnmount(importId) {
+    // Check if we're currently viewing this import
+    if (state.currentView?.type === 'import' && state.currentView?.id === importId) {
+        // Clear the view
+        state.currentView = null;
+        state.currentSource = null;
+        state.emails = [];
+        state.selectedEmails.clear();
+        
+        elements.contextTitle.textContent = 'Select a folder';
+        elements.contextMeta.textContent = '';
+        elements.emailList.innerHTML = `
+            <div class="empty-state">
+                <i data-lucide="arrow-left" class="empty-icon"></i>
+                <h3>No Folder Selected</h3>
+                <p>Select an account or archive folder from the sidebar to view emails.</p>
+            </div>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        updateButtonStates();
+    }
 }
 
 
