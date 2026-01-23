@@ -246,3 +246,57 @@
     font-size: 0.8rem;
     height: auto;
 }
+
+/* ============================================
+   IMPORTS SECTION
+   ============================================ */
+
+.import-item .tree-item-row {
+    position: relative;
+}
+
+.unmount-btn {
+    display: none;
+    padding: 2px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    border-radius: var(--radius-sm);
+    margin-left: auto;
+}
+
+.unmount-btn i {
+    width: 14px;
+    height: 14px;
+}
+
+.unmount-btn:hover {
+    color: var(--color-danger);
+    background: var(--color-background-secondary);
+}
+
+.import-item .tree-item-row:hover .unmount-btn {
+    display: flex;
+}
+
+.import-tree-item {
+    /* Container for import folder with children */
+}
+
+.import-folder-chevron {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: transform 0.15s;
+    color: var(--color-text-muted);
+}
+
+.import-folder-chevron:hover {
+    color: var(--color-text);
+}
+
+.import-tree-children {
+    /* Children container */
+}

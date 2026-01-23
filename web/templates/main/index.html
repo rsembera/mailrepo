@@ -26,6 +26,9 @@
                 <i data-lucide="trash-2"></i>
                 <span class="rail-badge hidden" id="trashBadge">0</span>
             </button>
+            <button class="rail-btn" id="importRailBtn" title="Import">
+                <i data-lucide="hard-drive-upload"></i>
+            </button>
         </div>
         <div class="rail-bottom">
             <button class="rail-btn" onclick="window.location.href='/settings'" title="Settings">
@@ -106,6 +109,18 @@
                     <i data-lucide="plus" class="tree-icon"></i>
                     <span class="tree-label">New Folder</span>
                 </button>
+            </div>
+        </div>
+        
+        <!-- Imports Section -->
+        <div class="sidebar-section" id="importsSection" style="display: none;">
+            <button class="section-header" data-section="imports">
+                <i data-lucide="chevron-right" class="chevron"></i>
+                <span>Imports</span>
+                <span class="section-count" id="importCount">0</span>
+            </button>
+            <div class="section-content expanded" id="importsList">
+                <!-- Mounted imports appear here -->
             </div>
         </div>
     </aside>
@@ -282,6 +297,35 @@
         </div>
     </div>
 </div>
+
+<!-- Import Modal -->
+<div class="modal-overlay" id="importModal">
+    <div class="modal-content modal-sm">
+        <div class="modal-header">
+            <h2>Import Emails</h2>
+        </div>
+        <p>Select import type:</p>
+        <div class="import-options">
+            <button class="import-option" id="importMboxBtn">
+                <i data-lucide="archive"></i>
+                <span class="import-option-title">Import .mbox file</span>
+                <span class="import-option-desc">Import an entire mailbox archive</span>
+            </button>
+            <button class="import-option" id="importEmlBtn">
+                <i data-lucide="file-text"></i>
+                <span class="import-option-title">Import .eml files</span>
+                <span class="import-option-desc">Import individual email files</span>
+            </button>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeModal('importModal')">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden file inputs for import -->
+<input type="file" id="mboxFileInput" accept=".mbox" style="display: none;">
+<input type="file" id="emlFileInput" accept=".eml" multiple style="display: none;">
 {% endblock %}
 
 {% block scripts %}

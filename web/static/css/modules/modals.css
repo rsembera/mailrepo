@@ -233,3 +233,53 @@
     height: 16px;
     color: var(--color-text-muted);
 }
+
+/* ============================================
+   IMPORT MODAL
+   ============================================ */
+
+.import-options {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    margin-top: var(--space-lg);
+}
+
+.import-option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-lg);
+    background: var(--color-background-secondary);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s;
+}
+
+.import-option:hover {
+    border-color: var(--color-primary);
+    background: var(--color-primary-lighter);
+}
+
+.import-option i {
+    width: 32px;
+    height: 32px;
+    color: var(--color-primary);
+    flex-shrink: 0;
+}
+
+.import-option-title {
+    display: block;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--color-text-heading);
+}
+
+.import-option-desc {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    margin-top: 2px;
+}

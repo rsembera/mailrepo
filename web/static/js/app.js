@@ -24,6 +24,7 @@ import { initMailView, selectView, loadAccountEmails, loadFolderEmails, openEmai
 import { initStaging, openStageModal, renderFolderSelectTree, handleFolderSelect, confirmStage, updateStagedBadge, updateButtonStates, goToReview, setSelectedDestinationFolder } from './components/staging.js';
 import { initFolderMgmt, showFolderManagementView, showFolderSelectionView, renameFolder, createSubfolder, openMoveFolder, confirmMoveFolder, deleteFolder, openColorPicker, handleFolderCheckbox, toggleAllFolders, stageSelectedFolders } from './views/folder-mgmt.js';
 import { initTrashView, showTrashView, updateTrashBadge, restoreFolder, permanentlyDeleteFolder, emptyTrash } from './views/trash.js';
+import { initImports, getImportEmails, getMountedImports, renderImportsSection } from './components/imports.js';
 
 // ============================================
 // DOM ELEMENTS
@@ -106,6 +107,12 @@ document.addEventListener('DOMContentLoaded', () => {
         onFolderSelect: (id) => selectView({ type: 'folder', id }),
         onAccountSelect: (id) => showFolderSelectionView(id),
         onImapFolderSelect: (accountId, folder) => selectView({ type: 'account', id: accountId, folder }),
+    });
+    
+    // Initialize imports component
+    initImports({
+        onImportSelect: (importId) => loadImportEmails(importId),
+        onImportFolderSelect: (importId, folder) => loadImportEmails(importId, folder),
     });
     
     initEventListeners();
@@ -260,6 +267,32 @@ function handleBeforeUnload(e) {
     }
 }
 
+/**
+ * Load emails from a mounted import.
+ */
+function loadImportEmails(importId, folderPath = null) {
+    const emails = getImportEmails(importId, folderPath);
+    const imports = getMountedImports();
+    const imp = imports.find(i => i.id === importId);
+    
+    if (!imp) {
+        showError('Import not found');
+        return;
+    }
+    
+    // Update header
+    const title = folderPath || imp.name;
+    elements.contextTitle.textContent = title;
+    elements.contextMeta.textContent = `${emails.length} email${emails.length !== 1 ? 's' : ''} (imported)`;
+    
+    // Store current view for returning from other views
+    state.currentView = { type: 'import', id: importId, folder: folderPath };
+    
+    // Render emails using existing email list component
+    renderEmailList(emails, { source: 'import', importId });
+    updateButtonStates();
+}
+
 
 // ============================================
 // LEFT RAIL VIEW SWITCHING
@@ -312,6 +345,8 @@ function showMailView() {
             loadAccountEmails(state.currentView.id, state.currentView.folder);
         } else if (state.currentView.type === 'folder') {
             loadFolderEmails(state.currentView.id);
+        } else if (state.currentView.type === 'import') {
+            loadImportEmails(state.currentView.id, state.currentView.folder);
         }
     } else {
         // No previous selection - show empty state
