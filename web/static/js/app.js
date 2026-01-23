@@ -381,19 +381,22 @@ function renderStagedList() {
                 <div class="staged-section-header">
                     <i data-lucide="folders"></i>
                     <span>Folders to Archive</span>
-                    <button class="btn btn-sm btn-secondary" onclick="unstageFolders()">
-                        <i data-lucide="x"></i> Clear
+                    <button class="btn btn-sm btn-ghost" onclick="unstageFolders()" title="Clear all folders">
+                        <i data-lucide="x"></i>
                     </button>
                 </div>
-                <div class="staged-folders-list">
+                <div class="staged-items-list">
         `;
         
-        state.stagedFolders.folders.forEach(folderPath => {
+        state.stagedFolders.folders.forEach((folderPath, index) => {
             html += `
-                <div class="staged-folder-item">
-                    <i data-lucide="folder"></i>
-                    <span class="folder-path">${escapeHtml(folderPath)}</span>
-                    <span class="staged-destination">→ ${escapeHtml(destName)}</span>
+                <div class="staged-list-item">
+                    <i data-lucide="folder" class="item-icon"></i>
+                    <span class="item-name">${escapeHtml(folderPath)}</span>
+                    <span class="item-destination">→ ${escapeHtml(destName)}</span>
+                    <button class="btn btn-sm btn-ghost unstage-btn" onclick="unstageFolder(${index})" title="Remove">
+                        <i data-lucide="x"></i>
+                    </button>
                 </div>
             `;
         });
@@ -408,41 +411,40 @@ function renderStagedList() {
     if (state.staged.size > 0) {
         const stagedArray = [...state.staged.entries()];
         
-        html += `<div class="staged-section">`;
-        if (state.stagedFolders?.folders?.length > 0) {
-            html += `
+        html += `
+            <div class="staged-section">
                 <div class="staged-section-header">
                     <i data-lucide="mail"></i>
                     <span>Emails to Archive</span>
                 </div>
-            `;
-        }
+                <div class="staged-items-list">
+        `;
         
         html += stagedArray.map(([emailId, data]) => {
             const email = data.email;
             const folder = state.folders.find(f => f.id == data.destinationFolderId);
             
             return `
-                <div class="email-item staged-item" data-id="${emailId}">
-                    <div class="email-content">
-                        <div class="email-header">
-                            <span class="email-sender">${escapeHtml(extractName(email.from || email.sender))}</span>
-                            <span class="email-date">${formatDate(email.date)}</span>
+                <div class="staged-list-item staged-email-item">
+                    <div class="item-content">
+                        <div class="item-header">
+                            <span class="item-sender">${escapeHtml(extractName(email.from || email.sender))}</span>
+                            <span class="item-date">${formatDate(email.date)}</span>
                         </div>
-                        <div class="email-subject">${escapeHtml(email.subject || '(no subject)')}</div>
-                        <div class="email-preview staged-destination">
-                            <i data-lucide="folder"></i>
-                            <span>→ ${escapeHtml(folder?.name || 'Unknown folder')}</span>
-                        </div>
+                        <div class="item-subject">${escapeHtml(email.subject || '(no subject)')}</div>
                     </div>
-                    <button class="btn btn-sm btn-secondary unstage-btn" onclick="unstageEmail('${emailId}')">
+                    <span class="item-destination">→ ${escapeHtml(folder?.name || 'Unknown folder')}</span>
+                    <button class="btn btn-sm btn-ghost unstage-btn" onclick="unstageEmail('${emailId}')" title="Remove">
                         <i data-lucide="x"></i>
                     </button>
                 </div>
             `;
         }).join('');
         
-        html += `</div>`;
+        html += `
+                </div>
+            </div>
+        `;
     }
     
     elements.emailList.innerHTML = html;
@@ -459,6 +461,32 @@ function unstageFolders() {
     }
 }
 window.unstageFolders = unstageFolders;
+
+function unstageFolder(index) {
+    if (!state.stagedFolders?.folders) return;
+    
+    state.stagedFolders.folders.splice(index, 1);
+    
+    // If no folders left, clear the whole object
+    if (state.stagedFolders.folders.length === 0) {
+        state.stagedFolders = null;
+    }
+    
+    // Update sessionStorage
+    if (state.stagedFolders) {
+        sessionStorage.setItem('stagedFolders', JSON.stringify(state.stagedFolders));
+    } else {
+        sessionStorage.removeItem('stagedFolders');
+    }
+    
+    updateStagedBadge();
+    
+    const activeBtn = document.querySelector('.rail-btn.active');
+    if (activeBtn?.dataset.view === 'staged') {
+        showStagedView();
+    }
+}
+window.unstageFolder = unstageFolder;
 
 function unstageEmail(emailId) {
     state.staged.delete(emailId);
