@@ -48,7 +48,7 @@
     gap: var(--space-xs);
     flex-shrink: 0;
     padding-top: var(--space-sm);
-    border-top: 1px solid var(--rail-btn-hover, rgba(255,255,255,0.1));
+    border-top: 2px solid rgba(255,255,255,0.2);
     margin-top: var(--space-sm);
 }
 
