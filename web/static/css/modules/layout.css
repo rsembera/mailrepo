@@ -18,17 +18,38 @@
     background: var(--rail-bg);
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
     padding: var(--space-md) 0;
     flex-shrink: 0;
+    height: 100vh;
+    position: sticky;
+    top: 0;
 }
 
-.rail-top,
+.rail-top {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-xs);
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+}
+
+/* Hide scrollbar but keep functionality */
+.rail-top::-webkit-scrollbar {
+    width: 0;
+}
+
 .rail-bottom {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: var(--space-xs);
+    flex-shrink: 0;
+    padding-top: var(--space-sm);
+    border-top: 1px solid var(--rail-btn-hover, rgba(255,255,255,0.1));
+    margin-top: var(--space-sm);
 }
 
 .rail-logo {
