@@ -178,10 +178,16 @@ def commit_staged():
     return jsonify({"results": results, "message": ". ".join(msg_parts) + "."})
 
 
-def _create_archive_folder_path(imap_folder: str, delimiter: str, parent_id: int) -> int:
-    """Create archive folders to mirror the IMAP folder path."""
+def _create_archive_folder_path(imap_folder: str, delimiter: str, parent_id: int) -> tuple[int, int]:
+    """
+    Create archive folders to mirror the IMAP folder path.
+    
+    Returns:
+        Tuple of (final_folder_id, folders_created_count)
+    """
     parts = imap_folder.split(delimiter)
     current_parent_id = parent_id
+    folders_created = 0
     
     for part in parts:
         existing = Database.fetchone(
@@ -196,8 +202,9 @@ def _create_archive_folder_path(imap_folder: str, delimiter: str, parent_id: int
                 (part, current_parent_id)
             )
             current_parent_id = cursor.lastrowid
+            folders_created += 1
     
-    return current_parent_id
+    return current_parent_id, folders_created
 
 
 @api_bp.route("/commit-folders", methods=["POST"])
@@ -235,11 +242,10 @@ def commit_folders():
         
         for imap_folder in imap_folders:
             try:
-                archive_folder_id = _create_archive_folder_path(
+                archive_folder_id, created_count = _create_archive_folder_path(
                     imap_folder, delimiter, dest_folder_id
                 )
-                if archive_folder_id != dest_folder_id:
-                    results["folders_created"] += 1
+                results["folders_created"] += created_count
                 
                 folder_info = client.select_folder(imap_folder)
                 if folder_info.get("message_count", 0) == 0:
