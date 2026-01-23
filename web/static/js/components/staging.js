@@ -161,21 +161,26 @@ export function updateStagedBadge() {
 }
 
 /**
- * Update stage/review button states based on current selection.
+ * Update stage button state and text based on current selection.
  */
 export function updateButtonStates() {
     // Re-query buttons in case they were recreated
     const currentStageBtn = document.getElementById('stageBtn');
-    const currentReviewBtn = document.getElementById('reviewBtn');
     
     if (currentStageBtn) {
         const canStage = state.currentView?.type === 'account' && state.selectedEmails.size > 0;
         currentStageBtn.disabled = !canStage;
-    }
-    if (currentReviewBtn) {
-        const hasEmails = state.staged.size > 0;
-        const hasFolders = state.stagedFolders?.destinationFolderId;
-        currentReviewBtn.disabled = !hasEmails && !hasFolders;
+        
+        // Update button text with count
+        const count = state.selectedEmails.size;
+        const textSpan = currentStageBtn.querySelector('span') || currentStageBtn.lastChild;
+        if (textSpan) {
+            if (textSpan.nodeType === Node.TEXT_NODE) {
+                textSpan.textContent = count > 0 ? ` Stage ${count} Email${count !== 1 ? 's' : ''}` : ' Stage Selected';
+            } else {
+                textSpan.textContent = count > 0 ? `Stage ${count} Email${count !== 1 ? 's' : ''}` : 'Stage Selected';
+            }
+        }
     }
 }
 

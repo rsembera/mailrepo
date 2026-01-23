@@ -66,6 +66,23 @@
     margin-top: var(--space-md);
 }
 
+/* Support for folder-tree component inside modal */
+.folder-select-list .folder-tree-item {
+    display: block;
+}
+
+.folder-select-list .folder-tree-row {
+    border-bottom: 1px solid var(--color-border-light, rgba(0,0,0,0.05));
+}
+
+.folder-select-list .folder-tree-item:last-child > .folder-tree-row {
+    border-bottom: none;
+}
+
+.folder-select-list .folder-tree-children {
+    display: block;
+}
+
 .folder-select-item-wrapper {
     /* Container for folder item and its children */
 }
@@ -118,15 +135,18 @@
     color: var(--color-text);
 }
 
-.folder-select-item-children {
+.folder-select-item-children,
+.folder-tree-children {
     /* Children container */
 }
 
-.folder-select-item-children .folder-select-item {
+.folder-select-item-children .folder-select-item,
+.folder-tree-children .folder-tree-row {
     border-bottom: none;
 }
 
-.folder-select-item-children .folder-select-item:not(:last-child) {
+.folder-select-item-children .folder-select-item:not(:last-child),
+.folder-tree-children .folder-tree-item:not(:last-child) .folder-tree-row {
     border-bottom: 1px solid var(--color-border-light, rgba(0,0,0,0.05));
 }
 

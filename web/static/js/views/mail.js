@@ -37,7 +37,7 @@ function restoreDefaultHeaderActions() {
         headerActions.innerHTML = `
             <button class="btn btn-primary" id="stageBtn" disabled>
                 <i data-lucide="package-plus"></i>
-                Stage Selected
+                <span>Stage Selected</span>
             </button>
         `;
         if (typeof lucide !== 'undefined') lucide.createIcons();
