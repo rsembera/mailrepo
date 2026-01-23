@@ -117,6 +117,7 @@ export function confirmStage() {
         modal.dataset.stagingMode = '';
         closeModal('stageModal');
         updateStagedBadge();
+        updateButtonStates();
         showAlert('Folders Staged', `${state.stagedFolders.folders.length} folder(s) staged for archiving. Click "Review & Commit" to proceed.`);
         return;
     }
