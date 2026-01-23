@@ -51,14 +51,28 @@ export function initStaging(config) {
 export function openStageModal() {
     if (state.selectedEmails.size === 0) return;
     
-    document.getElementById('stageCount').textContent = state.selectedEmails.size;
+    const modal = document.getElementById('stageModal');
+    if (!modal) return;
+    
+    // Reset modal header for email staging
+    const header = modal.querySelector('.modal-header h2');
+    if (header) {
+        header.innerHTML = `Stage <span id="stageCount">${state.selectedEmails.size}</span> Email(s)`;
+    }
+    
+    // Reset description paragraph
+    const desc = modal.querySelector('.modal-content > p');
+    if (desc) {
+        desc.textContent = 'Select destination folder:';
+    }
+    
     selectedDestinationFolder = null;
+    modal.dataset.stagingMode = '';
     
     renderFolderSelectTree();
     
     document.getElementById('confirmStageBtn').disabled = true;
-    
-    if (stageModal) stageModal.classList.add('active');
+    modal.classList.add('active');
 }
 
 /**
@@ -118,7 +132,7 @@ export function confirmStage() {
         closeModal('stageModal');
         updateStagedBadge();
         updateButtonStates();
-        showAlert('Folders Staged', `${state.stagedFolders.folders.length} folder(s) staged for archiving. Click "Review & Commit" to proceed.`);
+        showAlert('Folders Staged', `${state.stagedFolders.folders.length} folder(s) staged for archiving. Go to Staged Items to commit.`);
         return;
     }
     
