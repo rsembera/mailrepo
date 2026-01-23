@@ -14,7 +14,7 @@
 // IMPORTS
 // ============================================
 
-import { escapeHtml, extractName, formatDate, debounce } from './utils.js';
+import { escapeHtml, debounce } from './utils.js';
 import { state, loadFolders } from './state.js';
 import { closeModal, showPrompt, showConfirm, showAlert, initModalListeners } from './modals.js';
 import { renderFolderTree } from './components/folder-tree.js';
@@ -282,7 +282,8 @@ function handleBeforeUnload(e) {
                     showMailView();
                     break;
                 case 'staged':
-                    showStagedView();
+                    // Go directly to review page
+                    goToReview();
                     break;
                 case 'folders':
                     showFolderManagementView();
@@ -326,186 +327,6 @@ function showMailView() {
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 }
-
-function showStagedView() {
-    const sidebar = document.getElementById('sidebar');
-    const toolbar = document.querySelector('.content-toolbar');
-    const headerActions = document.querySelector('.header-actions');
-    
-    sidebar.style.display = 'none';
-    if (toolbar) toolbar.style.display = 'none';
-    
-    const emailCount = state.staged.size;
-    const folderCount = state.stagedFolders.length;
-    const totalCount = emailCount + folderCount;
-    
-    // Set header action for staged view - commit button only
-    if (headerActions) {
-        headerActions.innerHTML = `
-            <button class="btn btn-primary" id="commitBtnStaged" ${totalCount === 0 ? 'disabled' : ''}>
-                <i data-lucide="archive"></i>
-                Commit to Archive
-            </button>
-        `;
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-        
-        document.getElementById('commitBtnStaged')?.addEventListener('click', () => {
-            import('./components/staging.js').then(m => m.goToReview());
-        });
-    }
-    
-    elements.contextTitle.textContent = 'Staged Items';
-    
-    let metaParts = [];
-    if (emailCount > 0) metaParts.push(`${emailCount} email${emailCount !== 1 ? 's' : ''}`);
-    if (folderCount > 0) metaParts.push(`${folderCount} folder${folderCount !== 1 ? 's' : ''}`);
-    elements.contextMeta.textContent = metaParts.length > 0 ? metaParts.join(', ') + ' staged' : 'Nothing staged';
-    
-    if (totalCount === 0) {
-        elements.emailList.innerHTML = `
-            <div class="empty-state">
-                <i data-lucide="package" class="empty-icon"></i>
-                <h3>Nothing Staged</h3>
-                <p>Select emails or folders to prepare them for archiving.</p>
-            </div>
-        `;
-    } else {
-        renderStagedList();
-    }
-    
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-}
-
-function renderStagedList() {
-    let html = '';
-    
-    // Render staged folders first
-    if (state.stagedFolders.length > 0) {
-        html += `
-            <div class="staged-section">
-                <div class="staged-section-header">
-                    <i data-lucide="folders"></i>
-                    <span>Folders to Archive</span>
-                    <button class="btn btn-sm btn-ghost" onclick="unstageFolders()" title="Clear all folders">
-                        <i data-lucide="x"></i>
-                    </button>
-                </div>
-                <div class="staged-items-list">
-        `;
-        
-        state.stagedFolders.forEach((sf, index) => {
-            const destFolder = state.folders.find(f => f.id == sf.destinationFolderId);
-            const destName = destFolder?.name || 'Unknown folder';
-            
-            html += `
-                <div class="staged-list-item">
-                    <i data-lucide="folder" class="item-icon"></i>
-                    <span class="item-name">${escapeHtml(sf.folder)}</span>
-                    <span class="item-destination">→ ${escapeHtml(destName)}</span>
-                    <button class="btn btn-sm btn-ghost unstage-btn" onclick="unstageFolder(${index})" title="Remove">
-                        <i data-lucide="x"></i>
-                    </button>
-                </div>
-            `;
-        });
-        
-        html += `
-                </div>
-            </div>
-        `;
-    }
-    
-    // Render staged emails
-    if (state.staged.size > 0) {
-        const stagedArray = [...state.staged.entries()];
-        
-        html += `
-            <div class="staged-section">
-                <div class="staged-section-header">
-                    <i data-lucide="mail"></i>
-                    <span>Emails to Archive</span>
-                </div>
-                <div class="staged-items-list">
-        `;
-        
-        html += stagedArray.map(([emailId, data]) => {
-            const email = data.email;
-            const folder = state.folders.find(f => f.id == data.destinationFolderId);
-            
-            return `
-                <div class="staged-list-item staged-email-item">
-                    <div class="item-content">
-                        <div class="item-header">
-                            <span class="item-sender">${escapeHtml(extractName(email.from || email.sender))}</span>
-                            <span class="item-date">${formatDate(email.date)}</span>
-                        </div>
-                        <div class="item-subject">${escapeHtml(email.subject || '(no subject)')}</div>
-                    </div>
-                    <span class="item-destination">→ ${escapeHtml(folder?.name || 'Unknown folder')}</span>
-                    <button class="btn btn-sm btn-ghost unstage-btn" onclick="unstageEmail('${emailId}')" title="Remove">
-                        <i data-lucide="x"></i>
-                    </button>
-                </div>
-            `;
-        }).join('');
-        
-        html += `
-                </div>
-            </div>
-        `;
-    }
-    
-    elements.emailList.innerHTML = html;
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-}
-
-function unstageFolders() {
-    state.stagedFolders = [];
-    sessionStorage.removeItem('stagedFolders');
-    updateStagedBadge();
-    
-    const activeBtn = document.querySelector('.rail-btn.active');
-    if (activeBtn?.dataset.view === 'staged') {
-        showStagedView();
-    }
-}
-window.unstageFolders = unstageFolders;
-
-function unstageFolder(index) {
-    if (!state.stagedFolders.length) return;
-    
-    state.stagedFolders.splice(index, 1);
-    
-    // Update sessionStorage
-    if (state.stagedFolders.length > 0) {
-        sessionStorage.setItem('stagedFolders', JSON.stringify(state.stagedFolders));
-    } else {
-        sessionStorage.removeItem('stagedFolders');
-    }
-    
-    updateStagedBadge();
-    
-    const activeBtn = document.querySelector('.rail-btn.active');
-    if (activeBtn?.dataset.view === 'staged') {
-        showStagedView();
-    }
-}
-window.unstageFolder = unstageFolder;
-
-function unstageEmail(emailId) {
-    state.staged.delete(emailId);
-    updateStagedBadge();
-    
-    // Re-render if still in staged view
-    const activeBtn = document.querySelector('.rail-btn.active');
-    if (activeBtn?.dataset.view === 'staged') {
-        showStagedView();
-    }
-}
-window.unstageEmail = unstageEmail;
-
-
-window.unstageFolders = unstageFolders;
 
 /**
  * Restore staged items from sessionStorage.

@@ -236,7 +236,7 @@ function renderReviewList() {
                                 ${renderFolderOptions(sf.destinationFolderId)}
                             </div>
                         </div>
-                        <button class="btn btn-sm btn-ghost unstage-btn" onclick="unstageFolder(${sf.index})" title="Remove from staging">
+                        <button class="btn btn-sm btn-icon btn-danger-subtle" onclick="unstageFolder(${sf.index})" title="Remove">
                             <i data-lucide="x"></i>
                         </button>
                     </li>
@@ -326,7 +326,7 @@ function renderReviewList() {
                             </div>
                         </div>
                     </div>
-                    <button class="btn btn-sm btn-ghost unstage-btn" onclick="unstageEmail('${item.emailId}')" title="Remove from staging">
+                    <button class="btn btn-sm btn-icon btn-danger-subtle" onclick="unstageEmail('${item.emailId}')" title="Remove">
                         <i data-lucide="x"></i>
                     </button>
                 </div>
