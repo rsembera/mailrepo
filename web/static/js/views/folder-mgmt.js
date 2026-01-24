@@ -447,6 +447,9 @@ export async function showFolderSelectionView(accountId) {
     currentFolderSelectionAccountId = accountId;
     selectedFoldersForStaging.clear();
     
+    // Track this view so it can be restored
+    state.currentView = { type: 'accountFolders', id: accountId };
+    
     const accountRow = document.querySelector(`.tree-item-row[data-type="account"][data-id="${accountId}"]`);
     const accountName = accountRow?.querySelector('.tree-label')?.textContent || 'Account';
     

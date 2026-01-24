@@ -397,6 +397,8 @@ function showMailView() {
             loadFolderEmails(state.currentView.id);
         } else if (state.currentView.type === 'import') {
             loadImportEmails(state.currentView.id, state.currentView.folder);
+        } else if (state.currentView.type === 'accountFolders') {
+            showFolderSelectionView(state.currentView.id);
         }
     } else {
         // No previous selection - show empty state
