@@ -275,6 +275,7 @@
     font-weight: 600;
     font-size: 0.95rem;
     color: var(--color-text-heading);
+    font-family: var(--font-ui);
 }
 
 .import-option-desc {
@@ -282,6 +283,7 @@
     font-size: 0.8rem;
     color: var(--color-text-muted);
     margin-top: 2px;
+    font-family: var(--font-body);
 }
 
 /* ============================================
