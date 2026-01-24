@@ -81,21 +81,3 @@ def create_archive():
     is_first_run = folder_count["count"] == 0
     
     return render_template("main/create_archive.html", is_first_run=is_first_run)
-
-
-@main_bp.route("/review")
-def review():
-    """Review staged emails before committing."""
-    folders = Database.fetchall("SELECT * FROM folders ORDER BY name")
-    accounts = Database.fetchall("SELECT id, name, email FROM accounts ORDER BY name")
-    # Convert Row objects to dicts for JSON serialization
-    accounts_list = [dict(a) for a in accounts]
-    return render_template("main/review.html", folders=folders, accounts=accounts_list)
-
-
-@main_bp.route("/settings")
-def settings():
-    """Application settings page."""
-    accounts = Database.fetchall("SELECT * FROM accounts ORDER BY name")
-    folders = Database.fetchall("SELECT * FROM folders ORDER BY name")
-    return render_template("main/settings.html", accounts=accounts, folders=folders)
