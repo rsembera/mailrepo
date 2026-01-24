@@ -10,16 +10,17 @@
 
 {% block content %}
 <div class="settings-container">
-    <header class="settings-header">
-        <h1>
-            <i data-lucide="settings"></i>
-            Settings
-        </h1>
-        <a href="/" class="btn btn-secondary">
-            <i data-lucide="arrow-left"></i>
-            Back
-        </a>
-    </header>
+    <div class="settings-card">
+        <header class="settings-header">
+            <h1>
+                <i data-lucide="settings"></i>
+                Settings
+            </h1>
+            <a href="/" class="btn btn-secondary">
+                <i data-lucide="arrow-left"></i>
+                Back
+            </a>
+        </header>
     
     <!-- Appearance Section -->
     <details class="settings-section">
@@ -207,6 +208,7 @@
             About {{ app_name }}
         </a>
     </div>
+    </div><!-- /.settings-card -->
 </div>
 
 <!-- About Modal -->

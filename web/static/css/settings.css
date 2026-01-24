@@ -4,16 +4,26 @@
 
 /* Settings Page Layout */
 .settings-container {
-    max-width: 800px;
+    max-width: 750px;
     margin: 0 auto;
     padding: var(--space-xl);
+}
+
+/* Outer card wrapper */
+.settings-card {
+    background: white;
+    border-radius: 1rem;
+    padding: 2rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
 .settings-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--space-xl);
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--color-border);
 }
 
 .settings-header h1 {
@@ -31,23 +41,26 @@
 
 /* Collapsible Sections */
 .settings-section {
-    background: var(--color-background, white);
-    border-radius: var(--radius-xl);
-    margin-bottom: var(--space-lg);
-    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-md);
     overflow: visible;
+}
+
+.settings-section:last-of-type {
+    margin-bottom: 0;
 }
 
 .settings-section-header {
     display: flex;
     align-items: flex-start;
     gap: var(--space-md);
-    padding: var(--space-xl);
+    padding: var(--space-lg);
     cursor: pointer;
     user-select: none;
     list-style: none;
     transition: background-color 0.2s;
-    border-radius: var(--radius-xl);
+    border-radius: var(--radius-lg);
 }
 
 .settings-section-header:hover {
@@ -97,7 +110,7 @@ details[open] .settings-section-header .arrow {
 }
 
 .settings-section-content {
-    padding: 0 var(--space-xl) var(--space-xl) var(--space-xl);
+    padding: 0 var(--space-lg) var(--space-lg) var(--space-lg);
 }
 
 /* Account Cards */
@@ -383,8 +396,8 @@ details[open] .settings-section-header .arrow {
 /* Footer section with About link */
 .footer-section {
     text-align: center;
-    margin-top: 3rem;
-    padding-top: 2rem;
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
     border-top: 1px solid var(--color-border);
 }
 
