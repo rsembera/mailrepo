@@ -2,6 +2,13 @@
 
 ## High Priority
 
+### Import Folder Staging (Session 12 - Incomplete)
+- Individual email staging from imports WORKS
+- Folder staging for imports was attempted but reverted
+- Need to REUSE existing IMAP folder selection code, not reimplement
+- Key files: `views/folder-mgmt.js` has `showFolderSelectionView()`, `handleFolderCheckbox()`, etc.
+- See SESSION_NOTES.md for detailed lessons learned
+
 ### Progress Indicator for Email Loading
 - Currently shows spinner for all folder loads
 - Implement progress bar for folders with >50 emails
@@ -9,13 +16,10 @@
 - Backend needs to return count first, then stream/batch emails
 - Threshold (50) could be configurable in settings later
 
-### IMAP Folder Sync/Caching
-- Currently re-fetches all emails from IMAP on every folder click
-- Store UIDVALIDITY and highest UID seen per folder
-- On folder load: check UIDVALIDITY (if changed, cache invalid)
-- If valid: only fetch emails with UID > last seen (new emails only)
-- Cache headers locally (SQLite or in-memory for session)
-- Significant performance improvement for large folders
+### IMAP Folder Caching Improvements
+- Basic caching with UIDVALIDITY implemented
+- Could optimize for very large folders
+- Consider background refresh
 
 ## Medium Priority
 
@@ -31,6 +35,12 @@
 - "After commit" dropdown exists in review UI for folders
 - Backend doesn't yet implement archive/trash/delete for source IMAP folders
 - Currently only "Leave in place" actually works
+
+### Review Page Polish
+- Logout was hardcoded to /logout instead of /auth/logout (need to fix)
+- Consider "Unstage All" button
+- Group staged items by source (IMAP vs Import)
+- Hide "After commit" dropdown for imports (doesn't apply)
 
 ---
 
