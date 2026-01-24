@@ -5,6 +5,7 @@
  */
 
 import { getStagedEmails, getStagedFolders, clearStagedEmail, clearStagedFolder, clearAllStaged, updateStagedBadge } from '../components/staging.js';
+import { showConfirm } from '../modals.js';
 
 let contextTitle = null;
 let contextMeta = null;
@@ -52,8 +53,13 @@ export async function showReviewView() {
         `;
         if (typeof lucide !== 'undefined') lucide.createIcons();
         
-        document.getElementById('unstageAllBtn')?.addEventListener('click', () => {
-            if (confirm('Are you sure you want to unstage all items?')) {
+        document.getElementById('unstageAllBtn')?.addEventListener('click', async () => {
+            const confirmed = await showConfirm(
+                'Unstage All Items',
+                'Are you sure you want to unstage all items? This cannot be undone.',
+                { confirmText: 'Unstage All', confirmClass: 'btn-danger' }
+            );
+            if (confirmed) {
                 unstageAll();
             }
         });
