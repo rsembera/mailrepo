@@ -353,13 +353,24 @@ function loadImportEmails(importId, folderPath = null) {
  * Handle import unmount - clear main pane if viewing that import.
  */
 function handleImportUnmount(importId) {
-    // Check if we're currently viewing this import
-    if (state.currentView?.type === 'import' && state.currentView?.id === importId) {
+    // Check if we're currently viewing this import (either emails or folder selection)
+    const viewingThisImport = state.currentView?.id === importId && 
+        (state.currentView?.type === 'import' || state.currentView?.type === 'importFolders');
+    
+    if (viewingThisImport) {
         // Clear the view
         state.currentView = null;
         state.currentSource = null;
         state.emails = [];
         state.selectedEmails.clear();
+        
+        // Hide toolbar since nothing is selected
+        const toolbar = document.querySelector('.content-toolbar');
+        if (toolbar) toolbar.style.display = 'none';
+        
+        // Clear header actions
+        const headerActions = document.querySelector('.header-actions');
+        if (headerActions) headerActions.innerHTML = '';
         
         elements.contextTitle.textContent = 'Select a folder';
         elements.contextMeta.textContent = '';
