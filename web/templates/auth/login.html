@@ -8,6 +8,9 @@
 <div class="auth-container">
     <div class="auth-card">
         <div class="auth-header">
+            <div class="auth-logo">
+                <img src="{{ url_for('static', filename='assets/icon.png') }}" alt="MailRepo">
+            </div>
             <h1>{{ app_name }}</h1>
             <p class="auth-subtitle">Enter your master password to continue</p>
         </div>
@@ -45,6 +48,10 @@
                 <button type="submit" class="btn btn-primary btn-full">Unlock</button>
             </div>
         </form>
+        
+        <div class="auth-footer">
+            <p class="security-note">Your data is encrypted with AES-256</p>
+        </div>
     </div>
 </div>
 {% endblock %}

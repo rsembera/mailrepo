@@ -8,6 +8,9 @@
 <div class="auth-container">
     <div class="auth-card">
         <div class="auth-header">
+            <div class="auth-logo">
+                <img src="{{ url_for('static', filename='assets/icon.png') }}" alt="MailRepo">
+            </div>
             <h1>Welcome to {{ app_name }}</h1>
             <p class="auth-subtitle">Create a master password to secure your archives</p>
         </div>
@@ -34,7 +37,7 @@
                     autocomplete="new-password"
                     autofocus
                 >
-                <span class="helper-text">At least 8 characters. This password encrypts your OAuth tokens and secure archives.</span>
+                <span class="helper-text">At least 8 characters</span>
             </div>
             
             <div class="form-group">
@@ -57,7 +60,7 @@
         <div class="auth-footer">
             <p class="security-note">
                 <strong>Important:</strong> This password cannot be recovered. 
-                If you forget it, you'll need to reset the application and lose access to encrypted archives.
+                If you forget it, you'll need to reset the application.
             </p>
         </div>
     </div>
