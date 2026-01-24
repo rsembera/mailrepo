@@ -51,10 +51,10 @@
 
 .rail-divider {
     width: 24px;
-    height: 1px;
+    height: 2px;
     background: var(--rail-text);
-    opacity: 0.3;
-    margin: var(--space-sm) 0;
+    opacity: 0.5;
+    margin: var(--space-md) 0;
 }
 
 .rail-logo {
