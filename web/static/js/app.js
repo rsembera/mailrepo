@@ -20,7 +20,7 @@ import { closeModal, showPrompt, showConfirm, showAlert, initModalListeners } fr
 import { renderFolderTree } from './components/folder-tree.js';
 import { initEmailList, renderEmailList, toggleEmailSelection, handleSelectAll, updateSelectAllState } from './components/email-list.js';
 import { initSidebar, toggleSection, handleTreeItemClick, updateSidebarFolders, refreshSidebarFolders, loadAccountLabels, buildImapFolderTree, getFolderIcon } from './components/sidebar.js';
-import { initMailView, selectView, loadAccountEmails, loadFolderEmails, openEmailViewer, closeEmailViewer, showLoading, showError } from './views/mail.js';
+import { initMailView, selectView, loadAccountEmails, loadFolderEmails, openEmailViewer, closeEmailViewer, showLoading, showError, restoreDefaultHeaderActions } from './views/mail.js';
 import { initStaging, openStageModal, renderFolderSelectTree, handleFolderSelect, confirmStage, updateStagedBadge, updateButtonStates, goToReview, setSelectedDestinationFolder } from './components/staging.js';
 import { initFolderMgmt, showFolderManagementView, showFolderSelectionView, showImportFolderSelectionView, renameFolder, createSubfolder, openMoveFolder, confirmMoveFolder, deleteFolder, openColorPicker, handleFolderCheckbox, toggleAllFolders, stageSelectedFolders } from './views/folder-mgmt.js';
 import { initTrashView, showTrashView, updateTrashBadge, restoreFolder, permanentlyDeleteFolder, emptyTrash } from './views/trash.js';
@@ -318,6 +318,9 @@ function handleImportSelect(importId) {
  * Load emails from a mounted import.
  */
 function loadImportEmails(importId, folderPath = null) {
+    // Restore default header actions and toolbar
+    restoreDefaultHeaderActions();
+    
     const emails = getImportEmails(importId, folderPath);
     const imports = getMountedImports();
     const imp = imports.find(i => i.id === importId);

@@ -23,7 +23,7 @@ let onButtonStatesUpdate = null;
 /**
  * Restore default header actions for email list view (Stage Selected only).
  */
-function restoreDefaultHeaderActions() {
+export function restoreDefaultHeaderActions() {
     const headerActions = document.querySelector('.header-actions');
     const toolbar = document.querySelector('.content-toolbar');
     const sidebar = document.getElementById('sidebar');
