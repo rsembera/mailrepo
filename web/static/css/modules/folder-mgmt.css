@@ -5,9 +5,9 @@
    ============================================ */
 
 .folder-management-list {
-    padding: var(--space-md);
-    padding-left: var(--space-xl);
-    padding-right: var(--space-xl);
+    max-width: 850px;
+    margin: 0 auto;
+    padding: var(--space-lg);
 }
 
 .folder-management-header {

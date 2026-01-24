@@ -5,7 +5,9 @@
    ============================================ */
 
 .folder-selection-view {
-    padding: var(--space-md);
+    max-width: 850px;
+    margin: 0 auto;
+    padding: var(--space-lg);
 }
 
 .folder-selection-toolbar {
