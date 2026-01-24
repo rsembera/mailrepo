@@ -95,7 +95,7 @@ function renderFolderOptions(selectedId) {
 }
 
 function getAccountName(accountId) {
-    if (accountId === 'import') return 'Imported';
+    if (accountId === 'import' || accountId === null || accountId === undefined) return 'Imported';
     const account = accounts.find(a => a.id == accountId);
     return account ? (account.name || account.email) : `Account ${accountId}`;
 }
@@ -557,7 +557,9 @@ async function commitAll() {
         toCommit.push({
             email: data.email,
             destinationFolderId: data.destinationFolderId,
+            sourceType: data.sourceType || 'imap',
             sourceAccountId: data.sourceAccountId,
+            sourceImportId: data.sourceImportId,
             sourceFolder: data.sourceFolder,
             sourceAction: sourceActions[data.sourceAccountId] || 'leave',
         });

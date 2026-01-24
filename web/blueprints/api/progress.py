@@ -296,15 +296,113 @@ def stream_commit():
         
         yield sse_message("start", {"total": total, "type": "emails"})
         
-        # Group by account
+        # Separate imports from IMAP items
+        import_items = [item for item in staged if item.get("sourceType") == "import"]
+        imap_items = [item for item in staged if item.get("sourceType") != "import"]
+        
+        processed = 0
+        
+        # Process imports first (no IMAP connection needed)
+        for item in import_items:
+            processed += 1
+            email_data = item.get("email", {})
+            folder_id = item.get("destinationFolderId")
+            uid = email_data.get("uid", "")
+            subject = email_data.get("subject", "(no subject)")[:50]
+            
+            try:
+                # Check destination folder exists
+                folder = Database.fetchone(
+                    "SELECT id FROM folders WHERE id = ?", (folder_id,)
+                )
+                if not folder:
+                    raise ValueError(f"Folder {folder_id} not found")
+                
+                # Check for duplicate
+                message_id = email_data.get("message_id", "")
+                if message_id:
+                    existing = Database.fetchone(
+                        "SELECT id FROM messages WHERE folder_id = ? AND message_id = ?",
+                        (folder_id, message_id)
+                    )
+                    if existing:
+                        results["skipped"].append({
+                            "uid": uid,
+                            "reason": "duplicate",
+                            "subject": subject,
+                        })
+                        yield sse_message("progress", {
+                            "current": processed,
+                            "total": total,
+                            "percent": int(processed / total * 100),
+                            "status": "skipped",
+                            "subject": subject,
+                        })
+                        continue
+                
+                # Get raw email from source file
+                source_path = email_data.get("sourcePath")
+                if not source_path:
+                    raise ValueError("No source path for imported email")
+                
+                raw_email = _get_raw_email_from_import(source_path, uid)
+                if not raw_email:
+                    raise ValueError("Could not retrieve email content")
+                
+                body_text = _extract_body_text(raw_email)
+                
+                archive_path = Config.get_archive_path() / str(folder_id)
+                archive_path.mkdir(parents=True, exist_ok=True)
+                
+                safe_id = f"import_{uid.replace('/', '_').replace(':', '_')}"
+                encrypted_data = Encryption.encrypt(raw_email)
+                filepath = archive_path / f"{safe_id}.eml.enc"
+                filepath.write_bytes(encrypted_data)
+                
+                Database.execute(
+                    """
+                    INSERT INTO messages 
+                    (folder_id, source_account_id, message_id, subject, sender, date, filepath, body_text)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        folder_id,
+                        None,  # No source account for imports
+                        message_id,
+                        email_data.get("subject", ""),
+                        email_data.get("from", email_data.get("sender", "")),
+                        email_data.get("date"),
+                        str(filepath.relative_to(Config.get_base_path())),
+                        body_text,
+                    )
+                )
+                
+                results["success"].append(uid)
+                yield sse_message("progress", {
+                    "current": processed,
+                    "total": total,
+                    "percent": int(processed / total * 100),
+                    "status": "success",
+                    "subject": subject,
+                })
+                
+            except Exception as e:
+                results["failed"].append({"uid": uid, "error": str(e)})
+                yield sse_message("progress", {
+                    "current": processed,
+                    "total": total,
+                    "percent": int(processed / total * 100),
+                    "status": "failed",
+                    "subject": subject,
+                })
+        
+        # Group IMAP items by account
         by_account = {}
-        for item in staged:
+        for item in imap_items:
             acc_id = item.get("sourceAccountId")
             if acc_id not in by_account:
                 by_account[acc_id] = []
             by_account[acc_id].append(item)
-        
-        processed = 0
         
         for account_id, items in by_account.items():
             account = Database.fetchone(
@@ -495,6 +593,70 @@ def stream_commit():
             "X-Accel-Buffering": "no",
         }
     )
+
+
+def _get_raw_email_from_import(source_path: str, uid: str) -> bytes:
+    """
+    Get raw email content from an imported source.
+    
+    Args:
+        source_path: Path to mbox file or emlx/eml file
+        uid: Email UID (e.g., "mbox-5" or "emlx-12345.emlx")
+        
+    Returns:
+        Raw email bytes
+    """
+    import os
+    import mailbox
+    
+    if not source_path or not os.path.exists(source_path):
+        return None
+    
+    # Handle .emlx files (Apple Mail format)
+    if source_path.endswith('.emlx'):
+        try:
+            with open(source_path, 'rb') as f:
+                content = f.read()
+            # .emlx files start with a line containing the byte count, skip it
+            first_newline = content.find(b'\n')
+            if first_newline > 0:
+                email_content = content[first_newline + 1:]
+                # Find where the email ends (before Apple's plist metadata)
+                plist_marker = email_content.rfind(b'<?xml version=')
+                if plist_marker > 0:
+                    email_content = email_content[:plist_marker]
+                return email_content
+        except Exception as e:
+            print(f"Error reading emlx: {e}")
+            return None
+    
+    # Handle mbox files
+    if uid.startswith('mbox-') or uid.startswith('apple-'):
+        try:
+            # Extract index from uid (e.g., "mbox-5" -> 5)
+            parts = uid.split('-')
+            if len(parts) >= 2:
+                # Could be "mbox-5" or "apple-filename.mbox-5"
+                index = int(parts[-1])
+                
+                mbox = mailbox.mbox(source_path)
+                for i, message in enumerate(mbox):
+                    if i == index:
+                        return message.as_bytes()
+        except Exception as e:
+            print(f"Error reading mbox: {e}")
+            return None
+    
+    # Handle standalone .eml files
+    if source_path.endswith('.eml'):
+        try:
+            with open(source_path, 'rb') as f:
+                return f.read()
+        except Exception as e:
+            print(f"Error reading eml: {e}")
+            return None
+    
+    return None
 
 
 def _extract_body_text(raw_email: bytes) -> str:

@@ -62,6 +62,10 @@ export function initImports(config = {}) {
  * Show the import type selection modal.
  */
 function showImportModal() {
+    // Switch to Mail view first
+    const mailBtn = document.querySelector('.rail-btn[data-view="mail"]');
+    if (mailBtn) mailBtn.click();
+    
     const modal = document.getElementById('importModal');
     if (modal) {
         modal.classList.add('active');
@@ -89,12 +93,17 @@ window.closeModal = closeModal;
  */
 function initFilePicker() {
     const upBtn = document.getElementById('filePickerUp');
+    const refreshBtn = document.getElementById('filePickerRefresh');
     const confirmBtn = document.getElementById('filePickerConfirm');
     const showHidden = document.getElementById('filePickerShowHidden');
     const appleMode = document.getElementById('filePickerAppleMode');
     
     upBtn?.addEventListener('click', () => {
         navigateToParent();
+    });
+    
+    refreshBtn?.addEventListener('click', () => {
+        loadFilePickerDirectory(filePickerPath);
     });
     
     confirmBtn?.addEventListener('click', () => {

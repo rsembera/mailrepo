@@ -158,12 +158,23 @@ export function confirmStage() {
     state.selectedEmails.forEach(emailId => {
         const email = state.emails.find(e => (e.uid || e.id) === emailId);
         if (email) {
-            state.staged.set(emailId, {
+            const stagedItem = {
                 email,
                 destinationFolderId: selectedDestinationFolder,
-                sourceAccountId: state.currentView.type === 'account' ? state.currentView.id : null,
-                sourceFolder: state.currentView.folder || 'INBOX',
-            });
+            };
+            
+            // Track source based on view type
+            if (state.currentView.type === 'account') {
+                stagedItem.sourceType = 'imap';
+                stagedItem.sourceAccountId = state.currentView.id;
+                stagedItem.sourceFolder = state.currentView.folder || 'INBOX';
+            } else if (state.currentView.type === 'import') {
+                stagedItem.sourceType = 'import';
+                stagedItem.sourceImportId = state.currentView.id;
+                stagedItem.sourceFolder = state.currentView.folder || null;
+            }
+            
+            state.staged.set(emailId, stagedItem);
         }
     });
     
