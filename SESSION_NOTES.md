@@ -1,41 +1,28 @@
 # MailRepo - Session Notes
 
-## TODO for Next Session
+## Session 13 (January 24, 2026)
 
-### Quick Fixes Needed
-- [ ] Remove "Review & Commit" button from index.html (was removed but reverted)
-- [ ] Revisit Settings screen styling - may not fit with rest of app aesthetic
+### Completed
+- [x] **Welcome state for main page** - Replaced empty "Select a folder" with welcoming screen
+  - Hides toolbar (Select All, Search) until content loads
+  - Shows friendly message with link to Settings
+  - Uses mail icon instead of arrow
+- [x] **Remove "Review & Commit" button** - Removed from header (redundant with left rail)
+- [x] **Fix Review page logout** - Changed from GET link to POST form
+- [x] **Add "Unstage All" button** - Added to Review page header with confirmation
 
-### Import Folder Staging (Session 12 - Incomplete)
+### Still TODO
+
+#### Settings Screen Styling
+- May not fit with rest of app aesthetic - revisit
+
+#### Import Folder Staging (Session 12 - Incomplete)
 - Individual email staging from imports WORKS (commit `2a44c39`)
 - Folder staging for imports was attempted but reverted
   - Backend `/api/commit/stream` handles imports via `_get_raw_email_from_import()`
   - Supports mbox, emlx, and eml files
   - Staging tracks `sourceType: 'import'` and `sourceImportId`
 
-### Reverted (Commits after 2a44c39)
-We attempted to add folder staging for imports but made a mess. Key mistakes:
-
-1. **Reimplemented folder selection instead of reusing IMAP code**
-   - Created new functions in app.js: `showImportFolderSelectionView()`, `handleImportFolderCheckbox()`, etc.
-   - Should have extended/reused `views/folder-mgmt.js` which already has working folder selection
-
-2. **Parent/child checkbox logic was buggy**
-   - Didn't match IMAP behavior (parent shouldn't auto-select when child selected)
-   - Count in Stage button didn't update correctly
-
-3. **Review page changes cascaded problems**
-   - Changed grouping from accountId to sourceKey
-   - Broke getAccountName → getSourceName
-   - Import names showing as "Import: eml-1769225460843" instead of friendly names
-
-### What Needs to Be Done (Next Session)
-
-#### 1. Fix Review Page (Quick Wins)
-- [ ] Logout link: change `/logout` to `{{ url_for('auth.logout') }}` in review.html
-- [ ] Add "Unstage All" button
-
-#### 2. Import Folder Staging (Do It Right)
 The IMAP folder selection in `views/folder-mgmt.js` has:
 - `showFolderSelectionView(accountId)` - shows folder tree with checkboxes
 - `handleFolderCheckbox(checkbox, folderPath)` - handles check/uncheck with proper parent/child logic
@@ -52,26 +39,19 @@ Key differences for imports:
 - Source is importId, not accountId
 - Folder tree comes from mounted import, not IMAP API
 
-#### 3. Review Page Source Grouping
-- Group by source type (IMAP accounts vs Imports)
-- Use friendly import names (from mount, stored in sessionStorage)
-- Hide "After commit" dropdown for import sources
-
-### Files Changed (for reference)
-- `web/static/js/app.js` - Added import folder selection (REVERTED)
-- `web/static/js/components/staging.js` - Added import-folders mode (REVERTED)
-- `web/static/js/review.js` - Changed to source-based grouping (REVERTED)
-- `web/static/js/views/mail.js` - Exported restoreDefaultHeaderActions (REVERTED)
-- `web/templates/main/review.html` - Logout fix, Unstage All (REVERTED)
-
-### Current State (After Revert)
-- HEAD is at `2a44c39` "Enable staging and committing imported emails"
-- Individual email staging from imports works
-- Folder staging for imports not implemented
-- Review page has old accountId-based grouping
-
 ---
 
 ## Previous Sessions
 
-See transcript files in `/mnt/transcripts/` for earlier session history.
+See `docs/Session_Log.md` for complete history.
+
+---
+
+## Quick Start
+
+```bash
+cd /home/rick/Applications/mailrepo
+./venv/bin/python main.py
+# Open http://localhost:5050
+# Master password: Alkahest131!
+```
