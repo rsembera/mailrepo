@@ -91,6 +91,13 @@ function renderFolderManagementList() {
     
     let html = `
         <div class="folder-management-list">
+            <div class="folder-management-toolbar">
+                <h2>Manage Folders</h2>
+                <button class="btn btn-primary" onclick="openNewFolderModal(false)">
+                    <i data-lucide="plus"></i>
+                    New Folder
+                </button>
+            </div>
             <div class="folder-management-header">
                 <span>Folder</span>
                 <span>Color</span>
@@ -107,10 +114,6 @@ function renderFolderManagementList() {
     topLevelFolders.forEach(folder => renderFolderWithChildren(folder, 0));
     
     html += `
-            <button class="folder-management-add" onclick="openNewFolderModal(false)">
-                <i data-lucide="plus"></i>
-                <span>New Folder</span>
-            </button>
         </div>
     `;
     

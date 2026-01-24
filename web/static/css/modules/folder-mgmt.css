@@ -10,6 +10,20 @@
     padding: var(--space-lg);
 }
 
+.folder-management-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-lg);
+}
+
+.folder-management-toolbar h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-text-heading);
+}
+
 .folder-management-header {
     display: grid;
     grid-template-columns: 1fr 80px 150px;
@@ -75,33 +89,6 @@
     display: flex;
     gap: var(--space-xs);
     justify-content: center;
-}
-
-.folder-management-add {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    padding: var(--space-sm) var(--space-md);
-    margin-top: var(--space-sm);
-    color: var(--color-primary);
-    background: transparent;
-    border: 1px dashed var(--color-border);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    width: 100%;
-    font-size: inherit;
-    font-family: var(--font-ui);
-    transition: all 0.15s;
-}
-
-.folder-management-add:hover {
-    background: var(--color-background-secondary);
-    border-color: var(--color-primary);
-}
-
-.folder-management-add i {
-    width: 18px;
-    height: 18px;
 }
 
 /* Color dots */
