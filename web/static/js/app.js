@@ -137,6 +137,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const accountId = item.dataset.accountId;
         loadAccountLabels(accountId);
     });
+    
+    // Restore previous view from sessionStorage (e.g., when returning from review page)
+    restoreCurrentView();
 });
 
 function initEventListeners() {
@@ -301,6 +304,9 @@ function loadImportEmails(importId, folderPath = null) {
     state.currentView = { type: 'import', id: importId, folder: folderPath };
     state.currentSource = { type: 'import', importId };
     
+    // Save to sessionStorage for persistence across page loads
+    sessionStorage.setItem('mailrepo-currentView', JSON.stringify(state.currentView));
+    
     // Set emails in state and render
     state.emails = emails;
     renderEmailList();
@@ -432,5 +438,27 @@ function restoreStagedFromSession() {
         } catch (e) {
             console.error('Failed to restore staged folders:', e);
         }
+    }
+}
+
+/**
+ * Restore current view from sessionStorage.
+ * Called on page load to restore the previously selected account/folder.
+ */
+function restoreCurrentView() {
+    const saved = sessionStorage.getItem('mailrepo-currentView');
+    if (!saved) return;
+    
+    try {
+        const view = JSON.parse(saved);
+        if (view.type === 'account') {
+            selectView(view);
+        } else if (view.type === 'folder') {
+            selectView(view);
+        } else if (view.type === 'import') {
+            loadImportEmails(view.id, view.folder);
+        }
+    } catch (e) {
+        console.error('Failed to restore current view:', e);
     }
 }

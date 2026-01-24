@@ -94,6 +94,9 @@ export function selectView(view) {
     state.currentView = view;
     state.selectedEmails.clear();
     
+    // Save to sessionStorage for persistence across page loads
+    sessionStorage.setItem('mailrepo-currentView', JSON.stringify(view));
+    
     if (view.type === 'account') {
         loadAccountEmails(view.id, view.folder);
     } else if (view.type === 'folder') {
