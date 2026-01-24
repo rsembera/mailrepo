@@ -3,17 +3,22 @@
    ============================================ */
 
 /* Settings Page Layout */
+.settings-page {
+    background: var(--color-background-page, #EDF2F5);
+    min-height: 100vh;
+}
+
 .settings-container {
-    max-width: 720px;
+    max-width: 680px;
     margin: 0 auto;
-    padding: var(--space-xl);
+    padding: 2rem 1.5rem;
 }
 
 .settings-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--space-xl);
+    margin-bottom: 1.5rem;
 }
 
 .settings-header h1 {
@@ -21,6 +26,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-md);
+    font-size: 1.5rem;
 }
 
 .settings-header h1 i {
@@ -29,12 +35,12 @@
     color: var(--color-primary);
 }
 
-/* Collapsible Sections - Card Style */
+/* Collapsible Sections - White Card Style */
 .settings-section {
-    background: #FBFCFD;
+    background: white;
     border-radius: 1rem;
     margin-bottom: 1rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     overflow: visible;
     position: relative;
 }
@@ -56,7 +62,7 @@ details[open].settings-section {
 }
 
 .settings-section-header:hover {
-    background-color: #F2F4F5;
+    background-color: #F8FAFB;
 }
 
 .settings-section-header::-webkit-details-marker {
