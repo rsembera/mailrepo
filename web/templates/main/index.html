@@ -12,9 +12,6 @@
             <div class="rail-logo">
                 <img src="{{ url_for('static', filename='assets/icon.png') }}" alt="MailRepo" class="logo-icon">
             </div>
-            <button class="rail-btn" data-view="settings" title="Settings">
-                <i data-lucide="settings"></i>
-            </button>
             <button class="rail-btn active" data-view="mail" title="Mail">
                 <i data-lucide="inbox"></i>
             </button>
@@ -34,6 +31,10 @@
             </button>
         </div>
         <div class="rail-bottom">
+            <div class="rail-divider"></div>
+            <button class="rail-btn" data-view="settings" title="Settings">
+                <i data-lucide="settings"></i>
+            </button>
             <form action="{{ url_for('auth.logout') }}" method="POST" style="margin:0;">
                 <button type="submit" class="rail-btn" title="Logout">
                     <i data-lucide="log-out"></i>

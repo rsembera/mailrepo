@@ -47,9 +47,14 @@
     align-items: center;
     gap: var(--space-xs);
     flex-shrink: 0;
-    padding-top: var(--space-sm);
-    border-top: 2px solid rgba(255,255,255,0.2);
-    margin-top: var(--space-sm);
+}
+
+.rail-divider {
+    width: 24px;
+    height: 1px;
+    background: var(--rail-text);
+    opacity: 0.3;
+    margin: var(--space-sm) 0;
 }
 
 .rail-logo {
