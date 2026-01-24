@@ -893,10 +893,24 @@ function handleImportClick(e, row) {
     
     if (clickedChevron) {
         // Toggle expansion
+        const isExpanding = !row.classList.contains('expanded');
         row.classList.toggle('expanded');
         const children = row.nextElementSibling;
         if (children?.classList.contains('tree-children')) {
-            children.style.display = row.classList.contains('expanded') ? 'block' : 'none';
+            children.style.display = isExpanding ? 'block' : 'none';
+            
+            // When collapsing, also collapse all descendant folders
+            if (!isExpanding) {
+                children.querySelectorAll('.tree-item-row.expanded').forEach(expandedRow => {
+                    expandedRow.classList.remove('expanded');
+                });
+                children.querySelectorAll('.tree-children').forEach(nested => {
+                    nested.style.display = 'none';
+                });
+                children.querySelectorAll('.import-folder-chevron').forEach(chevron => {
+                    chevron.style.transform = 'rotate(0deg)';
+                });
+            }
         }
         return;
     }
@@ -922,6 +936,16 @@ function handleImportFolderClick(e, row) {
             const isExpanded = children.style.display !== 'none';
             children.style.display = isExpanded ? 'none' : 'block';
             clickedChevron.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(90deg)';
+            
+            // When collapsing, also collapse all descendant folders
+            if (isExpanded) {
+                children.querySelectorAll('.import-tree-children').forEach(nested => {
+                    nested.style.display = 'none';
+                });
+                children.querySelectorAll('.import-folder-chevron').forEach(chevron => {
+                    chevron.style.transform = 'rotate(0deg)';
+                });
+            }
         }
         return;
     }

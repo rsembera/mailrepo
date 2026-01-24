@@ -59,10 +59,21 @@ export function handleTreeItemClick(e, row) {
         const clickedChevron = e.target.closest('.chevron');
         if (clickedChevron) {
             // Toggle sidebar expansion only when clicking chevron
+            const isExpanding = !row.classList.contains('expanded');
             row.classList.toggle('expanded');
             const children = row.nextElementSibling;
             if (children?.classList.contains('tree-children')) {
-                children.style.display = row.classList.contains('expanded') ? 'block' : 'none';
+                children.style.display = isExpanding ? 'block' : 'none';
+                
+                // When collapsing, also collapse all descendant folders
+                if (!isExpanding) {
+                    children.querySelectorAll('.imap-tree-children').forEach(nested => {
+                        nested.style.display = 'none';
+                    });
+                    children.querySelectorAll('.imap-folder-chevron').forEach(chevron => {
+                        chevron.style.transform = 'rotate(0deg)';
+                    });
+                }
             }
             return;
         }
@@ -86,6 +97,16 @@ export function handleTreeItemClick(e, row) {
                 const isExpanded = children.style.display !== 'none';
                 children.style.display = isExpanded ? 'none' : 'block';
                 clickedChevron.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(90deg)';
+                
+                // When collapsing, also collapse all descendant folders
+                if (isExpanded) {
+                    children.querySelectorAll('.imap-tree-children').forEach(nested => {
+                        nested.style.display = 'none';
+                    });
+                    children.querySelectorAll('.imap-folder-chevron').forEach(chevron => {
+                        chevron.style.transform = 'rotate(0deg)';
+                    });
+                }
             }
             return;
         }
@@ -233,10 +254,20 @@ function createFolderTreeItem(folder, children, depth) {
     row.addEventListener('click', (e) => {
         if (hasChildren && (e.target.closest('.chevron') || e.target.classList.contains('chevron'))) {
             e.stopPropagation();
+            const isExpanding = !row.classList.contains('expanded');
             row.classList.toggle('expanded');
             const childContainer = folderItem.querySelector('.tree-children');
             if (childContainer) {
-                childContainer.style.display = row.classList.contains('expanded') ? 'block' : 'none';
+                childContainer.style.display = isExpanding ? 'block' : 'none';
+                
+                // When collapsing, also collapse all descendant folders
+                if (!isExpanding) {
+                    childContainer.querySelectorAll('.tree-item-row.expanded').forEach(expandedRow => {
+                        expandedRow.classList.remove('expanded');
+                        const nestedChildren = expandedRow.closest('.tree-item')?.querySelector('.tree-children');
+                        if (nestedChildren) nestedChildren.style.display = 'none';
+                    });
+                }
             }
             return;
         }
