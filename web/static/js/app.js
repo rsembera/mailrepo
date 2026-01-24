@@ -301,9 +301,13 @@ function handleImportSelect(importId) {
         return;
     }
     
-    // Check if import has meaningful folder structure
-    const hasFolderStructure = imp.folders && imp.folders.length > 0 && 
-        imp.folders.some(f => f.children && f.children.length > 0);
+    // Check if import has meaningful folder structure:
+    // - Multiple top-level folders, OR
+    // - Any folder with children (nested structure)
+    const hasFolderStructure = imp.folders && imp.folders.length > 0 && (
+        imp.folders.length > 1 || 
+        imp.folders.some(f => f.children && f.children.length > 0)
+    );
     
     if (hasFolderStructure) {
         // Has folder hierarchy - show folder selection for bulk staging
