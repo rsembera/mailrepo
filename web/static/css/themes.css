@@ -1,14 +1,14 @@
 /* ============================================
    MAILREPO THEME SYSTEM
-   Five themes: Lagoon (default), Graphite, Bloom, Rose, Midnight
+   Five themes: Pine (default), Graphite, Atlantic, Ember, Obsidian
    ============================================ */
 
 /* ============================================
-   THEME: LAGOON (Default)
+   THEME: PINE (Default)
    Professional teal - calm and focused
    ============================================ */
 :root,
-[data-theme="lagoon"] {
+[data-theme="pine"] {
     /* Rail */
     --rail-bg: #1F8F74;
     --rail-logo-bg: #b2ebf2;
@@ -77,10 +77,10 @@
 }
 
 /* ============================================
-   THEME: BLOOM
+   THEME: ATLANTIC
    Calm blue - focused and serene
    ============================================ */
-[data-theme="bloom"] {
+[data-theme="atlantic"] {
     /* Rail */
     --rail-bg: #3B6EA5;
     --rail-logo-bg: #a8c5e2;
@@ -113,10 +113,10 @@
 }
 
 /* ============================================
-   THEME: ROSE
+   THEME: EMBER
    Dusty rose - warm and sophisticated
    ============================================ */
-[data-theme="rose"] {
+[data-theme="ember"] {
     /* Rail */
     --rail-bg: #A65568;
     --rail-logo-bg: #e2b8c0;
@@ -149,10 +149,10 @@
 }
 
 /* ============================================
-   THEME: MIDNIGHT
+   THEME: OBSIDIAN
    Dark mode for late-night archiving
    ============================================ */
-[data-theme="midnight"] {
+[data-theme="obsidian"] {
     /* Rail */
     --rail-bg: #1e1e2e;
     --rail-logo-bg: #45475a;
@@ -200,7 +200,7 @@
    DARK THEME OVERRIDES
    Additional styles needed for dark mode
    ============================================ */
-[data-theme="midnight"] {
+[data-theme="obsidian"] {
     /* Cards and modals */
     --card-bg: #1e1e2e;
     --modal-bg: #1e1e2e;
@@ -213,96 +213,96 @@
 }
 
 /* Dark mode specific element overrides */
-[data-theme="midnight"] .sidebar {
+[data-theme="obsidian"] .sidebar {
     background: var(--sidebar-bg);
     border-right-color: var(--color-border);
 }
 
-[data-theme="midnight"] .content-header,
-[data-theme="midnight"] .content-toolbar {
+[data-theme="obsidian"] .content-header,
+[data-theme="obsidian"] .content-toolbar {
     background: var(--color-background);
     border-bottom-color: var(--color-border);
 }
 
-[data-theme="midnight"] .email-item {
+[data-theme="obsidian"] .email-item {
     border-bottom-color: var(--color-border);
 }
 
-[data-theme="midnight"] .email-item:hover {
+[data-theme="obsidian"] .email-item:hover {
     background: var(--color-background-secondary);
 }
 
-[data-theme="midnight"] .modal-content {
+[data-theme="obsidian"] .modal-content {
     background: var(--modal-bg);
 }
 
-[data-theme="midnight"] .auth-card {
+[data-theme="obsidian"] .auth-card {
     background: var(--card-bg);
 }
 
-[data-theme="midnight"] input,
-[data-theme="midnight"] select,
-[data-theme="midnight"] textarea {
+[data-theme="obsidian"] input,
+[data-theme="obsidian"] select,
+[data-theme="obsidian"] textarea {
     background: var(--input-bg);
     color: var(--color-text);
     border-color: var(--color-border);
 }
 
-[data-theme="midnight"] .section-header {
+[data-theme="obsidian"] .section-header {
     color: var(--color-text);
 }
 
-[data-theme="midnight"] .tree-item-row:hover {
+[data-theme="obsidian"] .tree-item-row:hover {
     background: var(--color-background-secondary);
 }
 
-[data-theme="midnight"] .tree-item-row.active {
+[data-theme="obsidian"] .tree-item-row.active {
     background: var(--color-primary-lighter);
     color: var(--color-primary);
 }
 
-[data-theme="midnight"] .folder-select-item:hover {
+[data-theme="obsidian"] .folder-select-item:hover {
     background: var(--color-background-secondary);
 }
 
-[data-theme="midnight"] .radio-label {
+[data-theme="obsidian"] .radio-label {
     border-color: var(--color-border);
 }
 
-[data-theme="midnight"] .radio-label:hover {
+[data-theme="obsidian"] .radio-label:hover {
     background: var(--color-background-secondary);
     border-color: var(--color-primary);
 }
 
 /* Settings page cards in dark mode */
-[data-theme="midnight"] .settings-section {
+[data-theme="obsidian"] .settings-section {
     background: var(--card-bg);
 }
 
-[data-theme="midnight"] .account-card {
+[data-theme="obsidian"] .account-card {
     background: var(--color-background-secondary);
 }
 
-[data-theme="midnight"] .icon-select-dropdown {
+[data-theme="obsidian"] .icon-select-dropdown {
     background: var(--card-bg);
     border-color: var(--color-border);
 }
 
-[data-theme="midnight"] .icon-select-trigger {
+[data-theme="obsidian"] .icon-select-trigger {
     background: var(--input-bg);
     border-color: var(--color-border);
     color: var(--color-text);
 }
 
-[data-theme="midnight"] .icon-select-option:hover {
+[data-theme="obsidian"] .icon-select-option:hover {
     background: var(--color-background-secondary);
 }
 
-[data-theme="midnight"] .icon-select-option.selected {
+[data-theme="obsidian"] .icon-select-option.selected {
     background: var(--color-primary-lighter);
 }
 
-[data-theme="midnight"] .theme-swatch {
+[data-theme="obsidian"] .theme-swatch {
     box-shadow: none;
     border: none;
 }

@@ -128,6 +128,7 @@
     font-size: 0.8125rem;
     font-weight: 500;
     color: var(--color-text);
+    font-family: var(--font-ui);
 }
 
 .theme-option.active .theme-name {

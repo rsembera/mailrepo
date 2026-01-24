@@ -112,25 +112,25 @@ function renderAppearanceSection() {
         <div class="appearance-group">
             <label class="appearance-label">Theme</label>
             <div class="theme-grid" id="themeGrid">
-                <button class="theme-option" data-theme="lagoon" title="Lagoon">
+                <button class="theme-option" data-theme="pine" title="Pine">
                     <span class="theme-swatch" style="background: #1F8F74;"></span>
-                    <span class="theme-name">Lagoon</span>
+                    <span class="theme-name">Pine</span>
                 </button>
                 <button class="theme-option" data-theme="graphite" title="Graphite">
                     <span class="theme-swatch" style="background: #475569;"></span>
                     <span class="theme-name">Graphite</span>
                 </button>
-                <button class="theme-option" data-theme="bloom" title="Bloom">
+                <button class="theme-option" data-theme="atlantic" title="Atlantic">
                     <span class="theme-swatch" style="background: #3B6EA5;"></span>
-                    <span class="theme-name">Bloom</span>
+                    <span class="theme-name">Atlantic</span>
                 </button>
-                <button class="theme-option" data-theme="rose" title="Rose">
+                <button class="theme-option" data-theme="ember" title="Ember">
                     <span class="theme-swatch" style="background: #A65568;"></span>
-                    <span class="theme-name">Rose</span>
+                    <span class="theme-name">Ember</span>
                 </button>
-                <button class="theme-option" data-theme="midnight" title="Midnight">
+                <button class="theme-option" data-theme="obsidian" title="Obsidian">
                     <span class="theme-swatch" style="background: #1e1e2e; border: 2px solid #45475a;"></span>
-                    <span class="theme-name">Midnight</span>
+                    <span class="theme-name">Obsidian</span>
                 </button>
             </div>
         </div>
@@ -274,7 +274,7 @@ function initAppearanceHandlers() {
  */
 function loadCurrentSettings() {
     // Get current theme
-    const currentTheme = localStorage.getItem('mailrepo-theme') || 'lagoon';
+    const currentTheme = localStorage.getItem('mailrepo-theme') || 'pine';
     const themeBtn = document.querySelector(`.theme-option[data-theme="${currentTheme}"]`);
     if (themeBtn) themeBtn.classList.add('active');
     
