@@ -24,6 +24,7 @@ import { initMailView, selectView, loadAccountEmails, loadFolderEmails, openEmai
 import { initStaging, openStageModal, renderFolderSelectTree, handleFolderSelect, confirmStage, updateStagedBadge, updateButtonStates, goToReview, setSelectedDestinationFolder } from './components/staging.js';
 import { initFolderMgmt, showFolderManagementView, showFolderSelectionView, renameFolder, createSubfolder, openMoveFolder, confirmMoveFolder, deleteFolder, openColorPicker, handleFolderCheckbox, toggleAllFolders, stageSelectedFolders } from './views/folder-mgmt.js';
 import { initTrashView, showTrashView, updateTrashBadge, restoreFolder, permanentlyDeleteFolder, emptyTrash } from './views/trash.js';
+import { initSettingsView, showSettingsView } from './views/settings.js';
 import { initImports, getImportEmails, getMountedImports, renderImportsSection } from './components/imports.js';
 
 // ============================================
@@ -97,6 +98,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize trash view
     initTrashView({
+        contextTitle: elements.contextTitle,
+        contextMeta: elements.contextMeta,
+        emailList: elements.emailList,
+    });
+    
+    // Initialize settings view
+    initSettingsView({
         contextTitle: elements.contextTitle,
         contextMeta: elements.contextMeta,
         emailList: elements.emailList,
@@ -352,6 +360,9 @@ function handleImportUnmount(importId) {
                     break;
                 case 'trash':
                     showTrashView();
+                    break;
+                case 'settings':
+                    showSettingsView();
                     break;
             }
         });

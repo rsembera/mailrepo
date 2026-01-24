@@ -31,7 +31,7 @@
             </button>
         </div>
         <div class="rail-bottom">
-            <button class="rail-btn" onclick="window.location.href='/settings'" title="Settings">
+            <button class="rail-btn" data-view="settings" title="Settings">
                 <i data-lucide="settings"></i>
             </button>
             <form action="{{ url_for('auth.logout') }}" method="POST" style="margin:0;">
@@ -74,7 +74,7 @@
                 {% else %}
                     <div class="sidebar-empty">
                         <p>No accounts connected</p>
-                        <a href="/settings?accounts" class="btn btn-sm btn-primary">Add Account</a>
+                        <button class="btn btn-sm btn-primary" onclick="document.querySelector('.rail-btn[data-view=settings]').click()">Add Account</button>
                     </div>
                 {% endif %}
             </div>
@@ -156,7 +156,7 @@
                 <i data-lucide="mail" class="welcome-icon"></i>
                 <h3>Welcome to MailRepo</h3>
                 <p>Select an email account from the sidebar to browse and archive your messages.</p>
-                <p class="welcome-hint">Or connect a new account in <a href="/settings?accounts">Settings</a>.</p>
+                <p class="welcome-hint">Or connect a new account in <a href="javascript:void(0);" onclick="document.querySelector('.rail-btn[data-view=settings]').click()">Settings</a>.</p>
             </div>
         </div>
     </main>
