@@ -23,7 +23,7 @@
     align-items: center;
     margin-bottom: 1.5rem;
     padding-bottom: 1.5rem;
-    border-bottom: 1px solid #CBD5E1;
+    border-bottom: 1px solid #B0BEC5;
 }
 
 .settings-header h1 {
@@ -41,7 +41,7 @@
 
 /* Collapsible Sections */
 .settings-section {
-    border: 1px solid #CBD5E1;
+    border: 1px solid #B0BEC5;
     border-radius: var(--radius-lg);
     margin-bottom: var(--space-md);
     overflow: visible;
@@ -398,7 +398,7 @@ details[open] .settings-section-header .arrow {
     text-align: center;
     margin-top: 1.5rem;
     padding-top: 1.5rem;
-    border-top: 1px solid #CBD5E1;
+    border-top: 1px solid #B0BEC5;
 }
 
 .about-link {
