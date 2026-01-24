@@ -196,10 +196,14 @@ function createFolderTreeItem(folder, children, depth) {
     folderItem.dataset.folderId = folder.id;
     
     const hasChildren = children && children.length > 0;
-    const colorDot = folder.color ? 
-        `<span class="color-dot" style="background: ${folder.color}"></span>` : '';
+    // Always render chevron space for alignment; use invisible placeholder when no children
     const chevron = hasChildren ? 
-        `<i data-lucide="chevron-right" class="chevron"></i>` : '';
+        `<i data-lucide="chevron-right" class="chevron"></i>` : 
+        `<span class="chevron-placeholder"></span>`;
+    // Always render color dot for alignment; use invisible style when no color
+    const colorDot = folder.color ? 
+        `<span class="color-dot" style="background: ${folder.color}"></span>` : 
+        `<span class="color-dot color-dot-empty"></span>`;
     const indent = depth > 0 ? `style="padding-left: ${12 + depth * 20}px"` : '';
     
     folderItem.innerHTML = `
