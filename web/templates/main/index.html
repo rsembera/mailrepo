@@ -130,23 +130,16 @@
         <!-- Context Header -->
         <header class="content-header">
             <div class="header-context">
-                <h1 id="contextTitle">Select a folder</h1>
+                <h1 id="contextTitle">Welcome to MailRepo</h1>
                 <span class="header-meta" id="contextMeta"></span>
             </div>
-            <div class="header-actions">
-                <button class="btn btn-secondary" id="stageBtn" disabled>
-                    <i data-lucide="package-plus"></i>
-                    Stage Selected
-                </button>
-                <button class="btn btn-primary" id="reviewBtn" disabled>
-                    <i data-lucide="check-circle"></i>
-                    Review & Commit
-                </button>
+            <div class="header-actions" id="headerActions">
+                <!-- Populated dynamically by JavaScript when content loads -->
             </div>
         </header>
         
-        <!-- Search/Filter Bar -->
-        <div class="content-toolbar">
+        <!-- Search/Filter Bar (hidden until content loads) -->
+        <div class="content-toolbar" style="display: none;">
             <label class="checkbox-label">
                 <input type="checkbox" id="selectAll">
                 <span>Select All</span>
@@ -159,10 +152,11 @@
         
         <!-- Email List -->
         <div class="email-list" id="emailList">
-            <div class="empty-state">
-                <i data-lucide="arrow-left" class="empty-icon"></i>
-                <h3>No Folder Selected</h3>
-                <p>Select an account or archive folder from the sidebar to view emails.</p>
+            <div class="welcome-state">
+                <i data-lucide="mail" class="welcome-icon"></i>
+                <h3>Welcome to MailRepo</h3>
+                <p>Select an email account from the sidebar to browse and archive your messages.</p>
+                <p class="welcome-hint">Or connect a new account in <a href="/settings?accounts">Settings</a>.</p>
             </div>
         </div>
     </main>

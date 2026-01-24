@@ -34,9 +34,11 @@
             <button class="rail-btn" onclick="window.location.href='/settings'" title="Settings">
                 <i data-lucide="settings"></i>
             </button>
-            <button class="rail-btn" onclick="window.location.href='/logout'" title="Logout">
-                <i data-lucide="log-out"></i>
-            </button>
+            <form action="{{ url_for('auth.logout') }}" method="POST" style="margin:0;">
+                <button type="submit" class="rail-btn" title="Logout">
+                    <i data-lucide="log-out"></i>
+                </button>
+            </form>
         </div>
     </nav>
 
@@ -66,6 +68,10 @@
                 <button class="btn btn-secondary" onclick="goBack()">
                     <i data-lucide="arrow-left"></i>
                     Back
+                </button>
+                <button class="btn btn-secondary" id="unstageAllBtn" disabled>
+                    <i data-lucide="x-circle"></i>
+                    Unstage All
                 </button>
                 <button class="btn btn-primary" id="commitBtn" disabled>
                     <i data-lucide="check-circle"></i>

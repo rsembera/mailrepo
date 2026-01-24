@@ -49,6 +49,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderSidebar();
     renderReviewList();
     updateCommitButton();
+    updateUnstageAllButton();
+    
+    // Unstage All button
+    document.getElementById('unstageAllBtn')?.addEventListener('click', () => {
+        if (confirm('Are you sure you want to unstage all items?')) {
+            unstageAll();
+        }
+    });
 });
 
 async function loadFolders() {
@@ -442,6 +450,15 @@ function unstageFolder(index) {
 }
 window.unstageFolder = unstageFolder;
 
+function unstageAll() {
+    stagedEmails.clear();
+    stagedFolders = [];
+    sessionStorage.removeItem('stagedEmails');
+    sessionStorage.removeItem('stagedFolders');
+    updateBadgeAndRender();
+}
+window.unstageAll = unstageAll;
+
 function updateBadgeAndRender() {
     const totalCount = stagedEmails.size + stagedFolders.length;
     document.getElementById('stagedBadge').textContent = totalCount;
@@ -466,11 +483,18 @@ function updateBadgeAndRender() {
         renderReviewList();
     }
     updateCommitButton();
+    updateUnstageAllButton();
 }
 
 function updateCommitButton() {
     const totalCount = stagedEmails.size + stagedFolders.length;
     document.getElementById('commitBtn').disabled = totalCount === 0;
+}
+
+function updateUnstageAllButton() {
+    const totalCount = stagedEmails.size + stagedFolders.length;
+    const btn = document.getElementById('unstageAllBtn');
+    if (btn) btn.disabled = totalCount === 0;
 }
 
 function goBack() {
