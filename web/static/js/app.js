@@ -25,6 +25,7 @@ import { initStaging, openStageModal, renderFolderSelectTree, handleFolderSelect
 import { initFolderMgmt, showFolderManagementView, showFolderSelectionView, renameFolder, createSubfolder, openMoveFolder, confirmMoveFolder, deleteFolder, openColorPicker, handleFolderCheckbox, toggleAllFolders, stageSelectedFolders } from './views/folder-mgmt.js';
 import { initTrashView, showTrashView, updateTrashBadge, restoreFolder, permanentlyDeleteFolder, emptyTrash } from './views/trash.js';
 import { initSettingsView, showSettingsView } from './views/settings.js';
+import { initReviewView, showReviewView } from './views/review.js';
 import { initImports, getImportEmails, getMountedImports, renderImportsSection } from './components/imports.js';
 
 // ============================================
@@ -105,6 +106,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize settings view
     initSettingsView({
+        contextTitle: elements.contextTitle,
+        contextMeta: elements.contextMeta,
+        emailList: elements.emailList,
+    });
+    
+    // Initialize review view
+    initReviewView({
         contextTitle: elements.contextTitle,
         contextMeta: elements.contextMeta,
         emailList: elements.emailList,
@@ -355,8 +363,7 @@ function handleImportUnmount(importId) {
                     showMailView();
                     break;
                 case 'staged':
-                    // Go directly to review page
-                    goToReview();
+                    showReviewView();
                     break;
                 case 'folders':
                     showFolderManagementView();

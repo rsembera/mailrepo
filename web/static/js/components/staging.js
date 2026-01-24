@@ -257,3 +257,43 @@ export function getSelectedDestinationFolder() {
 export function setSelectedDestinationFolder(id) {
     selectedDestinationFolder = id;
 }
+
+/**
+ * Get the staged emails Map.
+ */
+export function getStagedEmails() {
+    return state.staged;
+}
+
+/**
+ * Get the staged folders array.
+ */
+export function getStagedFolders() {
+    return state.stagedFolders;
+}
+
+/**
+ * Clear a staged email by ID.
+ */
+export function clearStagedEmail(emailId) {
+    state.staged.delete(emailId);
+    sessionStorage.setItem('stagedEmails', JSON.stringify([...state.staged.entries()]));
+}
+
+/**
+ * Clear a staged folder by index.
+ */
+export function clearStagedFolder(index) {
+    state.stagedFolders.splice(index, 1);
+    sessionStorage.setItem('stagedFolders', JSON.stringify(state.stagedFolders));
+}
+
+/**
+ * Clear all staged items.
+ */
+export function clearAllStaged() {
+    state.staged.clear();
+    state.stagedFolders = [];
+    sessionStorage.removeItem('stagedEmails');
+    sessionStorage.removeItem('stagedFolders');
+}
