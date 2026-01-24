@@ -419,7 +419,13 @@ details[open] .settings-section-header .arrow {
 
 .about-logo {
     width: 240px;
-    margin-bottom: var(--space-md);
+    margin-bottom: 1rem;
+}
+
+.about-divider {
+    border: none;
+    border-top: 1px solid #B0BEC5;
+    margin: 0 0 1rem 0;
 }
 
 .about-modal-content h2 {
