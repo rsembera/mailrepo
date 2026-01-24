@@ -358,6 +358,105 @@
         </div>
     </div>
 </div>
+
+<!-- Add Account Modal -->
+<div class="modal-overlay" id="addAccountModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Add Email Account</h2>
+        </div>
+        
+        <div class="form-group">
+            <label for="accountName">Account Name</label>
+            <input type="text" id="accountName" placeholder="e.g., Work Gmail, Personal iCloud">
+            <span class="helper-text">A friendly name to identify this account</span>
+        </div>
+        
+        <div class="form-group">
+            <label for="accountEmail">Email Address</label>
+            <input type="email" id="accountEmail" placeholder="you@example.com">
+        </div>
+        
+        <div class="form-group">
+            <label for="accountPassword">Password</label>
+            <input type="password" id="accountPassword" placeholder="App password or regular password">
+            <span class="helper-text">For Gmail/iCloud with 2FA, use an app-specific password</span>
+        </div>
+        
+        <details class="advanced-settings">
+            <summary>Advanced Settings</summary>
+            <div class="advanced-content">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="imapHost">IMAP Server</label>
+                        <input type="text" id="imapHost" placeholder="Auto-detected">
+                    </div>
+                    <div class="form-group" style="width: 100px;">
+                        <label for="imapPort">Port</label>
+                        <input type="number" id="imapPort" value="993">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="imapSsl" checked>
+                        Use SSL/TLS
+                    </label>
+                </div>
+            </div>
+        </details>
+        
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeModal('addAccountModal')">Cancel</button>
+            <button class="btn btn-primary" id="createAccountBtn">
+                <i data-lucide="plus"></i>
+                Add Account
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- App Password Info Modal -->
+<div class="modal-overlay" id="appPasswordModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>App-Specific Passwords</h2>
+        </div>
+        <div class="modal-body">
+            <p>If you use two-factor authentication (2FA) with your email provider, you'll need to generate an <strong>app-specific password</strong> for MailRepo.</p>
+            
+            <p>An app password is a one-time password that lets apps access your account without needing your main password or 2FA code.</p>
+            
+            <h4>How to get one:</h4>
+            <ul>
+                <li><strong>Gmail:</strong> Go to your Google Account → Security → 2-Step Verification → App passwords</li>
+                <li><strong>iCloud:</strong> Go to appleid.apple.com → Sign-In and Security → App-Specific Passwords</li>
+                <li><strong>Outlook/Hotmail:</strong> Go to account.microsoft.com → Security → Advanced security options → App passwords</li>
+                <li><strong>Other providers:</strong> Look for "App passwords" or "Third-party app access" in your account security settings</li>
+            </ul>
+            
+            <p style="margin-top: var(--space-lg); color: var(--color-text-muted); font-size: 0.875rem;">
+                If your email provider doesn't require 2FA, you can use your regular password.
+            </p>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-primary" onclick="closeModal('appPasswordModal')" style="width: 100%;">Got it</button>
+        </div>
+    </div>
+</div>
+
+<!-- About Modal -->
+<div class="modal-overlay" id="aboutModal">
+    <div class="modal-content about-modal-content">
+        <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="MailRepo Logo" class="about-logo">
+        <p class="about-version">v1.0 "Enigma"</p>
+        <p class="about-credits">Designed by Richard Sembera</p>
+        <p class="about-credits">Coded by Claude Opus 4.5</p>
+        <p class="about-tagline">"Email archiving, done right."</p>
+        <button onclick="closeModal('aboutModal')" class="btn btn-secondary" style="width: 100%;">
+            Close
+        </button>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}

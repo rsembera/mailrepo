@@ -387,3 +387,136 @@ function escapeHtml(str) {
     div.textContent = str;
     return div.innerHTML;
 }
+
+// ============================================
+// GLOBAL FUNCTIONS FOR SETTINGS MODALS
+// ============================================
+
+/**
+ * Open the Add Account modal.
+ */
+window.openAddAccountModal = function() {
+    const modal = document.getElementById('addAccountModal');
+    if (modal) {
+        // Clear form
+        document.getElementById('accountName').value = '';
+        document.getElementById('accountEmail').value = '';
+        document.getElementById('accountPassword').value = '';
+        document.getElementById('imapHost').value = '';
+        document.getElementById('imapPort').value = '993';
+        document.getElementById('imapSsl').checked = true;
+        
+        modal.classList.add('active');
+        document.getElementById('accountName').focus();
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+};
+
+/**
+ * Show app password info modal.
+ */
+window.showAppPasswordInfo = function() {
+    const modal = document.getElementById('appPasswordModal');
+    if (modal) modal.classList.add('active');
+};
+
+/**
+ * Show about modal.
+ */
+window.showAboutModal = function() {
+    const modal = document.getElementById('aboutModal');
+    if (modal) modal.classList.add('active');
+};
+
+/**
+ * Test account connection.
+ */
+window.testAccount = async function(accountId) {
+    try {
+        const response = await fetch(`/api/accounts/${accountId}/test`, { method: 'POST' });
+        const data = await response.json();
+        alert(data.success ? 'Connection successful!' : `Connection failed: ${data.error}`);
+    } catch (e) {
+        alert('Connection test failed');
+    }
+};
+
+/**
+ * Delete an account.
+ */
+window.deleteAccount = async function(accountId) {
+    if (!confirm('Are you sure you want to remove this account?')) return;
+    
+    try {
+        const response = await fetch(`/api/accounts/${accountId}`, { method: 'DELETE' });
+        if (response.ok) {
+            loadAccounts();
+            // Also refresh sidebar
+            const event = new CustomEvent('accountsChanged');
+            window.dispatchEvent(event);
+        } else {
+            const data = await response.json();
+            alert(data.error || 'Failed to delete account');
+        }
+    } catch (e) {
+        alert('Failed to delete account');
+    }
+};
+
+// Set up Create Account button handler
+document.addEventListener('DOMContentLoaded', () => {
+    const createBtn = document.getElementById('createAccountBtn');
+    if (createBtn) {
+        createBtn.addEventListener('click', createAccount);
+    }
+});
+
+/**
+ * Create a new account from the modal form.
+ */
+async function createAccount() {
+    const name = document.getElementById('accountName').value.trim();
+    const email = document.getElementById('accountEmail').value.trim();
+    const password = document.getElementById('accountPassword').value;
+    const host = document.getElementById('imapHost').value.trim();
+    const port = document.getElementById('imapPort').value;
+    const ssl = document.getElementById('imapSsl').checked;
+    
+    if (!name || !email || !password) {
+        alert('Please fill in all required fields');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/accounts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, email, password, host, port: parseInt(port), ssl })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            closeModal('addAccountModal');
+            loadAccounts();
+            // Refresh sidebar
+            const event = new CustomEvent('accountsChanged');
+            window.dispatchEvent(event);
+        } else {
+            alert(data.error || 'Failed to create account');
+        }
+    } catch (e) {
+        alert('Failed to create account');
+    }
+}
+
+/**
+ * Close a modal by ID.
+ */
+function closeModal(id) {
+    const modal = document.getElementById(id);
+    if (modal) modal.classList.remove('active');
+}
+
+// Make closeModal available globally
+window.closeModal = closeModal;
