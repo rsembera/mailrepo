@@ -3,47 +3,33 @@
 ## Session 13 (January 24, 2026)
 
 ### Completed
-- [x] **Welcome state for main page** - Replaced empty "Select a folder" with welcoming screen
-  - Hides toolbar (Select All, Search) until content loads
-  - Shows friendly message with link to Settings
-  - Uses mail icon instead of arrow
-- [x] **Remove "Review & Commit" button** - Removed from header (redundant with left rail)
-- [x] **Fix Review page logout** - Changed from GET link to POST form
-- [x] **Add "Unstage All" button** - Added to Review page header with confirmation
+
+**UI/UX Improvements:**
+- [x] Welcome state for main page - shows friendly message instead of empty toolbar
+- [x] Remove "Review & Commit" button from header (redundant with left rail)
+- [x] Fix Review page logout - changed from GET to POST form
+- [x] Add "Unstage All" button to Review page
+- [x] Staged rail button navigates to review even when empty
+- [x] Fix archive folder alignment - reserve space for chevrons and color dots
+- [x] Collapse child folders when parent collapses (standard tree behavior)
+- [x] Move Settings button to top of left rail (under logo)
+
+**Settings Redesign:**
+- [x] Settings now renders inside main app (like Manage Folders) instead of separate page
+- [x] Removed Import section (now accessed via left rail icon)
+- [x] Added all necessary modals to index.html (Add Account, App Password Info, About)
+- [x] Fixed font and font size selectors to actually apply changes
+
+**Theme System:**
+- [x] Renamed themes: Lagoon→Pine, Bloom→Atlantic, Rose→Ember, Midnight→Obsidian
+- [x] Theme names now use the selected app font
 
 ### Still TODO
 
-#### Settings Screen Styling
-- May not fit with rest of app aesthetic - revisit
-
 #### Import Folder Staging (Session 12 - Incomplete)
-- Individual email staging from imports WORKS (commit `2a44c39`)
+- Individual email staging from imports WORKS
 - Folder staging for imports was attempted but reverted
-  - Backend `/api/commit/stream` handles imports via `_get_raw_email_from_import()`
-  - Supports mbox, emlx, and eml files
-  - Staging tracks `sourceType: 'import'` and `sourceImportId`
-
-The IMAP folder selection in `views/folder-mgmt.js` has:
-- `showFolderSelectionView(accountId)` - shows folder tree with checkboxes
-- `handleFolderCheckbox(checkbox, folderPath)` - handles check/uncheck with proper parent/child logic
-- `updateParentCheckboxes()` - visual state only, doesn't modify selection set
-- `stageSelectedFolders()` - opens modal to pick destination
-- `selectedFoldersForStaging` - Set tracking selected folders
-
-**Approach**: Either:
-A. Refactor folder-mgmt.js to accept a "source" parameter (account OR import)
-B. Create a thin wrapper that reuses the same rendering and checkbox logic
-
-Key differences for imports:
-- No "After commit" action (can't modify local files)
-- Source is importId, not accountId
-- Folder tree comes from mounted import, not IMAP API
-
----
-
-## Previous Sessions
-
-See `docs/Session_Log.md` for complete history.
+- Approach: Refactor folder-mgmt.js to accept "source" parameter (account OR import)
 
 ---
 
@@ -55,3 +41,14 @@ cd /home/rick/Applications/mailrepo
 # Open http://localhost:5050
 # Master password: Alkahest131!
 ```
+
+## Git Log (Session 13)
+- `d4ad223` - Rename themes and fix theme name font
+- `ecf7892` - Fix font and font size settings to actually apply changes
+- `ca52799` - Complete settings view: add modals, CSS, and global functions
+- `5d4aafc` - Wire up settings view to app.js and left rail
+- `1a677b8` - Add settings view module (not yet wired up)
+- `eb55399` - Fix: Collapse child folders when parent is collapsed
+- `bb929ec` - Fix archive folder alignment: reserve space for chevrons and color dots
+- `21b5802` - Fix: Staged rail button now navigates to review page even when empty
+- `544ed29` - UI improvements: welcome state, remove Review button, fix logout, add Unstage All
