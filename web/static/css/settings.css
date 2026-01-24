@@ -414,18 +414,12 @@ details[open] .settings-section-header .arrow {
 /* About Modal */
 .about-modal-content {
     text-align: center;
-    max-width: 400px;
+    max-width: 300px;
 }
 
 .about-logo {
-    width: 240px;
-    margin-bottom: 1rem;
-}
-
-.about-divider {
-    border: none;
-    border-top: 1px solid #B0BEC5;
-    margin: 0 0 1rem 0;
+    width: 160px;
+    margin-bottom: 0.5rem;
 }
 
 .about-modal-content h2 {
