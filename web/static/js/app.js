@@ -186,6 +186,9 @@ function openNewFolderModal(fromStageModal = false) {
     document.getElementById('newFolderName').focus();
 }
 
+// Expose globally for inline onclick handlers
+window.openNewFolderModal = openNewFolderModal;
+
 async function createFolder(returnToStage) {
     const name = document.getElementById('newFolderName').value.trim();
     const fromStage = elements.newFolderModal.dataset.fromStage === 'true';

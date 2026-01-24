@@ -90,6 +90,7 @@
     cursor: pointer;
     width: 100%;
     font-size: inherit;
+    font-family: var(--font-ui);
     transition: all 0.15s;
 }
 
