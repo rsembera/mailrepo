@@ -316,5 +316,5 @@
 }
 
 .import-tree-children {
-    /* Children container */
+    padding-left: var(--space-lg);
 }

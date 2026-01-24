@@ -528,19 +528,26 @@ async function confirmFilePicker() {
     closeModal('filePickerModal');
     
     try {
+        let importId;
+        
         if (filePickerMode === 'mbox') {
             if (filePickerSelected.type === 'apple-mbox') {
                 // Apple Mail folder export
-                await mountAppleMboxFolder(filePickerSelected.path, filePickerSelected.name, filePickerSelected.tree);
+                importId = await mountAppleMboxFolder(filePickerSelected.path, filePickerSelected.name, filePickerSelected.tree);
             } else {
                 // Standard mbox file
-                await mountMboxFromPath(filePickerSelected.path, filePickerSelected.name);
+                importId = await mountMboxFromPath(filePickerSelected.path, filePickerSelected.name);
             }
         } else {
-            await mountEmlFolderFromPath(filePickerSelected.path, filePickerSelected.name);
+            importId = await mountEmlFolderFromPath(filePickerSelected.path, filePickerSelected.name);
         }
         
         renderImportsSection();
+        
+        // Auto-select the newly mounted import to show its contents
+        if (importId && onImportSelect) {
+            onImportSelect(importId);
+        }
     } catch (error) {
         console.error('Failed to mount import:', error);
         alert('Failed to import: ' + error.message);
@@ -598,6 +605,8 @@ async function mountMboxFromPath(path, name) {
         emails: emails,
         mountedAt: Date.now(),
     });
+    
+    return importId;
 }
 
 /**
@@ -652,6 +661,8 @@ async function mountAppleMboxFolder(path, name, tree) {
         emails: allEmails,
         mountedAt: Date.now(),
     });
+    
+    return importId;
 }
 
 /**
@@ -704,6 +715,8 @@ async function mountEmlFolderFromPath(path, name) {
         emails: emails,
         mountedAt: Date.now(),
     });
+    
+    return importId;
 }
 
 // ============================================
