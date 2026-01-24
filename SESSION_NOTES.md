@@ -1,10 +1,14 @@
 # MailRepo - Session Notes
 
-## Session 12 (January 23, 2026) - Import Staging (Partial)
+## TODO for Next Session
 
-### Completed & Kept
-- **Commit `2a44c39`**: Enable staging and committing imported emails
-  - Individual email staging from imports works
+### Quick Fixes Needed
+- [ ] Remove "Review & Commit" button from index.html (was removed but reverted)
+- [ ] Revisit Settings screen styling - may not fit with rest of app aesthetic
+
+### Import Folder Staging (Session 12 - Incomplete)
+- Individual email staging from imports WORKS (commit `2a44c39`)
+- Folder staging for imports was attempted but reverted
   - Backend `/api/commit/stream` handles imports via `_get_raw_email_from_import()`
   - Supports mbox, emlx, and eml files
   - Staging tracks `sourceType: 'import'` and `sourceImportId`
