@@ -36,12 +36,22 @@
 - [x] View selection now preserved when switching between views
 - [x] Fixed: folder selection view (account folders) now restores properly
 
+### Already Implemented (confirmed)
+
+- **Progress bars with SSE** - `web/blueprints/api/progress.py` streams real-time progress via Server-Sent Events; `web/static/js/components/progress.js` consumes with EventSource
+- **IMAP folder caching** - `cached_folders` and `cached_folders_at` in accounts table with freshness checks
+- **Email header caching** - `email_cache` table stores headers by account/folder/UID, uses UIDVALIDITY for cache invalidation
+
 ### Still TODO
 
 #### Import Folder Staging (Session 12 - Incomplete)
 - Individual email staging from imports WORKS
 - Folder staging for imports was attempted but reverted
 - Approach: Refactor folder-mgmt.js to accept "source" parameter (account OR import)
+
+#### Cleanup (Optional)
+- Old `/review` route and `review.js` (standalone page) could be removed
+- Old `/settings` route could be removed
 
 ---
 
@@ -55,6 +65,7 @@ cd /home/rick/Applications/mailrepo
 ```
 
 ## Git Log (Session 13)
+- `a92fd0c` - Update session notes with all Session 13 progress
 - `406bf2f` - Fix: Restore folder selection view when returning to Mail
 - `cc41841` - Convert Review page to client-side view
 - `610a6a9` - Move New Folder button to top toolbar with cleaner styling
