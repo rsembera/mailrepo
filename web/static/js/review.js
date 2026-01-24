@@ -36,7 +36,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Update badge
     const totalCount = stagedEmails.size + stagedFolders.length;
-    document.getElementById('stagedBadge').textContent = totalCount;
+    const badge = document.getElementById('stagedBadge');
+    badge.textContent = totalCount;
+    badge.classList.toggle('hidden', totalCount === 0);
     
     if (stagedEmails.size === 0 && stagedFolders.length === 0) {
         return;  // Show empty state
@@ -461,7 +463,9 @@ window.unstageAll = unstageAll;
 
 function updateBadgeAndRender() {
     const totalCount = stagedEmails.size + stagedFolders.length;
-    document.getElementById('stagedBadge').textContent = totalCount;
+    const badge = document.getElementById('stagedBadge');
+    badge.textContent = totalCount;
+    badge.classList.toggle('hidden', totalCount === 0);
     
     if (totalCount === 0) {
         // Show empty state
