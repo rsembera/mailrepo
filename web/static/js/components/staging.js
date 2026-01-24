@@ -224,7 +224,9 @@ export function updateButtonStates() {
     const currentStageBtn = document.getElementById('stageBtn');
     
     if (currentStageBtn) {
-        const canStage = state.currentView?.type === 'account' && state.selectedEmails.size > 0;
+        // Allow staging from account (IMAP) or import views
+        const viewType = state.currentView?.type;
+        const canStage = (viewType === 'account' || viewType === 'import') && state.selectedEmails.size > 0;
         currentStageBtn.disabled = !canStage;
         
         // Update button text with count

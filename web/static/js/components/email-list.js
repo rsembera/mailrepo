@@ -124,9 +124,9 @@ export function handleSelectAll(e) {
 export function updateSelectAllState() {
     if (!selectAllEl) return;
     
-    const available = state.emails.filter(e => !state.staged.has(e.id));
+    const available = state.emails.filter(e => !state.staged.has(e.uid || e.id));
     const selectedCount = [...state.selectedEmails].filter(id => 
-        available.some(e => e.id === id)
+        available.some(e => (e.uid || e.id) === id)
     ).length;
     
     selectAllEl.checked = available.length > 0 && selectedCount === available.length;
