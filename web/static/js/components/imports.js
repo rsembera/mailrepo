@@ -869,7 +869,8 @@ function renderImportFolders(folders, importId, depth) {
     
     for (const folder of folders) {
         const hasChildren = folder.children && folder.children.length > 0;
-        const indent = depth * 16;
+        // Start with base indent for first level, increase for nested folders
+        const indent = 16 + (depth * 16);
         
         html += `<div class="import-tree-item">`;
         html += `<div class="tree-item-row" data-type="import-folder" data-import-id="${importId}" data-folder="${escapeHtml(folder.fullPath)}" style="padding-left: ${indent}px">`;
