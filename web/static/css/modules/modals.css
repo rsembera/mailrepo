@@ -35,7 +35,6 @@
     box-shadow: var(--shadow-lg);
     transform: scale(0.95);
     transition: transform 0.2s;
-    font-family: var(--font-body);
 }
 
 .modal-overlay.active .modal-content {
@@ -257,7 +256,6 @@
     cursor: pointer;
     text-align: left;
     transition: all 0.15s;
-    font-family: inherit;
 }
 
 .import-option:hover {
