@@ -130,16 +130,34 @@ export function confirmStage() {
         
         // Add each folder as a separate entry with its destination
         pending.folders.forEach(folder => {
-            // Check for duplicates (same account + folder)
-            const exists = state.stagedFolders.some(
-                sf => sf.accountId === pending.accountId && sf.folder === folder
-            );
+            // Check for duplicates based on source type
+            let exists = false;
+            if (pending.sourceType === 'import') {
+                exists = state.stagedFolders.some(
+                    sf => sf.sourceType === 'import' && sf.importId === pending.importId && sf.folder === folder
+                );
+            } else {
+                exists = state.stagedFolders.some(
+                    sf => sf.sourceType !== 'import' && sf.accountId === pending.accountId && sf.folder === folder
+                );
+            }
+            
             if (!exists) {
-                state.stagedFolders.push({
-                    accountId: pending.accountId,
-                    folder: folder,
-                    destinationFolderId: selectedDestinationFolder
-                });
+                if (pending.sourceType === 'import') {
+                    state.stagedFolders.push({
+                        sourceType: 'import',
+                        importId: pending.importId,
+                        folder: folder,
+                        destinationFolderId: selectedDestinationFolder
+                    });
+                } else {
+                    state.stagedFolders.push({
+                        sourceType: 'account',
+                        accountId: pending.accountId,
+                        folder: folder,
+                        destinationFolderId: selectedDestinationFolder
+                    });
+                }
             }
         });
         

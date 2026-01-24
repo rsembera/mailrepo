@@ -183,10 +183,10 @@ function renderReviewView() {
                     <div class="review-item-info">
                         <div class="review-item-subject">
                             <i data-lucide="folder" style="width: 16px; height: 16px; margin-right: 4px;"></i>
-                            ${escapeHtml(sf.folder)}
+                            ${escapeHtml(sf.folder || '(root)')}
                         </div>
                         <div class="review-item-meta">
-                            <span class="review-item-from">${escapeHtml(getAccountName(sf.accountId))}</span>
+                            <span class="review-item-from">${escapeHtml(getFolderSourceName(sf))}</span>
                         </div>
                     </div>
                     <div class="review-item-dest">
@@ -235,6 +235,20 @@ function getSourceName(sourceKey, firstEmail) {
 function getAccountName(accountId) {
     const account = accounts.find(a => a.id == accountId);
     return account ? account.name : `Account ${accountId}`;
+}
+
+function getImportName(importId) {
+    const imports = window.getMountedImports ? window.getMountedImports() : [];
+    const imp = imports.find(i => i.id === importId);
+    return imp ? imp.name : `Import`;
+}
+
+function getFolderSourceName(sf) {
+    if (sf.sourceType === 'import') {
+        return getImportName(sf.importId);
+    } else {
+        return getAccountName(sf.accountId);
+    }
 }
 
 function renderFolderOptions(selectedId) {

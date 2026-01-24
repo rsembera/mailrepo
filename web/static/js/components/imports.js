@@ -730,6 +730,7 @@ export function getMountedImports() {
         ...data,
     }));
 }
+window.getMountedImports = getMountedImports;
 
 /**
  * Get emails from a mounted import.

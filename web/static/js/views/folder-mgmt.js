@@ -14,6 +14,7 @@ import { closeModal, showPrompt, showConfirm, showAlert } from '../modals.js';
 import { refreshSidebarFolders, buildImapFolderTree, getFolderIcon } from '../components/sidebar.js';
 import { updateStagedBadge } from '../components/staging.js';
 import { updateTrashBadge } from './trash.js';
+import { getMountedImports } from '../components/imports.js';
 
 // Module state
 let movingFolderId = null;
@@ -22,6 +23,7 @@ let moveDestinationId = null;
 // For folder selection view (bulk staging)
 let selectedFoldersForStaging = new Set();
 let currentFolderSelectionAccountId = null;
+let currentFolderSelectionImportId = null;
 let folderSelectionTree = [];
 
 // DOM references
@@ -489,6 +491,125 @@ export async function showFolderSelectionView(accountId) {
     }
 }
 
+/**
+ * Show folder selection view for bulk import folder staging.
+ */
+export function showImportFolderSelectionView(importId) {
+    currentFolderSelectionImportId = importId;
+    currentFolderSelectionAccountId = null;
+    selectedFoldersForStaging.clear();
+    
+    // Track this view so it can be restored
+    state.currentView = { type: 'importFolders', id: importId };
+    
+    const imports = getMountedImports();
+    const imp = imports.find(i => i.id === importId);
+    
+    if (!imp) {
+        emailList.innerHTML = '<div class="empty-state"><p>Import not found</p></div>';
+        return;
+    }
+    
+    if (contextTitle) contextTitle.textContent = imp.name;
+    if (contextMeta) contextMeta.textContent = 'Select folders to archive';
+    
+    const toolbar = document.querySelector('.content-toolbar');
+    if (toolbar) toolbar.style.display = 'none';
+    
+    const headerActions = document.querySelector('.header-actions');
+    if (headerActions) {
+        headerActions.innerHTML = `
+            <button class="btn btn-primary" id="stageFoldersBtn" disabled onclick="stageSelectedFolders()">
+                <i data-lucide="archive"></i>
+                <span>Stage Selected Folders</span>
+            </button>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+    
+    // Build folder tree for import
+    if (imp.type === 'eml') {
+        // Single email - just show one item to stage
+        folderSelectionTree = [{ name: imp.name, fullPath: '', children: [], emailCount: imp.emails.length }];
+    } else if (imp.folders && imp.folders.length > 0) {
+        // Has folder structure
+        folderSelectionTree = imp.folders;
+    } else {
+        // Flat list of emails - show as single root
+        folderSelectionTree = [{ name: imp.name, fullPath: '', children: [], emailCount: imp.emails.length }];
+    }
+    
+    renderImportFolderSelectionView(folderSelectionTree, importId);
+}
+
+function renderImportFolderSelectionView(tree, importId) {
+    let html = `
+        <div class="folder-selection-view">
+            <div class="folder-selection-toolbar">
+                <label class="select-all-folders">
+                    <input type="checkbox" id="selectAllFolders" onchange="toggleAllFolders(this.checked)">
+                    <span>Select All</span>
+                </label>
+            </div>
+            <div class="folder-selection-list">
+                ${renderImportFolderSelectionTree(tree, importId, 0)}
+            </div>
+        </div>
+    `;
+    
+    emailList.innerHTML = html;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    
+    document.querySelectorAll('.folder-selection-chevron').forEach(chevron => {
+        chevron.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const item = chevron.closest('.folder-selection-item');
+            const children = item.querySelector('.folder-selection-children');
+            if (children) {
+                const isExpanded = children.style.display !== 'none';
+                children.style.display = isExpanded ? 'none' : 'block';
+                chevron.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(90deg)';
+            }
+        });
+    });
+}
+
+function renderImportFolderSelectionTree(nodes, importId, depth) {
+    let html = '';
+    
+    nodes.forEach(node => {
+        const hasChildren = node.children && node.children.length > 0;
+        const indent = depth * 20;
+        const folderPath = node.fullPath;
+        
+        html += `<div class="folder-selection-item" data-folder="${escapeHtml(folderPath)}">`;
+        html += `<div class="folder-selection-row" style="padding-left: ${indent}px">`;
+        
+        if (hasChildren) {
+            html += `<i data-lucide="chevron-right" class="folder-selection-chevron"></i>`;
+        } else {
+            html += `<span class="chevron-spacer"></span>`;
+        }
+        
+        html += `<label class="folder-checkbox">`;
+        html += `<input type="checkbox" data-folder="${escapeHtml(folderPath)}" onchange="handleFolderCheckbox(this, '${escapeHtml(folderPath)}')">`;
+        html += `</label>`;
+        html += `<i data-lucide="folder" class="tree-icon"></i>`;
+        html += `<span class="folder-selection-name">${escapeHtml(node.name)}</span>`;
+        html += `</div>`;
+        
+        if (hasChildren) {
+            html += `<div class="folder-selection-children" style="display: none;">`;
+            html += renderImportFolderSelectionTree(node.children, importId, depth + 1);
+            html += `</div>`;
+        }
+        
+        html += `</div>`;
+    });
+    
+    return html;
+}
+
 function renderFolderSelectionView(tree, accountId) {
     let html = `
         <div class="folder-selection-view">
@@ -639,10 +760,23 @@ export function stageSelectedFolders() {
     if (selectedFoldersForStaging.size === 0) return;
     
     // Store pending folders - will be added to stagedFolders after destination is chosen
-    pendingFolderStaging = {
-        accountId: currentFolderSelectionAccountId,
-        folders: Array.from(selectedFoldersForStaging)
-    };
+    // Supports both IMAP accounts and imports
+    if (currentFolderSelectionAccountId) {
+        pendingFolderStaging = {
+            sourceType: 'account',
+            accountId: currentFolderSelectionAccountId,
+            folders: Array.from(selectedFoldersForStaging)
+        };
+    } else if (currentFolderSelectionImportId) {
+        pendingFolderStaging = {
+            sourceType: 'import',
+            importId: currentFolderSelectionImportId,
+            folders: Array.from(selectedFoldersForStaging)
+        };
+    } else {
+        console.error('No account or import selected for folder staging');
+        return;
+    }
     
     openStageFoldersModal();
 }

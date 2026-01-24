@@ -22,7 +22,7 @@ import { initEmailList, renderEmailList, toggleEmailSelection, handleSelectAll, 
 import { initSidebar, toggleSection, handleTreeItemClick, updateSidebarFolders, refreshSidebarFolders, loadAccountLabels, buildImapFolderTree, getFolderIcon } from './components/sidebar.js';
 import { initMailView, selectView, loadAccountEmails, loadFolderEmails, openEmailViewer, closeEmailViewer, showLoading, showError } from './views/mail.js';
 import { initStaging, openStageModal, renderFolderSelectTree, handleFolderSelect, confirmStage, updateStagedBadge, updateButtonStates, goToReview, setSelectedDestinationFolder } from './components/staging.js';
-import { initFolderMgmt, showFolderManagementView, showFolderSelectionView, renameFolder, createSubfolder, openMoveFolder, confirmMoveFolder, deleteFolder, openColorPicker, handleFolderCheckbox, toggleAllFolders, stageSelectedFolders } from './views/folder-mgmt.js';
+import { initFolderMgmt, showFolderManagementView, showFolderSelectionView, showImportFolderSelectionView, renameFolder, createSubfolder, openMoveFolder, confirmMoveFolder, deleteFolder, openColorPicker, handleFolderCheckbox, toggleAllFolders, stageSelectedFolders } from './views/folder-mgmt.js';
 import { initTrashView, showTrashView, updateTrashBadge, restoreFolder, permanentlyDeleteFolder, emptyTrash } from './views/trash.js';
 import { initSettingsView, showSettingsView } from './views/settings.js';
 import { initReviewView, showReviewView } from './views/review.js';
@@ -127,7 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize imports component
     initImports({
-        onImportSelect: (importId) => loadImportEmails(importId),
+        onImportSelect: (importId) => handleImportSelect(importId),
         onImportFolderSelect: (importId, folder) => loadImportEmails(importId, folder),
         onImportUnmount: (importId) => handleImportUnmount(importId),
     });
@@ -288,6 +288,33 @@ function handleBeforeUnload(e) {
 }
 
 /**
+ * Handle click on import name - decide whether to show folder selection or emails.
+ * Shows folder selection only if the import has a folder hierarchy.
+ * Otherwise shows emails directly.
+ */
+function handleImportSelect(importId) {
+    const imports = getMountedImports();
+    const imp = imports.find(i => i.id === importId);
+    
+    if (!imp) {
+        showError('Import not found');
+        return;
+    }
+    
+    // Check if import has meaningful folder structure
+    const hasFolderStructure = imp.folders && imp.folders.length > 0 && 
+        imp.folders.some(f => f.children && f.children.length > 0);
+    
+    if (hasFolderStructure) {
+        // Has folder hierarchy - show folder selection for bulk staging
+        showImportFolderSelectionView(importId);
+    } else {
+        // Flat structure (eml directory or flat mbox) - show emails directly
+        loadImportEmails(importId);
+    }
+}
+
+/**
  * Load emails from a mounted import.
  */
 function loadImportEmails(importId, folderPath = null) {
@@ -399,6 +426,8 @@ function showMailView() {
             loadImportEmails(state.currentView.id, state.currentView.folder);
         } else if (state.currentView.type === 'accountFolders') {
             showFolderSelectionView(state.currentView.id);
+        } else if (state.currentView.type === 'importFolders') {
+            showImportFolderSelectionView(state.currentView.id);
         }
     } else {
         // No previous selection - show empty state
