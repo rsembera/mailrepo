@@ -274,17 +274,17 @@ function initAppearanceHandlers() {
  */
 function loadCurrentSettings() {
     // Get current theme
-    const currentTheme = localStorage.getItem('theme') || 'lagoon';
+    const currentTheme = localStorage.getItem('mailrepo-theme') || 'lagoon';
     const themeBtn = document.querySelector(`.theme-option[data-theme="${currentTheme}"]`);
     if (themeBtn) themeBtn.classList.add('active');
     
     // Get current font
-    const currentFont = localStorage.getItem('font') || 'lexend';
+    const currentFont = localStorage.getItem('mailrepo-font') || 'lexend';
     const fontBtn = document.querySelector(`.font-option[data-font="${currentFont}"]`);
     if (fontBtn) fontBtn.classList.add('active');
     
     // Get current font size
-    const currentSize = localStorage.getItem('fontSize') || 'm';
+    const currentSize = localStorage.getItem('mailrepo-font-size') || 'm';
     const sizeBtn = document.querySelector(`.size-btn[data-size="${currentSize}"]`);
     if (sizeBtn) sizeBtn.classList.add('active');
 }
@@ -295,7 +295,7 @@ function loadCurrentSettings() {
 function setTheme(theme) {
     document.documentElement.dataset.theme = theme;
     document.body.dataset.theme = theme;
-    localStorage.setItem('theme', theme);
+    localStorage.setItem('mailrepo-theme', theme);
     fetch('/api/settings/theme', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -307,8 +307,15 @@ function setTheme(theme) {
  * Set font and persist.
  */
 function setFont(font) {
-    document.documentElement.dataset.font = font;
-    localStorage.setItem('font', font);
+    const fontFamilies = {
+        'lexend': 'var(--font-lexend)',
+        'libre-baskerville': 'var(--font-libre)',
+        'source-sans': 'var(--font-source-sans)'
+    };
+    const fontFamily = fontFamilies[font] || fontFamilies['lexend'];
+    document.documentElement.style.setProperty('--font-ui', fontFamily);
+    document.documentElement.style.setProperty('--font-body', fontFamily);
+    localStorage.setItem('mailrepo-font', font);
     fetch('/api/settings/font', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -320,8 +327,9 @@ function setFont(font) {
  * Set font size and persist.
  */
 function setFontSize(size) {
-    document.documentElement.dataset.fontSize = size;
-    localStorage.setItem('fontSize', size);
+    document.documentElement.classList.remove('font-size-s', 'font-size-m', 'font-size-l');
+    document.documentElement.classList.add(`font-size-${size}`);
+    localStorage.setItem('mailrepo-font-size', size);
     fetch('/api/settings/fontSize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
