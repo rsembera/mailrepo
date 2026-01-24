@@ -224,12 +224,11 @@ export function updateButtonStates() {
 
 /**
  * Navigate to review page with staged items.
+ * Always navigates, even if nothing is staged (shows empty state).
  */
 export function goToReview() {
     const hasEmails = state.staged.size > 0;
     const hasFolders = state.stagedFolders.length > 0;
-    
-    if (!hasEmails && !hasFolders) return;
     
     if (hasEmails) {
         sessionStorage.setItem('stagedEmails', JSON.stringify([...state.staged.entries()]));
