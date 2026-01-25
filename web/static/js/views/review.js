@@ -125,11 +125,19 @@ function renderReviewView() {
     stagedEmails.forEach((data, emailId) => {
         const key = data.sourceType === 'import' 
             ? `import:${data.sourceImportId}` 
-            : `account:${data.accountId}:${data.folder || 'INBOX'}`;
+            : `account:${data.sourceAccountId}:${data.sourceFolder || 'INBOX'}`;
         if (!emailsBySource.has(key)) {
             emailsBySource.set(key, []);
         }
-        emailsBySource.get(key).push({ emailId, ...data });
+        // Flatten email data for easier access in template
+        emailsBySource.get(key).push({ 
+            emailId, 
+            ...data,
+            // Pull email properties to top level for template access
+            subject: data.email?.subject,
+            from: data.email?.from,
+            date: data.email?.date,
+        });
     });
     
     // Render email groups
@@ -240,7 +248,8 @@ function renderReviewView() {
 
 function getSourceName(sourceKey, firstEmail) {
     if (sourceKey.startsWith('import:')) {
-        return firstEmail.importName || 'Import';
+        const importId = sourceKey.split(':')[1];
+        return getImportName(importId);
     } else {
         const parts = sourceKey.split(':');
         const accountId = parts[1];
