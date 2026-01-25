@@ -104,6 +104,138 @@ def _cache_email(account_id: int, folder: str, uidvalidity: int, email: dict):
     )
 
 
+# ============================================
+# FOLDER COMMIT HELPERS
+# ============================================
+
+def _create_archive_folder_from_path(archive_path: str, parent_folder_id: int) -> int:
+    """
+    Create archive folder(s) from a path string.
+    
+    Args:
+        archive_path: Path like "Parent/Child" or just "Child"
+        parent_folder_id: Destination folder ID (the folder user selected)
+        
+    Returns:
+        ID of the deepest folder created/found
+    
+    Example:
+        archive_path="Fan Mail/2024", parent_folder_id=5
+        Creates: [5] -> "Fan Mail" -> "2024"
+        Returns: ID of "2024" folder
+    """
+    if not archive_path:
+        return parent_folder_id
+    
+    parts = archive_path.split('/')
+    current_parent_id = parent_folder_id
+    
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+            
+        # Check if folder already exists
+        existing = Database.fetchone(
+            "SELECT id FROM folders WHERE name = ? AND parent_id = ? AND deleted_at IS NULL",
+            (part, current_parent_id)
+        )
+        
+        if existing:
+            current_parent_id = existing["id"]
+        else:
+            # Create new folder
+            cursor = Database.execute(
+                "INSERT INTO folders (name, parent_id) VALUES (?, ?)",
+                (part, current_parent_id)
+            )
+            current_parent_id = cursor.lastrowid
+    
+    return current_parent_id
+
+
+def _get_emails_from_import_folder(source_path: str, folder_path: str, import_type: str) -> list:
+    """
+    Get all emails belonging to a specific folder in an import.
+    
+    Args:
+        source_path: Path to the mbox file or Apple Mail export root
+        folder_path: Full path to the specific folder (e.g., "/path/to/Parent.mbox/Child.mbox")
+        import_type: 'mbox', 'apple-mbox', or 'eml'
+        
+    Returns:
+        List of (uid, raw_email_bytes) tuples
+    """
+    import os
+    import mailbox
+    
+    results = []
+    
+    if import_type == 'eml':
+        # EML directory - each .eml file is an email
+        if os.path.isdir(source_path):
+            for i, filename in enumerate(sorted(os.listdir(source_path))):
+                if filename.lower().endswith('.eml'):
+                    filepath = os.path.join(source_path, filename)
+                    try:
+                        with open(filepath, 'rb') as f:
+                            raw_email = f.read()
+                        results.append((f"eml-{i}", raw_email))
+                    except Exception as e:
+                        print(f"Error reading {filepath}: {e}")
+        return results
+    
+    if import_type == 'apple-mbox':
+        # Apple Mail export - folder_path points to a .mbox directory
+        # Look for mbox file inside or emlx files
+        mbox_internal = os.path.join(folder_path, 'mbox')
+        if os.path.exists(mbox_internal):
+            # Standard mbox file inside the .mbox directory
+            try:
+                mbox = mailbox.mbox(mbox_internal)
+                for i, message in enumerate(mbox):
+                    results.append((f"apple-{i}", message.as_bytes()))
+            except Exception as e:
+                print(f"Error reading Apple mbox {mbox_internal}: {e}")
+        else:
+            # Check for emlx files in Messages subdirectory
+            messages_dir = os.path.join(folder_path, 'Messages')
+            if os.path.isdir(messages_dir):
+                for i, filename in enumerate(sorted(os.listdir(messages_dir))):
+                    if filename.endswith('.emlx'):
+                        filepath = os.path.join(messages_dir, filename)
+                        try:
+                            with open(filepath, 'rb') as f:
+                                content = f.read()
+                            # emlx format: first line is byte count, then email, then plist
+                            first_newline = content.find(b'\n')
+                            if first_newline > 0:
+                                email_content = content[first_newline + 1:]
+                                plist_marker = email_content.rfind(b'<?xml version=')
+                                if plist_marker > 0:
+                                    email_content = email_content[:plist_marker]
+                                results.append((f"emlx-{filename}", email_content))
+                        except Exception as e:
+                            print(f"Error reading emlx {filepath}: {e}")
+        return results
+    
+    # Regular mbox file - need to filter by folder header if present
+    if import_type == 'mbox' and os.path.isfile(source_path):
+        try:
+            mbox = mailbox.mbox(source_path)
+            for i, message in enumerate(mbox):
+                # Check if email belongs to this folder
+                email_folder = message.get("X-Folder") or message.get("X-Gmail-Labels") or ""
+                
+                # If folder_path is empty/root, include emails without folder or match exactly
+                if not folder_path or email_folder == folder_path:
+                    results.append((f"mbox-{i}", message.as_bytes()))
+        except Exception as e:
+            print(f"Error reading mbox {source_path}: {e}")
+    
+    return results
+
+
 @api_bp.route("/accounts/<int:account_id>/emails/stream", methods=["GET"])
 def stream_account_emails(account_id):
     """
