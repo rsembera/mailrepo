@@ -810,7 +810,7 @@ export function stageSelectedFolders() {
     } else if (currentFolderSelectionImportId) {
         // Get import data to include path and type
         const imports = getMountedImports();
-        const imp = imports.get(currentFolderSelectionImportId);
+        const imp = imports.find(i => i.id === currentFolderSelectionImportId);
         
         pendingFolderStaging = {
             sourceType: 'import',
