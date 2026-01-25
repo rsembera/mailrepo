@@ -15,7 +15,6 @@ import { refreshSidebarFolders, buildImapFolderTree, getFolderIcon } from '../co
 import { updateStagedBadge } from '../components/staging.js';
 import { getMountedImports } from '../components/imports.js';
 import { updateTrashBadge } from './trash.js';
-import { getMountedImports } from '../components/imports.js';
 
 // Module state
 let movingFolderId = null;
