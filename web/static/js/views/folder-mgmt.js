@@ -686,21 +686,19 @@ export function handleFolderCheckbox(checkbox) {
     
     if (isChecked) {
         selectedFoldersForStaging.add(folderPath);
+        // Don't auto-check children - user might want just the parent's direct emails
     } else {
         selectedFoldersForStaging.delete(folderPath);
-    }
-    
-    const item = checkbox.closest('.folder-selection-item');
-    const childCheckboxes = item.querySelectorAll('.folder-selection-children input[type="checkbox"]');
-    childCheckboxes.forEach(child => {
-        child.checked = isChecked;
-        const childPath = child.dataset.folder;
-        if (isChecked) {
-            selectedFoldersForStaging.add(childPath);
-        } else {
+        // Uncheck all children when parent is unchecked (cascade down)
+        const item = checkbox.closest('.folder-selection-item');
+        const childCheckboxes = item.querySelectorAll('.folder-selection-children input[type="checkbox"]');
+        childCheckboxes.forEach(child => {
+            child.checked = false;
+            child.indeterminate = false;
+            const childPath = child.dataset.folder;
             selectedFoldersForStaging.delete(childPath);
-        }
-    });
+        });
+    }
     
     updateParentCheckboxes();
     updateSelectAllCheckbox();
@@ -711,7 +709,9 @@ export function handleFolderCheckbox(checkbox) {
 window.handleFolderCheckbox = handleFolderCheckbox;
 
 function updateParentCheckboxes() {
-    // Process from deepest to shallowest so parent states cascade correctly
+    // Only update visual state of parent checkboxes, NOT the staging set.
+    // The staging set should only contain folders explicitly clicked by the user.
+    // Process from deepest to shallowest so parent states cascade correctly.
     const items = Array.from(document.querySelectorAll('.folder-selection-item')).reverse();
     
     items.forEach(item => {
@@ -721,22 +721,22 @@ function updateParentCheckboxes() {
         const checkbox = item.querySelector(':scope > .folder-selection-row input[type="checkbox"]');
         if (!checkbox) return;
         
-        const folderPath = checkbox.dataset.folder;
         const childCheckboxes = children.querySelectorAll('input[type="checkbox"]');
         const checkedCount = Array.from(childCheckboxes).filter(c => c.checked).length;
         
+        // Only update visual state - don't modify selectedFoldersForStaging
         if (checkedCount === 0) {
             checkbox.checked = false;
             checkbox.indeterminate = false;
-            selectedFoldersForStaging.delete(folderPath);
         } else if (checkedCount === childCheckboxes.length) {
+            // All children checked - show parent as checked visually
+            // but DON'T add to staging set (user must explicitly click parent)
             checkbox.checked = true;
             checkbox.indeterminate = false;
-            selectedFoldersForStaging.add(folderPath);
         } else {
+            // Some children checked - show indeterminate
             checkbox.checked = false;
             checkbox.indeterminate = true;
-            selectedFoldersForStaging.delete(folderPath);
         }
     });
 }
