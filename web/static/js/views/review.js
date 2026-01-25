@@ -416,8 +416,11 @@ async function commitAll() {
         });
         
         const foldersToCommit = stagedFolders.map(sf => ({
+            sourceType: sf.sourceType,
             accountId: sf.accountId,
+            importId: sf.importId,
             folder: sf.folder,
+            archivePath: sf.archivePath,
             destinationFolderId: sf.destinationFolderId,
         }));
         

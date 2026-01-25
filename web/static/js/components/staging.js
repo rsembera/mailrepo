@@ -13,6 +13,7 @@ import { closeModal, showAlert } from '../modals.js';
 import { renderFolderTree } from '../components/folder-tree.js';
 import { renderEmailList } from '../components/email-list.js';
 import { getPendingFolderStaging, clearPendingFolderStaging } from '../views/folder-mgmt.js';
+import { getMountedImports } from '../components/imports.js';
 
 // Module state
 let selectedDestinationFolder = null;
@@ -115,6 +116,70 @@ export function handleFolderSelect(e) {
 }
 
 /**
+ * Get folder name from full path.
+ * Handles both filesystem paths and IMAP folder names.
+ */
+function getFolderName(fullPath) {
+    // Handle Apple mbox paths like "/path/to/Folder.mbox"
+    if (fullPath.includes('/')) {
+        const name = fullPath.split('/').pop();
+        // Remove .mbox extension if present
+        return name.replace(/\.mbox$/, '');
+    }
+    // Handle IMAP folder paths like "INBOX/Subfolder"
+    if (fullPath.includes('.')) {
+        return fullPath.split('.').pop();
+    }
+    return fullPath;
+}
+
+/**
+ * Compute archive paths for staged folders.
+ * 
+ * For each folder, determines the archive path based on whether its ancestors
+ * are also being staged to the same destination:
+ * - If ancestor is staged: preserve relative hierarchy (Parent/Child)
+ * - If no ancestor staged: just the folder name (Child)
+ * 
+ * @param {string[]} folderPaths - All folder paths being staged
+ * @param {string} sourceType - 'import' or 'account'
+ * @param {string} importId - Import ID (for imports)
+ * @returns {Object} Map of fullPath -> archivePath
+ */
+function computeArchivePaths(folderPaths, sourceType, importId) {
+    const archivePaths = {};
+    
+    // Sort by path length (shortest first) to process ancestors before descendants
+    const sorted = [...folderPaths].sort((a, b) => a.length - b.length);
+    
+    for (const path of sorted) {
+        const folderName = getFolderName(path);
+        
+        // Find if any ancestor path is also being staged
+        let ancestorPath = null;
+        for (const otherPath of sorted) {
+            if (otherPath !== path && path.startsWith(otherPath + '/')) {
+                // otherPath is an ancestor of path
+                // Use the longest matching ancestor (most immediate parent)
+                if (!ancestorPath || otherPath.length > ancestorPath.length) {
+                    ancestorPath = otherPath;
+                }
+            }
+        }
+        
+        if (ancestorPath && archivePaths[ancestorPath]) {
+            // Ancestor is staged - build relative path
+            archivePaths[path] = archivePaths[ancestorPath] + '/' + folderName;
+        } else {
+            // No ancestor staged - just use folder name
+            archivePaths[path] = folderName;
+        }
+    }
+    
+    return archivePaths;
+}
+
+/**
  * Confirm staging - handles both email and folder staging.
  */
 export function confirmStage() {
@@ -128,7 +193,14 @@ export function confirmStage() {
         const pending = getPendingFolderStaging();
         if (!pending) return;
         
-        // Add each folder as a separate entry with its destination
+        // Compute archive paths based on hierarchy
+        const archivePaths = computeArchivePaths(
+            pending.folders, 
+            pending.sourceType, 
+            pending.importId
+        );
+        
+        // Add each folder as a separate entry with its destination and archive path
         pending.folders.forEach(folder => {
             // Check for duplicates based on source type
             let exists = false;
@@ -143,11 +215,14 @@ export function confirmStage() {
             }
             
             if (!exists) {
+                const archivePath = archivePaths[folder] || getFolderName(folder);
+                
                 if (pending.sourceType === 'import') {
                     state.stagedFolders.push({
                         sourceType: 'import',
                         importId: pending.importId,
                         folder: folder,
+                        archivePath: archivePath,
                         destinationFolderId: selectedDestinationFolder
                     });
                 } else {
@@ -155,6 +230,7 @@ export function confirmStage() {
                         sourceType: 'account',
                         accountId: pending.accountId,
                         folder: folder,
+                        archivePath: archivePath,
                         destinationFolderId: selectedDestinationFolder
                     });
                 }
