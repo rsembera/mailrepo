@@ -406,12 +406,12 @@ async function commitAll() {
         const emails = [];
         stagedEmails.forEach((data, emailId) => {
             emails.push({
-                emailId,
-                accountId: data.accountId,
-                folder: data.folder,
+                email: data.email,  // Include full email object
                 destinationFolderId: data.destinationFolderId,
                 sourceType: data.sourceType,
+                sourceAccountId: data.sourceAccountId,
                 sourceImportId: data.sourceImportId,
+                sourceFolder: data.sourceFolder,
             });
         });
         
@@ -430,7 +430,7 @@ async function commitAll() {
         const response = await fetch('/api/commit/stream', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ emails, folders: foldersToCommit }),
+            body: JSON.stringify({ staged: emails, folders: foldersToCommit }),
         });
         
         if (!response.ok) {
