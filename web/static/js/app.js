@@ -437,7 +437,7 @@ function showMailView() {
     const subfoldersBar = document.getElementById('subfoldersBar');
     
     sidebar.style.display = '';
-    if (toolbar) toolbar.style.display = '';
+    if (toolbar) toolbar.style.display = 'none'; // Hide until emails are loaded
     if (headerActions) {
         headerActions.style.display = '';
         headerActions.innerHTML = ''; // Clear any leftover buttons
