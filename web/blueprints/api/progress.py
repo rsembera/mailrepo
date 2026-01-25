@@ -409,24 +409,25 @@ def stream_account_emails(account_id):
 @api_bp.route("/commit/stream", methods=["POST"])
 def stream_commit():
     """
-    Commit staged emails with progress streaming.
+    Commit staged emails and folders with progress streaming.
     
-    Uses Server-Sent Events to report progress as emails are archived.
+    Uses Server-Sent Events to report progress as items are archived.
     """
     data = request.get_json()
     staged = data.get("staged", [])
+    staged_folders = data.get("folders", [])
     
-    if not staged:
+    if not staged and not staged_folders:
         return Response(
-            sse_message("error", {"error": "No emails to commit"}),
+            sse_message("error", {"error": "No items to commit"}),
             mimetype="text/event-stream"
         )
     
     def generate():
-        results = {"success": [], "failed": [], "skipped": []}
-        total = len(staged)
+        results = {"success": [], "failed": [], "skipped": [], "folders_success": 0, "folders_failed": 0}
+        total = len(staged) + len(staged_folders)
         
-        yield sse_message("start", {"total": total, "type": "emails"})
+        yield sse_message("start", {"total": total, "type": "mixed" if staged_folders else "emails"})
         
         # Separate imports from IMAP items
         import_items = [item for item in staged if item.get("sourceType") == "import"]
@@ -703,18 +704,165 @@ def stream_commit():
                     except:
                         pass
         
+        # ============================================
+        # PHASE 2: Process Staged Folders
+        # ============================================
+        
+        for folder_item in staged_folders:
+            processed += 1
+            source_type = folder_item.get("sourceType")
+            archive_path = folder_item.get("archivePath", "")
+            dest_folder_id = folder_item.get("destinationFolderId")
+            folder_name = archive_path.split('/')[-1] if archive_path else "folder"
+            
+            try:
+                # Create archive folder structure from archivePath
+                target_folder_id = _create_archive_folder_from_path(archive_path, dest_folder_id)
+                
+                if source_type == "import":
+                    # Import folder commit
+                    import_path = folder_item.get("importPath")
+                    folder_path = folder_item.get("folder")
+                    import_type = folder_item.get("importType", "apple-mbox")
+                    
+                    emails = _get_emails_from_import_folder(import_path, folder_path, import_type)
+                    
+                    for uid, raw_email in emails:
+                        try:
+                            body_text = _extract_body_text(raw_email)
+                            
+                            file_path = Config.get_archive_path() / str(target_folder_id)
+                            file_path.mkdir(parents=True, exist_ok=True)
+                            
+                            safe_id = f"import_{uid.replace('/', '_').replace(':', '_')}"
+                            encrypted_data = Encryption.encrypt(raw_email)
+                            filepath = file_path / f"{safe_id}.eml.enc"
+                            filepath.write_bytes(encrypted_data)
+                            
+                            # Parse email for metadata
+                            import email as email_lib
+                            from email.header import decode_header
+                            from email.utils import parsedate_to_datetime
+                            
+                            msg = email_lib.message_from_bytes(raw_email)
+                            
+                            def decode_hdr(h):
+                                if not h: return ""
+                                try:
+                                    parts = decode_header(h)
+                                    return " ".join(
+                                        p.decode(c or "utf-8", errors="replace") if isinstance(p, bytes) else p
+                                        for p, c in parts
+                                    )
+                                except: return str(h)
+                            
+                            subject = decode_hdr(msg.get("Subject", ""))
+                            sender = decode_hdr(msg.get("From", ""))
+                            message_id = msg.get("Message-ID", "")
+                            date_str = msg.get("Date", "")
+                            try:
+                                date_ts = parsedate_to_datetime(date_str).isoformat() if date_str else None
+                            except:
+                                date_ts = date_str
+                            
+                            Database.execute(
+                                """INSERT INTO messages 
+                                   (folder_id, source_account_id, message_id, subject, sender, date, filepath, body_text)
+                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                                (target_folder_id, None, message_id, subject, sender, date_ts,
+                                 str(filepath.relative_to(Config.get_base_path())), body_text)
+                            )
+                            results["success"].append(uid)
+                        except Exception as e:
+                            results["failed"].append({"uid": uid, "error": str(e)})
+                else:
+                    # IMAP folder commit
+                    account_id = folder_item.get("accountId")
+                    imap_folder = folder_item.get("folder")
+                    
+                    account = Database.fetchone(
+                        "SELECT credentials_encrypted FROM accounts WHERE id = ?", (account_id,)
+                    )
+                    if not account:
+                        raise ValueError(f"Account {account_id} not found")
+                    
+                    client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+                    try:
+                        folder_info = client.select_folder(imap_folder)
+                        if folder_info.get("message_count", 0) > 0:
+                            uids = client.search(criteria="ALL", limit=0)
+                            for uid in uids:
+                                try:
+                                    email_data = client.fetch_full(uid)
+                                    raw_email = client.fetch_raw(uid)
+                                    if not raw_email:
+                                        results["failed"].append({"uid": uid, "error": "Empty"})
+                                        continue
+                                    
+                                    message_id = email_data.get("message_id", "")
+                                    if message_id:
+                                        existing = Database.fetchone(
+                                            "SELECT id FROM messages WHERE folder_id = ? AND message_id = ?",
+                                            (target_folder_id, message_id)
+                                        )
+                                        if existing:
+                                            results["skipped"].append({"uid": uid})
+                                            continue
+                                    
+                                    body_text = _extract_body_text(raw_email)
+                                    file_path = Config.get_archive_path() / str(target_folder_id)
+                                    file_path.mkdir(parents=True, exist_ok=True)
+                                    
+                                    safe_id = f"{account_id}_{uid}"
+                                    encrypted_data = Encryption.encrypt(raw_email)
+                                    filepath = file_path / f"{safe_id}.eml.enc"
+                                    filepath.write_bytes(encrypted_data)
+                                    
+                                    Database.execute(
+                                        """INSERT INTO messages 
+                                           (folder_id, source_account_id, message_id, subject, sender, date, filepath, body_text)
+                                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                                        (target_folder_id, account_id, message_id,
+                                         email_data.get("subject", ""), email_data.get("from", ""),
+                                         email_data.get("date"), str(filepath.relative_to(Config.get_base_path())), body_text)
+                                    )
+                                    results["success"].append(uid)
+                                except Exception as e:
+                                    results["failed"].append({"uid": uid, "error": str(e)})
+                    finally:
+                        client.disconnect()
+                
+                results["folders_success"] += 1
+                yield sse_message("progress", {
+                    "current": processed, "total": total,
+                    "percent": int(processed / total * 100),
+                    "status": "folder_success", "folder": folder_name,
+                })
+            except Exception as e:
+                results["folders_failed"] += 1
+                yield sse_message("progress", {
+                    "current": processed, "total": total,
+                    "percent": int(processed / total * 100),
+                    "status": "folder_failed", "folder": folder_name, "error": str(e),
+                })
+        
         Database.commit()
         
         # Build summary message
-        msg_parts = [f"{len(results['success'])} emails filed successfully"]
+        msg_parts = []
+        if results["success"]:
+            msg_parts.append(f"{len(results['success'])} emails filed")
+        if results["folders_success"]:
+            msg_parts.append(f"{results['folders_success']} folders archived")
         if results["skipped"]:
-            msg_parts.append(f"{len(results['skipped'])} skipped (already archived)")
-        if results["failed"]:
-            msg_parts.append(f"{len(results['failed'])} failed")
+            msg_parts.append(f"{len(results['skipped'])} skipped")
+        if results["failed"] or results["folders_failed"]:
+            fail_count = len(results["failed"]) + results["folders_failed"]
+            msg_parts.append(f"{fail_count} failed")
         
         yield sse_message("complete", {
             "results": results,
-            "message": ". ".join(msg_parts) + ".",
+            "message": ". ".join(msg_parts) + "." if msg_parts else "Nothing committed.",
         })
     
     return Response(
