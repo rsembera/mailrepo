@@ -592,7 +592,7 @@ function renderImportFolderSelectionTree(nodes, importId, depth) {
         }
         
         html += `<label class="folder-checkbox">`;
-        html += `<input type="checkbox" data-folder="${escapeHtml(folderPath)}" onchange="handleFolderCheckbox(this, '${escapeHtml(folderPath)}')">`;
+        html += `<input type="checkbox" data-folder="${escapeHtml(folderPath)}" onchange="handleFolderCheckbox(this)">`;
         html += `</label>`;
         html += `<i data-lucide="folder" class="tree-icon"></i>`;
         html += `<span class="folder-selection-name">${escapeHtml(node.name)}</span>`;
@@ -660,7 +660,7 @@ function renderFolderSelectionTree(nodes, accountId, depth) {
         }
         
         html += `<label class="folder-checkbox">`;
-        html += `<input type="checkbox" data-folder="${escapeHtml(folderPath)}" onchange="handleFolderCheckbox(this, '${escapeHtml(folderPath)}')">`;
+        html += `<input type="checkbox" data-folder="${escapeHtml(folderPath)}" onchange="handleFolderCheckbox(this)">`;
         html += `</label>`;
         html += `<i data-lucide="${getFolderIcon(node.name)}" class="tree-icon"></i>`;
         html += `<span class="folder-selection-name">${escapeHtml(node.name)}</span>`;
@@ -678,8 +678,11 @@ function renderFolderSelectionTree(nodes, accountId, depth) {
     return html;
 }
 
-export function handleFolderCheckbox(checkbox, folderPath) {
+export function handleFolderCheckbox(checkbox) {
+    const folderPath = checkbox.dataset.folder;
     const isChecked = checkbox.checked;
+    
+    console.log('handleFolderCheckbox:', { folderPath, isChecked });
     
     if (isChecked) {
         selectedFoldersForStaging.add(folderPath);
@@ -702,6 +705,8 @@ export function handleFolderCheckbox(checkbox, folderPath) {
     updateParentCheckboxes();
     updateSelectAllCheckbox();
     updateStageFoldersButton();
+    
+    console.log('After update, selectedFoldersForStaging:', Array.from(selectedFoldersForStaging));
 }
 window.handleFolderCheckbox = handleFolderCheckbox;
 
