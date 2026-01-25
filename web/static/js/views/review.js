@@ -67,11 +67,23 @@ export async function showReviewView() {
         document.getElementById('commitBtn')?.addEventListener('click', commitAll);
     }
     
-    // Load accounts from page data
-    accounts = window.accountsData || [];
+    // Load accounts from API
+    await loadAccounts();
     
     await loadFolders();
     renderReviewView();
+}
+
+async function loadAccounts() {
+    try {
+        const response = await fetch('/api/accounts');
+        if (response.ok) {
+            const data = await response.json();
+            accounts = data.accounts || [];
+        }
+    } catch (e) {
+        console.error('Failed to load accounts:', e);
+    }
 }
 
 async function loadFolders() {
@@ -189,7 +201,7 @@ function renderReviewView() {
                     <div class="review-item-info">
                         <div class="review-item-subject">
                             <i data-lucide="folder" style="width: 16px; height: 16px; margin-right: 4px;"></i>
-                            ${escapeHtml(sf.folder || '(root)')}
+                            ${escapeHtml(sf.archivePath || sf.folder.split('/').pop() || '(root)')}
                         </div>
                         <div class="review-item-meta">
                             <span class="review-item-from">${escapeHtml(getFolderSourceName(sf))}</span>
@@ -296,9 +308,35 @@ function initIconSelects() {
         trigger?.addEventListener('click', (e) => {
             e.stopPropagation();
             document.querySelectorAll('.icon-select-dropdown.open').forEach(d => {
-                if (d !== dropdown) d.classList.remove('open');
+                if (d !== dropdown) {
+                    d.classList.remove('open');
+                    d.style.removeProperty('bottom');
+                    d.style.removeProperty('top');
+                }
             });
-            dropdown?.classList.toggle('open');
+            
+            // Check if dropdown would go off screen
+            if (dropdown) {
+                const triggerRect = trigger.getBoundingClientRect();
+                const dropdownHeight = 200; // max-height from CSS
+                const spaceBelow = window.innerHeight - triggerRect.bottom;
+                
+                if (spaceBelow < dropdownHeight && triggerRect.top > dropdownHeight) {
+                    // Show above
+                    dropdown.style.bottom = '100%';
+                    dropdown.style.top = 'auto';
+                    dropdown.style.marginBottom = '4px';
+                    dropdown.style.marginTop = '0';
+                } else {
+                    // Show below (default)
+                    dropdown.style.top = '100%';
+                    dropdown.style.bottom = 'auto';
+                    dropdown.style.marginTop = '4px';
+                    dropdown.style.marginBottom = '0';
+                }
+                
+                dropdown.classList.toggle('open');
+            }
         });
         
         dropdown?.querySelectorAll('.icon-select-option').forEach(option => {

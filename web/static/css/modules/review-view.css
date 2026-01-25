@@ -17,7 +17,7 @@
 .review-group {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
-    overflow: hidden;
+    overflow: visible; /* Allow dropdowns to extend outside */
 }
 
 .review-group-header {
@@ -42,6 +42,7 @@
 .review-group-items {
     display: flex;
     flex-direction: column;
+    padding-bottom: var(--space-md); /* Space for last item's dropdown */
 }
 
 .review-item {
