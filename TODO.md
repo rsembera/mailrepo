@@ -2,46 +2,41 @@
 
 ## High Priority
 
-### Import Folder Staging (Session 12 - Incomplete)
-- Individual email staging from imports WORKS
-- Folder staging for imports was attempted but reverted
-- Need to REUSE existing IMAP folder selection code, not reimplement
-- Key files: `views/folder-mgmt.js` has `showFolderSelectionView()`, `handleFolderCheckbox()`, etc.
-- See SESSION_NOTES.md for detailed lessons learned
+### Commit UX
+- [ ] **Progress indicator during commit** - Show progress bar similar to IMAP folder loading, not just "Committing..." spinner
+- [ ] **Sidebar auto-refresh after commit** - Currently requires manual page refresh to see new folders/chevrons
 
-### Progress Indicator for Email Loading
-- Currently shows spinner for all folder loads
-- Implement progress bar for folders with >50 emails
-- Keep spinner for ≤50 emails (feels instant enough)
-- Backend needs to return count first, then stream/batch emails
-- Threshold (50) could be configurable in settings later
+### Folder Selection UX
+- [ ] **Grey out staged folders** - On folder selection pages, staged folders should be greyed out similar to how staged emails are greyed out
+- [ ] **Create subfolder in destination modal** - Allow creating nested folders in "Select destination folder" modal, not just root-level folders
 
-### IMAP Folder Caching Improvements
-- Basic caching with UIDVALIDITY implemented
-- Could optimize for very large folders
-- Consider background refresh
+### IMAP UX
+- [ ] **Chevron click loads inbox** - Clicking chevron on IMAP account in sidebar should load emails in that account's Inbox
 
 ## Medium Priority
 
-### Multi-Account Folder Staging (Backend)
-- Frontend now supports staging folders from multiple accounts
-- Backend `/api/commit-folders` still processes one account at a time
-- Frontend groups and makes multiple API calls (works, but not ideal)
-- Could optimize backend to accept array of account+folder+destination groups
+### Error Handling
+- [ ] **Duplicate folder name handling** - What happens if two folders with same name land in same archive destination? Need graceful handling (rename, merge, or error)
 
-## Low Priority / Future
+### Caching
+- [ ] **Investigate email cache clearing** - Email cache was unexpectedly cleared during testing, forcing reload from IMAP. Determine why and fix if it's a bug.
 
-### After Commit Actions for Folders
-- "After commit" dropdown exists in review UI for folders
-- Backend doesn't yet implement archive/trash/delete for source IMAP folders
-- Currently only "Leave in place" actually works
+## Low Priority / Cleanup
 
-### Review Page Polish
-- Logout was hardcoded to /logout instead of /auth/logout (need to fix)
-- Consider "Unstage All" button
-- Group staged items by source (IMAP vs Import)
-- Hide "After commit" dropdown for imports (doesn't apply)
+### Code Cleanup
+- [ ] **Remove debug logging** - Remove `[COMMIT ERROR]` print statements from progress.py once commit is stable
+
+### Future Enhancements
+- [ ] Progress bars with Server-Sent Events for long-running operations (partially done for commit, need for other operations)
+- [ ] Improve IMAP folder caching to reduce slow repeated calls
 
 ---
 
-*Last updated: January 23, 2026*
+## Completed (Session 14)
+
+- [x] Folder commit feature (all 8 implementation chunks)
+- [x] Fix email commit data structure mismatches
+- [x] Fix review view displaying email/account data
+- [x] Fix EML sourcePath for commit
+- [x] Fix dropdown overflow/positioning in review view
+- [x] Load account names properly in review view

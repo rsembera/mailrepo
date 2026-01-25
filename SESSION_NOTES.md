@@ -1,63 +1,37 @@
 # MailRepo - Session Notes
 
-## Session 14 (January 25, 2026)
+## Session 14 (January 24-25, 2026)
 
-### Completed Today
+### Completed
 
-**Code Cleanup:**
-- [x] Removed old standalone Review and Settings pages (~2,755 lines deleted)
+**Folder Commit Feature (All 8 Chunks):**
+- ✅ Backend helpers for folder creation and email retrieval
+- ✅ Streaming commit endpoint handles both emails and folders
+- ✅ Archive path computation preserves folder hierarchy
+- ✅ Frontend passes import data (path, type) with commits
+- ✅ Clears staged items after successful commit
 
-**Import Improvements:**
-- [x] Auto-display import contents after mounting
-- [x] Show emails directly for imports without folder structure
-- [x] Show folder selection only if import has actual hierarchy
-- [x] Indent first-level import folders below mbox name in sidebar
-- [x] Clear toolbar when unmounting viewed import
+**Bug Fixes:**
+- ✅ Fixed `staged` vs `emails` key mismatch in commit request
+- ✅ Fixed nested email object access in review view
+- ✅ Fixed `sourceAccountId` field name for IMAP grouping  
+- ✅ Fixed account names showing as "Account undefined"
+- ✅ Fixed EML imports missing `sourcePath` for commit
+- ✅ Fixed duplicate import causing JS syntax error
+- ✅ Fixed `imports.get()` vs `imports.find()` for array lookup
+- ✅ Folder names now show `archivePath` not full filesystem path
 
-**Folder Selection Checkbox Logic (Major Fix):**
-- [x] Fixed escaping issue with folder paths containing quotes (e.g., "Peter O'Connor")
-- [x] Explicit selection only - no auto-check cascading
-- [x] Parent shows indeterminate when children are staged but parent is not
-- [x] Select All state based on staging set, not visual checkbox state
+**UI Improvements:**
+- ✅ Smart dropdown positioning (flips up when near viewport bottom)
+- ✅ Removed overflow:hidden that was clipping dropdowns
 
-**Folder Commit Feature (Chunks 1-7 of IMPLEMENTATION_PLAN.md):**
-- [x] Chunk 1: `_create_archive_folder_from_path()` helper
-- [x] Chunk 2: `_get_emails_from_import_folder()` helper for mbox/Apple mbox/eml
-- [x] Chunk 3-5: Backend folder commit in `/api/commit/stream`
-  - Handles both import folders and IMAP folders
-  - Uses `archivePath` for correct hierarchy
-  - Progress events for folder operations
-- [x] Chunk 6: Frontend passes `importPath` and `importType` with commits
-- [x] Chunk 7: Clear staged items after commit, show results alert
+### Known Issues / TODO
 
-### Remaining
-
-**Chunk 8: Handle Only Direct Emails (Parent Without Children)**
-- When staging just a parent (not children), only archive parent's direct emails
-- For IMAP: automatic (IMAP folders don't include subfolders)
-- For imports: need to filter emails that belong directly to folder, not children
-
-**Testing Needed:**
-- Test Apple mbox folder commit with hierarchy
-- Test IMAP folder commit with hierarchy
-- Test flat mbox folder commit
-- Test mixed email + folder commit
-
-### Current State
-
-- Server running on port 5050
-- All changes committed and pushed to origin/main
-- Master password: Alkahest131!
+See TODO.md for full list.
 
 ---
 
-## Session 13 (January 24, 2026)
-
-Converted Review and Settings to client-side views, UI improvements, theme renaming.
-
----
-
-## Quick Start
+## Quick Reference
 
 ```bash
 cd /home/rick/Applications/mailrepo
@@ -66,9 +40,9 @@ cd /home/rick/Applications/mailrepo
 # Master password: Alkahest131!
 ```
 
-## Recent Commits (Session 14)
-- `ec07ffe` - Chunk 6-7: Frontend folder commit data and cleanup
-- `7b9e3be` - Chunk 3-5: Add folder commit to streaming endpoint
-- `451ff1c` - Chunk 1-2: Add folder commit helper functions
-- `630c0d2` - Add implementation plan for folder commit feature
-- `033a256` - Fix checkbox visual state reflects actual staging set
+## Recent Commits
+- `5e0200a` - Fix: Add sourcePath to EML email parsing response
+- `698ba6f` - Debug: Add error logging to email commit
+- `b0278e9` - Fix: Review view displaying email/account data correctly
+- `c84f90f` - Fix: Review view UI improvements
+- `03ba142` - Fix: Send correct data structure for email commit
