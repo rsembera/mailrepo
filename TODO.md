@@ -1,5 +1,19 @@
 # MailRepo - TODO
 
+## Before Starting Any Feature
+
+**READ FIRST, CODE SECOND:**
+1. Trace the existing similar code path end-to-end before making changes
+2. Verify field names and data structures actually exist - don't assume
+3. Test after each change, not after batching multiple fixes
+
+Key files to check for data structures:
+- `web/static/js/components/staging.js` - staged email/folder structure
+- `web/static/js/views/review.js` - what review view expects
+- `web/blueprints/api/progress.py` - what backend expects in commit request
+
+---
+
 ## High Priority
 
 ### Commit UX
