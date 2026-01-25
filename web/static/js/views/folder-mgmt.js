@@ -700,37 +700,65 @@ export function handleFolderCheckbox(checkbox, folderPath) {
     });
     
     updateParentCheckboxes();
+    updateSelectAllCheckbox();
     updateStageFoldersButton();
 }
 window.handleFolderCheckbox = handleFolderCheckbox;
 
 function updateParentCheckboxes() {
-    document.querySelectorAll('.folder-selection-item').forEach(item => {
+    // Process from deepest to shallowest so parent states cascade correctly
+    const items = Array.from(document.querySelectorAll('.folder-selection-item')).reverse();
+    
+    items.forEach(item => {
         const children = item.querySelector('.folder-selection-children');
         if (!children) return;
         
         const checkbox = item.querySelector(':scope > .folder-selection-row input[type="checkbox"]');
         if (!checkbox) return;
         
+        const folderPath = checkbox.dataset.folder;
         const childCheckboxes = children.querySelectorAll('input[type="checkbox"]');
         const checkedCount = Array.from(childCheckboxes).filter(c => c.checked).length;
         
         if (checkedCount === 0) {
             checkbox.checked = false;
             checkbox.indeterminate = false;
+            selectedFoldersForStaging.delete(folderPath);
         } else if (checkedCount === childCheckboxes.length) {
             checkbox.checked = true;
             checkbox.indeterminate = false;
+            selectedFoldersForStaging.add(folderPath);
         } else {
             checkbox.checked = false;
             checkbox.indeterminate = true;
+            selectedFoldersForStaging.delete(folderPath);
         }
     });
+}
+
+function updateSelectAllCheckbox() {
+    const selectAll = document.getElementById('selectAllFolders');
+    if (!selectAll) return;
+    
+    const allCheckboxes = document.querySelectorAll('.folder-selection-list input[type="checkbox"]');
+    const checkedCount = Array.from(allCheckboxes).filter(c => c.checked).length;
+    
+    if (checkedCount === 0) {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+    } else if (checkedCount === allCheckboxes.length) {
+        selectAll.checked = true;
+        selectAll.indeterminate = false;
+    } else {
+        selectAll.checked = false;
+        selectAll.indeterminate = true;
+    }
 }
 
 export function toggleAllFolders(checked) {
     document.querySelectorAll('.folder-selection-list input[type="checkbox"]').forEach(cb => {
         cb.checked = checked;
+        cb.indeterminate = false;
         const folderPath = cb.dataset.folder;
         if (checked) {
             selectedFoldersForStaging.add(folderPath);
