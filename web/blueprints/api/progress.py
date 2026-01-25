@@ -156,7 +156,11 @@ def _create_archive_folder_from_path(archive_path: str, parent_folder_id: int) -
 
 def _get_emails_from_import_folder(source_path: str, folder_path: str, import_type: str) -> list:
     """
-    Get all emails belonging to a specific folder in an import.
+    Get emails belonging DIRECTLY to a specific folder in an import.
+    
+    IMPORTANT: Only returns emails that are direct children of the folder,
+    NOT emails from nested subfolders. This ensures that staging a parent
+    folder without its children only archives the parent's direct emails.
     
     Args:
         source_path: Path to the mbox file or Apple Mail export root
@@ -187,7 +191,8 @@ def _get_emails_from_import_folder(source_path: str, folder_path: str, import_ty
     
     if import_type == 'apple-mbox':
         # Apple Mail export - folder_path points to a .mbox directory
-        # Look for mbox file inside or emlx files
+        # Each .mbox dir has its own mbox file or Messages folder with only
+        # that folder's direct emails - child folders are separate .mbox dirs
         mbox_internal = os.path.join(folder_path, 'mbox')
         if os.path.exists(mbox_internal):
             # Standard mbox file inside the .mbox directory
@@ -219,7 +224,8 @@ def _get_emails_from_import_folder(source_path: str, folder_path: str, import_ty
                             print(f"Error reading emlx {filepath}: {e}")
         return results
     
-    # Regular mbox file - need to filter by folder header if present
+    # Regular mbox file - filter by folder header for exact match only
+    # (emails in child folders have different X-Folder values)
     if import_type == 'mbox' and os.path.isfile(source_path):
         try:
             mbox = mailbox.mbox(source_path)
