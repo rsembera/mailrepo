@@ -424,7 +424,7 @@ def parse_eml_file():
                 "date": date_ts or date_str,
                 "message_id": message.get("Message-ID", ""),
                 "filename": os.path.basename(path),
-                "filepath": path,
+                "sourcePath": path,  # Used by commit to retrieve raw email
             },
         })
         
