@@ -447,15 +447,14 @@ function showMailView() {
         subfoldersBar.innerHTML = '';
     }
     
-    // Show welcome state
-    elements.contextTitle.textContent = 'Welcome to MailRepo';
+    // Show empty state prompt
+    elements.contextTitle.textContent = 'MailRepo';
     elements.contextMeta.textContent = '';
     elements.emailList.innerHTML = `
-        <div class="welcome-state">
-            <i data-lucide="mail" class="welcome-icon"></i>
-            <h3>Welcome to MailRepo</h3>
-            <p>Select an email account from the sidebar to browse and archive your messages.</p>
-            <p class="welcome-hint">Or connect a new account in <a href="javascript:void(0);" onclick="document.querySelector('.rail-btn[data-view=settings]').click()">Settings</a>.</p>
+        <div class="empty-state">
+            <i data-lucide="inbox" class="empty-icon"></i>
+            <h3>No Folder Selected</h3>
+            <p>Select a folder from the sidebar to view emails.</p>
         </div>
     `;
     if (typeof lucide !== 'undefined') lucide.createIcons();
