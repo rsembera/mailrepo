@@ -526,7 +526,6 @@ def stream_commit():
                 })
                 
             except Exception as e:
-                print(f"[COMMIT ERROR] Email {uid}: {e}")  # Debug logging
                 results["failed"].append({"uid": uid, "error": str(e)})
                 yield sse_message("progress", {
                     "current": processed,
@@ -680,7 +679,6 @@ def stream_commit():
                             })
                             
                         except Exception as e:
-                            print(f"[COMMIT ERROR] IMAP email {uid}: {e}")  # Debug logging
                             results["failed"].append({"uid": uid, "error": str(e)})
                             yield sse_message("progress", {
                                 "current": processed,
@@ -693,7 +691,6 @@ def stream_commit():
                 
             except Exception as e:
                 # Handle connection failures
-                print(f"[COMMIT ERROR] IMAP connection failed: {e}")  # Debug logging
                 for item in items:
                     if item not in [i for acc_items in by_account.values() for i in acc_items if i.get("_processed")]:
                         processed += 1
