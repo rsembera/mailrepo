@@ -139,6 +139,11 @@
             </div>
         </header>
         
+        <!-- Subfolders Bar (shown when viewing archive folder with subfolders) -->
+        <div class="subfolders-bar" id="subfoldersBar" style="display: none;">
+            <!-- Populated dynamically -->
+        </div>
+        
         <!-- Search/Filter Bar (hidden until content loads) -->
         <div class="content-toolbar" style="display: none;">
             <label class="checkbox-label">
@@ -441,6 +446,18 @@
         </div>
         <div class="modal-actions">
             <button class="btn btn-primary" onclick="closeModal('appPasswordModal')" style="width: 100%;">Got it</button>
+        </div>
+    </div>
+</div>
+
+<!-- Commit Progress Modal -->
+<div class="modal-overlay" id="commitProgressModal">
+    <div class="modal-content modal-sm">
+        <div class="modal-header">
+            <h2>Committing...</h2>
+        </div>
+        <div id="commitProgressContent">
+            <!-- Progress component renders here -->
         </div>
     </div>
 </div>

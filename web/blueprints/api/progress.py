@@ -439,7 +439,15 @@ def stream_commit():
         import_items = [item for item in staged if item.get("sourceType") == "import"]
         imap_items = [item for item in staged if item.get("sourceType") != "import"]
         
+        total_individual_emails = len(staged)
         processed = 0
+        
+        # Send phase 1 status if we have individual emails
+        if total_individual_emails > 0:
+            yield sse_message("status", {
+                "phase": "emails",
+                "message": f"Phase 1: Committing {total_individual_emails} email{'s' if total_individual_emails != 1 else ''}",
+            })
         
         # Process imports first (no IMAP connection needed)
         for item in import_items:
@@ -517,23 +525,30 @@ def stream_commit():
                 )
                 
                 results["success"].append(uid)
+                
+                # Commit every 10 emails for durability
+                if processed % 10 == 0:
+                    Database.commit()
+                
                 yield sse_message("progress", {
                     "current": processed,
-                    "total": total,
-                    "percent": int(processed / total * 100),
+                    "total": total_individual_emails,
+                    "percent": int(processed / total_individual_emails * 100) if total_individual_emails > 0 else 100,
                     "status": "success",
                     "subject": subject,
+                    "commitPhase": "emails",
                 })
                 
             except Exception as e:
                 results["failed"].append({"uid": uid, "error": str(e)})
                 yield sse_message("progress", {
                     "current": processed,
-                    "total": total,
-                    "percent": int(processed / total * 100),
+                    "total": total_individual_emails,
+                    "percent": int(processed / total_individual_emails * 100) if total_individual_emails > 0 else 100,
                     "status": "failed",
                     "subject": subject,
                     "error": str(e),
+                    "commitPhase": "emails",
                 })
         
         # Group IMAP items by account
@@ -670,23 +685,30 @@ def stream_commit():
                             )
                             
                             results["success"].append(uid)
+                            
+                            # Commit every 10 emails for durability
+                            if processed % 10 == 0:
+                                Database.commit()
+                            
                             yield sse_message("progress", {
                                 "current": processed,
-                                "total": total,
-                                "percent": int(processed / total * 100),
+                                "total": total_individual_emails,
+                                "percent": int(processed / total_individual_emails * 100) if total_individual_emails > 0 else 100,
                                 "status": "success",
                                 "subject": subject,
+                                "commitPhase": "emails",
                             })
                             
                         except Exception as e:
                             results["failed"].append({"uid": uid, "error": str(e)})
                             yield sse_message("progress", {
                                 "current": processed,
-                                "total": total,
-                                "percent": int(processed / total * 100),
+                                "total": total_individual_emails,
+                                "percent": int(processed / total_individual_emails * 100) if total_individual_emails > 0 else 100,
                                 "status": "failed",
                                 "subject": subject,
                                 "error": str(e),
+                                "commitPhase": "emails",
                             })
                 
             except Exception as e:
@@ -715,8 +737,17 @@ def stream_commit():
         # PHASE 2: Process Staged Folders
         # ============================================
         
-        for folder_item in staged_folders:
-            processed += 1
+        folder_count = len(staged_folders)
+        
+        # Send phase 2 status if we have folders
+        if folder_count > 0:
+            phase_label = "Phase 2" if total_individual_emails > 0 else "Phase 1"
+            yield sse_message("status", {
+                "phase": "folders",
+                "message": f"{phase_label}: Committing {folder_count} folder{'s' if folder_count != 1 else ''}",
+            })
+        
+        for folder_idx, folder_item in enumerate(staged_folders):
             source_type = folder_item.get("sourceType")
             archive_path = folder_item.get("archivePath", "")
             dest_folder_id = folder_item.get("destinationFolderId")
@@ -733,20 +764,19 @@ def stream_commit():
                     import_type = folder_item.get("importType", "apple-mbox")
                     
                     emails = _get_emails_from_import_folder(import_path, folder_path, import_type)
+                    folder_email_count = len(emails)
                     
-                    for uid, raw_email in emails:
+                    # Send status update for this folder
+                    yield sse_message("status", {
+                        "phase": "folder",
+                        "message": f"Folder {folder_idx + 1} of {folder_count}: {folder_name} ({folder_email_count} emails)",
+                        "folderIndex": folder_idx + 1,
+                        "folderCount": folder_count,
+                    })
+                    
+                    for i, (uid, raw_email) in enumerate(emails):
                         try:
-                            body_text = _extract_body_text(raw_email)
-                            
-                            file_path = Config.get_archive_path() / str(target_folder_id)
-                            file_path.mkdir(parents=True, exist_ok=True)
-                            
-                            safe_id = f"import_{uid.replace('/', '_').replace(':', '_')}"
-                            encrypted_data = Encryption.encrypt(raw_email)
-                            filepath = file_path / f"{safe_id}.eml.enc"
-                            filepath.write_bytes(encrypted_data)
-                            
-                            # Parse email for metadata
+                            # Parse email for metadata first (so we can show subject in progress)
                             import email as email_lib
                             from email.header import decode_header
                             from email.utils import parsedate_to_datetime
@@ -763,7 +793,7 @@ def stream_commit():
                                     )
                                 except: return str(h)
                             
-                            subject = decode_hdr(msg.get("Subject", ""))
+                            subject = decode_hdr(msg.get("Subject", ""))[:50] or "(no subject)"
                             sender = decode_hdr(msg.get("From", ""))
                             message_id = msg.get("Message-ID", "")
                             date_str = msg.get("Date", "")
@@ -771,6 +801,16 @@ def stream_commit():
                                 date_ts = parsedate_to_datetime(date_str).isoformat() if date_str else None
                             except:
                                 date_ts = date_str
+                            
+                            body_text = _extract_body_text(raw_email)
+                            
+                            file_path = Config.get_archive_path() / str(target_folder_id)
+                            file_path.mkdir(parents=True, exist_ok=True)
+                            
+                            safe_id = f"import_{uid.replace('/', '_').replace(':', '_')}"
+                            encrypted_data = Encryption.encrypt(raw_email)
+                            filepath = file_path / f"{safe_id}.eml.enc"
+                            filepath.write_bytes(encrypted_data)
                             
                             Database.execute(
                                 """INSERT INTO messages 
@@ -780,8 +820,37 @@ def stream_commit():
                                  str(filepath.relative_to(Config.get_base_path())), body_text)
                             )
                             results["success"].append(uid)
+                            
+                            # Commit every 10 emails for durability
+                            if (i + 1) % 10 == 0:
+                                Database.commit()
+                            
+                            # Send per-email progress
+                            yield sse_message("progress", {
+                                "current": i + 1,
+                                "total": folder_email_count,
+                                "percent": int((i + 1) / folder_email_count * 100) if folder_email_count > 0 else 100,
+                                "status": "success",
+                                "subject": subject,
+                                "folder": folder_name,
+                                "folderIndex": folder_idx + 1,
+                                "folderCount": folder_count,
+                                "commitPhase": "folders",
+                            })
                         except Exception as e:
                             results["failed"].append({"uid": uid, "error": str(e)})
+                            yield sse_message("progress", {
+                                "current": i + 1,
+                                "total": folder_email_count,
+                                "percent": int((i + 1) / folder_email_count * 100) if folder_email_count > 0 else 100,
+                                "status": "failed",
+                                "subject": "(error)",
+                                "folder": folder_name,
+                                "error": str(e),
+                                "folderIndex": folder_idx + 1,
+                                "folderCount": folder_count,
+                                "commitPhase": "folders",
+                            })
                 else:
                     # IMAP folder commit
                     account_id = folder_item.get("accountId")
@@ -798,12 +867,35 @@ def stream_commit():
                         folder_info = client.select_folder(imap_folder)
                         if folder_info.get("message_count", 0) > 0:
                             uids = client.search(criteria="ALL", limit=0)
-                            for uid in uids:
+                            folder_email_count = len(uids)
+                            
+                            # Send status update for this folder
+                            yield sse_message("status", {
+                                "phase": "folder",
+                                "message": f"Folder {folder_idx + 1} of {folder_count}: {folder_name} ({folder_email_count} emails)",
+                                "folderIndex": folder_idx + 1,
+                                "folderCount": folder_count,
+                            })
+                            
+                            for i, uid in enumerate(uids):
                                 try:
                                     email_data = client.fetch_full(uid)
                                     raw_email = client.fetch_raw(uid)
+                                    subject = (email_data.get("subject", "") or "(no subject)")[:50]
+                                    
                                     if not raw_email:
                                         results["failed"].append({"uid": uid, "error": "Empty"})
+                                        yield sse_message("progress", {
+                                            "current": i + 1,
+                                            "total": folder_email_count,
+                                            "percent": int((i + 1) / folder_email_count * 100),
+                                            "status": "failed",
+                                            "subject": subject,
+                                            "folder": folder_name,
+                                            "folderIndex": folder_idx + 1,
+                                            "folderCount": folder_count,
+                                            "commitPhase": "folders",
+                                        })
                                         continue
                                     
                                     message_id = email_data.get("message_id", "")
@@ -814,6 +906,17 @@ def stream_commit():
                                         )
                                         if existing:
                                             results["skipped"].append({"uid": uid})
+                                            yield sse_message("progress", {
+                                                "current": i + 1,
+                                                "total": folder_email_count,
+                                                "percent": int((i + 1) / folder_email_count * 100),
+                                                "status": "skipped",
+                                                "subject": subject,
+                                                "folder": folder_name,
+                                                "folderIndex": folder_idx + 1,
+                                                "folderCount": folder_count,
+                                                "commitPhase": "folders",
+                                            })
                                             continue
                                     
                                     body_text = _extract_body_text(raw_email)
@@ -834,24 +937,56 @@ def stream_commit():
                                          email_data.get("date"), str(filepath.relative_to(Config.get_base_path())), body_text)
                                     )
                                     results["success"].append(uid)
+                                    
+                                    # Commit every 10 emails for durability
+                                    if (i + 1) % 10 == 0:
+                                        Database.commit()
+                                    
+                                    # Send per-email progress
+                                    yield sse_message("progress", {
+                                        "current": i + 1,
+                                        "total": folder_email_count,
+                                        "percent": int((i + 1) / folder_email_count * 100),
+                                        "status": "success",
+                                        "subject": subject,
+                                        "folder": folder_name,
+                                        "folderIndex": folder_idx + 1,
+                                        "folderCount": folder_count,
+                                        "commitPhase": "folders",
+                                    })
                                 except Exception as e:
                                     results["failed"].append({"uid": uid, "error": str(e)})
+                                    yield sse_message("progress", {
+                                        "current": i + 1,
+                                        "total": folder_email_count,
+                                        "percent": int((i + 1) / folder_email_count * 100),
+                                        "status": "failed",
+                                        "subject": "(error)",
+                                        "folder": folder_name,
+                                        "error": str(e),
+                                        "folderIndex": folder_idx + 1,
+                                        "folderCount": folder_count,
+                                        "commitPhase": "folders",
+                                    })
                     finally:
                         client.disconnect()
                 
                 results["folders_success"] += 1
-                yield sse_message("progress", {
-                    "current": processed, "total": total,
-                    "percent": int(processed / total * 100),
-                    "status": "folder_success", "folder": folder_name,
-                })
+                # Commit after each folder completes
+                Database.commit()
             except Exception as e:
                 results["folders_failed"] += 1
                 yield sse_message("progress", {
-                    "current": processed, "total": total,
-                    "percent": int(processed / total * 100),
-                    "status": "folder_failed", "folder": folder_name, "error": str(e),
+                    "current": 0,
+                    "total": 0,
+                    "percent": 0,
+                    "status": "folder_failed", 
+                    "folder": folder_name, 
+                    "error": str(e),
                 })
+        
+        # Increment processed for folder count tracking (after all folders done)
+        processed += len(staged_folders)
         
         Database.commit()
         
@@ -860,9 +995,9 @@ def stream_commit():
         if results["success"]:
             msg_parts.append(f"{len(results['success'])} emails filed")
         if results["folders_success"]:
-            msg_parts.append(f"{results['folders_success']} folders archived")
+            msg_parts.append(f"{results['folders_success']} folder{'s' if results['folders_success'] != 1 else ''} archived")
         if results["skipped"]:
-            msg_parts.append(f"{len(results['skipped'])} skipped")
+            msg_parts.append(f"{len(results['skipped'])} skipped (duplicate{'s' if len(results['skipped']) != 1 else ''})")
         if results["failed"] or results["folders_failed"]:
             fail_count = len(results["failed"]) + results["folders_failed"]
             msg_parts.append(f"{fail_count} failed")

@@ -127,6 +127,66 @@ export function handleTreeItemClick(e, row) {
 }
 
 /**
+ * Programmatically select a folder in the sidebar and update active state.
+ * Expands parent folders to show the target, and collapses folders that are
+ * no longer in the path to the target.
+ * @param {number} folderId - Folder ID to select
+ */
+export function selectFolderInSidebar(folderId) {
+    // Remove active from all rows
+    document.querySelectorAll('.tree-item-row').forEach(r => r.classList.remove('active'));
+    
+    // Find and activate the target folder
+    const targetRow = document.querySelector(`.tree-item-row[data-type="folder"][data-id="${folderId}"]`);
+    if (targetRow) {
+        targetRow.classList.add('active');
+        
+        // Build set of folder IDs in the path to this folder
+        const pathIds = new Set();
+        pathIds.add(String(folderId));
+        
+        // Walk up the DOM to find all ancestor folder IDs
+        let currentItem = targetRow.closest('.folder-item');
+        let parent = currentItem?.parentElement;
+        
+        while (parent && parent.classList.contains('tree-children')) {
+            const parentFolderItem = parent.closest('.folder-item');
+            if (parentFolderItem) {
+                const parentId = parentFolderItem.dataset.folderId;
+                if (parentId) pathIds.add(parentId);
+            }
+            currentItem = parentFolderItem;
+            parent = currentItem?.parentElement;
+        }
+        
+        // Now expand folders in the path and collapse those not in the path
+        document.querySelectorAll('.folder-item').forEach(folderItem => {
+            const itemId = folderItem.dataset.folderId;
+            const row = folderItem.querySelector(':scope > .tree-item-row');
+            const children = folderItem.querySelector(':scope > .tree-children');
+            const chevron = row?.querySelector('.chevron');
+            
+            if (!children) return; // No children to expand/collapse
+            
+            if (pathIds.has(itemId)) {
+                // This folder is in the path - expand it
+                children.style.display = 'block';
+                row?.classList.add('expanded');
+                if (chevron) chevron.style.transform = 'rotate(90deg)';
+            } else {
+                // This folder is not in the path - collapse it
+                children.style.display = 'none';
+                row?.classList.remove('expanded');
+                if (chevron) chevron.style.transform = 'rotate(0deg)';
+            }
+        });
+        
+        // Scroll into view if needed
+        targetRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+}
+
+/**
  * Add a new folder to the sidebar.
  * @param {Object} newFolder - Folder object with id, name, color
  */

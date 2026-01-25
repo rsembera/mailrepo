@@ -41,6 +41,14 @@
     font-weight: 500;
 }
 
+/* Folder info (shows "Folder 2 of 3: FolderName" during multi-folder commits) */
+.progress-folder-info {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    font-weight: 500;
+    padding: var(--space-xs) 0;
+}
+
 /* Progress bar */
 .progress-bar-container {
     display: flex;
@@ -75,15 +83,19 @@
 
 /* Current item detail */
 .progress-detail {
-    font-size: 0.8rem;
-    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    color: var(--color-text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    padding: var(--space-xs) var(--space-sm);
+    background: var(--color-bg-offset);
+    border-radius: var(--radius-sm);
+    margin-top: var(--space-xs);
 }
 
 .progress-subject {
-    font-style: italic;
+    font-weight: 500;
 }
 
 /* ============================================

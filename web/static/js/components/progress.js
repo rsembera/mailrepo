@@ -26,6 +26,7 @@ export function createProgress(container) {
             total = 0,
             percent = 0,
             subject = '',
+            folderInfo = '',  // e.g., "Folder 2 of 3"
         } = state;
         
         const showBar = total > 0;
@@ -36,6 +37,9 @@ export function createProgress(container) {
                     <i data-lucide="${getPhaseIcon(phase)}" class="progress-icon ${phase === 'connecting' || phase === 'searching' ? 'spin' : ''}"></i>
                     <span class="progress-message">${escapeHtml(message)}</span>
                 </div>
+                ${folderInfo ? `
+                    <div class="progress-folder-info">${escapeHtml(folderInfo)}</div>
+                ` : ''}
                 ${showBar ? `
                     <div class="progress-bar-container">
                         <div class="progress-bar">
@@ -233,15 +237,36 @@ export function createProgress(container) {
                 });
                 break;
             case 'progress':
-                const statusMsg = data.status === 'skipped' ? 'Skipped (duplicate)' :
-                                  data.status === 'failed' ? 'Failed' : 'Archiving...';
+                let statusMsg;
+                let folderInfo = '';
+                
+                if (data.commitPhase === 'folders') {
+                    // Folder commit phase
+                    if (data.folderCount > 1) {
+                        folderInfo = `Folder ${data.folderIndex} of ${data.folderCount}: ${data.folder}`;
+                    } else if (data.folder) {
+                        folderInfo = data.folder;
+                    }
+                    statusMsg = data.status === 'skipped' ? 'Skipped (duplicate)' :
+                                data.status === 'failed' ? 'Failed' : 'Archiving...';
+                } else if (data.commitPhase === 'emails') {
+                    // Individual email commit (phase 1)
+                    folderInfo = 'Phase 1: Emails';
+                    statusMsg = data.status === 'skipped' ? 'Skipped (duplicate)' :
+                                data.status === 'failed' ? 'Failed' : 'Archiving...';
+                } else {
+                    // Fallback for older/other progress events
+                    statusMsg = data.status === 'skipped' ? 'Skipped (duplicate)' :
+                                data.status === 'failed' ? 'Failed' : 'Archiving...';
+                }
                 render({
                     phase: 'loading',
                     message: statusMsg,
                     current: data.current,
                     total: data.total,
                     percent: data.percent,
-                    subject: data.subject,
+                    subject: data.subject || '',
+                    folderInfo: folderInfo,
                 });
                 break;
             case 'complete':

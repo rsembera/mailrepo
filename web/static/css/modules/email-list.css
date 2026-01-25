@@ -293,3 +293,49 @@
 .welcome-state .welcome-hint a:hover {
     text-decoration: underline;
 }
+
+/* ============================================
+   SUBFOLDERS BAR (pill navigation)
+   ============================================ */
+.subfolders-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-lg);
+    background: var(--color-background-secondary);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.subfolder-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full, 9999px);
+    font-size: 0.8125rem;
+    font-family: var(--font-ui);
+    color: var(--color-text);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.subfolder-pill:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: var(--color-primary-lighter, rgba(var(--color-primary-rgb), 0.1));
+}
+
+.subfolder-pill i {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+.subfolder-pill span {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

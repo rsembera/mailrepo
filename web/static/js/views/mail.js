@@ -111,6 +111,13 @@ export async function loadAccountEmails(accountId, folder = 'INBOX') {
     // Restore default header actions and toolbar
     restoreDefaultHeaderActions();
     
+    // Hide subfolders bar (not applicable for IMAP view)
+    const subfoldersBar = document.getElementById('subfoldersBar');
+    if (subfoldersBar) {
+        subfoldersBar.style.display = 'none';
+        subfoldersBar.innerHTML = '';
+    }
+    
     if (contextTitle) contextTitle.textContent = folder;
     if (contextMeta) contextMeta.textContent = 'Loading...';
     
@@ -170,7 +177,11 @@ export async function loadFolderEmails(folderId) {
         if (contextTitle) contextTitle.textContent = folder?.name || 'Archive';
         if (contextMeta) contextMeta.textContent = `${state.emails.length} archived emails`;
         
-        renderEmailList();
+        // Check for subfolders
+        const subfolders = state.folders.filter(f => f.parent_id == folderId && !f.deleted_at);
+        
+        // Render subfolders + emails
+        renderFolderContents(folderId, subfolders);
         
     } catch (error) {
         console.error('Error loading emails:', error);
@@ -178,6 +189,74 @@ export async function loadFolderEmails(folderId) {
         showError(error.message);
     }
 }
+
+/**
+ * Render folder contents: subfolders (if any) followed by emails.
+ */
+function renderFolderContents(folderId, subfolders) {
+    if (!emailList) return;
+    
+    const subfoldersBar = document.getElementById('subfoldersBar');
+    const currentFolder = state.folders.find(f => f.id == folderId);
+    const parentFolder = currentFolder?.parent_id ? state.folders.find(f => f.id == currentFolder.parent_id) : null;
+    
+    // Show bar if we have subfolders OR a parent to go up to
+    if ((subfolders.length > 0 || parentFolder) && subfoldersBar) {
+        let pillsHtml = '';
+        
+        // Add "Up" pill if there's a parent
+        if (parentFolder) {
+            pillsHtml += `
+                <button class="subfolder-pill subfolder-pill-up" onclick="window.navigateToSubfolder(${parentFolder.id})">
+                    <i data-lucide="arrow-up"></i>
+                    <span>${escapeHtml(parentFolder.name)}</span>
+                </button>
+            `;
+        }
+        
+        // Add subfolder pills
+        pillsHtml += subfolders.map(sf => {
+            const childFolders = state.folders.filter(f => f.parent_id == sf.id && !f.deleted_at);
+            const hasChildren = childFolders.length > 0;
+            
+            return `
+                <button class="subfolder-pill" onclick="window.navigateToSubfolder(${sf.id})">
+                    <i data-lucide="${hasChildren ? 'folder-tree' : 'folder'}"></i>
+                    <span>${escapeHtml(sf.name)}</span>
+                </button>
+            `;
+        }).join('');
+        
+        subfoldersBar.innerHTML = pillsHtml;
+        subfoldersBar.style.display = 'flex';
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    } else if (subfoldersBar) {
+        subfoldersBar.style.display = 'none';
+        subfoldersBar.innerHTML = '';
+    }
+    
+    // Render emails using standard list
+    renderEmailList();
+}
+
+/**
+ * Navigate to a subfolder.
+ */
+window.navigateToSubfolder = function(folderId) {
+    // Update view state
+    state.currentView = { type: 'folder', id: folderId };
+    state.selectedEmails.clear();
+    
+    // Load the subfolder
+    loadFolderEmails(folderId);
+    
+    // Update sidebar selection
+    import('../components/sidebar.js').then(m => {
+        if (m.selectFolderInSidebar) {
+            m.selectFolderInSidebar(folderId);
+        }
+    });
+};
 
 /**
  * Show loading state in email list.
