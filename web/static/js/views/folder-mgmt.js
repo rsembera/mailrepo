@@ -709,34 +709,43 @@ export function handleFolderCheckbox(checkbox) {
 window.handleFolderCheckbox = handleFolderCheckbox;
 
 function updateParentCheckboxes() {
-    // Only update visual state of parent checkboxes, NOT the staging set.
-    // The staging set should only contain folders explicitly clicked by the user.
-    // Process from deepest to shallowest so parent states cascade correctly.
+    // Update visual state of parent checkboxes based on staging set and children.
+    // Parent shows:
+    //   - checked: if parent itself is in staging set
+    //   - indeterminate: if any children are in staging set but parent is not
+    //   - unchecked: if neither parent nor any children are in staging set
     const items = Array.from(document.querySelectorAll('.folder-selection-item')).reverse();
     
     items.forEach(item => {
-        const children = item.querySelector('.folder-selection-children');
-        if (!children) return;
-        
         const checkbox = item.querySelector(':scope > .folder-selection-row input[type="checkbox"]');
         if (!checkbox) return;
         
-        const childCheckboxes = children.querySelectorAll('input[type="checkbox"]');
-        const checkedCount = Array.from(childCheckboxes).filter(c => c.checked).length;
+        const folderPath = checkbox.dataset.folder;
+        const isInStagingSet = selectedFoldersForStaging.has(folderPath);
         
-        // Only update visual state - don't modify selectedFoldersForStaging
-        if (checkedCount === 0) {
-            checkbox.checked = false;
+        const children = item.querySelector('.folder-selection-children');
+        if (!children) {
+            // Leaf node - just reflect staging set
+            checkbox.checked = isInStagingSet;
             checkbox.indeterminate = false;
-        } else if (checkedCount === childCheckboxes.length) {
-            // All children checked - show parent as checked visually
-            // but DON'T add to staging set (user must explicitly click parent)
+            return;
+        }
+        
+        // Check if any descendants are in staging set
+        const childCheckboxes = children.querySelectorAll('input[type="checkbox"]');
+        const hasSelectedChildren = Array.from(childCheckboxes).some(c => 
+            selectedFoldersForStaging.has(c.dataset.folder)
+        );
+        
+        if (isInStagingSet) {
             checkbox.checked = true;
             checkbox.indeterminate = false;
-        } else {
-            // Some children checked - show indeterminate
+        } else if (hasSelectedChildren) {
             checkbox.checked = false;
             checkbox.indeterminate = true;
+        } else {
+            checkbox.checked = false;
+            checkbox.indeterminate = false;
         }
     });
 }
@@ -745,13 +754,15 @@ function updateSelectAllCheckbox() {
     const selectAll = document.getElementById('selectAllFolders');
     if (!selectAll) return;
     
+    // Count based on staging set, not visual checkbox state
     const allCheckboxes = document.querySelectorAll('.folder-selection-list input[type="checkbox"]');
-    const checkedCount = Array.from(allCheckboxes).filter(c => c.checked).length;
+    const totalCount = allCheckboxes.length;
+    const selectedCount = selectedFoldersForStaging.size;
     
-    if (checkedCount === 0) {
+    if (selectedCount === 0) {
         selectAll.checked = false;
         selectAll.indeterminate = false;
-    } else if (checkedCount === allCheckboxes.length) {
+    } else if (selectedCount === totalCount) {
         selectAll.checked = true;
         selectAll.indeterminate = false;
     } else {
