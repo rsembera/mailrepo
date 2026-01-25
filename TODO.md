@@ -19,6 +19,7 @@ Key files to check for data structures:
 ### Commit UX
 - [ ] **Progress indicator during commit** - Show progress bar similar to IMAP folder loading, not just "Committing..." spinner
 - [ ] **Sidebar auto-refresh after commit** - Currently requires manual page refresh to see new folders/chevrons
+- [ ] **"After commit" action dropdown** - LOST during review page conversion! Was in old review.js. Options: Leave in place, Move to trash, Delete permanently. Per-source-folder setting.
 
 ### Folder Selection UX
 - [ ] **Grey out staged folders** - On folder selection pages, staged folders should be greyed out similar to how staged emails are greyed out
