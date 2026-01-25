@@ -425,41 +425,43 @@ function handleImportUnmount(importId) {
 })();
 
 function showMailView() {
-    // Restore normal mail view
+    // Reset to clean state
+    state.currentView = null;
+    state.selectedEmails.clear();
+    state.emails = [];
+    
+    // Restore normal mail view layout
     const sidebar = document.getElementById('sidebar');
     const toolbar = document.querySelector('.content-toolbar');
     const headerActions = document.querySelector('.header-actions');
+    const subfoldersBar = document.getElementById('subfoldersBar');
     
     sidebar.style.display = '';
     if (toolbar) toolbar.style.display = '';
-    if (headerActions) headerActions.style.display = '';
-    
-    // If we have a previously selected view, restore it
-    if (state.currentView) {
-        if (state.currentView.type === 'account') {
-            loadAccountEmails(state.currentView.id, state.currentView.folder);
-        } else if (state.currentView.type === 'folder') {
-            loadFolderEmails(state.currentView.id);
-        } else if (state.currentView.type === 'import') {
-            loadImportEmails(state.currentView.id, state.currentView.folder);
-        } else if (state.currentView.type === 'accountFolders') {
-            showFolderSelectionView(state.currentView.id);
-        } else if (state.currentView.type === 'importFolders') {
-            showImportFolderSelectionView(state.currentView.id);
-        }
-    } else {
-        // No previous selection - show empty state
-        elements.contextTitle.textContent = 'Select a folder';
-        elements.contextMeta.textContent = '';
-        elements.emailList.innerHTML = `
-            <div class="empty-state">
-                <i data-lucide="arrow-left" class="empty-icon"></i>
-                <h3>No Folder Selected</h3>
-                <p>Select an account or archive folder from the sidebar to view emails.</p>
-            </div>
-        `;
-        if (typeof lucide !== 'undefined') lucide.createIcons();
+    if (headerActions) {
+        headerActions.style.display = '';
+        headerActions.innerHTML = ''; // Clear any leftover buttons
     }
+    if (subfoldersBar) {
+        subfoldersBar.style.display = 'none';
+        subfoldersBar.innerHTML = '';
+    }
+    
+    // Show welcome state
+    elements.contextTitle.textContent = 'Welcome to MailRepo';
+    elements.contextMeta.textContent = '';
+    elements.emailList.innerHTML = `
+        <div class="welcome-state">
+            <i data-lucide="mail" class="welcome-icon"></i>
+            <h3>Welcome to MailRepo</h3>
+            <p>Select an email account from the sidebar to browse and archive your messages.</p>
+            <p class="welcome-hint">Or connect a new account in <a href="javascript:void(0);" onclick="document.querySelector('.rail-btn[data-view=settings]').click()">Settings</a>.</p>
+        </div>
+    `;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    
+    // Remove active state from sidebar items
+    document.querySelectorAll('.tree-item-row').forEach(r => r.classList.remove('active'));
 }
 
 /**

@@ -16,11 +16,6 @@ Key files to check for data structures:
 
 ## High Priority
 
-### Commit UX
-- [ ] **Progress indicator during commit** - Show progress bar similar to IMAP folder loading, not just "Committing..." spinner
-- [ ] **Sidebar auto-refresh after commit** - Currently requires manual page refresh to see new folders/chevrons
-- [ ] **"After commit" action dropdown** - LOST during review page conversion! Was in old review.js. Options: Leave in place, Move to trash, Delete permanently. Per-source-folder setting.
-
 ### Folder Selection UX
 - [ ] **Grey out staged folders** - On folder selection pages, staged folders should be greyed out similar to how staged emails are greyed out
 - [ ] **Create subfolder in destination modal** - Allow creating nested folders in "Select destination folder" modal, not just root-level folders
@@ -33,8 +28,8 @@ Key files to check for data structures:
 ### Error Handling
 - [ ] **Duplicate folder name handling** - What happens if two folders with same name land in same archive destination? Need graceful handling (rename, merge, or error)
 
-### Caching
-- [ ] **Investigate email cache clearing** - Email cache was unexpectedly cleared during testing, forcing reload from IMAP. Determine why and fix if it's a bug.
+### Export Feature
+- [ ] **ZIP export** - Export archived folders as ZIP files (endpoint exists but returns 501 Not Implemented)
 
 ## Low Priority / Cleanup
 
@@ -42,12 +37,21 @@ Key files to check for data structures:
 - [ ] **Remove debug logging** - Remove `[COMMIT ERROR]` print statements from progress.py once commit is stable
 
 ### Future Enhancements
-- [ ] Progress bars with Server-Sent Events for long-running operations (partially done for commit, need for other operations)
-- [ ] Improve IMAP folder caching to reduce slow repeated calls
+- [ ] Progress bars for other long-running operations (folder loading, exports)
+- [ ] Settings screen polish
 
 ---
 
-## Completed (Session 14)
+## Completed (Session 15 - January 25, 2026)
+
+- [x] **Progress indicator during commit** - Full streaming progress with Phase 1 (emails) / Phase 2 (folders), per-email subjects, and periodic DB commits for durability
+- [x] **"After commit" action dropdown** - Restored with styled icon-select component, added to both email groups AND folder groups
+- [x] **Subfolder navigation pills** - Compact pill bar between header and toolbar for navigating subfolders
+- [x] **"Up" pill** - Navigate to parent folder from subfolder view  
+- [x] **Sidebar auto-sync** - Sidebar expands/collapses to match current folder location when using pills
+- [x] Sidebar auto-refresh after commit (was already working)
+
+## Completed (Session 14 - January 24, 2026)
 
 - [x] Folder commit feature (all 8 implementation chunks)
 - [x] Fix email commit data structure mismatches
