@@ -5,7 +5,7 @@
  */
 
 import { getStagedEmails, getStagedFolders, clearStagedEmail, clearStagedFolder, clearAllStaged, updateStagedBadge } from '../components/staging.js';
-import { showConfirm } from '../modals.js';
+import { showConfirm, showAlert } from '../modals.js';
 
 let contextTitle = null;
 let contextMeta = null;
@@ -419,6 +419,8 @@ async function commitAll() {
             sourceType: sf.sourceType,
             accountId: sf.accountId,
             importId: sf.importId,
+            importPath: sf.importPath,
+            importType: sf.importType,
             folder: sf.folder,
             archivePath: sf.archivePath,
             destinationFolderId: sf.destinationFolderId,
@@ -438,8 +440,10 @@ async function commitAll() {
         // Read streaming response
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
-        let successCount = 0;
-        let errorCount = 0;
+        let emailSuccess = 0;
+        let emailError = 0;
+        let folderSuccess = 0;
+        let folderError = 0;
         
         while (true) {
             const { done, value } = await reader.read();
@@ -450,14 +454,19 @@ async function commitAll() {
             
             for (const line of lines) {
                 try {
-                    const event = JSON.parse(line);
-                    if (event.type === 'email_success') {
-                        successCount++;
-                        clearStagedEmail(event.emailId);
-                    } else if (event.type === 'email_error') {
-                        errorCount++;
-                    } else if (event.type === 'complete') {
-                        // Done
+                    // Parse SSE format: "event: xxx\ndata: {...}"
+                    if (line.startsWith('data: ')) {
+                        const data = JSON.parse(line.slice(6));
+                        
+                        if (data.status === 'success') {
+                            emailSuccess++;
+                        } else if (data.status === 'failed') {
+                            emailError++;
+                        } else if (data.status === 'folder_success') {
+                            folderSuccess++;
+                        } else if (data.status === 'folder_failed') {
+                            folderError++;
+                        }
                     }
                 } catch (e) {
                     // Ignore parse errors
@@ -465,11 +474,20 @@ async function commitAll() {
             }
         }
         
+        // Clear all staged items after commit
+        clearAllStaged();
         updateStagedBadge();
         renderReviewView();
         
-        if (errorCount > 0) {
-            alert(`Committed ${successCount} emails. ${errorCount} failed.`);
+        // Show results
+        const results = [];
+        if (emailSuccess > 0) results.push(`${emailSuccess} emails`);
+        if (folderSuccess > 0) results.push(`${folderSuccess} folders`);
+        if (emailError > 0 || folderError > 0) {
+            const errors = emailError + folderError;
+            showAlert('Commit Complete', `Committed ${results.join(', ')}. ${errors} failed.`);
+        } else if (results.length > 0) {
+            showAlert('Commit Complete', `Successfully committed ${results.join(' and ')}.`);
         }
         
     } catch (e) {

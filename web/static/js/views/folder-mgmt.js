@@ -13,6 +13,7 @@ import { state, loadFolders } from '../state.js';
 import { closeModal, showPrompt, showConfirm, showAlert } from '../modals.js';
 import { refreshSidebarFolders, buildImapFolderTree, getFolderIcon } from '../components/sidebar.js';
 import { updateStagedBadge } from '../components/staging.js';
+import { getMountedImports } from '../components/imports.js';
 import { updateTrashBadge } from './trash.js';
 import { getMountedImports } from '../components/imports.js';
 
@@ -808,9 +809,15 @@ export function stageSelectedFolders() {
             folders: Array.from(selectedFoldersForStaging)
         };
     } else if (currentFolderSelectionImportId) {
+        // Get import data to include path and type
+        const imports = getMountedImports();
+        const imp = imports.get(currentFolderSelectionImportId);
+        
         pendingFolderStaging = {
             sourceType: 'import',
             importId: currentFolderSelectionImportId,
+            importPath: imp?.path || '',
+            importType: imp?.type || 'mbox',
             folders: Array.from(selectedFoldersForStaging)
         };
     } else {

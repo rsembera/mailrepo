@@ -221,6 +221,8 @@ export function confirmStage() {
                     state.stagedFolders.push({
                         sourceType: 'import',
                         importId: pending.importId,
+                        importPath: pending.importPath,
+                        importType: pending.importType,
                         folder: folder,
                         archivePath: archivePath,
                         destinationFolderId: selectedDestinationFolder
