@@ -1,57 +1,79 @@
 # MailRepo - Session Notes
 
+## Session 14 (January 25, 2026)
+
+### Completed Today
+
+**Code Cleanup:**
+- [x] Removed old standalone Review and Settings pages (~2,755 lines deleted)
+  - Deleted `web/static/js/review.js`, `web/static/js/settings.js`
+  - Deleted `web/static/css/review.css`, `web/static/css/settings.css`
+  - Deleted `web/templates/main/review.html`, `web/templates/main/settings.html`
+  - Removed `/review` and `/settings` routes from `main.py`
+
+**Import Improvements:**
+- [x] Auto-display import contents after mounting (no need to click import name)
+- [x] Show emails directly for imports without folder structure (EML dirs, flat mbox)
+- [x] Show folder selection only if import has actual hierarchy
+- [x] Indent first-level import folders below mbox name in sidebar
+- [x] Clear toolbar when unmounting viewed import
+
+**Folder Selection Checkbox Logic (Major Fix):**
+- [x] Fixed escaping issue with folder paths containing quotes (e.g., "Peter O'Connor")
+- [x] Checking a child does NOT auto-check/stage the parent
+- [x] Checking a parent does NOT auto-check/stage children
+- [x] Unchecking a parent DOES uncheck all children (cascade down)
+- [x] Parent shows indeterminate when children are staged but parent is not
+- [x] Select All state based on staging set, not visual checkbox state
+- [x] Stage button enables correctly based on actual selections
+
+**UI Fixes:**
+- [x] Unstage All uses confirmation modal instead of browser alert
+- [x] New Folder button in sidebar uses selected app font
+- [x] Stage button now enables for import views (not just IMAP)
+- [x] Select All toggle works correctly (uncheck was broken)
+
+### In Progress
+
+**Folder Staging Hierarchy Logic:**
+- Frontend: `computeArchivePaths()` added to staging.js
+- Frontend: `archivePath` now sent with folder commit data
+- Backend: NOT YET IMPLEMENTED - see IMPLEMENTATION_PLAN.md
+
+### Current State
+
+- Individual email staging: WORKS (IMAP and imports)
+- Individual email commit: WORKS (IMAP and imports)
+- Folder staging UI: WORKS (IMAP and imports)
+- Folder commit: PARTIALLY IMPLEMENTED (IMAP only, no hierarchy logic)
+- Import folder commit: NOT IMPLEMENTED
+
+---
+
 ## Session 13 (January 24, 2026)
 
 ### Completed
 
 **UI/UX Improvements:**
-- [x] Welcome state for main page - shows friendly message instead of empty toolbar
-- [x] Remove "Review & Commit" button from header (redundant with left rail)
-- [x] Fix Review page logout - changed from GET to POST form
+- [x] Welcome state for main page
+- [x] Remove "Review & Commit" button from header
+- [x] Fix Review page logout
 - [x] Add "Unstage All" button to Review page
 - [x] Staged rail button navigates to review even when empty
-- [x] Fix archive folder alignment - reserve space for chevrons and color dots
-- [x] Collapse child folders when parent collapses (standard tree behavior)
-- [x] Move Settings button to top of left rail (under logo)
-- [x] Reorder left rail icons for better workflow (Mail → Import → Staged → Folders → Trash | Settings → Logout)
-- [x] Add divider line above Settings/Logout in left rail
-- [x] Fix review page left rail to match main page
-- [x] Add max-width (850px) to Manage Folders and folder selection views
-- [x] Move New Folder button to top toolbar with cleaner styling
-- [x] Fix Import modal button text to use selected app font
+- [x] Fix archive folder alignment
+- [x] Collapse child folders when parent collapses
+- [x] Reorder left rail icons
+- [x] Add divider line above Settings/Logout
+- [x] Add max-width to Manage Folders view
+- [x] Move New Folder button to top toolbar
 
 **Settings Redesign:**
-- [x] Settings now renders inside main app (like Manage Folders) instead of separate page
-- [x] Removed Import section (now accessed via left rail icon)
-- [x] Added all necessary modals to index.html (Add Account, App Password Info, About)
-- [x] Fixed font and font size selectors to actually apply changes
-
-**Theme System:**
-- [x] Renamed themes: Lagoon→Pine, Bloom→Atlantic, Rose→Ember, Midnight→Obsidian
-- [x] Theme names now use the selected app font
+- [x] Settings now renders inside main app
+- [x] Fixed font and font size selectors
 
 **Review View Conversion:**
-- [x] Converted Review from separate page to client-side view (like Settings, Trash, etc.)
-- [x] No more page reload when viewing staged items
-- [x] View selection now preserved when switching between views
-- [x] Fixed: folder selection view (account folders) now restores properly
-
-### Already Implemented (confirmed)
-
-- **Progress bars with SSE** - `web/blueprints/api/progress.py` streams real-time progress via Server-Sent Events; `web/static/js/components/progress.js` consumes with EventSource
-- **IMAP folder caching** - `cached_folders` and `cached_folders_at` in accounts table with freshness checks
-- **Email header caching** - `email_cache` table stores headers by account/folder/UID, uses UIDVALIDITY for cache invalidation
-
-### Still TODO
-
-#### Import Folder Staging (Session 12 - Incomplete)
-- Individual email staging from imports WORKS
-- Folder staging for imports was attempted but reverted
-- Approach: Refactor folder-mgmt.js to accept "source" parameter (account OR import)
-
-#### Cleanup (Optional)
-- Old `/review` route and `review.js` (standalone page) could be removed
-- Old `/settings` route could be removed
+- [x] Converted Review from separate page to client-side view
+- [x] View selection preserved when switching views
 
 ---
 
@@ -63,25 +85,3 @@ cd /home/rick/Applications/mailrepo
 # Open http://localhost:5050
 # Master password: Alkahest131!
 ```
-
-## Git Log (Session 13)
-- `a92fd0c` - Update session notes with all Session 13 progress
-- `406bf2f` - Fix: Restore folder selection view when returning to Mail
-- `cc41841` - Convert Review page to client-side view
-- `610a6a9` - Move New Folder button to top toolbar with cleaner styling
-- `814b998` - Fix New Folder button: expose openNewFolderModal globally, use app font
-- `a7da0e0` - Add max-width to Manage Folders and folder selection views
-- `ad8bb36` - Fix review page left rail to match main page
-- `ad0f134` - Make rail divider more prominent
-- `5a49692` - Reorder left rail icons for better workflow
-- `dec4e1a` - Fix: Import button text now uses selected app font
-- `9ae4020` - Fix: Review page badge now hides when count is 0
-- `d4ad223` - Rename themes and fix theme name font
-- `ecf7892` - Fix font and font size settings to actually apply changes
-- `ca52799` - Complete settings view: add modals, CSS, and global functions
-- `5d4aafc` - Wire up settings view to app.js and left rail
-- `1a677b8` - Add settings view module (not yet wired up)
-- `eb55399` - Fix: Collapse child folders when parent is collapsed
-- `bb929ec` - Fix archive folder alignment: reserve space for chevrons and color dots
-- `21b5802` - Fix: Staged rail button now navigates to review page even when empty
-- `544ed29` - UI improvements: welcome state, remove Review button, fix logout, add Unstage All
