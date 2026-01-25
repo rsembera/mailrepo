@@ -21,6 +21,14 @@
 - ✅ "After commit" dropdown added for staged folders (was emails only)
 - ✅ Options: Leave in place, Move to Trash, Delete permanently
 
+**Main View Reset:**
+- ✅ Clicking Mail icon resets to clean state (no stale selections/toolbars)
+- ✅ Clears subfolder pills, header actions, sidebar active states
+- ✅ Shows simple "No Folder Selected" prompt (welcome only on startup)
+
+### Design Decision
+**Clean slate on Mail view navigation** - Chose to reset state completely rather than persist selections when switching views. Rationale: data integrity and predictability outweigh minor navigation convenience. Avoids stale state bugs (deleted folders still showing, outdated counts, leftover UI elements).
+
 ### Files Modified
 - `web/blueprints/api/progress.py` - Phase indicators, periodic commits
 - `web/static/css/modules/email-list.css` - Subfolder pill styles
@@ -30,7 +38,14 @@
 - `web/static/js/components/sidebar.js` - selectFolderInSidebar with expand/collapse
 - `web/static/js/views/mail.js` - Subfolder pills, navigateToSubfolder
 - `web/static/js/views/review.js` - Styled dropdowns, folder groups
+- `web/static/js/app.js` - showMailView() clean slate reset
 - `web/templates/main/index.html` - Subfolders bar container
+
+### Recent Commits
+- `3f89694` - Simpler empty state when returning to Mail view
+- `0278751` - Hide toolbar on Mail view reset
+- `d69991a` - Reset to clean state when clicking Mail icon
+- `433f4a7` - Add commit progress streaming, subfolder navigation pills, and UI improvements
 
 ---
 
@@ -69,9 +84,3 @@ cd /home/rick/Applications/mailrepo
 # Open http://localhost:5050
 # Master password: Alkahest131!
 ```
-
-## Recent Commits
-- `433f4a7` - Add commit progress streaming, subfolder navigation pills, and UI improvements
-- `5e0200a` - Fix: Add sourcePath to EML email parsing response
-- `698ba6f` - Debug: Add error logging to email commit
-- `b0278e9` - Fix: Review view displaying email/account data correctly
