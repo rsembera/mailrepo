@@ -682,8 +682,6 @@ export function handleFolderCheckbox(checkbox) {
     const folderPath = checkbox.dataset.folder;
     const isChecked = checkbox.checked;
     
-    console.log('handleFolderCheckbox:', { folderPath, isChecked });
-    
     if (isChecked) {
         selectedFoldersForStaging.add(folderPath);
         // Don't auto-check children - user might want just the parent's direct emails
@@ -703,8 +701,6 @@ export function handleFolderCheckbox(checkbox) {
     updateParentCheckboxes();
     updateSelectAllCheckbox();
     updateStageFoldersButton();
-    
-    console.log('After update, selectedFoldersForStaging:', Array.from(selectedFoldersForStaging));
 }
 window.handleFolderCheckbox = handleFolderCheckbox;
 
