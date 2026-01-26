@@ -1,14 +1,78 @@
 /* MailRepo - Email List Styles */
 
 /* ============================================
-   EMAIL LIST
+   EMAIL LIST (table-style layout)
    ============================================ */
 .email-list {
     flex: 1;
     overflow-y: auto;
-    padding: var(--space-md);
 }
 
+/* Two-column header for email list */
+.email-list-header {
+    grid-template-columns: 1fr 100px !important;
+}
+
+/* Email list items use 2-column grid */
+.email-list-item {
+    grid-template-columns: 1fr 100px;
+    cursor: pointer;
+}
+
+.email-list-item:hover {
+    background: var(--color-background-tertiary, rgba(0,0,0,0.06));
+}
+
+.email-list-item.selected {
+    background: color-mix(in srgb, var(--color-primary) 10%, transparent) !important;
+}
+
+.email-list-item.staged {
+    opacity: 0.5;
+}
+
+.email-list-content {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    min-width: 0;
+}
+
+.email-list-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.email-sender {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--color-text-heading);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.email-subject {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.email-date {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* ============================================
+   LEGACY EMAIL ITEM STYLES (card-based)
+   ============================================ */
 .email-item {
     display: flex;
     align-items: flex-start;

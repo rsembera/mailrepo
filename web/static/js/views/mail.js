@@ -28,23 +28,13 @@ export function restoreDefaultHeaderActions() {
     const toolbar = document.querySelector('.content-toolbar');
     const sidebar = document.getElementById('sidebar');
     
-    // Show sidebar and toolbar
+    // Show sidebar, hide old toolbar (email list has its own now)
     if (sidebar) sidebar.style.display = '';
-    if (toolbar) toolbar.style.display = '';
+    if (toolbar) toolbar.style.display = 'none';
     
-    // Stage button only - no Review & Commit (that's on the Staged Items page)
+    // Clear header actions - email list has its own toolbar now
     if (headerActions) {
-        headerActions.innerHTML = `
-            <button class="btn btn-primary" id="stageBtn" disabled>
-                <i data-lucide="package-plus"></i>
-                <span>Stage Selected</span>
-            </button>
-        `;
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-        
-        document.getElementById('stageBtn')?.addEventListener('click', () => {
-            import('../components/staging.js').then(m => m.openStageModal());
-        });
+        headerActions.innerHTML = '';
     }
 }
 
@@ -56,9 +46,9 @@ function clearHeaderActions() {
     const toolbar = document.querySelector('.content-toolbar');
     const sidebar = document.getElementById('sidebar');
     
-    // Show sidebar and toolbar
+    // Show sidebar, hide old toolbar (email list has its own now)
     if (sidebar) sidebar.style.display = '';
-    if (toolbar) toolbar.style.display = '';
+    if (toolbar) toolbar.style.display = 'none';
     
     // Clear buttons (archive view - no staging)
     if (headerActions) {

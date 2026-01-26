@@ -40,15 +40,46 @@ export function renderEmailList() {
         return;
     }
     
-    emailListEl.innerHTML = state.emails.map(email => {
+    const selectedCount = state.selectedEmails.size;
+    
+    // Build table-style layout matching folder selection
+    let html = `
+        <div class="folder-management-list">
+            <div class="folder-management-toolbar">
+                <h2>${state.emails.length} Email${state.emails.length !== 1 ? 's' : ''}</h2>
+                <div class="toolbar-actions">
+                    <button class="btn btn-secondary" onclick="selectAllEmails()">
+                        <i data-lucide="check-square"></i>
+                        Select All
+                    </button>
+                    <button class="btn btn-secondary" onclick="clearSelectedEmails()" ${selectedCount === 0 ? 'disabled' : ''}>
+                        <i data-lucide="x"></i>
+                        Clear Selected
+                    </button>
+                    <button class="btn btn-primary" id="stageSelectedEmailsBtn" onclick="openStageModalForSelected()" ${selectedCount === 0 ? 'disabled' : ''}>
+                        <i data-lucide="archive"></i>
+                        Stage${selectedCount > 0 ? ` (${selectedCount})` : ''}
+                    </button>
+                </div>
+            </div>
+            <div class="folder-management-header email-list-header">
+                <span>Email</span>
+                <span>Actions</span>
+            </div>
+    `;
+    
+    html += state.emails.map(email => {
         const emailId = email.uid || email.id;
         const isStaged = state.staged.has(emailId);
         const isSelected = state.selectedEmails.has(emailId);
         
+        let rowClass = 'folder-management-item email-list-item';
+        if (isStaged) rowClass += ' staged';
+        if (isSelected) rowClass += ' selected';
+        
         // Determine which action buttons to show
         let actionsHtml = '';
         if (isStaged) {
-            // Staged: select disabled, clear active (unstages)
             actionsHtml = `
                 <button class="btn btn-sm btn-icon" disabled title="Already staged">
                     <i data-lucide="circle"></i>
@@ -58,7 +89,6 @@ export function renderEmailList() {
                 </button>
             `;
         } else if (isSelected) {
-            // Selected: checkmark shown, clear active (deselects)
             actionsHtml = `
                 <button class="btn btn-sm btn-icon btn-selected" disabled title="Selected">
                     <i data-lucide="check"></i>
@@ -68,7 +98,6 @@ export function renderEmailList() {
                 </button>
             `;
         } else {
-            // Default: select active, clear disabled
             actionsHtml = `
                 <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); selectEmail('${emailId}')" title="Select">
                     <i data-lucide="circle"></i>
@@ -80,24 +109,26 @@ export function renderEmailList() {
         }
         
         return `
-            <div class="email-item ${isStaged ? 'staged' : ''} ${isSelected ? 'selected' : ''}" 
-                 data-id="${emailId}">
-                <div class="email-actions" onclick="event.stopPropagation()">
-                    ${actionsHtml}
-                </div>
-                <div class="email-content" onclick="openEmailViewer('${emailId}')">
-                    <div class="email-header">
+            <div class="${rowClass}" data-id="${emailId}" onclick="openEmailViewer('${emailId}')">
+                <div class="email-list-content">
+                    <div class="email-list-main">
                         <span class="email-sender">${escapeHtml(extractName(email.from || email.sender))}</span>
-                        <span class="email-date">${formatDate(email.date)}</span>
+                        <span class="email-subject">${escapeHtml(email.subject || '(no subject)')}</span>
                     </div>
-                    <div class="email-subject">${escapeHtml(email.subject || '(no subject)')}</div>
-                    ${email.snippet ? `<div class="email-preview">${escapeHtml(email.snippet)}</div>` : ''}
+                    <span class="email-date">${formatDate(email.date)}</span>
+                </div>
+                <div class="folder-management-actions" onclick="event.stopPropagation()">
+                    ${actionsHtml}
                 </div>
             </div>
         `;
     }).join('');
     
+    html += `</div>`;
+    
+    emailListEl.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
+}
     updateToolbarButtons();
 }
 
@@ -158,6 +189,15 @@ export function clearSelectedEmails() {
     if (onSelectionChange) onSelectionChange();
 }
 window.clearSelectedEmails = clearSelectedEmails;
+
+/**
+ * Open stage modal for selected emails.
+ */
+export function openStageModalForSelected() {
+    if (state.selectedEmails.size === 0) return;
+    import('./staging.js').then(m => m.openStageModal());
+}
+window.openStageModalForSelected = openStageModalForSelected;
 
 /**
  * Update toolbar button states.
