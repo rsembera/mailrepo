@@ -822,13 +822,22 @@ window.toggleAllFolders = toggleAllFolders;
 
 /**
  * Refresh the current folder selection view (after staging).
+ * Preserves scroll position.
  */
 export function refreshFolderSelectionView() {
+    // Save scroll position
+    const scrollTop = emailList?.scrollTop || 0;
+    
     if (currentFolderSelectionAccountId) {
         showFolderSelectionView(currentFolderSelectionAccountId);
     } else if (currentFolderSelectionImportId) {
         showImportFolderSelectionView(currentFolderSelectionImportId);
     }
+    
+    // Restore scroll position after render
+    requestAnimationFrame(() => {
+        if (emailList) emailList.scrollTop = scrollTop;
+    });
 }
 
 function updateStageFoldersButton() {
