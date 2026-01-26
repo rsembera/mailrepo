@@ -367,10 +367,20 @@
 .welcome-state .welcome-hint a {
     color: var(--color-primary);
     text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }
 
 .welcome-state .welcome-hint a:hover {
     text-decoration: underline;
+}
+
+/* Inline icon in links */
+.inline-icon {
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
 }
 
 /* ============================================

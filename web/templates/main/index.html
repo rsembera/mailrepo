@@ -15,9 +15,6 @@
             <button class="rail-btn active" data-view="mail" title="Mail">
                 <i data-lucide="inbox"></i>
             </button>
-            <button class="rail-btn" id="importRailBtn" title="Import">
-                <i data-lucide="hard-drive-upload"></i>
-            </button>
             <button class="rail-btn" data-view="staged" title="Staged Emails" id="stagedRailBtn">
                 <i data-lucide="package"></i>
                 <span class="rail-badge hidden" id="stagedBadge">0</span>
@@ -168,7 +165,7 @@
                 <i data-lucide="mail" class="welcome-icon"></i>
                 <h3>Welcome to MailRepo</h3>
                 <p>Select an email account from the sidebar to browse and archive your messages.</p>
-                <p class="welcome-hint">Or connect a new account in <a href="javascript:void(0);" onclick="document.querySelector('.rail-btn[data-view=settings]').click()">Settings</a>.</p>
+                <p class="welcome-hint">Or <a href="javascript:void(0);" onclick="openImportModal()"><i data-lucide="upload" class="inline-icon"></i> import emails</a> from a file.</p>
             </div>
         </div>
     </main>

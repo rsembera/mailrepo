@@ -72,6 +72,7 @@ function showImportModal() {
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 }
+window.openImportModal = showImportModal;
 
 /**
  * Close a modal by ID.
