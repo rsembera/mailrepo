@@ -103,10 +103,6 @@
                         <p>No archive folders</p>
                     </div>
                 {% endif %}
-                <button class="tree-item-row add-folder-btn" onclick="openImportModal()">
-                    <i data-lucide="upload" class="tree-icon"></i>
-                    <span class="tree-label">Import</span>
-                </button>
             </div>
         </div>
         
@@ -121,6 +117,12 @@
                 <!-- Mounted imports appear here -->
             </div>
         </div>
+        
+        <!-- Import Button (always at bottom of sidebar) -->
+        <button class="tree-item-row add-folder-btn sidebar-bottom-btn" onclick="openImportModal()">
+            <i data-lucide="upload" class="tree-icon"></i>
+            <span class="tree-label">Import</span>
+        </button>
     </aside>
 
     <!-- Pane 3: Main Content -->

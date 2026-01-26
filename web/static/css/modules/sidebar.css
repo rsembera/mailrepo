@@ -250,6 +250,12 @@
     background: var(--color-primary-lighter);
 }
 
+/* Import button at bottom of sidebar */
+.sidebar-bottom-btn {
+    margin-top: auto;
+    border-top: 1px solid var(--color-border);
+}
+
 /* Sidebar empty state */
 .sidebar-empty {
     padding: var(--space-lg);
