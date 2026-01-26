@@ -950,7 +950,10 @@ let pendingFolderStaging = null;
  * Select a folder (add to pending selection).
  */
 export function selectFolder(folderPath) {
+    console.log('selectFolder called with:', folderPath);
+    console.log('selectedFoldersForStaging before:', selectedFoldersForStaging);
     selectedFoldersForStaging.add(folderPath);
+    console.log('selectedFoldersForStaging after:', selectedFoldersForStaging);
     refreshFolderSelectionView();
 }
 window.selectFolder = selectFolder;
