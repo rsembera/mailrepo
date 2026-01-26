@@ -19,6 +19,24 @@
     opacity: 0.5;
 }
 
+/* Selected folders have highlight */
+.folder-selection-item.selected {
+    background: color-mix(in srgb, var(--color-primary) 10%, transparent) !important;
+}
+
+/* Selected checkmark button */
+.btn-selected {
+    color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+    border-color: var(--color-primary);
+}
+
+/* Toolbar actions container */
+.toolbar-actions {
+    display: flex;
+    gap: var(--space-sm);
+}
+
 /* Staged badge */
 .staged-badge {
     display: inline-flex;

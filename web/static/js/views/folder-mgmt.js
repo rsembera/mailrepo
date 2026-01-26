@@ -588,18 +588,26 @@ export function showImportFolderSelectionView(importId) {
 }
 
 function renderImportFolderSelectionView(tree, importId) {
+    const selectedCount = selectedFoldersForStaging.size;
+    
     let html = `
         <div class="folder-management-list">
             <div class="folder-management-toolbar">
                 <h2>Select Folders to Archive</h2>
-                <button class="btn btn-primary" onclick="stageAllFolders()">
-                    <i data-lucide="archive"></i>
-                    Stage All
-                </button>
+                <div class="toolbar-actions">
+                    <button class="btn btn-secondary" onclick="selectAllFolders()">
+                        <i data-lucide="check-square"></i>
+                        Select All
+                    </button>
+                    <button class="btn btn-primary" id="stageSelectedBtn" onclick="stageSelectedFoldersFromSelection()" ${selectedCount === 0 ? 'disabled' : ''}>
+                        <i data-lucide="archive"></i>
+                        Stage${selectedCount > 0 ? ` (${selectedCount})` : ''}
+                    </button>
+                </div>
             </div>
             <div class="folder-management-header folder-selection-header">
                 <span>Folder</span>
-                <span>Action</span>
+                <span>Actions</span>
             </div>
             ${renderImportFolderSelectionTree(tree, importId, 0)}
         </div>
@@ -616,26 +624,50 @@ function renderImportFolderSelectionTree(nodes, importId, depth) {
         const hasChildren = node.children && node.children.length > 0;
         const folderPath = node.fullPath;
         
-        // Check if this folder is already staged (use == for type coercion)
+        // Check if this folder is already staged
         const isStaged = state.stagedFolders.some(
             sf => sf.sourceType === 'import' && sf.importId == importId && sf.folder === folderPath
         );
         
+        // Check if this folder is selected (pending)
+        const isSelected = selectedFoldersForStaging.has(folderPath);
+        
+        let rowClass = 'folder-management-item folder-selection-item';
+        if (isStaged) rowClass += ' staged';
+        if (isSelected) rowClass += ' selected';
+        
+        let actionsHtml = '';
+        if (isStaged) {
+            actionsHtml = `
+                <button class="btn btn-sm btn-icon" onclick="clearFolder('${escapeHtml(folderPath)}')" title="Unstage">
+                    <i data-lucide="x"></i>
+                </button>
+            `;
+        } else if (isSelected) {
+            actionsHtml = `
+                <button class="btn btn-sm btn-icon btn-selected" disabled title="Selected">
+                    <i data-lucide="check"></i>
+                </button>
+                <button class="btn btn-sm btn-icon" onclick="clearFolder('${escapeHtml(folderPath)}')" title="Deselect">
+                    <i data-lucide="x"></i>
+                </button>
+            `;
+        } else {
+            actionsHtml = `
+                <button class="btn btn-sm btn-icon" onclick="selectFolder('${escapeHtml(folderPath)}')" title="Select">
+                    <i data-lucide="circle"></i>
+                </button>
+            `;
+        }
+        
         html += `
-            <div class="folder-management-item folder-selection-item ${isStaged ? 'staged' : ''}" data-folder="${escapeHtml(folderPath)}">
+            <div class="${rowClass}" data-folder="${escapeHtml(folderPath)}">
                 <div class="folder-management-name" style="padding-left: ${depth * 24}px">
                     <i data-lucide="folder" class="folder-icon"></i>
                     <span class="folder-label">${escapeHtml(node.name)}</span>
                 </div>
                 <div class="folder-management-actions">
-                    ${isStaged 
-                        ? `<button class="btn btn-sm btn-secondary" onclick="unstageSingleFolder('${escapeHtml(folderPath)}')" title="Unstage this folder">
-                               <i data-lucide="x"></i> Unstage
-                           </button>`
-                        : `<button class="btn btn-sm btn-primary" onclick="stageSingleFolder('${escapeHtml(folderPath)}')" title="Stage this folder">
-                               <i data-lucide="archive"></i> Stage
-                           </button>`
-                    }
+                    ${actionsHtml}
                 </div>
             </div>
         `;
@@ -650,18 +682,26 @@ function renderImportFolderSelectionTree(nodes, importId, depth) {
 }
 
 function renderFolderSelectionView(tree, accountId) {
+    const selectedCount = selectedFoldersForStaging.size;
+    
     let html = `
         <div class="folder-management-list">
             <div class="folder-management-toolbar">
                 <h2>Select Folders to Archive</h2>
-                <button class="btn btn-primary" onclick="stageAllFolders()">
-                    <i data-lucide="archive"></i>
-                    Stage All
-                </button>
+                <div class="toolbar-actions">
+                    <button class="btn btn-secondary" onclick="selectAllFolders()">
+                        <i data-lucide="check-square"></i>
+                        Select All
+                    </button>
+                    <button class="btn btn-primary" id="stageSelectedBtn" onclick="stageSelectedFoldersFromSelection()" ${selectedCount === 0 ? 'disabled' : ''}>
+                        <i data-lucide="archive"></i>
+                        Stage${selectedCount > 0 ? ` (${selectedCount})` : ''}
+                    </button>
+                </div>
             </div>
             <div class="folder-management-header folder-selection-header">
                 <span>Folder</span>
-                <span>Action</span>
+                <span>Actions</span>
             </div>
             ${renderFolderSelectionTree(tree, accountId, 0)}
         </div>
@@ -678,26 +718,53 @@ function renderFolderSelectionTree(nodes, accountId, depth) {
         const hasChildren = node.children && node.children.length > 0;
         const folderPath = node.fullPath;
         
-        // Check if this folder is already staged (use == for type coercion)
+        // Check if this folder is already staged
         const isStaged = state.stagedFolders.some(
             sf => sf.sourceType === 'account' && sf.accountId == accountId && sf.folder === folderPath
         );
         
+        // Check if this folder is selected (pending)
+        const isSelected = selectedFoldersForStaging.has(folderPath);
+        
+        let rowClass = 'folder-management-item folder-selection-item';
+        if (isStaged) rowClass += ' staged';
+        if (isSelected) rowClass += ' selected';
+        
+        let actionsHtml = '';
+        if (isStaged) {
+            // Staged: just show clear button to unstage
+            actionsHtml = `
+                <button class="btn btn-sm btn-icon" onclick="clearFolder('${escapeHtml(folderPath)}')" title="Unstage">
+                    <i data-lucide="x"></i>
+                </button>
+            `;
+        } else if (isSelected) {
+            // Selected: show checkmark and clear button
+            actionsHtml = `
+                <button class="btn btn-sm btn-icon btn-selected" disabled title="Selected">
+                    <i data-lucide="check"></i>
+                </button>
+                <button class="btn btn-sm btn-icon" onclick="clearFolder('${escapeHtml(folderPath)}')" title="Deselect">
+                    <i data-lucide="x"></i>
+                </button>
+            `;
+        } else {
+            // Default: show select button
+            actionsHtml = `
+                <button class="btn btn-sm btn-icon" onclick="selectFolder('${escapeHtml(folderPath)}')" title="Select">
+                    <i data-lucide="circle"></i>
+                </button>
+            `;
+        }
+        
         html += `
-            <div class="folder-management-item folder-selection-item ${isStaged ? 'staged' : ''}" data-folder="${escapeHtml(folderPath)}">
+            <div class="${rowClass}" data-folder="${escapeHtml(folderPath)}">
                 <div class="folder-management-name" style="padding-left: ${depth * 24}px">
                     <i data-lucide="${getFolderIcon(node.name)}" class="folder-icon"></i>
                     <span class="folder-label">${escapeHtml(node.name)}</span>
                 </div>
                 <div class="folder-management-actions">
-                    ${isStaged 
-                        ? `<button class="btn btn-sm btn-secondary" onclick="unstageSingleFolder('${escapeHtml(folderPath)}')" title="Unstage this folder">
-                               <i data-lucide="x"></i> Unstage
-                           </button>`
-                        : `<button class="btn btn-sm btn-primary" onclick="stageSingleFolder('${escapeHtml(folderPath)}')" title="Stage this folder">
-                               <i data-lucide="archive"></i> Stage
-                           </button>`
-                    }
+                    ${actionsHtml}
                 </div>
             </div>
         `;
@@ -853,6 +920,108 @@ function updateStageFoldersButton() {
 
 // Track folders being staged in current modal session
 let pendingFolderStaging = null;
+
+/**
+ * Select a folder (add to pending selection).
+ */
+export function selectFolder(folderPath) {
+    selectedFoldersForStaging.add(folderPath);
+    refreshFolderSelectionView();
+}
+window.selectFolder = selectFolder;
+
+/**
+ * Clear a folder - deselects if selected, unstages if staged.
+ */
+export function clearFolder(folderPath) {
+    // Check if it's selected (pending)
+    if (selectedFoldersForStaging.has(folderPath)) {
+        selectedFoldersForStaging.delete(folderPath);
+        refreshFolderSelectionView();
+        return;
+    }
+    
+    // Check if it's staged - find and remove
+    const index = state.stagedFolders.findIndex(sf => {
+        if (currentFolderSelectionAccountId) {
+            return sf.sourceType === 'account' && sf.accountId == currentFolderSelectionAccountId && sf.folder === folderPath;
+        } else if (currentFolderSelectionImportId) {
+            return sf.sourceType === 'import' && sf.importId == currentFolderSelectionImportId && sf.folder === folderPath;
+        }
+        return false;
+    });
+    
+    if (index !== -1) {
+        state.stagedFolders.splice(index, 1);
+        sessionStorage.setItem('stagedFolders', JSON.stringify(state.stagedFolders));
+        updateStagedBadge();
+        refreshFolderSelectionView();
+    }
+}
+window.clearFolder = clearFolder;
+
+/**
+ * Select all unstaged folders.
+ */
+export function selectAllFolders() {
+    const allFolderPaths = collectAllFolderPaths(folderSelectionTree);
+    
+    // Add all unstaged folders to selection
+    allFolderPaths.forEach(path => {
+        const isStaged = state.stagedFolders.some(sf => {
+            if (currentFolderSelectionAccountId) {
+                return sf.sourceType === 'account' && sf.accountId == currentFolderSelectionAccountId && sf.folder === path;
+            } else if (currentFolderSelectionImportId) {
+                return sf.sourceType === 'import' && sf.importId == currentFolderSelectionImportId && sf.folder === path;
+            }
+            return false;
+        });
+        
+        if (!isStaged) {
+            selectedFoldersForStaging.add(path);
+        }
+    });
+    
+    refreshFolderSelectionView();
+}
+window.selectAllFolders = selectAllFolders;
+
+/**
+ * Stage all currently selected folders.
+ */
+export function stageSelectedFoldersFromSelection() {
+    if (selectedFoldersForStaging.size === 0) return;
+    
+    const folderPaths = Array.from(selectedFoldersForStaging);
+    
+    if (currentFolderSelectionAccountId) {
+        pendingFolderStaging = {
+            sourceType: 'account',
+            accountId: currentFolderSelectionAccountId,
+            folders: folderPaths
+        };
+    } else if (currentFolderSelectionImportId) {
+        const imports = getMountedImports();
+        const imp = imports.find(i => i.id === currentFolderSelectionImportId);
+        
+        pendingFolderStaging = {
+            sourceType: 'import',
+            importId: currentFolderSelectionImportId,
+            importPath: imp?.path || '',
+            importType: imp?.type || 'mbox',
+            folders: folderPaths
+        };
+    } else {
+        console.error('No account or import selected for folder staging');
+        return;
+    }
+    
+    // Clear selection - they'll become staged after destination is chosen
+    selectedFoldersForStaging.clear();
+    
+    openStageFoldersModal();
+}
+window.stageSelectedFoldersFromSelection = stageSelectedFoldersFromSelection;
 
 /**
  * Stage a single folder (called from per-row Stage button).
