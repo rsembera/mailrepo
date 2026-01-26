@@ -50,7 +50,6 @@
 - [ ] Auto-empty Trash bin (configurable?)
 
 ### Archive View
-- [ ] After commit, option to delete emails on server when done
 
 ## Low Priority
 
@@ -67,6 +66,7 @@
 
 ## Completed (Session 15 - January 25, 2026)
 
+- [x] Dropdown to Leave/Archive/Trash emails on server after commit
 - [x] Progress indicator during commit (phases, per-email, periodic DB commits)
 - [x] "After commit" action dropdown (restored, styled, added for folders)
 - [x] Subfolder navigation pills with sidebar sync
