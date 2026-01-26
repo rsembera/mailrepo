@@ -607,6 +607,10 @@ function renderImportFolderSelectionView(tree, importId) {
                         <i data-lucide="check-square"></i>
                         Select All
                     </button>
+                    <button class="btn btn-secondary" onclick="clearAllSelected()" ${selectedCount === 0 ? 'disabled' : ''}>
+                        <i data-lucide="x"></i>
+                        Clear Selected
+                    </button>
                     <button class="btn btn-primary" id="stageSelectedBtn" onclick="stageSelectedFoldersFromSelection()" ${selectedCount === 0 ? 'disabled' : ''}>
                         <i data-lucide="archive"></i>
                         Stage${selectedCount > 0 ? ` (${selectedCount})` : ''}
@@ -708,6 +712,10 @@ function renderFolderSelectionView(tree, accountId) {
                     <button class="btn btn-secondary" onclick="selectAllFolders()">
                         <i data-lucide="check-square"></i>
                         Select All
+                    </button>
+                    <button class="btn btn-secondary" onclick="clearAllSelected()" ${selectedCount === 0 ? 'disabled' : ''}>
+                        <i data-lucide="x"></i>
+                        Clear Selected
                     </button>
                     <button class="btn btn-primary" id="stageSelectedBtn" onclick="stageSelectedFoldersFromSelection()" ${selectedCount === 0 ? 'disabled' : ''}>
                         <i data-lucide="archive"></i>
@@ -1011,6 +1019,15 @@ export function selectAllFolders() {
     refreshFolderSelectionView();
 }
 window.selectAllFolders = selectAllFolders;
+
+/**
+ * Clear all selected folders.
+ */
+export function clearAllSelected() {
+    selectedFoldersForStaging.clear();
+    refreshFolderSelectionView();
+}
+window.clearAllSelected = clearAllSelected;
 
 /**
  * Stage all currently selected folders.
