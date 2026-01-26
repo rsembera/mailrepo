@@ -639,9 +639,9 @@ function renderImportFolderSelectionTree(nodes, importId, depth) {
         const indent = depth * 20;
         const folderPath = node.fullPath;
         
-        // Check if this folder is already staged
+        // Check if this folder is already staged (use == for type coercion)
         const isStaged = state.stagedFolders.some(
-            sf => sf.sourceType === 'import' && sf.importId === importId && sf.folder === folderPath
+            sf => sf.sourceType === 'import' && sf.importId == importId && sf.folder === folderPath
         );
         
         html += `<div class="folder-selection-item ${isStaged ? 'staged' : ''}" data-folder="${escapeHtml(folderPath)}">`;
@@ -712,9 +712,9 @@ function renderFolderSelectionTree(nodes, accountId, depth) {
         const indent = depth * 20;
         const folderPath = node.fullPath;
         
-        // Check if this folder is already staged
+        // Check if this folder is already staged (use == for type coercion)
         const isStaged = state.stagedFolders.some(
-            sf => sf.sourceType === 'account' && sf.accountId === accountId && sf.folder === folderPath
+            sf => sf.sourceType === 'account' && sf.accountId == accountId && sf.folder === folderPath
         );
         
         html += `<div class="folder-selection-item ${isStaged ? 'staged' : ''}" data-folder="${escapeHtml(folderPath)}">`;
@@ -853,6 +853,17 @@ export function toggleAllFolders(checked) {
     updateStageFoldersButton();
 }
 window.toggleAllFolders = toggleAllFolders;
+
+/**
+ * Refresh the current folder selection view (after staging).
+ */
+export function refreshFolderSelectionView() {
+    if (currentFolderSelectionAccountId) {
+        showFolderSelectionView(currentFolderSelectionAccountId);
+    } else if (currentFolderSelectionImportId) {
+        showImportFolderSelectionView(currentFolderSelectionImportId);
+    }
+}
 
 function updateStageFoldersButton() {
     const btn = document.getElementById('stageFoldersBtn');

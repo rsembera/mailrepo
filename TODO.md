@@ -14,7 +14,7 @@
 ### Import/Export
 - [ ] Test Apple mbox imports thoroughly; test full import workflow
 - [ ] Add .pst import support
-- [ ] ZIP export for archived folders (endpoint exists, returns 501)
+- [x] ZIP export for archived folders (endpoint exists, returns 501)
 - [ ] PDF export for emails
 - [ ] View/download attachments in emails (server and archive)
 

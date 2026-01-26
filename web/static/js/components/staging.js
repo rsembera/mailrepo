@@ -12,7 +12,7 @@ import { state } from '../state.js';
 import { closeModal, showAlert } from '../modals.js';
 import { renderFolderTree } from '../components/folder-tree.js';
 import { renderEmailList } from '../components/email-list.js';
-import { getPendingFolderStaging, clearPendingFolderStaging } from '../views/folder-mgmt.js';
+import { getPendingFolderStaging, clearPendingFolderStaging, refreshFolderSelectionView } from '../views/folder-mgmt.js';
 import { getMountedImports } from '../components/imports.js';
 
 // Module state
@@ -244,7 +244,11 @@ export function confirmStage() {
         closeModal('stageModal');
         updateStagedBadge();
         updateButtonStates();
-        showAlert('Folders Staged', `${pending.folders.length} folder(s) staged for archiving. Go to Staged Items to commit.`);
+        
+        // Refresh the folder selection view to show staged folders as greyed out
+        refreshFolderSelectionView();
+        
+        showAlert('Folders Staged', `${pending.folders.length} folder(s) staged for archiving. Go to Review to commit.`);
         return;
     }
     
