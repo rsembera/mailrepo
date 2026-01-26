@@ -592,6 +592,10 @@ function renderImportFolderSelectionView(tree, importId) {
         <div class="folder-management-list">
             <div class="folder-management-toolbar">
                 <h2>Select Folders to Archive</h2>
+                <button class="btn btn-primary" onclick="stageAllFolders()">
+                    <i data-lucide="archive"></i>
+                    Stage All
+                </button>
             </div>
             <div class="folder-management-header folder-selection-header">
                 <span>Folder</span>
@@ -625,7 +629,9 @@ function renderImportFolderSelectionTree(nodes, importId, depth) {
                 </div>
                 <div class="folder-management-actions">
                     ${isStaged 
-                        ? '<span class="staged-badge">Staged</span>'
+                        ? `<button class="btn btn-sm btn-secondary" onclick="unstageSingleFolder('${escapeHtml(folderPath)}')" title="Unstage this folder">
+                               <i data-lucide="x"></i> Unstage
+                           </button>`
                         : `<button class="btn btn-sm btn-primary" onclick="stageSingleFolder('${escapeHtml(folderPath)}')" title="Stage this folder">
                                <i data-lucide="archive"></i> Stage
                            </button>`
@@ -648,6 +654,10 @@ function renderFolderSelectionView(tree, accountId) {
         <div class="folder-management-list">
             <div class="folder-management-toolbar">
                 <h2>Select Folders to Archive</h2>
+                <button class="btn btn-primary" onclick="stageAllFolders()">
+                    <i data-lucide="archive"></i>
+                    Stage All
+                </button>
             </div>
             <div class="folder-management-header folder-selection-header">
                 <span>Folder</span>
@@ -681,7 +691,9 @@ function renderFolderSelectionTree(nodes, accountId, depth) {
                 </div>
                 <div class="folder-management-actions">
                     ${isStaged 
-                        ? '<span class="staged-badge">Staged</span>'
+                        ? `<button class="btn btn-sm btn-secondary" onclick="unstageSingleFolder('${escapeHtml(folderPath)}')" title="Unstage this folder">
+                               <i data-lucide="x"></i> Unstage
+                           </button>`
                         : `<button class="btn btn-sm btn-primary" onclick="stageSingleFolder('${escapeHtml(folderPath)}')" title="Stage this folder">
                                <i data-lucide="archive"></i> Stage
                            </button>`
@@ -863,6 +875,94 @@ export function stageSingleFolder(folderPath) {
     openStageFoldersModal();
 }
 window.stageSingleFolder = stageSingleFolder;
+
+/**
+ * Stage all folders in the current view.
+ */
+export function stageAllFolders() {
+    // Collect all folder paths from the current tree
+    const allFolderPaths = collectAllFolderPaths(folderSelectionTree);
+    
+    // Filter out already-staged folders
+    const unstagedPaths = allFolderPaths.filter(path => {
+        if (currentFolderSelectionAccountId) {
+            return !state.stagedFolders.some(
+                sf => sf.sourceType === 'account' && sf.accountId == currentFolderSelectionAccountId && sf.folder === path
+            );
+        } else if (currentFolderSelectionImportId) {
+            return !state.stagedFolders.some(
+                sf => sf.sourceType === 'import' && sf.importId == currentFolderSelectionImportId && sf.folder === path
+            );
+        }
+        return true;
+    });
+    
+    if (unstagedPaths.length === 0) {
+        showAlert('All Staged', 'All folders are already staged.');
+        return;
+    }
+    
+    // Store pending folders
+    if (currentFolderSelectionAccountId) {
+        pendingFolderStaging = {
+            sourceType: 'account',
+            accountId: currentFolderSelectionAccountId,
+            folders: unstagedPaths
+        };
+    } else if (currentFolderSelectionImportId) {
+        const imports = getMountedImports();
+        const imp = imports.find(i => i.id === currentFolderSelectionImportId);
+        
+        pendingFolderStaging = {
+            sourceType: 'import',
+            importId: currentFolderSelectionImportId,
+            importPath: imp?.path || '',
+            importType: imp?.type || 'mbox',
+            folders: unstagedPaths
+        };
+    }
+    
+    openStageFoldersModal();
+}
+window.stageAllFolders = stageAllFolders;
+
+/**
+ * Collect all folder paths from a tree structure.
+ */
+function collectAllFolderPaths(nodes, paths = []) {
+    nodes.forEach(node => {
+        paths.push(node.fullPath);
+        if (node.children && node.children.length > 0) {
+            collectAllFolderPaths(node.children, paths);
+        }
+    });
+    return paths;
+}
+
+/**
+ * Unstage a single folder.
+ */
+export function unstageSingleFolder(folderPath) {
+    // Find and remove the staged folder
+    const index = state.stagedFolders.findIndex(sf => {
+        if (currentFolderSelectionAccountId) {
+            return sf.sourceType === 'account' && sf.accountId == currentFolderSelectionAccountId && sf.folder === folderPath;
+        } else if (currentFolderSelectionImportId) {
+            return sf.sourceType === 'import' && sf.importId == currentFolderSelectionImportId && sf.folder === folderPath;
+        }
+        return false;
+    });
+    
+    if (index !== -1) {
+        state.stagedFolders.splice(index, 1);
+        sessionStorage.setItem('stagedFolders', JSON.stringify(state.stagedFolders));
+        
+        // Update badge and refresh view
+        updateStagedBadge();
+        refreshFolderSelectionView();
+    }
+}
+window.unstageSingleFolder = unstageSingleFolder;
 
 export function stageSelectedFolders() {
     if (selectedFoldersForStaging.size === 0) return;
