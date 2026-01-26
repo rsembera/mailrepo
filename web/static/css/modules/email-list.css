@@ -36,6 +36,14 @@
     opacity: 0.5;
 }
 
+.email-actions {
+    display: flex;
+    gap: 2px;
+    padding-top: 2px;
+    flex-shrink: 0;
+}
+
+/* Legacy checkbox support */
 .email-checkbox {
     padding-top: 2px;
 }

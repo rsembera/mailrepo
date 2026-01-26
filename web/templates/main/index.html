@@ -146,10 +146,16 @@
         
         <!-- Search/Filter Bar (hidden until content loads) -->
         <div class="content-toolbar" style="display: none;">
-            <label class="checkbox-label">
-                <input type="checkbox" id="selectAll">
-                <span>Select All</span>
-            </label>
+            <div class="toolbar-actions">
+                <button class="btn btn-secondary btn-sm" id="selectAllEmailsBtn" onclick="selectAllEmails()">
+                    <i data-lucide="check-square"></i>
+                    Select All
+                </button>
+                <button class="btn btn-secondary btn-sm" id="clearSelectedEmailsBtn" onclick="clearSelectedEmails()" disabled>
+                    <i data-lucide="x"></i>
+                    Clear Selected
+                </button>
+            </div>
             <div class="toolbar-spacer"></div>
             <div class="search-box">
                 <input type="text" placeholder="Search emails..." id="searchInput">

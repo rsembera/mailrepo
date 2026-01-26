@@ -18,7 +18,7 @@ import { escapeHtml, debounce } from './utils.js';
 import { state, loadFolders } from './state.js';
 import { closeModal, showPrompt, showConfirm, showAlert, initModalListeners } from './modals.js';
 import { renderFolderTree } from './components/folder-tree.js';
-import { initEmailList, renderEmailList, toggleEmailSelection, handleSelectAll, updateSelectAllState } from './components/email-list.js';
+import { initEmailList, renderEmailList, toggleEmailSelection, updateSelectAllState } from './components/email-list.js';
 import { initSidebar, toggleSection, handleTreeItemClick, updateSidebarFolders, refreshSidebarFolders, loadAccountLabels, buildImapFolderTree, getFolderIcon } from './components/sidebar.js';
 import { initMailView, selectView, loadAccountEmails, loadFolderEmails, openEmailViewer, closeEmailViewer, showLoading, showError, restoreDefaultHeaderActions } from './views/mail.js';
 import { initStaging, openStageModal, renderFolderSelectTree, handleFolderSelect, confirmStage, updateStagedBadge, updateButtonStates, goToReview, setSelectedDestinationFolder } from './components/staging.js';
@@ -42,7 +42,6 @@ const elements = {
     contextTitle: document.getElementById('contextTitle'),
     contextMeta: document.getElementById('contextMeta'),
     emailList: document.getElementById('emailList'),
-    selectAll: document.getElementById('selectAll'),
     searchInput: document.getElementById('searchInput'),
     
     // Buttons
@@ -68,7 +67,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize email list component
     initEmailList({
         emailList: elements.emailList,
-        selectAll: elements.selectAll,
         onSelectionChange: updateButtonStates,
     });
     
@@ -161,9 +159,6 @@ function initEventListeners() {
     // Stage/Review buttons
     elements.stageBtn?.addEventListener('click', openStageModal);
     elements.reviewBtn?.addEventListener('click', goToReview);
-    
-    // Select all
-    elements.selectAll?.addEventListener('change', handleSelectAll);
     
     // Search
     elements.searchInput?.addEventListener('input', debounce(handleSearch, 300));

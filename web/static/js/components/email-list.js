@@ -9,19 +9,16 @@ import { state } from '../state.js';
 
 // Reference to DOM elements (set via init)
 let emailListEl = null;
-let selectAllEl = null;
 let onSelectionChange = null;
 
 /**
  * Initialize the email list component.
  * @param {Object} config
  * @param {HTMLElement} config.emailList - Email list container
- * @param {HTMLElement} config.selectAll - Select all checkbox
  * @param {Function} config.onSelectionChange - Callback when selection changes
  */
 export function initEmailList(config) {
     emailListEl = config.emailList;
-    selectAllEl = config.selectAll;
     onSelectionChange = config.onSelectionChange;
 }
 
@@ -48,14 +45,45 @@ export function renderEmailList() {
         const isStaged = state.staged.has(emailId);
         const isSelected = state.selectedEmails.has(emailId);
         
+        // Determine which action buttons to show
+        let actionsHtml = '';
+        if (isStaged) {
+            // Staged: select disabled, clear active (unstages)
+            actionsHtml = `
+                <button class="btn btn-sm btn-icon" disabled title="Already staged">
+                    <i data-lucide="circle"></i>
+                </button>
+                <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); clearEmail('${emailId}')" title="Unstage">
+                    <i data-lucide="x"></i>
+                </button>
+            `;
+        } else if (isSelected) {
+            // Selected: checkmark shown, clear active (deselects)
+            actionsHtml = `
+                <button class="btn btn-sm btn-icon btn-selected" disabled title="Selected">
+                    <i data-lucide="check"></i>
+                </button>
+                <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); clearEmail('${emailId}')" title="Deselect">
+                    <i data-lucide="x"></i>
+                </button>
+            `;
+        } else {
+            // Default: select active, clear disabled
+            actionsHtml = `
+                <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); selectEmail('${emailId}')" title="Select">
+                    <i data-lucide="circle"></i>
+                </button>
+                <button class="btn btn-sm btn-icon" disabled title="Not selected">
+                    <i data-lucide="x"></i>
+                </button>
+            `;
+        }
+        
         return `
             <div class="email-item ${isStaged ? 'staged' : ''} ${isSelected ? 'selected' : ''}" 
                  data-id="${emailId}">
-                <div class="email-checkbox" onclick="event.stopPropagation()">
-                    <input type="checkbox" 
-                           ${isSelected ? 'checked' : ''} 
-                           ${isStaged ? 'disabled' : ''}
-                           onchange="toggleEmailSelection('${emailId}')">
+                <div class="email-actions" onclick="event.stopPropagation()">
+                    ${actionsHtml}
                 </div>
                 <div class="email-content" onclick="openEmailViewer('${emailId}')">
                     <div class="email-header">
@@ -69,13 +97,83 @@ export function renderEmailList() {
         `;
     }).join('');
     
-    updateSelectAllState();
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    updateToolbarButtons();
 }
 
 /**
- * Toggle selection of an email.
- * @param {string} emailId - ID of email to toggle
+ * Select an email.
  */
+export function selectEmail(emailId) {
+    if (state.staged.has(emailId)) return;
+    state.selectedEmails.add(emailId);
+    renderEmailList();
+    if (onSelectionChange) onSelectionChange();
+}
+window.selectEmail = selectEmail;
+
+/**
+ * Clear an email - deselects if selected, unstages if staged.
+ */
+export function clearEmail(emailId) {
+    if (state.selectedEmails.has(emailId)) {
+        state.selectedEmails.delete(emailId);
+        renderEmailList();
+        if (onSelectionChange) onSelectionChange();
+        return;
+    }
+    
+    if (state.staged.has(emailId)) {
+        state.staged.delete(emailId);
+        sessionStorage.setItem('staged', JSON.stringify([...state.staged.entries()]));
+        renderEmailList();
+        if (onSelectionChange) onSelectionChange();
+        // Update staged badge
+        import('./staging.js').then(m => m.updateStagedBadge());
+    }
+}
+window.clearEmail = clearEmail;
+
+/**
+ * Select all unstaged emails.
+ */
+export function selectAllEmails() {
+    state.emails.forEach(email => {
+        const emailId = email.uid || email.id;
+        if (!state.staged.has(emailId)) {
+            state.selectedEmails.add(emailId);
+        }
+    });
+    renderEmailList();
+    if (onSelectionChange) onSelectionChange();
+}
+window.selectAllEmails = selectAllEmails;
+
+/**
+ * Clear all selected emails.
+ */
+export function clearSelectedEmails() {
+    state.selectedEmails.clear();
+    renderEmailList();
+    if (onSelectionChange) onSelectionChange();
+}
+window.clearSelectedEmails = clearSelectedEmails;
+
+/**
+ * Update toolbar button states.
+ */
+export function updateToolbarButtons() {
+    const selectAllBtn = document.getElementById('selectAllEmailsBtn');
+    const clearSelectedBtn = document.getElementById('clearSelectedEmailsBtn');
+    
+    const hasSelected = state.selectedEmails.size > 0;
+    
+    if (clearSelectedBtn) {
+        clearSelectedBtn.disabled = !hasSelected;
+    }
+}
+
+// Legacy function for backward compatibility
 export function toggleEmailSelection(emailId) {
     if (state.staged.has(emailId)) return;
     
@@ -85,53 +183,20 @@ export function toggleEmailSelection(emailId) {
         state.selectedEmails.add(emailId);
     }
     
-    // Update UI
-    const item = document.querySelector(`.email-item[data-id="${emailId}"]`);
-    if (item) {
-        item.classList.toggle('selected', state.selectedEmails.has(emailId));
-        item.querySelector('input[type="checkbox"]').checked = state.selectedEmails.has(emailId);
-    }
-    
-    updateSelectAllState();
-    if (onSelectionChange) onSelectionChange();
-}
-
-/**
- * Handle select all checkbox change.
- * @param {Event} e - Change event
- */
-export function handleSelectAll(e) {
-    const checked = e.target.checked;
-    
-    state.emails.forEach(email => {
-        const emailId = email.uid || email.id;
-        if (!state.staged.has(emailId)) {
-            if (checked) {
-                state.selectedEmails.add(emailId);
-            } else {
-                state.selectedEmails.delete(emailId);
-            }
-        }
-    });
-    
     renderEmailList();
     if (onSelectionChange) onSelectionChange();
 }
+window.toggleEmailSelection = toggleEmailSelection;
 
-/**
- * Update the select all checkbox state.
- */
-export function updateSelectAllState() {
-    if (!selectAllEl) return;
-    
-    const available = state.emails.filter(e => !state.staged.has(e.uid || e.id));
-    const selectedCount = [...state.selectedEmails].filter(id => 
-        available.some(e => (e.uid || e.id) === id)
-    ).length;
-    
-    selectAllEl.checked = available.length > 0 && selectedCount === available.length;
-    selectAllEl.indeterminate = selectedCount > 0 && selectedCount < available.length;
+// Legacy - keep for compatibility but no longer used
+export function handleSelectAll(e) {
+    if (e.target.checked) {
+        selectAllEmails();
+    } else {
+        clearSelectedEmails();
+    }
 }
 
-// Expose to window for inline onclick handlers
-window.toggleEmailSelection = toggleEmailSelection;
+export function updateSelectAllState() {
+    updateToolbarButtons();
+}
