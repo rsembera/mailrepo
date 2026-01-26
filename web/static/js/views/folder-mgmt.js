@@ -582,7 +582,12 @@ function renderImportFolderSelectionTree(nodes, importId, depth) {
         const indent = depth * 20;
         const folderPath = node.fullPath;
         
-        html += `<div class="folder-selection-item" data-folder="${escapeHtml(folderPath)}">`;
+        // Check if this folder is already staged
+        const isStaged = state.stagedFolders.some(
+            sf => sf.sourceType === 'import' && sf.importId === importId && sf.folder === folderPath
+        );
+        
+        html += `<div class="folder-selection-item ${isStaged ? 'staged' : ''}" data-folder="${escapeHtml(folderPath)}">`;
         html += `<div class="folder-selection-row" style="padding-left: ${indent}px">`;
         
         if (hasChildren) {
@@ -592,7 +597,7 @@ function renderImportFolderSelectionTree(nodes, importId, depth) {
         }
         
         html += `<label class="folder-checkbox">`;
-        html += `<input type="checkbox" data-folder="${escapeHtml(folderPath)}" onchange="handleFolderCheckbox(this)">`;
+        html += `<input type="checkbox" data-folder="${escapeHtml(folderPath)}" ${isStaged ? 'disabled checked' : ''} onchange="handleFolderCheckbox(this)">`;
         html += `</label>`;
         html += `<i data-lucide="folder" class="tree-icon"></i>`;
         html += `<span class="folder-selection-name">${escapeHtml(node.name)}</span>`;
@@ -650,7 +655,12 @@ function renderFolderSelectionTree(nodes, accountId, depth) {
         const indent = depth * 20;
         const folderPath = node.fullPath;
         
-        html += `<div class="folder-selection-item" data-folder="${escapeHtml(folderPath)}">`;
+        // Check if this folder is already staged
+        const isStaged = state.stagedFolders.some(
+            sf => sf.sourceType === 'account' && sf.accountId === accountId && sf.folder === folderPath
+        );
+        
+        html += `<div class="folder-selection-item ${isStaged ? 'staged' : ''}" data-folder="${escapeHtml(folderPath)}">`;
         html += `<div class="folder-selection-row" style="padding-left: ${indent}px">`;
         
         if (hasChildren) {
@@ -660,7 +670,7 @@ function renderFolderSelectionTree(nodes, accountId, depth) {
         }
         
         html += `<label class="folder-checkbox">`;
-        html += `<input type="checkbox" data-folder="${escapeHtml(folderPath)}" onchange="handleFolderCheckbox(this)">`;
+        html += `<input type="checkbox" data-folder="${escapeHtml(folderPath)}" ${isStaged ? 'disabled checked' : ''} onchange="handleFolderCheckbox(this)">`;
         html += `</label>`;
         html += `<i data-lucide="${getFolderIcon(node.name)}" class="tree-icon"></i>`;
         html += `<span class="folder-selection-name">${escapeHtml(node.name)}</span>`;
@@ -679,6 +689,9 @@ function renderFolderSelectionTree(nodes, accountId, depth) {
 }
 
 export function handleFolderCheckbox(checkbox) {
+    // Skip if checkbox is disabled (already staged)
+    if (checkbox.disabled) return;
+    
     const folderPath = checkbox.dataset.folder;
     const isChecked = checkbox.checked;
     
@@ -689,7 +702,7 @@ export function handleFolderCheckbox(checkbox) {
         selectedFoldersForStaging.delete(folderPath);
         // Uncheck all children when parent is unchecked (cascade down)
         const item = checkbox.closest('.folder-selection-item');
-        const childCheckboxes = item.querySelectorAll('.folder-selection-children input[type="checkbox"]');
+        const childCheckboxes = item.querySelectorAll('.folder-selection-children input[type="checkbox"]:not(:disabled)');
         childCheckboxes.forEach(child => {
             child.checked = false;
             child.indeterminate = false;
@@ -751,7 +764,8 @@ function updateSelectAllCheckbox() {
     if (!selectAll) return;
     
     // Count based on staging set, not visual checkbox state
-    const allCheckboxes = document.querySelectorAll('.folder-selection-list input[type="checkbox"]');
+    // Exclude already-staged (disabled) checkboxes from the count
+    const allCheckboxes = document.querySelectorAll('.folder-selection-list input[type="checkbox"]:not(:disabled)');
     const totalCount = allCheckboxes.length;
     const selectedCount = selectedFoldersForStaging.size;
     
@@ -768,7 +782,8 @@ function updateSelectAllCheckbox() {
 }
 
 export function toggleAllFolders(checked) {
-    document.querySelectorAll('.folder-selection-list input[type="checkbox"]').forEach(cb => {
+    // Only toggle non-disabled (not already staged) checkboxes
+    document.querySelectorAll('.folder-selection-list input[type="checkbox"]:not(:disabled)').forEach(cb => {
         cb.checked = checked;
         cb.indeterminate = false;
         const folderPath = cb.dataset.folder;

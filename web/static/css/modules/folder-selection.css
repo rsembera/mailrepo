@@ -88,6 +88,15 @@
     /* Visible by default, toggle via JS */
 }
 
+/* Staged folders appear greyed out */
+.folder-selection-item.staged {
+    opacity: 0.5;
+}
+
+.folder-selection-item.staged .folder-checkbox input[type="checkbox"] {
+    cursor: not-allowed;
+}
+
 .folder-selection-actions {
     display: flex;
     gap: var(--space-sm);
