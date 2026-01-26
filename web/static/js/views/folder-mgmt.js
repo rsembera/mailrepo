@@ -520,13 +520,7 @@ export async function showFolderSelectionView(accountId) {
     
     const headerActions = document.querySelector('.header-actions');
     if (headerActions) {
-        headerActions.innerHTML = `
-            <button class="btn btn-primary" id="stageFoldersBtn" disabled onclick="stageSelectedFolders()">
-                <i data-lucide="archive"></i>
-                <span>Stage Selected Folders</span>
-            </button>
-        `;
-        if (typeof lucide !== 'undefined') lucide.createIcons();
+        headerActions.innerHTML = ''; // No bulk action button needed - each folder has its own Stage button
     }
     
     emailList.innerHTML = '<div class="loading-indicator">Loading folders...</div>';
@@ -575,13 +569,7 @@ export function showImportFolderSelectionView(importId) {
     
     const headerActions = document.querySelector('.header-actions');
     if (headerActions) {
-        headerActions.innerHTML = `
-            <button class="btn btn-primary" id="stageFoldersBtn" disabled onclick="stageSelectedFolders()">
-                <i data-lucide="archive"></i>
-                <span>Stage Selected Folders</span>
-            </button>
-        `;
-        if (typeof lucide !== 'undefined') lucide.createIcons();
+        headerActions.innerHTML = ''; // No bulk action button needed - each folder has its own Stage button
     }
     
     // Build folder tree for import
@@ -601,34 +589,20 @@ export function showImportFolderSelectionView(importId) {
 
 function renderImportFolderSelectionView(tree, importId) {
     let html = `
-        <div class="folder-selection-view">
-            <div class="folder-selection-toolbar">
-                <label class="select-all-folders">
-                    <input type="checkbox" id="selectAllFolders" onchange="toggleAllFolders(this.checked)">
-                    <span>Select All</span>
-                </label>
+        <div class="folder-management-list">
+            <div class="folder-management-toolbar">
+                <h2>Select Folders to Archive</h2>
             </div>
-            <div class="folder-selection-list">
-                ${renderImportFolderSelectionTree(tree, importId, 0)}
+            <div class="folder-management-header folder-selection-header">
+                <span>Folder</span>
+                <span>Action</span>
             </div>
+            ${renderImportFolderSelectionTree(tree, importId, 0)}
         </div>
     `;
     
     emailList.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
-    
-    document.querySelectorAll('.folder-selection-chevron').forEach(chevron => {
-        chevron.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const item = chevron.closest('.folder-selection-item');
-            const children = item.querySelector('.folder-selection-children');
-            if (children) {
-                const isExpanded = children.style.display !== 'none';
-                children.style.display = isExpanded ? 'none' : 'block';
-                chevron.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(90deg)';
-            }
-        });
-    });
 }
 
 function renderImportFolderSelectionTree(nodes, importId, depth) {
@@ -636,7 +610,6 @@ function renderImportFolderSelectionTree(nodes, importId, depth) {
     
     nodes.forEach(node => {
         const hasChildren = node.children && node.children.length > 0;
-        const indent = depth * 20;
         const folderPath = node.fullPath;
         
         // Check if this folder is already staged (use == for type coercion)
@@ -644,29 +617,27 @@ function renderImportFolderSelectionTree(nodes, importId, depth) {
             sf => sf.sourceType === 'import' && sf.importId == importId && sf.folder === folderPath
         );
         
-        html += `<div class="folder-selection-item ${isStaged ? 'staged' : ''}" data-folder="${escapeHtml(folderPath)}">`;
-        html += `<div class="folder-selection-row" style="padding-left: ${indent}px">`;
+        html += `
+            <div class="folder-management-item folder-selection-item ${isStaged ? 'staged' : ''}" data-folder="${escapeHtml(folderPath)}">
+                <div class="folder-management-name" style="padding-left: ${depth * 24}px">
+                    <i data-lucide="folder" class="folder-icon"></i>
+                    <span class="folder-label">${escapeHtml(node.name)}</span>
+                </div>
+                <div class="folder-management-actions">
+                    ${isStaged 
+                        ? '<span class="staged-badge">Staged</span>'
+                        : `<button class="btn btn-sm btn-primary" onclick="stageSingleFolder('${escapeHtml(folderPath)}')" title="Stage this folder">
+                               <i data-lucide="archive"></i> Stage
+                           </button>`
+                    }
+                </div>
+            </div>
+        `;
         
+        // Recursively render children (always expanded)
         if (hasChildren) {
-            html += `<i data-lucide="chevron-right" class="folder-selection-chevron"></i>`;
-        } else {
-            html += `<span class="chevron-spacer"></span>`;
-        }
-        
-        html += `<label class="folder-checkbox">`;
-        html += `<input type="checkbox" data-folder="${escapeHtml(folderPath)}" ${isStaged ? 'disabled checked' : ''} onchange="handleFolderCheckbox(this)">`;
-        html += `</label>`;
-        html += `<i data-lucide="folder" class="tree-icon"></i>`;
-        html += `<span class="folder-selection-name">${escapeHtml(node.name)}</span>`;
-        html += `</div>`;
-        
-        if (hasChildren) {
-            html += `<div class="folder-selection-children" style="display: none;">`;
             html += renderImportFolderSelectionTree(node.children, importId, depth + 1);
-            html += `</div>`;
         }
-        
-        html += `</div>`;
     });
     
     return html;
@@ -674,34 +645,20 @@ function renderImportFolderSelectionTree(nodes, importId, depth) {
 
 function renderFolderSelectionView(tree, accountId) {
     let html = `
-        <div class="folder-selection-view">
-            <div class="folder-selection-toolbar">
-                <label class="select-all-folders">
-                    <input type="checkbox" id="selectAllFolders" onchange="toggleAllFolders(this.checked)">
-                    <span>Select All</span>
-                </label>
+        <div class="folder-management-list">
+            <div class="folder-management-toolbar">
+                <h2>Select Folders to Archive</h2>
             </div>
-            <div class="folder-selection-list">
-                ${renderFolderSelectionTree(tree, accountId, 0)}
+            <div class="folder-management-header folder-selection-header">
+                <span>Folder</span>
+                <span>Action</span>
             </div>
+            ${renderFolderSelectionTree(tree, accountId, 0)}
         </div>
     `;
     
     emailList.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
-    
-    document.querySelectorAll('.folder-selection-chevron').forEach(chevron => {
-        chevron.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const item = chevron.closest('.folder-selection-item');
-            const children = item.querySelector('.folder-selection-children');
-            if (children) {
-                const isExpanded = children.style.display !== 'none';
-                children.style.display = isExpanded ? 'none' : 'block';
-                chevron.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(90deg)';
-            }
-        });
-    });
 }
 
 function renderFolderSelectionTree(nodes, accountId, depth) {
@@ -709,7 +666,6 @@ function renderFolderSelectionTree(nodes, accountId, depth) {
     
     nodes.forEach(node => {
         const hasChildren = node.children && node.children.length > 0;
-        const indent = depth * 20;
         const folderPath = node.fullPath;
         
         // Check if this folder is already staged (use == for type coercion)
@@ -717,29 +673,27 @@ function renderFolderSelectionTree(nodes, accountId, depth) {
             sf => sf.sourceType === 'account' && sf.accountId == accountId && sf.folder === folderPath
         );
         
-        html += `<div class="folder-selection-item ${isStaged ? 'staged' : ''}" data-folder="${escapeHtml(folderPath)}">`;
-        html += `<div class="folder-selection-row" style="padding-left: ${indent}px">`;
+        html += `
+            <div class="folder-management-item folder-selection-item ${isStaged ? 'staged' : ''}" data-folder="${escapeHtml(folderPath)}">
+                <div class="folder-management-name" style="padding-left: ${depth * 24}px">
+                    <i data-lucide="${getFolderIcon(node.name)}" class="folder-icon"></i>
+                    <span class="folder-label">${escapeHtml(node.name)}</span>
+                </div>
+                <div class="folder-management-actions">
+                    ${isStaged 
+                        ? '<span class="staged-badge">Staged</span>'
+                        : `<button class="btn btn-sm btn-primary" onclick="stageSingleFolder('${escapeHtml(folderPath)}')" title="Stage this folder">
+                               <i data-lucide="archive"></i> Stage
+                           </button>`
+                    }
+                </div>
+            </div>
+        `;
         
+        // Recursively render children (always expanded)
         if (hasChildren) {
-            html += `<i data-lucide="chevron-right" class="folder-selection-chevron"></i>`;
-        } else {
-            html += `<span class="chevron-spacer"></span>`;
-        }
-        
-        html += `<label class="folder-checkbox">`;
-        html += `<input type="checkbox" data-folder="${escapeHtml(folderPath)}" ${isStaged ? 'disabled checked' : ''} onchange="handleFolderCheckbox(this)">`;
-        html += `</label>`;
-        html += `<i data-lucide="${getFolderIcon(node.name)}" class="tree-icon"></i>`;
-        html += `<span class="folder-selection-name">${escapeHtml(node.name)}</span>`;
-        html += `</div>`;
-        
-        if (hasChildren) {
-            html += `<div class="folder-selection-children" style="display: none;">`;
             html += renderFolderSelectionTree(node.children, accountId, depth + 1);
-            html += `</div>`;
         }
-        
-        html += `</div>`;
     });
     
     return html;
@@ -878,6 +832,37 @@ function updateStageFoldersButton() {
 
 // Track folders being staged in current modal session
 let pendingFolderStaging = null;
+
+/**
+ * Stage a single folder (called from per-row Stage button).
+ */
+export function stageSingleFolder(folderPath) {
+    // Store pending folder - will be added to stagedFolders after destination is chosen
+    if (currentFolderSelectionAccountId) {
+        pendingFolderStaging = {
+            sourceType: 'account',
+            accountId: currentFolderSelectionAccountId,
+            folders: [folderPath]
+        };
+    } else if (currentFolderSelectionImportId) {
+        const imports = getMountedImports();
+        const imp = imports.find(i => i.id === currentFolderSelectionImportId);
+        
+        pendingFolderStaging = {
+            sourceType: 'import',
+            importId: currentFolderSelectionImportId,
+            importPath: imp?.path || '',
+            importType: imp?.type || 'mbox',
+            folders: [folderPath]
+        };
+    } else {
+        console.error('No account or import selected for folder staging');
+        return;
+    }
+    
+    openStageFoldersModal();
+}
+window.stageSingleFolder = stageSingleFolder;
 
 export function stageSelectedFolders() {
     if (selectedFoldersForStaging.size === 0) return;

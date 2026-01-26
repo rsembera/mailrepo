@@ -1,7 +1,38 @@
 /* MailRepo - Folder Selection View Styles (bulk staging) */
 
 /* ============================================
-   FOLDER SELECTION VIEW (bulk staging)
+   FOLDER SELECTION VIEW (table-based layout)
+   ============================================ */
+
+/* Two-column header for folder selection */
+.folder-selection-header {
+    grid-template-columns: 1fr 100px !important;
+}
+
+/* Folder selection items use 2-column grid */
+.folder-selection-item.folder-management-item {
+    grid-template-columns: 1fr 100px;
+}
+
+/* Staged folders appear greyed out */
+.folder-selection-item.staged {
+    opacity: 0.5;
+}
+
+/* Staged badge */
+.staged-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    background: var(--color-background-secondary);
+    border-radius: var(--radius-sm);
+}
+
+/* ============================================
+   LEGACY STYLES (keeping for compatibility)
    ============================================ */
 
 .folder-selection-view {
@@ -86,15 +117,6 @@
 
 .folder-selection-children {
     /* Visible by default, toggle via JS */
-}
-
-/* Staged folders appear greyed out */
-.folder-selection-item.staged {
-    opacity: 0.5;
-}
-
-.folder-selection-item.staged .folder-checkbox input[type="checkbox"] {
-    cursor: not-allowed;
 }
 
 .folder-selection-actions {
