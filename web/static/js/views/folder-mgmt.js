@@ -913,17 +913,18 @@ export function toggleAllFolders(checked) {
 window.toggleAllFolders = toggleAllFolders;
 
 /**
- * Refresh the current folder selection view (after staging).
- * Preserves scroll position.
+ * Refresh the current folder selection view (after staging/selecting).
+ * Preserves scroll position and selection state.
  */
 export function refreshFolderSelectionView() {
     // Save scroll position
     const scrollTop = emailList?.scrollTop || 0;
     
-    if (currentFolderSelectionAccountId) {
-        showFolderSelectionView(currentFolderSelectionAccountId);
-    } else if (currentFolderSelectionImportId) {
-        showImportFolderSelectionView(currentFolderSelectionImportId);
+    // Re-render without clearing selection (don't call full show functions)
+    if (currentFolderSelectionAccountId && folderSelectionTree) {
+        renderFolderSelectionView(folderSelectionTree, currentFolderSelectionAccountId);
+    } else if (currentFolderSelectionImportId && folderSelectionTree) {
+        renderImportFolderSelectionView(folderSelectionTree, currentFolderSelectionImportId);
     }
     
     // Restore scroll position after render
@@ -950,10 +951,7 @@ let pendingFolderStaging = null;
  * Select a folder (add to pending selection).
  */
 export function selectFolder(folderPath) {
-    console.log('selectFolder called with:', folderPath);
-    console.log('selectedFoldersForStaging before:', selectedFoldersForStaging);
     selectedFoldersForStaging.add(folderPath);
-    console.log('selectedFoldersForStaging after:', selectedFoldersForStaging);
     refreshFolderSelectionView();
 }
 window.selectFolder = selectFolder;
