@@ -112,10 +112,12 @@ export function renderEmailList() {
             <div class="${rowClass}" data-id="${emailId}" onclick="openEmailViewer('${emailId}')">
                 <div class="email-list-content">
                     <div class="email-list-main">
-                        <span class="email-sender">${escapeHtml(extractName(email.from || email.sender))}</span>
+                        <div class="email-list-header-row">
+                            <span class="email-sender">${escapeHtml(extractName(email.from || email.sender))}</span>
+                            <span class="email-date">${formatDate(email.date)}</span>
+                        </div>
                         <span class="email-subject">${escapeHtml(email.subject || '(no subject)')}</span>
                     </div>
-                    <span class="email-date">${formatDate(email.date)}</span>
                 </div>
                 <div class="folder-management-actions" onclick="event.stopPropagation()">
                     ${actionsHtml}

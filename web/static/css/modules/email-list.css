@@ -46,6 +46,13 @@
     flex: 1;
 }
 
+.email-list-header-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-md);
+}
+
 .email-sender {
     font-weight: 600;
     font-size: 0.9rem;
