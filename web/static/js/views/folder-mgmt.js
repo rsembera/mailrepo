@@ -150,6 +150,9 @@ function renderFolderManagementItem(folder, depth = 0) {
                 <button class="btn btn-sm btn-icon" onclick="createSubfolder(${folder.id})" title="Add subfolder">
                     <i data-lucide="folder-plus"></i>
                 </button>
+                <button class="btn btn-sm btn-icon" onclick="exportFolder(${folder.id})" title="Export as ZIP">
+                    <i data-lucide="download"></i>
+                </button>
                 <button class="btn btn-sm btn-icon btn-danger-subtle" onclick="deleteFolder(${folder.id})" title="Delete">
                     <i data-lucide="trash-2"></i>
                 </button>
@@ -361,6 +364,60 @@ export async function deleteFolder(folderId) {
     }
 }
 window.deleteFolder = deleteFolder;
+
+export async function exportFolder(folderId) {
+    const folder = state.folders.find(f => f.id == folderId);
+    if (!folder) return;
+    
+    const children = state.folders.filter(f => f.parent_id == folderId && !f.deleted_at);
+    
+    // Ask about subfolders if there are any
+    let includeSubfolders = true;
+    if (children.length > 0) {
+        includeSubfolders = await showConfirm(
+            'Export Folder',
+            `Export "${folder.name}" with ${children.length} subfolder${children.length > 1 ? 's' : ''}?`,
+            { okText: 'Export All', cancelText: 'Just This Folder' }
+        );
+    }
+    
+    try {
+        const response = await fetch(`/api/folders/${folderId}/export`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ include_subfolders: includeSubfolders }),
+        });
+        
+        if (!response.ok) {
+            const data = await response.json();
+            showAlert('Error', data.error || 'Failed to export folder');
+            return;
+        }
+        
+        // Get filename from Content-Disposition header
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = `${folder.name}_export.zip`;
+        if (contentDisposition) {
+            const match = contentDisposition.match(/filename="?([^";\n]+)"?/);
+            if (match) filename = match[1];
+        }
+        
+        // Download the file
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error('Error exporting folder:', error);
+        showAlert('Error', 'Failed to export folder');
+    }
+}
+window.exportFolder = exportFolder;
 
 function updateSidebarFoldersAfterDelete(folderId) {
     const archiveSection = document.getElementById('archiveSection');

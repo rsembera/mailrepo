@@ -4,9 +4,11 @@ MailRepo API - Import/Export Routes
 Handles mbox and eml import, and folder export.
 """
 
+import io
+import zipfile
 from pathlib import Path
-from flask import request, jsonify
-from core import Database
+from flask import request, jsonify, send_file
+from core import Database, Config, Encryption
 from core import scan_mbox_file, import_mbox_file, import_eml_file
 from . import api_bp
 
@@ -95,10 +97,115 @@ def import_eml():
 
 @api_bp.route("/folders/<int:folder_id>/export", methods=["POST"])
 def export_folder(folder_id):
-    """Export a folder as ZIP file (not yet implemented)."""
+    """Export a folder and its contents as an unencrypted ZIP file."""
     folder = Database.fetchone("SELECT id, name FROM folders WHERE id = ?", (folder_id,))
     if not folder:
         return jsonify({"error": "Folder not found"}), 404
     
-    # TODO: Implement ZIP export
-    return jsonify({"error": "Export not yet implemented"}), 501
+    data = request.get_json() or {}
+    include_subfolders = data.get("include_subfolders", True)
+    
+    # Get all folders to export (recursive if include_subfolders)
+    folder_ids = [folder_id]
+    folders_by_id = {folder_id: folder}
+    
+    if include_subfolders:
+        # Recursively collect all child folders
+        def collect_children(parent_id, collected):
+            children = Database.fetchall(
+                "SELECT id, name, parent_id FROM folders WHERE parent_id = ? AND deleted_at IS NULL",
+                (parent_id,)
+            )
+            for child in children:
+                collected.append(child["id"])
+                folders_by_id[child["id"]] = child
+                collect_children(child["id"], collected)
+        collect_children(folder_id, folder_ids)
+    
+    # Build folder path lookup (folder_id -> relative path in ZIP)
+    def build_path(fid, path_parts=None):
+        if path_parts is None:
+            path_parts = []
+        f = folders_by_id.get(fid)
+        if not f:
+            return "/".join(reversed(path_parts))
+        path_parts.append(f["name"])
+        if f.get("parent_id") and f["parent_id"] in folders_by_id:
+            return build_path(f["parent_id"], path_parts)
+        return "/".join(reversed(path_parts))
+    
+    folder_paths = {fid: build_path(fid) for fid in folder_ids}
+    
+    # Get all messages in these folders
+    placeholders = ",".join("?" * len(folder_ids))
+    messages = Database.fetchall(
+        f"""
+        SELECT id, folder_id, subject, sender, date, filepath
+        FROM messages
+        WHERE folder_id IN ({placeholders})
+        ORDER BY folder_id, date
+        """,
+        tuple(folder_ids)
+    )
+    
+    # Create ZIP in memory
+    zip_buffer = io.BytesIO()
+    
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        # Track filenames to avoid duplicates within same folder
+        folder_filenames = {}  # folder_id -> set of used filenames
+        
+        for msg in messages:
+            fid = msg["folder_id"]
+            if fid not in folder_filenames:
+                folder_filenames[fid] = set()
+            
+            filepath = Config.get_base_path() / msg["filepath"]
+            if not filepath.exists():
+                continue
+            
+            try:
+                # Read and decrypt the email
+                raw_bytes = filepath.read_bytes()
+                decrypted_bytes = Encryption.decrypt(raw_bytes)
+                
+                # Generate a safe filename
+                subject = msg["subject"] or "no_subject"
+                # Sanitize subject for filename
+                safe_subject = "".join(c if c.isalnum() or c in " -_" else "_" for c in subject)[:50].strip()
+                base_filename = f"{safe_subject}.eml"
+                
+                # Ensure uniqueness within folder
+                filename = base_filename
+                counter = 1
+                while filename in folder_filenames[fid]:
+                    name_part = base_filename[:-4]  # remove .eml
+                    filename = f"{name_part}_{counter}.eml"
+                    counter += 1
+                folder_filenames[fid].add(filename)
+                
+                # Build full path in ZIP
+                folder_path = folder_paths.get(fid, "")
+                if folder_path:
+                    zip_path = f"{folder_path}/{filename}"
+                else:
+                    zip_path = filename
+                
+                # Add to ZIP
+                zf.writestr(zip_path, decrypted_bytes)
+            except Exception as e:
+                print(f"Error exporting message {msg['id']}: {e}")
+                continue
+    
+    zip_buffer.seek(0)
+    
+    # Generate download filename
+    safe_folder_name = "".join(c if c.isalnum() or c in " -_" else "_" for c in folder["name"])[:30].strip()
+    download_filename = f"{safe_folder_name}_export.zip"
+    
+    return send_file(
+        zip_buffer,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name=download_filename
+    )

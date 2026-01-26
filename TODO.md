@@ -27,7 +27,7 @@
 - [ ] Settings → reset database option
 
 ### Staging/Commit UX
-- [ ] Grey out staged folders on folder selection pages (like emails)
+- [x] Grey out staged folders on folder selection pages (like emails)
 - [ ] Support staging emails/folders from multiple accounts simultaneously
 - [ ] Create subfolders in destination modal (drill down, not just expand)
 - [ ] Review parent/child folder selection when staging folders (checkboxes)
