@@ -7,49 +7,72 @@
 2. Verify field names and data structures actually exist - don't assume
 3. Test after each change, not after batching multiple fixes
 
-Key files to check for data structures:
-- `web/static/js/components/staging.js` - staged email/folder structure
-- `web/static/js/views/review.js` - what review view expects
-- `web/blueprints/api/progress.py` - what backend expects in commit request
-
 ---
 
 ## High Priority
 
-### Folder Selection UX
-- [ ] **Grey out staged folders** - On folder selection pages, staged folders should be greyed out similar to how staged emails are greyed out
-- [ ] **Create subfolder in destination modal** - Allow creating nested folders in "Select destination folder" modal, not just root-level folders
+### Import/Export
+- [ ] Test Apple mbox imports thoroughly; test full import workflow
+- [ ] Add .pst import support
+- [ ] ZIP export for archived folders (endpoint exists, returns 501)
+- [ ] PDF export for emails
+- [ ] View/download attachments in emails (server and archive)
 
-### IMAP UX
-- [ ] **Chevron click loads inbox** - Clicking chevron on IMAP account in sidebar should load emails in that account's Inbox
+### Core Features
+- [ ] Show remote content button in emails
+- [ ] Indexed search of all email content (FTS)
+- [ ] Operations on archived emails: move/delete/export
+- [ ] Backup system (copy from EdgeCase)
+- [ ] Automatic timeout (security)
+- [ ] Settings → reset database option
+
+### Staging/Commit UX
+- [ ] Grey out staged folders on folder selection pages (like emails)
+- [ ] Support staging emails/folders from multiple accounts simultaneously
+- [ ] Create subfolders in destination modal (drill down, not just expand)
+- [ ] Review parent/child folder selection when staging folders (checkboxes)
+- [ ] Selecting parent folder (when collapsed) should select all children?
+
+### Error Handling
+- [ ] Duplicate names: folders/emails with identical names in same archive folder
+- [ ] Duplicate names: if email/folder already exists; if part of same commit
+- [ ] If folder X in Trash, can't create new folder with same name
 
 ## Medium Priority
 
-### Error Handling
-- [ ] **Duplicate folder name handling** - What happens if two folders with same name land in same archive destination? Need graceful handling (rename, merge, or error)
+### IMAP UX
+- [ ] Clicking chevron on IMAP folder should load emails in Inbox
 
-### Export Feature
-- [ ] **ZIP export** - Export archived folders as ZIP files (endpoint exists but returns 501 Not Implemented)
+### Trash View
+- [ ] Sort/search in Trash
+- [ ] Table in Trash is too wide
+- [ ] Scrolling not right in Trash - folders don't appear, seem to persist when deleted
+- [ ] Auto-empty Trash bin (configurable?)
 
-## Low Priority / Cleanup
+### Archive View
+- [ ] After commit, option to delete emails on server when done
+
+## Low Priority
+
+### Security
+- [ ] Security audit
+
+### Infrastructure
+- [ ] mailrepo.ca placeholder on Sentinel
 
 ### Code Cleanup
-- [ ] **Remove debug logging** - Remove `[COMMIT ERROR]` print statements from progress.py once commit is stable
-
-### Future Enhancements
-- [ ] Progress bars for other long-running operations (folder loading, exports)
-- [ ] Settings screen polish
+- [ ] Remove debug logging from progress.py
 
 ---
 
 ## Completed (Session 15 - January 25, 2026)
 
-- [x] **Progress indicator during commit** - Full streaming progress with Phase 1 (emails) / Phase 2 (folders), per-email subjects, and periodic DB commits for durability
-- [x] **"After commit" action dropdown** - Restored with styled icon-select component, added to both email groups AND folder groups
-- [x] **Subfolder navigation pills** - Compact pill bar between header and toolbar for navigating subfolders
-- [x] **"Up" pill** - Navigate to parent folder from subfolder view  
-- [x] **Sidebar auto-sync** - Sidebar expands/collapses to match current folder location when using pills
-- [x] Sidebar auto-refresh after commit (was already working)
+- [x] Progress indicator during commit (phases, per-email, periodic DB commits)
+- [x] "After commit" action dropdown (restored, styled, added for folders)
+- [x] Subfolder navigation pills with sidebar sync
+- [x] "Unstage all" & Commit buttons persist in main view - FIXED (Mail view reset)
+- [x] Select All checkbox and Search field persist - FIXED (Mail view reset)
+- [x] When folder deleted, chevron still in main view - FIXED (Mail view reset)
 
 ## Completed (Session 14 - January 24, 2026)
 
