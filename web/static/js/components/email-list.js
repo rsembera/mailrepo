@@ -129,8 +129,6 @@ export function renderEmailList() {
     emailListEl.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
-    updateToolbarButtons();
-}
 
 /**
  * Select an email.
