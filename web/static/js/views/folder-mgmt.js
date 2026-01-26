@@ -16,6 +16,14 @@ import { updateStagedBadge } from '../components/staging.js';
 import { getMountedImports } from '../components/imports.js';
 import { updateTrashBadge } from './trash.js';
 
+/**
+ * Escape a string for use in an onclick attribute.
+ * Handles quotes and backslashes.
+ */
+function escapeForOnclick(str) {
+    return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
 // Module state
 let movingFolderId = null;
 let moveDestinationId = null;
@@ -636,10 +644,15 @@ function renderImportFolderSelectionTree(nodes, importId, depth) {
         if (isStaged) rowClass += ' staged';
         if (isSelected) rowClass += ' selected';
         
+        const escapedPath = escapeForOnclick(folderPath);
         let actionsHtml = '';
+        
         if (isStaged) {
             actionsHtml = `
-                <button class="btn btn-sm btn-icon" onclick="clearFolder('${escapeHtml(folderPath)}')" title="Unstage">
+                <button class="btn btn-sm btn-icon" disabled title="Already staged">
+                    <i data-lucide="circle"></i>
+                </button>
+                <button class="btn btn-sm btn-icon" onclick="clearFolder('${escapedPath}')" title="Unstage">
                     <i data-lucide="x"></i>
                 </button>
             `;
@@ -648,14 +661,17 @@ function renderImportFolderSelectionTree(nodes, importId, depth) {
                 <button class="btn btn-sm btn-icon btn-selected" disabled title="Selected">
                     <i data-lucide="check"></i>
                 </button>
-                <button class="btn btn-sm btn-icon" onclick="clearFolder('${escapeHtml(folderPath)}')" title="Deselect">
+                <button class="btn btn-sm btn-icon" onclick="clearFolder('${escapedPath}')" title="Deselect">
                     <i data-lucide="x"></i>
                 </button>
             `;
         } else {
             actionsHtml = `
-                <button class="btn btn-sm btn-icon" onclick="selectFolder('${escapeHtml(folderPath)}')" title="Select">
+                <button class="btn btn-sm btn-icon" onclick="selectFolder('${escapedPath}')" title="Select">
                     <i data-lucide="circle"></i>
+                </button>
+                <button class="btn btn-sm btn-icon" disabled title="Not selected">
+                    <i data-lucide="x"></i>
                 </button>
             `;
         }
@@ -731,28 +747,37 @@ function renderFolderSelectionTree(nodes, accountId, depth) {
         if (isSelected) rowClass += ' selected';
         
         let actionsHtml = '';
+        const canClear = isStaged || isSelected;
+        const escapedPath = escapeForOnclick(folderPath);
+        
         if (isStaged) {
-            // Staged: just show clear button to unstage
+            // Staged: select button disabled, clear active
             actionsHtml = `
-                <button class="btn btn-sm btn-icon" onclick="clearFolder('${escapeHtml(folderPath)}')" title="Unstage">
+                <button class="btn btn-sm btn-icon" disabled title="Already staged">
+                    <i data-lucide="circle"></i>
+                </button>
+                <button class="btn btn-sm btn-icon" onclick="clearFolder('${escapedPath}')" title="Unstage">
                     <i data-lucide="x"></i>
                 </button>
             `;
         } else if (isSelected) {
-            // Selected: show checkmark and clear button
+            // Selected: show checkmark, clear active
             actionsHtml = `
                 <button class="btn btn-sm btn-icon btn-selected" disabled title="Selected">
                     <i data-lucide="check"></i>
                 </button>
-                <button class="btn btn-sm btn-icon" onclick="clearFolder('${escapeHtml(folderPath)}')" title="Deselect">
+                <button class="btn btn-sm btn-icon" onclick="clearFolder('${escapedPath}')" title="Deselect">
                     <i data-lucide="x"></i>
                 </button>
             `;
         } else {
-            // Default: show select button
+            // Default: select active, clear disabled
             actionsHtml = `
-                <button class="btn btn-sm btn-icon" onclick="selectFolder('${escapeHtml(folderPath)}')" title="Select">
+                <button class="btn btn-sm btn-icon" onclick="selectFolder('${escapedPath}')" title="Select">
                     <i data-lucide="circle"></i>
+                </button>
+                <button class="btn btn-sm btn-icon" disabled title="Not selected">
+                    <i data-lucide="x"></i>
                 </button>
             `;
         }
