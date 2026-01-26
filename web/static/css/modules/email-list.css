@@ -9,12 +9,12 @@
 }
 
 /* Two-column header for email list */
-.email-list-header {
-    grid-template-columns: 1fr 100px !important;
+.email-list-header.folder-management-header {
+    grid-template-columns: 1fr 100px;
 }
 
-/* Email list items use 2-column grid */
-.email-list-item {
+/* Email list items use 2-column grid - override folder-management-item */
+.email-list-item.folder-management-item {
     grid-template-columns: 1fr 100px;
     cursor: pointer;
 }
