@@ -9,7 +9,7 @@
  */
 
 import { escapeHtml } from '../utils.js';
-import { state, loadFolders } from '../state.js';
+import { state, loadFolders, setSelectedFoldersGetter, setSelectedFoldersClearer } from '../state.js';
 import { closeModal, showPrompt, showConfirm, showAlert } from '../modals.js';
 import { refreshSidebarFolders, buildImapFolderTree, getFolderIcon } from '../components/sidebar.js';
 import { updateStagedBadge } from '../components/staging.js';
@@ -59,6 +59,10 @@ export function initFolderMgmt(config) {
     contextTitle = config.contextTitle;
     contextMeta = config.contextMeta;
     emailList = config.emailList;
+    
+    // Register getter and clearer for selected folders (for navigation guard)
+    setSelectedFoldersGetter(() => selectedFoldersForStaging.size);
+    setSelectedFoldersClearer(() => selectedFoldersForStaging.clear());
 }
 
 /**

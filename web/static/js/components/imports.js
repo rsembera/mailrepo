@@ -7,6 +7,7 @@
  */
 
 import { escapeHtml } from '../utils.js';
+import { confirmNavigation } from '../state.js';
 
 // Mounted imports stored in memory (session-only)
 const mountedImports = new Map();
@@ -901,7 +902,7 @@ function renderImportFolders(folders, importId, depth) {
 /**
  * Handle click on import item.
  */
-function handleImportClick(e, row) {
+async function handleImportClick(e, row) {
     const clickedChevron = e.target.closest('.chevron');
     const clickedUnmount = e.target.closest('.unmount-btn');
     
@@ -931,6 +932,9 @@ function handleImportClick(e, row) {
         return;
     }
     
+    // Navigation guard - check for unsaved selections
+    if (!await confirmNavigation()) return;
+    
     // Select the import
     const importId = row.dataset.id;
     document.querySelectorAll('.tree-item-row').forEach(r => r.classList.remove('active'));
@@ -942,7 +946,7 @@ function handleImportClick(e, row) {
 /**
  * Handle click on import folder.
  */
-function handleImportFolderClick(e, row) {
+async function handleImportFolderClick(e, row) {
     const clickedChevron = e.target.closest('.import-folder-chevron');
     
     if (clickedChevron) {
@@ -965,6 +969,9 @@ function handleImportFolderClick(e, row) {
         }
         return;
     }
+    
+    // Navigation guard - check for unsaved selections
+    if (!await confirmNavigation()) return;
     
     const importId = row.dataset.importId;
     const folder = row.dataset.folder;

@@ -10,7 +10,7 @@
  */
 
 import { escapeHtml } from '../utils.js';
-import { state } from '../state.js';
+import { state, confirmNavigation } from '../state.js';
 
 // Callbacks set via init
 let onFolderSelect = null;
@@ -50,7 +50,7 @@ export function toggleSection(header) {
  * @param {Event} e - Click event
  * @param {HTMLElement} row - Clicked row element
  */
-export function handleTreeItemClick(e, row) {
+export async function handleTreeItemClick(e, row) {
     const type = row.dataset.type;
     const id = row.dataset.id;
     
@@ -77,6 +77,9 @@ export function handleTreeItemClick(e, row) {
             }
             return;
         }
+        
+        // Navigation guard - check for unsaved selections
+        if (!await confirmNavigation()) return;
         
         // Clicking account name loads folder selection in main pane (doesn't expand sidebar)
         document.querySelectorAll('.tree-item-row').forEach(r => r.classList.remove('active'));
@@ -111,6 +114,9 @@ export function handleTreeItemClick(e, row) {
             return;
         }
         
+        // Navigation guard - check for unsaved selections
+        if (!await confirmNavigation()) return;
+        
         const accountId = row.dataset.accountId;
         const folder = row.dataset.label || row.dataset.folder;
         if (onImapFolderSelect) onImapFolderSelect(accountId, folder);
@@ -118,6 +124,9 @@ export function handleTreeItemClick(e, row) {
     
     // Handle archive folder click
     if (type === 'folder') {
+        // Navigation guard - check for unsaved selections
+        if (!await confirmNavigation()) return;
+        
         if (onFolderSelect) onFolderSelect(id);
     }
     

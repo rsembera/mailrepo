@@ -15,7 +15,7 @@
 // ============================================
 
 import { escapeHtml, debounce } from './utils.js';
-import { state, loadFolders } from './state.js';
+import { state, loadFolders, confirmNavigation } from './state.js';
 import { closeModal, showPrompt, showConfirm, showAlert, initModalListeners } from './modals.js';
 import { renderFolderTree } from './components/folder-tree.js';
 import { initEmailList, renderEmailList, toggleEmailSelection, updateSelectAllState } from './components/email-list.js';
@@ -390,8 +390,11 @@ function handleImportUnmount(importId) {
     const railBtns = document.querySelectorAll('.rail-btn[data-view]');
     
     railBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', async () => {
             const view = btn.dataset.view;
+            
+            // Navigation guard - check for unsaved selections
+            if (!await confirmNavigation()) return;
             
             // Update active state
             railBtns.forEach(b => b.classList.remove('active'));
