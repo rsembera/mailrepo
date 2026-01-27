@@ -12,7 +12,7 @@ import { state } from '../state.js';
 import { closeModal, showAlert, showPrompt } from '../modals.js';
 import { renderFolderTree } from '../components/folder-tree.js';
 import { renderEmailList } from '../components/email-list.js';
-import { getPendingFolderStaging, clearPendingFolderStaging, refreshFolderSelectionView } from '../views/folder-mgmt.js';
+import { getPendingFolderStaging, clearPendingFolderStaging, refreshFolderSelectionView } from '../views/folder-selection.js';
 import { getMountedImports } from '../components/imports.js';
 import { escapeHtml } from '../utils.js';
 
