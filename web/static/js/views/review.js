@@ -16,6 +16,7 @@ let emailList = null;
 let folders = [];
 let accounts = [];
 let sourceActions = {};
+let dropdownClickListenerAdded = false;
 
 /**
  * Refresh sidebar by reloading folders from server and re-rendering.
@@ -457,12 +458,15 @@ function initIconSelects() {
         });
     });
     
-    // Close dropdowns when clicking outside
-    document.addEventListener('click', () => {
-        document.querySelectorAll('.icon-select-dropdown.open').forEach(d => {
-            d.classList.remove('open');
+    // Close dropdowns when clicking outside (only add once)
+    if (!dropdownClickListenerAdded) {
+        document.addEventListener('click', () => {
+            document.querySelectorAll('.icon-select-dropdown.open').forEach(d => {
+                d.classList.remove('open');
+            });
         });
-    });
+        dropdownClickListenerAdded = true;
+    }
 }
 
 function changeEmailDestination(emailId, folderId) {
