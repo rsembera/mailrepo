@@ -3,6 +3,8 @@
  * 
  * Renders the staged items review grouped by destination folder.
  * Bulk operations only - individual item management happens during staging.
+ * 
+ * @module views/review
  */
 
 import { escapeHtml, escapeForOnclick } from '../utils.js';
@@ -11,25 +13,108 @@ import { showConfirm, showAlert } from '../modals.js';
 import { state, loadFolders } from '../state.js';
 import { refreshSidebarFolders } from '../components/sidebar.js';
 
+// === Module State ===
+
+/** @type {HTMLElement|null} */
 let contextTitle = null;
+/** @type {HTMLElement|null} */
 let contextMeta = null;
+/** @type {HTMLElement|null} */
 let emailList = null;
 
+/** @type {Array} Cached folder list */
 let folders = [];
+/** @type {Array} Cached account list */
 let accounts = [];
+/** @type {Object<string, string>} Map of sourceKey -> action (leave/archive/trash/delete) */
 let sourceActions = {};
+/** @type {boolean} */
 let dropdownClickListenerAdded = false;
+/** @type {Set<string>} Track expanded source groups */
+let expandedSourceGroups = new Set();
+
+// === Helper Functions ===
+
+/**
+ * Get account name by ID.
+ * @param {number|string} accountId
+ * @returns {string}
+ */
+function getAccountName(accountId) {
+    const account = accounts.find(a => a.id == accountId);
+    return account ? account.name : `Account ${accountId}`;
+}
+
+/**
+ * Get import name by ID.
+ * @param {string} importId
+ * @returns {string}
+ */
+function getImportName(importId) {
+    const imports = window.getMountedImports ? window.getMountedImports() : [];
+    const imp = imports.find(i => i.id === importId);
+    return imp ? imp.name : `Import`;
+}
+
+/**
+ * Build a source key from staged item data.
+ * @param {Object} data - Staged email or folder data
+ * @param {string} data.sourceType - 'import' or 'imap'
+ * @param {string} [data.sourceImportId] - Import ID if sourceType is 'import'
+ * @param {number} [data.sourceAccountId] - Account ID if sourceType is 'imap'
+ * @param {string} [data.importId] - Import ID (folder format)
+ * @param {number} [data.accountId] - Account ID (folder format)
+ * @returns {string} Source key like 'import:abc' or 'account:123'
+ */
+function buildSourceKey(data) {
+    if (data.sourceType === 'import') {
+        return `import:${data.sourceImportId || data.importId}`;
+    }
+    return `account:${data.sourceAccountId || data.accountId}`;
+}
+
+/**
+ * Parse a line key into its components.
+ * @param {string} lineKey - Key like 'account:123:INBOX' or 'import:abc:FolderName'
+ * @returns {{sourceType: string, sourceId: string, folderName: string}}
+ */
+function parseLineKey(lineKey) {
+    const parts = lineKey.split(':');
+    return {
+        sourceType: parts[0],
+        sourceId: parts[1],
+        folderName: parts.slice(2).join(':'), // Handle folder names with colons
+    };
+}
+
+/**
+ * Get effective destination ID as string, handling unassigned case.
+ * @param {number|string|null|undefined} destId
+ * @returns {string}
+ */
+function normalizeDestId(destId) {
+    return destId ? String(destId) : 'unassigned';
+}
+
+// === Sidebar & Data Loading ===
 
 /**
  * Refresh sidebar by reloading folders from server and re-rendering.
+ * @returns {Promise<void>}
  */
 async function refreshSidebar() {
     await loadFolders();
     refreshSidebarFolders();
 }
 
+// === Public API ===
+
 /**
- * Initialize the review view.
+ * Initialize the review view with DOM element references.
+ * @param {Object} config - Configuration object
+ * @param {HTMLElement} config.contextTitle - Header title element
+ * @param {HTMLElement} config.contextMeta - Header meta info element
+ * @param {HTMLElement} config.emailList - Main content container element
  */
 export function initReviewView(config) {
     contextTitle = config.contextTitle;
@@ -39,6 +124,8 @@ export function initReviewView(config) {
 
 /**
  * Show the review view in the main content area.
+ * Hides sidebar, loads accounts and folders, renders the staged items grouped by destination.
+ * @returns {Promise<void>}
  */
 export async function showReviewView() {
     const sidebar = document.getElementById('sidebar');
@@ -83,6 +170,12 @@ export async function showReviewView() {
     renderReviewView();
 }
 
+// === Data Loading ===
+
+/**
+ * Load accounts from the server.
+ * @returns {Promise<void>}
+ */
 async function loadAccounts() {
     try {
         const response = await fetch('/api/accounts');
@@ -95,6 +188,10 @@ async function loadAccounts() {
     }
 }
 
+/**
+ * Load folders from the server for use in destination dropdowns.
+ * @returns {Promise<void>}
+ */
 async function loadFoldersForReview() {
     try {
         const response = await fetch('/api/folders');
@@ -110,7 +207,7 @@ async function loadFoldersForReview() {
 
 /**
  * Build data structure grouped by destination, then source.
- * Returns: Map<destinationId, { emails: Map<sourceKey, items[]>, folders: Map<sourceKey, items[]> }>
+ * @returns {Map<string, {emails: Map, folders: Map}>} Map of destId -> { emails, folders }
  */
 function buildGroupedData() {
     const stagedEmails = getStagedEmails();
@@ -121,19 +218,13 @@ function buildGroupedData() {
     
     // Process emails
     stagedEmails.forEach((data, emailId) => {
-        const destId = data.destinationFolderId || 'unassigned';
+        const destId = normalizeDestId(data.destinationFolderId);
         if (!byDestination.has(destId)) {
             byDestination.set(destId, { emails: new Map(), folders: new Map() });
         }
         
-        const sourceKey = data.sourceType === 'import'
-            ? `import:${data.sourceImportId}`
-            : `account:${data.sourceAccountId}`;
-        
+        const sourceKey = buildSourceKey(data);
         const sourceFolder = data.sourceFolder || 'INBOX';
-        const fullSourceKey = data.sourceType === 'import' 
-            ? sourceKey 
-            : `${sourceKey}:${sourceFolder}`;
         
         const dest = byDestination.get(destId);
         if (!dest.emails.has(sourceKey)) {
@@ -149,14 +240,12 @@ function buildGroupedData() {
     
     // Process folders
     stagedFolders.forEach((sf, index) => {
-        const destId = sf.destinationFolderId || 'unassigned';
+        const destId = normalizeDestId(sf.destinationFolderId);
         if (!byDestination.has(destId)) {
             byDestination.set(destId, { emails: new Map(), folders: new Map() });
         }
         
-        const sourceKey = sf.sourceType === 'import'
-            ? `import:${sf.importId}`
-            : `account:${sf.accountId}`;
+        const sourceKey = buildSourceKey(sf);
         
         const dest = byDestination.get(destId);
         if (!dest.folders.has(sourceKey)) {
@@ -168,6 +257,11 @@ function buildGroupedData() {
     return byDestination;
 }
 
+// === View Rendering ===
+
+/**
+ * Render the main review view with all staged items grouped by destination.
+ */
 function renderReviewView() {
     const stagedEmails = getStagedEmails();
     const stagedFolders = getStagedFolders();
@@ -266,10 +360,16 @@ function renderReviewView() {
     updateButtons();
 }
 
+// === Source Group Rendering ===
 
-// Track expanded source groups
-let expandedSourceGroups = new Set();
-
+/**
+ * Render a source group (emails or folders from one account/import).
+ * @param {Object} source - Source data with items
+ * @param {string} sourceKey - Key like 'account:123' or 'import:abc'
+ * @param {string|number} destId - Destination folder ID
+ * @param {string} type - 'emails' or 'folders'
+ * @returns {string} HTML string
+ */
 function renderSourceGroup(source, sourceKey, destId, type) {
     const isImap = sourceKey.startsWith('account:');
     const sourceName = isImap ? getAccountName(source.accountId) : getImportName(source.importId);
@@ -509,27 +609,24 @@ window.unstageDestination = async function(destId) {
 window.unstageSource = async function(sourceKey, destId, type) {
     const stagedEmails = getStagedEmails();
     const stagedFolders = getStagedFolders();
+    const normalizedDestId = normalizeDestId(destId);
     
     // Count items to unstage
     let count = 0;
     
     if (type === 'emails') {
         stagedEmails.forEach(data => {
-            const itemSourceKey = data.sourceType === 'import'
-                ? `import:${data.sourceImportId}`
-                : `account:${data.sourceAccountId}`;
-            const itemDestId = String(data.destinationFolderId || 'unassigned');
-            if (itemSourceKey === sourceKey && itemDestId === String(destId)) {
+            const itemSourceKey = buildSourceKey(data);
+            const itemDestId = normalizeDestId(data.destinationFolderId);
+            if (itemSourceKey === sourceKey && itemDestId === normalizedDestId) {
                 count++;
             }
         });
     } else {
         stagedFolders.forEach(sf => {
-            const itemSourceKey = sf.sourceType === 'import'
-                ? `import:${sf.importId}`
-                : `account:${sf.accountId}`;
-            const itemDestId = String(sf.destinationFolderId || 'unassigned');
-            if (itemSourceKey === sourceKey && itemDestId === String(destId)) {
+            const itemSourceKey = buildSourceKey(sf);
+            const itemDestId = normalizeDestId(sf.destinationFolderId);
+            if (itemSourceKey === sourceKey && itemDestId === normalizedDestId) {
                 count++;
             }
         });
@@ -546,11 +643,9 @@ window.unstageSource = async function(sourceKey, destId, type) {
     if (type === 'emails') {
         const newEmails = new Map();
         stagedEmails.forEach((data, emailId) => {
-            const itemSourceKey = data.sourceType === 'import'
-                ? `import:${data.sourceImportId}`
-                : `account:${data.sourceAccountId}`;
-            const itemDestId = String(data.destinationFolderId || 'unassigned');
-            const matches = itemSourceKey === sourceKey && itemDestId === String(destId);
+            const itemSourceKey = buildSourceKey(data);
+            const itemDestId = normalizeDestId(data.destinationFolderId);
+            const matches = itemSourceKey === sourceKey && itemDestId === normalizedDestId;
             if (!matches) {
                 newEmails.set(emailId, data);
             }
@@ -558,11 +653,9 @@ window.unstageSource = async function(sourceKey, destId, type) {
         sessionStorage.setItem('stagedEmails', JSON.stringify([...newEmails.entries()]));
     } else {
         const newFolders = stagedFolders.filter(sf => {
-            const itemSourceKey = sf.sourceType === 'import'
-                ? `import:${sf.importId}`
-                : `account:${sf.accountId}`;
-            const itemDestId = String(sf.destinationFolderId || 'unassigned');
-            const matches = itemSourceKey === sourceKey && itemDestId === String(destId);
+            const itemSourceKey = buildSourceKey(sf);
+            const itemDestId = normalizeDestId(sf.destinationFolderId);
+            const matches = itemSourceKey === sourceKey && itemDestId === normalizedDestId;
             return !matches;
         });
         sessionStorage.setItem('stagedFolders', JSON.stringify(newFolders));
@@ -575,21 +668,14 @@ window.unstageSource = async function(sourceKey, destId, type) {
 // Unstage emails from a specific source folder (account:id:folderName)
 window.unstageSourceFolder = async function(lineKey, destId) {
     const stagedEmails = getStagedEmails();
-    
-    // Parse lineKey: "account:123:INBOX" or "import:abc:FolderName"
-    const parts = lineKey.split(':');
-    const sourceType = parts[0];
-    const sourceId = parts[1];
-    const folderName = parts.slice(2).join(':'); // Handle folder names with colons
+    const { sourceType, sourceId, folderName } = parseLineKey(lineKey);
     
     // Count matching emails
     let count = 0;
     stagedEmails.forEach(data => {
-        const itemSourceKey = data.sourceType === 'import'
-            ? `import:${data.sourceImportId}`
-            : `account:${data.sourceAccountId}`;
+        const itemSourceKey = buildSourceKey(data);
         const itemFolder = data.sourceFolder || 'INBOX';
-        const itemDestId = String(data.destinationFolderId || 'unassigned');
+        const itemDestId = normalizeDestId(data.destinationFolderId);
         
         if (`${sourceType}:${sourceId}` === itemSourceKey && 
             itemFolder === folderName && 
@@ -608,15 +694,13 @@ window.unstageSourceFolder = async function(lineKey, destId) {
     
     const newEmails = new Map();
     stagedEmails.forEach((data, emailId) => {
-        const itemSourceKey = data.sourceType === 'import'
-            ? `import:${data.sourceImportId}`
-            : `account:${data.sourceAccountId}`;
+        const itemSourceKey = buildSourceKey(data);
         const itemFolder = data.sourceFolder || 'INBOX';
-        const itemDestId = String(data.destinationFolderId || 'unassigned');
+        const itemDestId = normalizeDestId(data.destinationFolderId);
         
         const matches = `${sourceType}:${sourceId}` === itemSourceKey && 
                        itemFolder === folderName && 
-                       itemDestId === String(destId);
+                       itemDestId === normalizeDestId(destId);
         if (!matches) {
             newEmails.set(emailId, data);
         }
@@ -746,19 +830,11 @@ function initIconSelects() {
     }
 }
 
-// === Helper functions ===
+// === Unstage All & Button State ===
 
-function getAccountName(accountId) {
-    const account = accounts.find(a => a.id == accountId);
-    return account ? account.name : `Account ${accountId}`;
-}
-
-function getImportName(importId) {
-    const imports = window.getMountedImports ? window.getMountedImports() : [];
-    const imp = imports.find(i => i.id === importId);
-    return imp ? imp.name : `Import`;
-}
-
+/**
+ * Clear all staged items and re-render.
+ */
 function unstageAll() {
     clearAllStaged();
     updateStagedBadge();
