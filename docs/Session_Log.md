@@ -4,6 +4,63 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## January 26, 2026 — Afternoon/Evening Session (Session 16)
+
+**Participants:** Rick, Claude
+
+**Work Done:**
+
+### Features Implemented
+
+1. **Grey out staged folders** (`bda9a6d`)
+   - Folders already staged now appear greyed out with disabled checkboxes in folder selection view
+   - Matches existing behavior for staged emails (visual consistency)
+
+2. **ZIP export for archive folders** (`719291b`, `fa7efcc`)
+   - Full implementation of folder export feature
+   - Backend endpoint decrypts `.eml.enc` files on the fly
+   - Builds ZIP with folder structure preserved
+   - Sanitizes filenames and handles duplicates
+   - Added download icon button to each folder row in Manage Folders view
+   - Fixed SQLCipher Row object `.get()` compatibility issue
+
+### Folder Selection UI Redesign
+- Replaced checkboxes with select/clear icon buttons per folder
+- Added "Select All", "Clear Selected", and "Stage (N)" toolbar buttons
+- Fixed selection state persistence (was being cleared on refresh)
+- Fixed scroll position reset after staging/selecting
+- Fixed onclick handlers breaking with special characters in folder paths (escapeForOnclick helper)
+
+### Email List UI Redesign
+- Redesigned to match folder selection pattern - table-style layout
+- Added same toolbar buttons (Select All, Clear Selected, Stage)
+- Action buttons aligned to right in Actions column
+- Removed search bar from toolbar
+
+### Commit Logic Review
+- Confirmed full folder path preservation works correctly
+- Both `staging.py` and `progress.py` use the same approach - creates full hierarchy under destination
+
+### Sidebar/Navigation Cleanup
+- Removed Import button from left rail
+- Replaced "New Folder" button in sidebar with "Import" button
+- Import button now last item in sidebar (after Imports section)
+- Welcome message restored to original (links to Settings for adding accounts)
+
+### CSS Fixes
+- Fixed email list grid column alignment with increased specificity
+- Added inline-icon class for icons in links
+
+**Commits:**
+- `bda9a6d` — Fix: Grey out already-staged folders in folder selection view
+- `719291b` — Add: ZIP export for archive folders
+- `fa7efcc` — Fix: SQLCipher Row object doesn't support .get() in ZIP export
+- (additional commits for UI redesign work)
+
+**Status:** ZIP export working. Folder and email selection UI unified and polished.
+
+---
+
 ## TODO Before Release
 
 - [x] ~~**Migrate to SQLCipher**~~ ✅ Done Jan 21, 2026

@@ -14,7 +14,7 @@
 ### Import/Export
 - [ ] Test Apple mbox imports thoroughly; test full import workflow
 - [ ] Add .pst import support
-- [x] ZIP export for archived folders (endpoint exists, returns 501)
+- [x] ZIP export for archived folders
 - [ ] PDF export for emails
 - [ ] View/download attachments in emails (server and archive)
 
@@ -30,8 +30,6 @@
 - [x] Grey out staged folders on folder selection pages (like emails)
 - [ ] Support staging emails/folders from multiple accounts simultaneously
 - [ ] Create subfolders in destination modal (drill down, not just expand)
-- [ ] Review parent/child folder selection when staging folders (checkboxes)
-- [ ] Selecting parent folder (when collapsed) should select all children?
 
 ### Error Handling
 - [ ] Duplicate names: folders/emails with identical names in same archive folder
@@ -64,6 +62,35 @@
 
 ---
 
+## Completed (Session 16 - January 26, 2026)
+
+- [x] Grey out staged folders on folder selection pages
+- [x] ZIP export for archived folders (full implementation)
+- [x] Fix SQLCipher Row .get() compatibility in ZIP export
+
+### Folder Selection UI Redesign
+- [x] Replaced checkboxes with select/clear icon buttons per folder
+- [x] Added "Select All", "Clear Selected", and "Stage (N)" toolbar buttons
+- [x] Fixed selection state persistence (was being cleared on refresh)
+- [x] Fixed scroll position reset after staging/selecting
+- [x] Fixed onclick handlers breaking with special characters in folder paths (escapeForOnclick helper)
+
+### Email List UI Redesign
+- [x] Redesigned to match folder selection pattern - table-style layout
+- [x] Added same toolbar buttons (Select All, Clear Selected, Stage)
+- [x] Action buttons aligned to right in Actions column
+- [x] Removed search bar from toolbar
+
+### Sidebar/Navigation Cleanup
+- [x] Removed Import button from left rail
+- [x] Replaced "New Folder" button in sidebar with "Import" button
+- [x] Import button now last item in sidebar (after Imports section)
+- [x] Welcome message restored to original (links to Settings for adding accounts)
+
+### CSS Fixes
+- [x] Fixed email list grid column alignment with increased specificity
+- [x] Added inline-icon class for icons in links
+
 ## Completed (Session 15 - January 25, 2026)
 
 - [x] Dropdown to Leave/Archive/Trash emails on server after commit
@@ -73,6 +100,8 @@
 - [x] "Unstage all" & Commit buttons persist in main view - FIXED (Mail view reset)
 - [x] Select All checkbox and Search field persist - FIXED (Mail view reset)
 - [x] When folder deleted, chevron still in main view - FIXED (Mail view reset)
+- [x] Review parent/child folder selection when staging folders (checkboxes)
+- [x] Selecting parent folder (when collapsed) should select all children
 
 ## Completed (Session 14 - January 24, 2026)
 

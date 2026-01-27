@@ -1,62 +1,63 @@
 # MailRepo Session Notes
 
-**Date:** January 23, 2026  
-**Last Updated:** Session 10 in progress
+**Date:** January 26, 2026  
+**Last Updated:** Session 16
 
 ---
 
-## Completed Today (Session 10)
+## Completed Today (Session 16)
 
-### SSE Progress Streaming Fixes
+### Features
+- **Grey out staged folders** - Staged folders now appear greyed out with disabled checkboxes
+- **ZIP export** - Full implementation for exporting archive folders as decrypted ZIP files
 
-**Email Loading:**
-- Removed hardcoded 50 email limit from frontend (`mail.js`)
-- Updated IMAP `search()` to treat `limit=0` as "no limit"
-- Updated streaming endpoint to default to no limit
+### Folder Selection UI Redesign
+- Replaced checkboxes with select/clear icon buttons per folder
+- Added "Select All", "Clear Selected", and "Stage (N)" toolbar buttons
+- Fixed selection state persistence (was being cleared on refresh)
+- Fixed scroll position reset after staging/selecting
+- Fixed onclick handlers breaking with special characters (escapeForOnclick helper)
 
-**Commit Operation:**
-- Added SSE streaming to review page commit workflow
-- Progress bar now updates in real-time as emails are archived
-- Shows current/total count and status (success/skipped/failed)
+### Email List UI Redesign
+- Redesigned to match folder selection pattern - table-style layout
+- Added same toolbar buttons (Select All, Clear Selected, Stage)
+- Action buttons aligned to right in Actions column
+- Removed search bar from toolbar
 
-**Code Changes:**
-- `core/imap.py`: Updated search() limit parameter (0 = unlimited)
-- `web/blueprints/api/progress.py`: Default limit to 0 (unlimited)
-- `web/blueprints/api/staging.py`: Use limit=0 for folder archiving
-- `web/static/js/views/mail.js`: Remove hardcoded &limit=50
-- `web/static/js/review.js`: Use SSE streaming for commit progress
+### Sidebar/Navigation Cleanup
+- Removed Import button from left rail
+- Replaced "New Folder" button in sidebar with "Import" button
+- Import button now last item in sidebar (after Imports section)
+- Welcome message restored to original
+
+### Bug Fixes
+- Fixed SQLCipher Row object `.get()` compatibility in ZIP export
 
 ---
 
-## Previous Session (Session 09) Summary
+## Previous Session (Session 15) Summary
 
-- Fixed mail view not restoring folder selection
-- Fixed IMAP folder chevron expansion
-- Fixed folder commit not archiving emails
-- Fixed folder selection highlighting entire tree
-- Removed redundant "Staged Items" view
-- Added unstage buttons to Review page
-- Added full left rail to Review page
-- Created initial SSE progress streaming files
+- Progress streaming with phases for commit operation
+- Periodic DB commits every 10 emails for durability
+- Subfolder navigation pills with sidebar sync
+- "After commit" dropdowns styled and functional
+- Parent/child folder selection for staging
 
 ---
 
 ## Current State
 
 - **Server:** Runs on port 5050
-- **All features working:** Email viewing, staging, folder management, trash
+- **All features working:** Email/folder staging, commit, ZIP export, folder management
 - **Git:** Commits pushed to origin/main
-- **Last commit:** `0914571` - "Fix email limit and add SSE progress streaming to commit"
 
 ---
 
 ## TODO / Next Steps
 
-1. ✅ Fix the 50 email limit in streaming endpoint
-2. ✅ Add progress streaming to commit operation  
-3. Test full workflow end-to-end with large folders
-4. Add progress streaming to folder commit (optional)
-5. Verify progress bar displays correctly during email loading
+1. Test Apple mbox imports thoroughly
+2. Create subfolders in destination modal
+3. Address remaining UI polish items from TODO.md
 
 ---
 
