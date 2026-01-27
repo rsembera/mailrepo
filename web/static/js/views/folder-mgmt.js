@@ -77,7 +77,7 @@ export async function showFolderManagementView() {
     if (toolbar) toolbar.style.display = 'none';
     if (headerActions) headerActions.style.display = 'none';
     
-    if (contextTitle) contextTitle.textContent = 'Manage Folders';
+    if (contextTitle) contextTitle.textContent = 'Manage Archives';
     if (contextMeta) contextMeta.textContent = '';
     
     await loadFolders();
@@ -106,7 +106,7 @@ function renderFolderManagementList() {
     let html = `
         <div class="folder-management-list">
             <div class="folder-management-toolbar">
-                <h2>Manage Folders</h2>
+                <h2>Manage Archives</h2>
                 <button class="btn btn-primary" onclick="openNewFolderModal(false)">
                     <i data-lucide="plus"></i>
                     New Folder

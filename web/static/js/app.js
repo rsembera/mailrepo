@@ -446,7 +446,7 @@ function showMailView() {
     }
     
     // Show empty state prompt
-    elements.contextTitle.textContent = 'MailRepo';
+    elements.contextTitle.textContent = 'Browse & Stage';
     elements.contextMeta.textContent = '';
     elements.emailList.innerHTML = `
         <div class="empty-state">
