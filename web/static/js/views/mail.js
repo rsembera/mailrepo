@@ -12,6 +12,13 @@ import { escapeHtml } from '../utils.js';
 import { state } from '../state.js';
 import { renderEmailList } from '../components/email-list.js';
 
+/**
+ * Escape a string for use in an onclick attribute.
+ */
+function escapeForOnclick(str) {
+    return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
 // DOM element references
 let contextTitle = null;
 let contextMeta = null;
@@ -101,12 +108,8 @@ export async function loadAccountEmails(accountId, folder = 'INBOX') {
     // Restore default header actions and toolbar
     restoreDefaultHeaderActions();
     
-    // Hide subfolders bar (not applicable for IMAP view)
-    const subfoldersBar = document.getElementById('subfoldersBar');
-    if (subfoldersBar) {
-        subfoldersBar.style.display = 'none';
-        subfoldersBar.innerHTML = '';
-    }
+    // Render IMAP breadcrumbs and subfolders
+    renderImapNavigation(accountId, folder);
     
     if (contextTitle) contextTitle.textContent = folder;
     if (contextMeta) contextMeta.textContent = 'Loading...';
@@ -177,6 +180,99 @@ export async function loadFolderEmails(folderId) {
         console.error('Error loading emails:', error);
         if (contextTitle) contextTitle.textContent = 'Error';
         showError(error.message);
+    }
+}
+
+/**
+ * Render IMAP folder navigation: breadcrumbs and subfolder links.
+ */
+function renderImapNavigation(accountId, folderPath) {
+    const subfoldersBar = document.getElementById('subfoldersBar');
+    if (!subfoldersBar) return;
+    
+    // Get cached IMAP folder data
+    const imapData = state.imapFolders.get(accountId);
+    if (!imapData) {
+        subfoldersBar.style.display = 'none';
+        subfoldersBar.innerHTML = '';
+        return;
+    }
+    
+    // Determine delimiter from folder data
+    let delimiter = '/';
+    if (imapData.folders.length > 0 && imapData.folders[0].delimiter) {
+        delimiter = imapData.folders[0].delimiter;
+    }
+    
+    // Build breadcrumb parts from folder path
+    const parts = folderPath.split(delimiter);
+    
+    // Find subfolders of current folder
+    const subfolders = imapData.folders.filter(f => {
+        if (f.name === folderPath) return false;
+        if (f.name.startsWith(folderPath + delimiter)) {
+            // Check it's a direct child, not a grandchild
+            const remainder = f.name.slice(folderPath.length + delimiter.length);
+            return !remainder.includes(delimiter);
+        }
+        return false;
+    });
+    
+    // Also check for top-level subfolders if we're at a top-level folder
+    const topLevelSubfolders = parts.length === 1 ? imapData.folders.filter(f => {
+        if (f.name === folderPath) return false;
+        if (!f.name.includes(delimiter)) return false;
+        const fParts = f.name.split(delimiter);
+        return fParts.length === 2 && fParts[0] === folderPath;
+    }) : [];
+    
+    const allSubfolders = [...subfolders, ...topLevelSubfolders];
+    
+    // Show bar if nested (more than one part) or has subfolders
+    const isNested = parts.length > 1;
+    if (isNested || allSubfolders.length > 0) {
+        let html = '';
+        
+        // Breadcrumb trail (only if nested)
+        if (isNested) {
+            html += `<div class="subfolder-breadcrumbs">`;
+            parts.forEach((part, i) => {
+                if (i > 0) html += ` <i data-lucide="chevron-right" class="breadcrumb-sep"></i> `;
+                if (i === parts.length - 1) {
+                    html += `<span class="breadcrumb-current">${escapeHtml(part)}</span>`;
+                } else {
+                    const pathToHere = parts.slice(0, i + 1).join(delimiter);
+                    html += `<a href="#" onclick="window.navigateToImapFolder(${accountId}, '${escapeForOnclick(pathToHere)}'); return false;" class="breadcrumb-link">${escapeHtml(part)}</a>`;
+                }
+            });
+            html += `</div>`;
+        }
+        
+        // Subfolder links
+        if (allSubfolders.length > 0) {
+            // Sort alphabetically by name (last part of path)
+            allSubfolders.sort((a, b) => {
+                const aName = a.name.split(delimiter).pop();
+                const bName = b.name.split(delimiter).pop();
+                return aName.localeCompare(bName);
+            });
+            
+            html += `<div class="subfolder-links">`;
+            html += `<span class="subfolder-label">Subfolders:</span> `;
+            html += allSubfolders.map((sf, i) => {
+                const name = sf.name.split(delimiter).pop();
+                const separator = i < allSubfolders.length - 1 ? ', ' : '';
+                return `<a href="#" onclick="window.navigateToImapFolder(${accountId}, '${escapeForOnclick(sf.name)}'); return false;" class="subfolder-link">${escapeHtml(name)}</a>${separator}`;
+            }).join('');
+            html += `</div>`;
+        }
+        
+        subfoldersBar.innerHTML = html;
+        subfoldersBar.style.display = 'block';
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    } else {
+        subfoldersBar.style.display = 'none';
+        subfoldersBar.innerHTML = '';
     }
 }
 
@@ -256,6 +352,18 @@ window.navigateToSubfolder = function(folderId) {
             m.selectFolderInSidebar(folderId);
         }
     });
+};
+
+/**
+ * Navigate to an IMAP folder.
+ */
+window.navigateToImapFolder = function(accountId, folderPath) {
+    // Update view state
+    state.currentView = { type: 'account', id: accountId, folder: folderPath };
+    state.selectedEmails.clear();
+    
+    // Load the folder
+    loadAccountEmails(accountId, folderPath);
 };
 
 /**

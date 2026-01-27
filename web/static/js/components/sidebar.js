@@ -384,6 +384,10 @@ export async function loadAccountLabels(accountId) {
         const data = await response.json();
         const folders = data.folders || [];
         const tree = buildImapFolderTree(folders);
+        
+        // Cache IMAP folders in state for use by mail view
+        state.imapFolders.set(accountId, { folders, tree });
+        
         const html = renderImapFolderTree(tree, accountId, 0);
         container.innerHTML = html || '<div class="tree-loading">No folders</div>';
         

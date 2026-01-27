@@ -28,6 +28,7 @@ export const state = {
     selectedEmails: new Set(),
     folders: [],
     expandedAccounts: new Set(),
+    imapFolders: new Map(), // Map<accountId, {folders: [], tree: {}}>
 };
 
 /**
