@@ -219,8 +219,8 @@ function renderReviewView() {
                     </div>
                     <div class="review-destination-header-right">
                         ${renderDestinationDropdown(destId)}
-                        <button class="btn btn-sm btn-secondary" onclick="unstageDestination('${destId}')" title="Unstage all items going to this folder">
-                            Unstage All
+                        <button class="btn btn-sm btn-danger-subtle" onclick="unstageDestination('${destId}')" title="Unstage all items going to this folder">
+                            Unstage
                         </button>
                     </div>
                 </div>
@@ -292,8 +292,10 @@ function renderSourceGroup(source, sourceKey, destId, type) {
                             <span>After:</span>
                             ${renderSourceActionDropdown(`${sourceKey}:${destId}`)}
                         </label>
-                    ` : ''}
-                    <button class="btn btn-sm btn-icon btn-secondary" onclick="unstageSource('${escapedSourceKey}', '${escapedDestId}', '${type}')" title="Unstage">
+                    ` : `
+                        <span class="review-import-badge">Import</span>
+                    `}
+                    <button class="btn btn-sm btn-icon btn-danger-subtle" onclick="unstageSource('${escapedSourceKey}', '${escapedDestId}', '${type}')" title="Unstage">
                         <i data-lucide="x"></i>
                     </button>
                 </div>
@@ -335,8 +337,9 @@ function renderDestinationDropdown(currentDestId) {
     
     return `
         <div class="icon-select dest-change-dropdown" data-dest-id="${currentDestId}">
-            <button class="icon-select-trigger">
-                <span>Change</span>
+            <button class="icon-select-trigger" title="Change destination folder">
+                <i data-lucide="folder-output" class="icon-select-icon"></i>
+                <span>Destination</span>
                 <i data-lucide="chevron-down" class="icon-select-arrow"></i>
             </button>
             <div class="icon-select-dropdown">
