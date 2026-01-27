@@ -71,27 +71,36 @@
     flex-direction: column;
 }
 
-/* === Source Line (individual source folder row) === */
+/* === Source Group (collapsible by source account/import) === */
 
-.review-source-line {
+.review-source-group {
+    border-top: 1px solid var(--color-border);
+}
+
+.review-source-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: var(--space-sm) var(--space-lg);
-    border-top: 1px solid var(--color-border);
-    gap: var(--space-md);
+    cursor: pointer;
+    user-select: none;
 }
 
-.review-source-line:hover {
+.review-source-header:hover {
     background: var(--color-background-secondary);
 }
 
-.review-source-line-left {
+.review-source-header-left {
     display: flex;
     align-items: center;
     gap: var(--space-sm);
-    flex: 1;
-    min-width: 0;
+}
+
+.review-chevron {
+    width: 16px;
+    height: 16px;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
 }
 
 .review-source-icon {
@@ -107,28 +116,61 @@
     font-size: 0.9rem;
 }
 
-.review-source-folder {
-    color: var(--color-text-muted);
-    font-size: 0.9rem;
-}
-
-.review-source-folder::before {
-    content: '/';
-    margin: 0 var(--space-xs);
-    color: var(--color-text-muted);
-}
-
 .review-source-count {
     color: var(--color-text-muted);
     font-size: 0.85rem;
-    margin-left: var(--space-xs);
 }
 
-.review-source-line-right {
+.review-source-header-right {
     display: flex;
     align-items: center;
     gap: var(--space-md);
-    flex-shrink: 0;
+}
+
+/* === Source Items (expanded content) === */
+
+.review-source-items {
+    background: var(--color-background);
+}
+
+.review-source-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-xs) var(--space-lg);
+    padding-left: calc(var(--space-lg) + 32px);
+    border-top: 1px solid var(--color-border-light);
+}
+
+.review-source-item:hover {
+    background: var(--color-background-secondary);
+}
+
+.review-source-item-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.review-item-icon {
+    width: 14px;
+    height: 14px;
+    color: var(--color-text-muted);
+}
+
+.review-item-name {
+    font-size: 0.85rem;
+    color: var(--color-text);
+}
+
+.review-item-count {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+}
+
+.review-source-item-right {
+    display: flex;
+    align-items: center;
 }
 
 /* === Source Action Label === */

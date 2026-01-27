@@ -227,14 +227,27 @@ function renderReviewView() {
                 <div class="review-destination-content">
         `;
         
-        // Render email sources
+        // Collect all sources (emails and folders) and sort alphabetically by source name
+        const allSources = [];
+        
         destData.emails.forEach((source, sourceKey) => {
-            html += renderSourceGroup(source, sourceKey, destId, 'emails');
+            const isImap = sourceKey.startsWith('account:');
+            const sourceName = isImap ? getAccountName(source.accountId) : getImportName(source.importId);
+            allSources.push({ source, sourceKey, type: 'emails', sourceName });
         });
         
-        // Render folder sources
         destData.folders.forEach((source, sourceKey) => {
-            html += renderSourceGroup(source, sourceKey, destId, 'folders');
+            const isImap = sourceKey.startsWith('account:');
+            const sourceName = isImap ? getAccountName(source.accountId) : getImportName(source.importId);
+            allSources.push({ source, sourceKey, type: 'folders', sourceName });
+        });
+        
+        // Sort by source name
+        allSources.sort((a, b) => a.sourceName.localeCompare(b.sourceName));
+        
+        // Render sorted sources
+        allSources.forEach(({ source, sourceKey, type }) => {
+            html += renderSourceGroup(source, sourceKey, destId, type);
         });
         
         html += `
@@ -253,77 +266,120 @@ function renderReviewView() {
 }
 
 
+// Track expanded source groups
+let expandedSourceGroups = new Set();
+
 function renderSourceGroup(source, sourceKey, destId, type) {
     const isImap = sourceKey.startsWith('account:');
     const sourceName = isImap ? getAccountName(source.accountId) : getImportName(source.importId);
+    const groupId = `${sourceKey}:${destId}:${type}`;
+    const isExpanded = expandedSourceGroups.has(groupId);
+    const escapedGroupId = escapeForOnclick(groupId);
     
-    let html = '';
-    
+    // Count items
+    let itemCount = 0;
+    let itemLabel = '';
     if (type === 'emails') {
-        // For emails: one line per source folder within the account
-        source.byFolder.forEach((items, folderName) => {
-            const lineKey = `${sourceKey}:${folderName}`;
-            const escapedLineKey = escapeForOnclick(lineKey);
-            const escapedDestId = escapeForOnclick(String(destId));
-            
-            html += `
-                <div class="review-source-line" data-source-key="${escapeHtml(lineKey)}" data-dest-id="${destId}">
-                    <div class="review-source-line-left">
-                        <i data-lucide="${isImap ? 'mail' : 'archive'}" class="review-source-icon"></i>
-                        <span class="review-source-name">${escapeHtml(sourceName)}</span>
-                        <span class="review-source-folder">${escapeHtml(folderName)}</span>
-                        <span class="review-source-count">(${items.length})</span>
-                    </div>
-                    <div class="review-source-line-right">
-                        ${isImap ? `
-                            <label class="source-action-label">
-                                <span>After:</span>
-                                ${renderSourceActionDropdown(`${sourceKey}:${folderName}:${destId}`)}
-                            </label>
-                        ` : `
-                            <span class="review-import-label">No server action</span>
-                        `}
-                        <button class="btn btn-sm btn-icon" onclick="unstageSourceFolder('${escapedLineKey}', '${escapedDestId}')" title="Unstage">
-                            <i data-lucide="x"></i>
-                        </button>
-                    </div>
-                </div>
-            `;
-        });
+        source.byFolder.forEach((items) => itemCount += items.length);
+        itemLabel = `${itemCount} email${itemCount !== 1 ? 's' : ''}`;
     } else {
-        // For folders: one line per staged folder
-        source.items.forEach((sf) => {
-            const folderDisplayName = sf.archivePath || sf.folder.split('/').pop() || '(folder)';
-            const index = sf.originalIndex;
-            const escapedDestId = escapeForOnclick(String(destId));
-            
-            html += `
-                <div class="review-source-line" data-folder-index="${index}" data-dest-id="${destId}">
-                    <div class="review-source-line-left">
-                        <i data-lucide="folder" class="review-source-icon"></i>
-                        <span class="review-source-name">${escapeHtml(sourceName)}</span>
-                        <span class="review-source-folder">${escapeHtml(folderDisplayName)}</span>
-                    </div>
-                    <div class="review-source-line-right">
-                        ${isImap ? `
-                            <label class="source-action-label">
-                                <span>After:</span>
-                                ${renderSourceActionDropdown(`folder:${sourceKey}:${index}:${destId}`)}
-                            </label>
-                        ` : `
-                            <span class="review-import-label">No server action</span>
-                        `}
-                        <button class="btn btn-sm btn-icon" onclick="unstageFolderByIndex(${index})" title="Unstage">
-                            <i data-lucide="x"></i>
-                        </button>
-                    </div>
-                </div>
-            `;
-        });
+        itemCount = source.items.length;
+        itemLabel = `${itemCount} folder${itemCount !== 1 ? 's' : ''}`;
     }
     
+    let html = `
+        <div class="review-source-group" data-group-id="${escapeHtml(groupId)}">
+            <div class="review-source-header" onclick="toggleSourceGroup('${escapedGroupId}')">
+                <div class="review-source-header-left">
+                    <i data-lucide="${isExpanded ? 'chevron-down' : 'chevron-right'}" class="review-chevron"></i>
+                    <i data-lucide="${isImap ? 'mail' : 'archive'}" class="review-source-icon"></i>
+                    <span class="review-source-name">${escapeHtml(sourceName)}</span>
+                    <span class="review-source-count">(${itemLabel})</span>
+                </div>
+                <div class="review-source-header-right" onclick="event.stopPropagation()">
+                    ${isImap ? `
+                        <label class="source-action-label">
+                            <span>After:</span>
+                            ${renderSourceActionDropdown(`${sourceKey}:${destId}`)}
+                        </label>
+                    ` : `
+                        <span class="review-import-label">No server action</span>
+                    `}
+                </div>
+            </div>
+    `;
+    
+    if (isExpanded) {
+        html += `<div class="review-source-items">`;
+        
+        if (type === 'emails') {
+            // Sort folders alphabetically
+            const sortedFolders = Array.from(source.byFolder.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+            
+            sortedFolders.forEach(([folderName, items]) => {
+                const lineKey = `${sourceKey}:${folderName}`;
+                const escapedLineKey = escapeForOnclick(lineKey);
+                const escapedDestId = escapeForOnclick(String(destId));
+                
+                html += `
+                    <div class="review-source-item">
+                        <div class="review-source-item-left">
+                            <i data-lucide="folder" class="review-item-icon"></i>
+                            <span class="review-item-name">${escapeHtml(folderName)}</span>
+                            <span class="review-item-count">(${items.length})</span>
+                        </div>
+                        <div class="review-source-item-right">
+                            <button class="btn btn-sm btn-icon" onclick="unstageSourceFolder('${escapedLineKey}', '${escapedDestId}')" title="Unstage">
+                                <i data-lucide="x"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+        } else {
+            // Sort folders alphabetically
+            const sortedItems = [...source.items].sort((a, b) => {
+                const nameA = a.archivePath || a.folder.split('/').pop() || '';
+                const nameB = b.archivePath || b.folder.split('/').pop() || '';
+                return nameA.localeCompare(nameB);
+            });
+            
+            sortedItems.forEach((sf) => {
+                const folderDisplayName = sf.archivePath || sf.folder.split('/').pop() || '(folder)';
+                const index = sf.originalIndex;
+                
+                html += `
+                    <div class="review-source-item">
+                        <div class="review-source-item-left">
+                            <i data-lucide="folder" class="review-item-icon"></i>
+                            <span class="review-item-name">${escapeHtml(folderDisplayName)}</span>
+                        </div>
+                        <div class="review-source-item-right">
+                            <button class="btn btn-sm btn-icon" onclick="unstageFolderByIndex(${index})" title="Unstage">
+                                <i data-lucide="x"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        
+        html += `</div>`;
+    }
+    
+    html += `</div>`;
     return html;
 }
+
+window.toggleSourceGroup = function(groupId) {
+    if (expandedSourceGroups.has(groupId)) {
+        expandedSourceGroups.delete(groupId);
+    } else {
+        expandedSourceGroups.add(groupId);
+    }
+    renderReviewView();
+};
+
 
 function renderDestinationDropdown(currentDestId) {
     const topLevel = folders.filter(f => !f.parent_id && !f.deleted_at);
