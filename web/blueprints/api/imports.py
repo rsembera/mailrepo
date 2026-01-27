@@ -119,14 +119,21 @@ def get_import_email():
     uid = data.get("uid", "").strip()
     import_type = data.get("importType", "mbox")
     folder_path = data.get("folderPath", "")
+    email_source_path = data.get("emailSourcePath", "").strip()  # Direct path to email file
     
-    if not source_path:
+    # DEBUG logging
+    print(f"[DEBUG import/email] uid={uid}, importType={import_type}")
+    print(f"[DEBUG import/email] sourcePath={source_path}")
+    print(f"[DEBUG import/email] folderPath={folder_path}")
+    print(f"[DEBUG import/email] emailSourcePath={email_source_path}")
+    
+    if not source_path and not email_source_path:
         return jsonify({"error": "Source path is required"}), 400
     if not uid:
         return jsonify({"error": "UID is required"}), 400
     
-    source_path = Path(source_path).expanduser()
-    if not source_path.exists():
+    source_path = Path(source_path).expanduser() if source_path else None
+    if source_path and not source_path.exists():
         return jsonify({"error": "Source not found"}), 404
     
     def decode_header_value(header):
@@ -145,7 +152,7 @@ def get_import_email():
             return str(header)
     
     def get_email_body(msg):
-        """Extract email body (prefer HTML, fallback to plain text)."""
+        """Extract email body - returns (html_body, text_body) tuple."""
         html_body = None
         text_body = None
         
@@ -157,12 +164,12 @@ def get_import_email():
                 if "attachment" in content_disposition:
                     continue
                 
-                if content_type == "text/html":
+                if content_type == "text/html" and not html_body:
                     payload = part.get_payload(decode=True)
                     if payload:
                         charset = part.get_content_charset() or "utf-8"
                         html_body = payload.decode(charset, errors="replace")
-                elif content_type == "text/plain" and not html_body:
+                elif content_type == "text/plain" and not text_body:
                     payload = part.get_payload(decode=True)
                     if payload:
                         charset = part.get_content_charset() or "utf-8"
@@ -177,7 +184,7 @@ def get_import_email():
                 else:
                     text_body = payload.decode(charset, errors="replace")
         
-        return html_body or text_body or ""
+        return (html_body, text_body)
     
     def get_attachments(msg):
         """Extract attachment info from email."""
@@ -198,34 +205,107 @@ def get_import_email():
     try:
         raw_email = None
         
-        # Get raw email bytes based on import type
-        if import_type == 'eml':
-            # EML directory - find specific file
-            if uid.startswith('eml-'):
-                results = _parse_eml_directory(str(source_path))
-                for r_uid, r_bytes in results:
-                    if r_uid == uid:
-                        raw_email = r_bytes
-                        break
-        elif import_type == 'apple-mbox':
-            # Apple Mail export
-            if folder_path:
-                results = _parse_apple_mbox(folder_path)
+        # If we have a direct path to the email file, use it (EML files, Apple emlx)
+        # But NOT for mbox files - those need UID-based lookup
+        if email_source_path:
+            email_path = Path(email_source_path).expanduser()
+            if email_path.exists() and email_path.is_file():
+                suffix = email_path.suffix.lower()
+                # Only use direct file reading for individual email files
+                if suffix == '.emlx':
+                    # Parse Apple .emlx format
+                    print(f"[DEBUG] Reading .emlx file: {email_path}")
+                    with open(email_path, 'rb') as f:
+                        content = f.read()
+                    first_newline = content.find(b'\n')
+                    if first_newline > 0:
+                        email_content = content[first_newline + 1:]
+                        plist_marker = email_content.rfind(b'<?xml version=')
+                        if plist_marker > 0:
+                            email_content = email_content[:plist_marker]
+                        raw_email = email_content
+                elif suffix == '.eml':
+                    # Regular .eml file
+                    print(f"[DEBUG] Reading .eml file: {email_path}")
+                    try:
+                        with open(email_path, 'rb') as f:
+                            raw_email = f.read()
+                        print(f"[DEBUG] Read .eml file, length={len(raw_email)}")
+                    except Exception as e:
+                        print(f"[DEBUG] Failed to read .eml file: {e}")
+                # For mbox files, fall through to UID-based lookup below
+        
+        # Fallback lookups - only if direct file reading didn't work
+        if not raw_email:
+            if import_type == 'eml':
+                # EML directory - find specific file
+                if uid.startswith('eml-'):
+                    results = _parse_eml_directory(str(source_path))
+                    for r_uid, r_bytes in results:
+                        if r_uid == uid:
+                            raw_email = r_bytes
+                            break
+            elif import_type == 'apple-mbox':
+                # Apple Mail export - parse directly using same logic as filesystem.py
+                import mailbox
+                import os
+                
+                # Use folder_path which points to the specific .mbox directory
+                mbox_dir = folder_path if folder_path else str(source_path)
+                print(f"[DEBUG] apple-mbox: mbox_dir={mbox_dir}")
+                
+                # Check for mbox file inside the .mbox directory
+                mbox_file = os.path.join(mbox_dir, "mbox")
+                print(f"[DEBUG] apple-mbox: checking mbox_file={mbox_file}, exists={os.path.isfile(mbox_file)}")
+                if os.path.isfile(mbox_file):
+                    # UID format from filesystem.py: f"apple-{basename}-{i}"
+                    # e.g., "apple-mbox-0" where "mbox" is basename of the mbox file
+                    try:
+                        mbox = mailbox.mbox(mbox_file)
+                        for i, message in enumerate(mbox):
+                            expected_uid = f"apple-{os.path.basename(mbox_file)}-{i}"
+                            if expected_uid == uid:
+                                raw_email = message.as_bytes()
+                                print(f"[DEBUG] Found email, raw_email length={len(raw_email)}")
+                                break
+                    except Exception as e:
+                        print(f"[DEBUG] mbox parse error: {e}")
+                
+                # Check for Messages directory with .emlx files
+                if not raw_email:
+                    messages_dir = os.path.join(mbox_dir, "Messages")
+                    if os.path.isdir(messages_dir):
+                        # UID format: f"emlx-{filename}"
+                        for entry in os.scandir(messages_dir):
+                            if entry.name.endswith('.emlx') and entry.is_file():
+                                expected_uid = f"emlx-{entry.name}"
+                                if expected_uid == uid:
+                                    try:
+                                        with open(entry.path, 'rb') as f:
+                                            content = f.read()
+                                        # .emlx format: first line is byte count, then email, then plist
+                                        first_newline = content.find(b'\n')
+                                        if first_newline > 0:
+                                            email_content = content[first_newline + 1:]
+                                            plist_marker = email_content.rfind(b'<?xml version=')
+                                            if plist_marker > 0:
+                                                email_content = email_content[:plist_marker]
+                                            raw_email = email_content
+                                            break
+                                    except:
+                                        pass
             else:
-                results = _parse_apple_mbox(str(source_path))
-            for r_uid, r_bytes in results:
-                if r_uid == uid:
-                    raw_email = r_bytes
-                    break
-        else:
-            # Standard mbox
-            raw_email = get_raw_email_from_import(str(source_path), uid)
+                # Standard mbox
+                raw_email = get_raw_email_from_import(str(source_path), uid)
+        
+        print(f"[DEBUG] After all lookups, raw_email={'set, len=' + str(len(raw_email)) if raw_email else 'None'}")
         
         if not raw_email:
             return jsonify({"error": "Email not found in import source"}), 404
         
         # Parse the email
         msg = email_lib.message_from_bytes(raw_email)
+        print(f"[DEBUG] Parsed message, is_multipart={msg.is_multipart()}, content_type={msg.get_content_type()}")
         
         # Parse date
         date_str = msg.get("Date", "")
@@ -237,6 +317,9 @@ def get_import_email():
             except:
                 pass
         
+        html_body, text_body = get_email_body(msg)
+        print(f"[DEBUG] Extracted body, html_len={len(html_body) if html_body else 0}, text_len={len(text_body) if text_body else 0}")
+        
         email_data = {
             "uid": uid,
             "subject": decode_header_value(msg.get("Subject", "(no subject)")),
@@ -244,7 +327,8 @@ def get_import_email():
             "to": decode_header_value(msg.get("To", "")),
             "cc": decode_header_value(msg.get("Cc", "")),
             "date": date_display,
-            "body": get_email_body(msg),
+            "html_body": html_body,
+            "text_body": text_body,
             "attachments": get_attachments(msg),
         }
         

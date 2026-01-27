@@ -440,6 +440,7 @@ export async function openEmailViewer(emailId) {
                     uid: email.uid || email.id,
                     importType: imp.type,
                     folderPath: state.currentView.folder || '',
+                    emailSourcePath: email.sourcePath || '',  // Direct path for EML files
                 }),
             });
         } else {
