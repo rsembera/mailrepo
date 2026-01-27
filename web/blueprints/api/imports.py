@@ -130,8 +130,10 @@ def export_folder(folder_id):
         if not f:
             return "/".join(reversed(path_parts))
         path_parts.append(f["name"])
-        if f.get("parent_id") and f["parent_id"] in folders_by_id:
-            return build_path(f["parent_id"], path_parts)
+        # Row objects don't support .get(), use try/except or check keys
+        parent_id = f["parent_id"] if "parent_id" in f.keys() else None
+        if parent_id and parent_id in folders_by_id:
+            return build_path(parent_id, path_parts)
         return "/".join(reversed(path_parts))
     
     folder_paths = {fid: build_path(fid) for fid in folder_ids}
