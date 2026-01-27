@@ -207,7 +207,7 @@ function renderImapNavigation(accountId, folderPath) {
     // Build breadcrumb parts from folder path
     const parts = folderPath.split(delimiter);
     
-    // Find subfolders of current folder
+    // Find direct subfolders of current folder
     const subfolders = imapData.folders.filter(f => {
         if (f.name === folderPath) return false;
         if (f.name.startsWith(folderPath + delimiter)) {
@@ -218,19 +218,9 @@ function renderImapNavigation(accountId, folderPath) {
         return false;
     });
     
-    // Also check for top-level subfolders if we're at a top-level folder
-    const topLevelSubfolders = parts.length === 1 ? imapData.folders.filter(f => {
-        if (f.name === folderPath) return false;
-        if (!f.name.includes(delimiter)) return false;
-        const fParts = f.name.split(delimiter);
-        return fParts.length === 2 && fParts[0] === folderPath;
-    }) : [];
-    
-    const allSubfolders = [...subfolders, ...topLevelSubfolders];
-    
     // Show bar if nested (more than one part) or has subfolders
     const isNested = parts.length > 1;
-    if (isNested || allSubfolders.length > 0) {
+    if (isNested || subfolders.length > 0) {
         let html = '';
         
         // Breadcrumb trail (only if nested)
@@ -249,9 +239,9 @@ function renderImapNavigation(accountId, folderPath) {
         }
         
         // Subfolder links
-        if (allSubfolders.length > 0) {
+        if (subfolders.length > 0) {
             // Sort alphabetically by name (last part of path)
-            allSubfolders.sort((a, b) => {
+            subfolders.sort((a, b) => {
                 const aName = a.name.split(delimiter).pop();
                 const bName = b.name.split(delimiter).pop();
                 return aName.localeCompare(bName);
@@ -259,9 +249,9 @@ function renderImapNavigation(accountId, folderPath) {
             
             html += `<div class="subfolder-links">`;
             html += `<span class="subfolder-label">Subfolders:</span> `;
-            html += allSubfolders.map((sf, i) => {
+            html += subfolders.map((sf, i) => {
                 const name = sf.name.split(delimiter).pop();
-                const separator = i < allSubfolders.length - 1 ? ', ' : '';
+                const separator = i < subfolders.length - 1 ? ', ' : '';
                 return `<a href="#" onclick="window.navigateToImapFolder(${accountId}, '${escapeForOnclick(sf.name)}'); return false;" class="subfolder-link">${escapeHtml(name)}</a>${separator}`;
             }).join('');
             html += `</div>`;
