@@ -418,10 +418,12 @@ def stream_commit():
     Commit staged emails and folders with progress streaming.
     
     Uses Server-Sent Events to report progress as items are archived.
+    Supports post-commit actions (archive, trash, delete) for IMAP emails.
     """
     data = request.get_json()
     staged = data.get("staged", [])
     staged_folders = data.get("folders", [])
+    source_actions = data.get("sourceActions", {})  # e.g., {"account:1:INBOX:5": "archive"}
     
     if not staged and not staged_folders:
         return Response(
@@ -430,7 +432,7 @@ def stream_commit():
         )
     
     def generate():
-        results = {"success": [], "failed": [], "skipped": [], "folders_success": 0, "folders_failed": 0}
+        results = {"success": [], "failed": [], "skipped": [], "folders_success": 0, "folders_failed": 0, "post_actions": {"success": 0, "failed": 0}}
         total = len(staged) + len(staged_folders)
         
         yield sse_message("start", {"total": total, "type": "mixed" if staged_folders else "emails"})
@@ -441,6 +443,10 @@ def stream_commit():
         
         total_individual_emails = len(staged)
         processed = 0
+        
+        # Track successfully committed IMAP emails for post-actions
+        # Structure: {account_id: {folder: [(uid, dest_folder_id), ...]}}
+        committed_imap_emails = {}
         
         # Send phase 1 status if we have individual emails
         if total_individual_emails > 0:
@@ -686,6 +692,13 @@ def stream_commit():
                             
                             results["success"].append(uid)
                             
+                            # Track for post-commit actions
+                            if account_id not in committed_imap_emails:
+                                committed_imap_emails[account_id] = {}
+                            if source_folder not in committed_imap_emails[account_id]:
+                                committed_imap_emails[account_id][source_folder] = []
+                            committed_imap_emails[account_id][source_folder].append((uid, folder_id))
+                            
                             # Commit every 10 emails for durability
                             if processed % 10 == 0:
                                 Database.commit()
@@ -732,6 +745,84 @@ def stream_commit():
                         client.disconnect()
                     except:
                         pass
+        
+        # ============================================
+        # POST-COMMIT ACTIONS (archive, trash, delete on server)
+        # ============================================
+        
+        if committed_imap_emails and source_actions:
+            yield sse_message("status", {
+                "phase": "post_actions",
+                "message": "Applying post-commit actions on server...",
+            })
+            
+            for account_id, folders_data in committed_imap_emails.items():
+                account = Database.fetchone(
+                    "SELECT id, credentials_encrypted FROM accounts WHERE id = ?",
+                    (account_id,)
+                )
+                if not account or not account["credentials_encrypted"]:
+                    continue
+                
+                client = None
+                try:
+                    client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+                    
+                    for source_folder, email_list in folders_data.items():
+                        # Find the action for this source folder
+                        # Keys are like "account:1:INBOX:5" where 5 is the dest folder id
+                        # Or "account:1:5" for grouped sources
+                        action = None
+                        for key, act in source_actions.items():
+                            # Check various key formats
+                            if key.startswith(f"account:{account_id}"):
+                                # Could be "account:1:5" or "account:1:INBOX:5"
+                                parts = key.split(':')
+                                if len(parts) >= 3:
+                                    # Check if this key matches our folder
+                                    if len(parts) == 3:
+                                        # "account:1:5" format - applies to all folders for this dest
+                                        action = act
+                                        break
+                                    elif len(parts) >= 4 and parts[2] == source_folder:
+                                        # "account:1:INBOX:5" format
+                                        action = act
+                                        break
+                        
+                        if not action or action == 'leave':
+                            continue
+                        
+                        try:
+                            client.select_folder(source_folder)
+                            
+                            for uid, dest_folder_id in email_list:
+                                try:
+                                    if action == 'archive':
+                                        client.archive_email(uid)
+                                        results["post_actions"]["success"] += 1
+                                    elif action == 'trash':
+                                        client.trash_email(uid)
+                                        results["post_actions"]["success"] += 1
+                                    elif action == 'delete':
+                                        client.delete_email(uid)
+                                        results["post_actions"]["success"] += 1
+                                except IMAPError as e:
+                                    results["post_actions"]["failed"] += 1
+                                    print(f"Post-action {action} failed for {uid}: {e}")
+                        except IMAPError as e:
+                            print(f"Failed to select folder {source_folder} for post-actions: {e}")
+                            results["post_actions"]["failed"] += len(email_list)
+                
+                except Exception as e:
+                    print(f"Post-action connection failed for account {account_id}: {e}")
+                    for folders_data in folders_data.values():
+                        results["post_actions"]["failed"] += len(folders_data)
+                finally:
+                    if client:
+                        try:
+                            client.disconnect()
+                        except:
+                            pass
         
         # ============================================
         # PHASE 2: Process Staged Folders
@@ -1001,6 +1092,10 @@ def stream_commit():
         if results["failed"] or results["folders_failed"]:
             fail_count = len(results["failed"]) + results["folders_failed"]
             msg_parts.append(f"{fail_count} failed")
+        if results["post_actions"]["success"]:
+            msg_parts.append(f"{results['post_actions']['success']} server action{'s' if results['post_actions']['success'] != 1 else ''} applied")
+        if results["post_actions"]["failed"]:
+            msg_parts.append(f"{results['post_actions']['failed']} server action{'s' if results['post_actions']['failed'] != 1 else ''} failed")
         
         yield sse_message("complete", {
             "results": results,

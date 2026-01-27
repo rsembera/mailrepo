@@ -485,3 +485,136 @@ class IMAP:
         finally:
             if client:
                 client.disconnect()
+    
+    # ==========================================
+    # Post-commit actions (archive, trash, delete)
+    # ==========================================
+    
+    def get_special_folder(self, folder_type: str) -> str | None:
+        """
+        Find special folder name (Archive, Trash) for this IMAP server.
+        
+        Args:
+            folder_type: 'archive' or 'trash'
+            
+        Returns:
+            Folder name or None if not found.
+        """
+        if not self.connection:
+            raise IMAPError("Not connected")
+        
+        # Common folder names by type
+        archive_names = ['Archive', '[Gmail]/All Mail', 'Archives', 'INBOX.Archive']
+        trash_names = ['Trash', '[Gmail]/Trash', 'Deleted Items', 'Deleted Messages', 'INBOX.Trash']
+        
+        search_names = archive_names if folder_type == 'archive' else trash_names
+        
+        try:
+            folders = self.list_folders()
+            folder_names = [f['name'] for f in folders]
+            
+            # Try to find matching folder
+            for name in search_names:
+                if name in folder_names:
+                    return name
+            
+            # Case-insensitive fallback
+            for name in search_names:
+                for folder_name in folder_names:
+                    if folder_name.lower() == name.lower():
+                        return folder_name
+            
+            return None
+        except Exception as e:
+            print(f"Warning: Could not find {folder_type} folder: {e}")
+            return None
+    
+    def move_email(self, uid: str, destination_folder: str) -> bool:
+        """
+        Move an email to another folder (copy + delete from source).
+        
+        Args:
+            uid: Message UID.
+            destination_folder: Destination folder name.
+            
+        Returns:
+            True if successful.
+        """
+        if not self.connection:
+            raise IMAPError("Not connected")
+        
+        try:
+            # Copy to destination
+            status, _ = self.connection.uid('COPY', uid, f'"{destination_folder}"')
+            if status != 'OK':
+                raise IMAPError(f"Failed to copy message {uid} to {destination_folder}")
+            
+            # Mark original as deleted
+            status, _ = self.connection.uid('STORE', uid, '+FLAGS', '(\\Deleted)')
+            if status != 'OK':
+                raise IMAPError(f"Failed to mark message {uid} as deleted")
+            
+            # Expunge to remove from source folder
+            self.connection.expunge()
+            
+            return True
+        except Exception as e:
+            raise IMAPError(f"Failed to move message {uid}: {e}")
+    
+    def archive_email(self, uid: str) -> bool:
+        """
+        Move email to Archive folder.
+        
+        Args:
+            uid: Message UID.
+            
+        Returns:
+            True if successful, raises IMAPError if archive folder not found.
+        """
+        archive_folder = self.get_special_folder('archive')
+        if not archive_folder:
+            raise IMAPError("Archive folder not found on server")
+        
+        return self.move_email(uid, archive_folder)
+    
+    def trash_email(self, uid: str) -> bool:
+        """
+        Move email to Trash folder.
+        
+        Args:
+            uid: Message UID.
+            
+        Returns:
+            True if successful, raises IMAPError if trash folder not found.
+        """
+        trash_folder = self.get_special_folder('trash')
+        if not trash_folder:
+            raise IMAPError("Trash folder not found on server")
+        
+        return self.move_email(uid, trash_folder)
+    
+    def delete_email(self, uid: str) -> bool:
+        """
+        Permanently delete email (mark deleted + expunge).
+        
+        Args:
+            uid: Message UID.
+            
+        Returns:
+            True if successful.
+        """
+        if not self.connection:
+            raise IMAPError("Not connected")
+        
+        try:
+            # Mark as deleted
+            status, _ = self.connection.uid('STORE', uid, '+FLAGS', '(\\Deleted)')
+            if status != 'OK':
+                raise IMAPError(f"Failed to mark message {uid} as deleted")
+            
+            # Expunge to permanently remove
+            self.connection.expunge()
+            
+            return True
+        except Exception as e:
+            raise IMAPError(f"Failed to delete message {uid}: {e}")
