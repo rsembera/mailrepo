@@ -384,21 +384,22 @@ export async function exportFolder(folderId) {
     
     const children = state.folders.filter(f => f.parent_id == folderId && !f.deleted_at);
     
-    // Ask about subfolders if there are any
-    let includeSubfolders = true;
+    // Confirm export if there are subfolders
     if (children.length > 0) {
-        includeSubfolders = await showConfirm(
+        const confirmed = await showConfirm(
             'Export Folder',
-            `Export "${folder.name}" with ${children.length} subfolder${children.length > 1 ? 's' : ''}?`,
-            { okText: 'Export All', cancelText: 'Just This Folder' }
+            `Export "${folder.name}" and its ${children.length} subfolder${children.length > 1 ? 's' : ''}?`,
+            { okText: 'Export', cancelText: 'Cancel' }
         );
+        
+        if (!confirmed) return; // Cancel - abort entirely
     }
     
     try {
         const response = await fetch(`/api/folders/${folderId}/export`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ include_subfolders: includeSubfolders }),
+            body: JSON.stringify({ include_subfolders: true }),
         });
         
         if (!response.ok) {
