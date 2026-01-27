@@ -1,53 +1,40 @@
 # MailRepo Refactoring Plan V2
 
 **Created:** January 27, 2026  
-**Status:** Planned (for future session)  
-**Priority:** Low - Non-blocking for release
+**Updated:** January 27, 2026  
+**Status:** Mostly Complete
 
 ---
 
-## Overview
+## Completed ✅
 
-The initial refactoring (V1) successfully modularized the codebase. However, after continued development, several files have grown large again and some patterns could be improved. This plan addresses technical debt while maintaining stability.
+### Priority 1: Split progress.py
+- Extracted `email_parser.py` (~400 lines) for email parsing logic
+- `progress.py` reduced from 1,202 to ~800 lines
 
-### Current File Sizes (Lines of Code)
+### Priority 2: Split folder-mgmt.js
+- Extracted `folder-selection.js` (~665 lines) for bulk IMAP/import folder staging
+- `folder-mgmt.js` reduced from 1,200 to ~485 lines
 
-**Backend (Python):**
-| File | Lines | Notes |
-|------|-------|-------|
-| `progress.py` | 1,202 | ⚠️ Too large - handles streaming, commit, parsing |
-| `filesystem.py` | 621 | File picker logic |
-| `imap.py` | 620 | IMAP operations |
-| `database.py` | 363 | Database layer |
-| `staging.py` | 324 | Staging routes |
-| `folders.py` | 312 | Folder routes |
+### Priority 3.1: Move escapeForOnclick to utils.js
+- Consolidated duplicate implementations from mail.js, folder-mgmt.js, review.js
+- Single source of truth in utils.js
 
-**Frontend (JavaScript):**
-| File | Lines | Notes |
-|------|-------|-------|
-| `folder-mgmt.js` | 1,200 | ⚠️ Too large - folder mgmt + bulk selection |
-| `imports.js` | 983 | ⚠️ Large - file picker + import logic |
-| `review.js` | 883 | ⚠️ Large - complex rendering logic |
-| `sidebar.js` | 573 | IMAP tree + archive tree |
-| `staging.js` | 561 | Destination modal + staging |
-| `mail.js` | 547 | Email loading + navigation |
-| `settings.js` | 530 | Settings view |
-| `app.js` | 500 | Entry point |
+### Priority 4: Extract file-picker.js
+- Extracted `file-picker.js` (~415 lines) for filesystem navigation
+- `imports.js` reduced from 983 to ~510 lines
 
 ---
 
-## Priority 1: Split progress.py (~1,200 lines)
+## Remaining (Optional)
 
-The largest backend file handles too many responsibilities.
+### Priority 3.2: Create tree-renderer.js
+**Status:** Deferred - High risk, 3-4 hours estimated  
+**Rationale:** Folder tree rendering is duplicated across sidebar.js, staging.js, folder-mgmt.js, but creating a shared component requires careful testing of all tree use cases.
 
-### Current Responsibilities
-1. SSE message formatting
-2. Email cache management
-3. IMAP email streaming
-4. Import email streaming
-5. Commit workflow (emails + folders)
-6. Post-commit actions (archive/trash/delete)
-7. Email parsing (mbox, Apple mbox, emlx, EML)
+### Priority 5: Clean up review.js
+**Status:** Skipped - Low value  
+**Rationale:** File is large (872 lines) but cohesive. Suggested improvements (extract helpers, add JSDoc) are polish rather than structural.
 
 ### Proposed Split
 
