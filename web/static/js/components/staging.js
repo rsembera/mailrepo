@@ -148,11 +148,11 @@ export function renderFolderSelectDrilldown() {
             const colorDot = folder.color ? 
                 `<span class="drilldown-color" style="background: ${folder.color}"></span>` : '';
             
-            html += `<div class="drilldown-item" data-id="${folder.id}" onclick="drilldownSelect(${folder.id}, ${hasChildren})">
+            html += `<div class="drilldown-item" data-id="${folder.id}" onclick="drilldownSelect(${folder.id})">
                 ${colorDot}
                 <i data-lucide="folder" class="drilldown-icon"></i>
                 <span class="drilldown-label">${escapeHtml(folder.name)}</span>
-                ${hasChildren ? `<i data-lucide="chevron-right" class="drilldown-chevron"></i>` : ''}
+                <i data-lucide="chevron-right" class="drilldown-chevron"></i>
             </div>`;
         });
     }
@@ -177,23 +177,14 @@ function buildBreadcrumbs(folder, allFolders) {
 }
 
 /**
- * Handle clicking a folder in drilldown - either select or drill in.
+ * Handle clicking a folder in drilldown - always drill in.
  */
-window.drilldownSelect = function(folderId, hasChildren) {
-    if (hasChildren) {
-        // Drill into this folder
-        currentDrilldownFolder = folderId;
-        renderFolderSelectDrilldown();
-    } else {
-        // Select this folder (no children to drill into)
-        selectedDestinationFolder = folderId;
-        document.getElementById('confirmStageBtn').disabled = false;
-        
-        // Highlight selected
-        document.querySelectorAll('.drilldown-item').forEach(item => {
-            item.classList.toggle('selected', item.dataset.id == folderId);
-        });
-    }
+window.drilldownSelect = function(folderId) {
+    // Always drill into the folder
+    currentDrilldownFolder = folderId;
+    selectedDestinationFolder = null;
+    document.getElementById('confirmStageBtn').disabled = true;
+    renderFolderSelectDrilldown();
 };
 
 /**

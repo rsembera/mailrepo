@@ -423,10 +423,12 @@
     padding: var(--space-sm) var(--space-md);
     background: var(--color-background-secondary);
     border-bottom: 1px solid var(--color-border);
+    min-height: 40px;
 }
 
 .drilldown-back {
     padding: var(--space-xs) var(--space-sm);
+    flex-shrink: 0;
 }
 
 .drilldown-back i {
@@ -439,7 +441,19 @@
     align-items: center;
     gap: var(--space-xs);
     font-size: 0.85rem;
-    overflow: hidden;
+    overflow-x: auto;
+    white-space: nowrap;
+    flex: 1;
+    scrollbar-width: thin;
+}
+
+.drilldown-path::-webkit-scrollbar {
+    height: 4px;
+}
+
+.drilldown-path::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 2px;
 }
 
 .breadcrumb-sep {
@@ -463,8 +477,6 @@
     font-weight: 600;
     color: var(--color-text);
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .drilldown-select-current {
