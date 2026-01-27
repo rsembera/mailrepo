@@ -211,14 +211,11 @@ window.drilldownTo = function(folderId) {
  */
 window.createSubfolderInDrilldown = async function() {
     const parentId = currentDrilldownFolder || null;
-    const parentName = parentId 
-        ? state.folders.find(f => f.id == parentId)?.name 
-        : 'root';
     
     const name = await showPrompt(
         'New Folder',
-        `Create folder${parentId ? ` in "${parentName}"` : ''}:`,
-        { placeholder: 'Folder name' }
+        'Folder name:',
+        { placeholder: 'e.g., Client: Smith' }
     );
     
     if (!name || !name.trim()) return;
