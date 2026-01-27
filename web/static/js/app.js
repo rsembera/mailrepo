@@ -22,7 +22,7 @@ import { initEmailList, renderEmailList, toggleEmailSelection, updateSelectAllSt
 import { initSidebar, toggleSection, handleTreeItemClick, updateSidebarFolders, refreshSidebarFolders, loadAccountLabels, buildImapFolderTree, getFolderIcon } from './components/sidebar.js';
 import { initMailView, selectView, loadAccountEmails, loadFolderEmails, openEmailViewer, closeEmailViewer, showLoading, showError, restoreDefaultHeaderActions } from './views/mail.js';
 import { initStaging, openStageModal, renderFolderSelectTree, handleFolderSelect, confirmStage, updateStagedBadge, updateButtonStates, goToReview, setSelectedDestinationFolder } from './components/staging.js';
-import { initFolderMgmt, showFolderManagementView, showFolderSelectionView, showImportFolderSelectionView, renameFolder, createSubfolder, openMoveFolder, confirmMoveFolder, deleteFolder, openColorPicker, handleFolderCheckbox, toggleAllFolders, stageSelectedFolders } from './views/folder-mgmt.js';
+import { initFolderMgmt, showFolderManagementView, showFolderSelectionView, showImportFolderSelectionView, renameFolder, createSubfolder, openMoveFolder, confirmMoveFolder, deleteFolder, openColorPicker, stageSelectedFolders } from './views/folder-mgmt.js';
 import { initTrashView, showTrashView, updateTrashBadge, restoreFolder, permanentlyDeleteFolder, emptyTrash } from './views/trash.js';
 import { initSettingsView, showSettingsView } from './views/settings.js';
 import { initReviewView, showReviewView } from './views/review.js';
