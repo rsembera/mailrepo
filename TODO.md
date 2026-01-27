@@ -28,7 +28,7 @@
 
 ### Staging/Commit UX
 - [x] Grey out staged folders on folder selection pages (like emails)
-- [ ] Support staging emails/folders from multiple accounts simultaneously
+- [x] Support staging emails/folders from multiple accounts simultaneously
 - [x] Create subfolders in destination modal (drill-down approach)
 
 ### Error Handling
@@ -58,7 +58,10 @@
 - [ ] mailrepo.ca placeholder on Sentinel
 
 ### Code Cleanup
-- [ ] Remove debug logging from progress.py
+- [x] Remove debug logging from progress.py
+
+### Testing
+- [ ] Automated test suite (start with import parsing, encryption/decryption)
 
 ---
 

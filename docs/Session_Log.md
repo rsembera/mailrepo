@@ -4,6 +4,38 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## January 27, 2026 — Morning Session (Session 19)
+
+**Participants:** Rick, Claude
+
+**Work Done:**
+
+### Code Cleanup
+- Removed all debug print statements from `progress.py` (10 statements)
+
+### Destination Modal Polish
+- Breadcrumbs now wrap to next line instead of horizontal scrolling
+- Removed redundant back arrow button (breadcrumb links handle navigation)
+- Added "Archive" root link to breadcrumbs, then removed it (root folders are distinct entities)
+
+### Archive Folder Navigation Redesign
+- Full breadcrumb trail in main view (e.g., "Client A > 2024 > Q1")
+- Breadcrumbs only appear when in nested folders
+- Replaced awkward subfolder pills with inline text links ("Subfolders: January, February, March")
+- Design decision: Root folders are distinct archives; navigate between them via sidebar, not breadcrumbs
+
+### Verified
+- Multi-account staging already works (emails from different accounts can be staged together)
+
+**Commits:**
+- `50a5f40` — UI polish: remove debug logging, breadcrumb wrapping, remove redundant back button
+- `7e9764c` — Add full breadcrumb trail to archive folder navigation
+- `dd4ccd9` — Replace subfolder pills with inline links, remove Archive root from breadcrumbs
+
+**Status:** UI polish complete. Ready for comprehensive testing.
+
+---
+
 ## January 26, 2026 — Afternoon/Evening Session (Session 16)
 
 **Participants:** Rick, Claude
