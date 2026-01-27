@@ -29,7 +29,7 @@
 ### Staging/Commit UX
 - [x] Grey out staged folders on folder selection pages (like emails)
 - [ ] Support staging emails/folders from multiple accounts simultaneously
-- [ ] Create subfolders in destination modal (drill down, not just expand)
+- [x] Create subfolders in destination modal (drill-down approach)
 
 ### Error Handling
 - [ ] Duplicate names: folders/emails with identical names in same archive folder
@@ -61,6 +61,26 @@
 - [ ] Remove debug logging from progress.py
 
 ---
+
+## Completed (Session 18 - January 27, 2026)
+
+### After Commit Actions
+- [x] Wire up After Commit actions (archive, trash, delete on IMAP server)
+- [x] IMAP methods: get_special_folder, move_email, archive_email, trash_email, delete_email
+- [x] Auto-detect Archive/Trash folder names for different IMAP servers
+
+### UI Polish
+- [x] Fix page titles: "Manage Folders" → "Manage Archives", "MailRepo" → "Browse & Stage"
+- [x] Change Manage Archives h2 to show folder count instead of redundant title
+- [x] Fix export folder Cancel - now properly aborts instead of continuing
+- [x] Remove unnecessary confirmation modal from folder export
+
+### Destination Folder Modal Redesign
+- [x] Replace chevron tree with drill-down folder selector
+- [x] Click folder to drill in, back button and breadcrumb navigation
+- [x] Stage button enables when drilled into a folder
+- [x] New Folder creates subfolder at current level
+- [x] Breadcrumbs horizontally scrollable for deep hierarchies
 
 ## Completed (Session 17 - January 27, 2026)
 
