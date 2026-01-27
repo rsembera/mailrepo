@@ -95,6 +95,165 @@ def import_eml():
         return jsonify({"success": False, "error": result["error"]}), 500
 
 
+@api_bp.route("/import/email", methods=["POST"])
+def get_import_email():
+    """
+    Fetch full email content from an import source.
+    
+    Request body:
+        sourcePath: Path to mbox file or directory
+        uid: Email UID (e.g., "mbox-5", "eml-0", "apple-3")
+        importType: 'mbox', 'apple-mbox', or 'eml'
+        folderPath: (optional) For apple-mbox, path to specific .mbox folder
+    
+    Returns:
+        email: Full email data including body
+    """
+    import email as email_lib
+    from email.header import decode_header
+    from email.utils import parsedate_to_datetime
+    from .email_parser import get_raw_email_from_import, _parse_apple_mbox, _parse_eml_directory
+    
+    data = request.get_json() or {}
+    source_path = data.get("sourcePath", "").strip()
+    uid = data.get("uid", "").strip()
+    import_type = data.get("importType", "mbox")
+    folder_path = data.get("folderPath", "")
+    
+    if not source_path:
+        return jsonify({"error": "Source path is required"}), 400
+    if not uid:
+        return jsonify({"error": "UID is required"}), 400
+    
+    source_path = Path(source_path).expanduser()
+    if not source_path.exists():
+        return jsonify({"error": "Source not found"}), 404
+    
+    def decode_header_value(header):
+        if not header:
+            return ""
+        try:
+            parts = decode_header(header)
+            decoded = []
+            for content, charset in parts:
+                if isinstance(content, bytes):
+                    decoded.append(content.decode(charset or "utf-8", errors="replace"))
+                else:
+                    decoded.append(content)
+            return " ".join(decoded)
+        except:
+            return str(header)
+    
+    def get_email_body(msg):
+        """Extract email body (prefer HTML, fallback to plain text)."""
+        html_body = None
+        text_body = None
+        
+        if msg.is_multipart():
+            for part in msg.walk():
+                content_type = part.get_content_type()
+                content_disposition = str(part.get("Content-Disposition", ""))
+                
+                if "attachment" in content_disposition:
+                    continue
+                
+                if content_type == "text/html":
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        charset = part.get_content_charset() or "utf-8"
+                        html_body = payload.decode(charset, errors="replace")
+                elif content_type == "text/plain" and not html_body:
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        charset = part.get_content_charset() or "utf-8"
+                        text_body = payload.decode(charset, errors="replace")
+        else:
+            payload = msg.get_payload(decode=True)
+            if payload:
+                charset = msg.get_content_charset() or "utf-8"
+                content_type = msg.get_content_type()
+                if content_type == "text/html":
+                    html_body = payload.decode(charset, errors="replace")
+                else:
+                    text_body = payload.decode(charset, errors="replace")
+        
+        return html_body or text_body or ""
+    
+    def get_attachments(msg):
+        """Extract attachment info from email."""
+        attachments = []
+        if msg.is_multipart():
+            for part in msg.walk():
+                content_disposition = str(part.get("Content-Disposition", ""))
+                if "attachment" in content_disposition:
+                    filename = part.get_filename()
+                    if filename:
+                        attachments.append({
+                            "filename": decode_header_value(filename),
+                            "content_type": part.get_content_type(),
+                            "size": len(part.get_payload(decode=True) or b""),
+                        })
+        return attachments
+    
+    try:
+        raw_email = None
+        
+        # Get raw email bytes based on import type
+        if import_type == 'eml':
+            # EML directory - find specific file
+            if uid.startswith('eml-'):
+                results = _parse_eml_directory(str(source_path))
+                for r_uid, r_bytes in results:
+                    if r_uid == uid:
+                        raw_email = r_bytes
+                        break
+        elif import_type == 'apple-mbox':
+            # Apple Mail export
+            if folder_path:
+                results = _parse_apple_mbox(folder_path)
+            else:
+                results = _parse_apple_mbox(str(source_path))
+            for r_uid, r_bytes in results:
+                if r_uid == uid:
+                    raw_email = r_bytes
+                    break
+        else:
+            # Standard mbox
+            raw_email = get_raw_email_from_import(str(source_path), uid)
+        
+        if not raw_email:
+            return jsonify({"error": "Email not found in import source"}), 404
+        
+        # Parse the email
+        msg = email_lib.message_from_bytes(raw_email)
+        
+        # Parse date
+        date_str = msg.get("Date", "")
+        date_display = date_str
+        if date_str:
+            try:
+                dt = parsedate_to_datetime(date_str)
+                date_display = dt.strftime("%Y-%m-%d %H:%M")
+            except:
+                pass
+        
+        email_data = {
+            "uid": uid,
+            "subject": decode_header_value(msg.get("Subject", "(no subject)")),
+            "from": decode_header_value(msg.get("From", "")),
+            "to": decode_header_value(msg.get("To", "")),
+            "cc": decode_header_value(msg.get("Cc", "")),
+            "date": date_display,
+            "body": get_email_body(msg),
+            "attachments": get_attachments(msg),
+        }
+        
+        return jsonify({"email": email_data})
+        
+    except Exception as e:
+        return jsonify({"error": f"Failed to read email: {str(e)}"}), 500
+
+
 @api_bp.route("/folders/<int:folder_id>/export", methods=["POST"])
 def export_folder(folder_id):
     """Export a folder and its contents as an unencrypted ZIP file."""

@@ -425,6 +425,23 @@ export async function openEmailViewer(emailId) {
             const folderId = state.currentView.id;
             const messageId = email.id;
             response = await fetch(`/api/folders/${folderId}/emails/${messageId}`);
+        } else if (state.currentView?.type === 'import') {
+            // Get import details from mounted imports
+            const imports = window.getMountedImports ? window.getMountedImports() : [];
+            const imp = imports.find(i => i.id === state.currentView.id);
+            if (!imp) {
+                throw new Error('Import not found');
+            }
+            response = await fetch('/api/import/email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sourcePath: imp.path,
+                    uid: email.uid || email.id,
+                    importType: imp.type,
+                    folderPath: state.currentView.folder || '',
+                }),
+            });
         } else {
             throw new Error('Unknown view type');
         }
