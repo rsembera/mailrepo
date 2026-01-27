@@ -121,12 +121,6 @@ def get_import_email():
     folder_path = data.get("folderPath", "")
     email_source_path = data.get("emailSourcePath", "").strip()  # Direct path to email file
     
-    # DEBUG logging
-    print(f"[DEBUG import/email] uid={uid}, importType={import_type}")
-    print(f"[DEBUG import/email] sourcePath={source_path}")
-    print(f"[DEBUG import/email] folderPath={folder_path}")
-    print(f"[DEBUG import/email] emailSourcePath={email_source_path}")
-    
     if not source_path and not email_source_path:
         return jsonify({"error": "Source path is required"}), 400
     if not uid:
@@ -214,7 +208,6 @@ def get_import_email():
                 # Only use direct file reading for individual email files
                 if suffix == '.emlx':
                     # Parse Apple .emlx format
-                    print(f"[DEBUG] Reading .emlx file: {email_path}")
                     with open(email_path, 'rb') as f:
                         content = f.read()
                     first_newline = content.find(b'\n')
@@ -226,13 +219,8 @@ def get_import_email():
                         raw_email = email_content
                 elif suffix == '.eml':
                     # Regular .eml file
-                    print(f"[DEBUG] Reading .eml file: {email_path}")
-                    try:
-                        with open(email_path, 'rb') as f:
-                            raw_email = f.read()
-                        print(f"[DEBUG] Read .eml file, length={len(raw_email)}")
-                    except Exception as e:
-                        print(f"[DEBUG] Failed to read .eml file: {e}")
+                    with open(email_path, 'rb') as f:
+                        raw_email = f.read()
                 # For mbox files, fall through to UID-based lookup below
         
         # Fallback lookups - only if direct file reading didn't work
@@ -252,11 +240,9 @@ def get_import_email():
                 
                 # Use folder_path which points to the specific .mbox directory
                 mbox_dir = folder_path if folder_path else str(source_path)
-                print(f"[DEBUG] apple-mbox: mbox_dir={mbox_dir}")
                 
                 # Check for mbox file inside the .mbox directory
                 mbox_file = os.path.join(mbox_dir, "mbox")
-                print(f"[DEBUG] apple-mbox: checking mbox_file={mbox_file}, exists={os.path.isfile(mbox_file)}")
                 if os.path.isfile(mbox_file):
                     # UID format from filesystem.py: f"apple-{basename}-{i}"
                     # e.g., "apple-mbox-0" where "mbox" is basename of the mbox file
@@ -266,10 +252,9 @@ def get_import_email():
                             expected_uid = f"apple-{os.path.basename(mbox_file)}-{i}"
                             if expected_uid == uid:
                                 raw_email = message.as_bytes()
-                                print(f"[DEBUG] Found email, raw_email length={len(raw_email)}")
                                 break
-                    except Exception as e:
-                        print(f"[DEBUG] mbox parse error: {e}")
+                    except Exception:
+                        pass
                 
                 # Check for Messages directory with .emlx files
                 if not raw_email:
@@ -298,14 +283,11 @@ def get_import_email():
                 # Standard mbox
                 raw_email = get_raw_email_from_import(str(source_path), uid)
         
-        print(f"[DEBUG] After all lookups, raw_email={'set, len=' + str(len(raw_email)) if raw_email else 'None'}")
-        
         if not raw_email:
             return jsonify({"error": "Email not found in import source"}), 404
         
         # Parse the email
         msg = email_lib.message_from_bytes(raw_email)
-        print(f"[DEBUG] Parsed message, is_multipart={msg.is_multipart()}, content_type={msg.get_content_type()}")
         
         # Parse date
         date_str = msg.get("Date", "")
@@ -318,7 +300,6 @@ def get_import_email():
                 pass
         
         html_body, text_body = get_email_body(msg)
-        print(f"[DEBUG] Extracted body, html_len={len(html_body) if html_body else 0}, text_len={len(text_body) if text_body else 0}")
         
         email_data = {
             "uid": uid,
