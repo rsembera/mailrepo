@@ -104,12 +104,11 @@ export function renderFolderSelectDrilldown() {
     if (currentFolder) {
         const breadcrumbs = buildBreadcrumbs(currentFolder, visibleFolders);
         html += `<div class="drilldown-breadcrumbs">`;
-        html += `<button class="btn btn-sm btn-secondary drilldown-back" onclick="drilldownBack()">
-            <i data-lucide="arrow-left"></i>
-        </button>`;
         html += `<span class="drilldown-path">`;
+        // Root link to get back to top level
+        html += `<a href="#" onclick="drilldownTo(null); return false;" class="breadcrumb-link">Archive</a>`;
         breadcrumbs.forEach((crumb, i) => {
-            if (i > 0) html += ` <i data-lucide="chevron-right" class="breadcrumb-sep"></i> `;
+            html += ` <i data-lucide="chevron-right" class="breadcrumb-sep"></i> `;
             if (i === breadcrumbs.length - 1) {
                 html += `<span class="breadcrumb-current">${escapeHtml(crumb.name)}</span>`;
             } else {
@@ -178,19 +177,6 @@ function buildBreadcrumbs(folder, allFolders) {
 window.drilldownSelect = function(folderId) {
     // Always drill into the folder
     currentDrilldownFolder = folderId;
-    selectedDestinationFolder = null;
-    document.getElementById('confirmStageBtn').disabled = true;
-    renderFolderSelectDrilldown();
-};
-
-/**
- * Go back one level in drilldown.
- */
-window.drilldownBack = function() {
-    if (!currentDrilldownFolder) return;
-    
-    const currentFolder = state.folders.find(f => f.id == currentDrilldownFolder);
-    currentDrilldownFolder = currentFolder?.parent_id || null;
     selectedDestinationFolder = null;
     document.getElementById('confirmStageBtn').disabled = true;
     renderFolderSelectDrilldown();

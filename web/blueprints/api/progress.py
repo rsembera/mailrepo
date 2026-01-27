@@ -185,8 +185,8 @@ def _get_emails_from_import_folder(source_path: str, folder_path: str, import_ty
                         with open(filepath, 'rb') as f:
                             raw_email = f.read()
                         results.append((f"eml-{i}", raw_email))
-                    except Exception as e:
-                        print(f"Error reading {filepath}: {e}")
+                    except Exception:
+                        pass  # Skip unreadable files
         return results
     
     if import_type == 'apple-mbox':
@@ -200,8 +200,8 @@ def _get_emails_from_import_folder(source_path: str, folder_path: str, import_ty
                 mbox = mailbox.mbox(mbox_internal)
                 for i, message in enumerate(mbox):
                     results.append((f"apple-{i}", message.as_bytes()))
-            except Exception as e:
-                print(f"Error reading Apple mbox {mbox_internal}: {e}")
+            except Exception:
+                pass  # Skip unreadable mbox
         else:
             # Check for emlx files in Messages subdirectory
             messages_dir = os.path.join(folder_path, 'Messages')
@@ -220,8 +220,8 @@ def _get_emails_from_import_folder(source_path: str, folder_path: str, import_ty
                                 if plist_marker > 0:
                                     email_content = email_content[:plist_marker]
                                 results.append((f"emlx-{filename}", email_content))
-                        except Exception as e:
-                            print(f"Error reading emlx {filepath}: {e}")
+                        except Exception:
+                            pass  # Skip unreadable emlx
         return results
     
     # Regular mbox file - filter by folder header for exact match only
@@ -236,8 +236,8 @@ def _get_emails_from_import_folder(source_path: str, folder_path: str, import_ty
                 # If folder_path is empty/root, include emails without folder or match exactly
                 if not folder_path or email_folder == folder_path:
                     results.append((f"mbox-{i}", message.as_bytes()))
-        except Exception as e:
-            print(f"Error reading mbox {source_path}: {e}")
+        except Exception:
+            pass  # Skip unreadable mbox
     
     return results
 
@@ -806,15 +806,12 @@ def stream_commit():
                                     elif action == 'delete':
                                         client.delete_email(uid)
                                         results["post_actions"]["success"] += 1
-                                except IMAPError as e:
+                                except IMAPError:
                                     results["post_actions"]["failed"] += 1
-                                    print(f"Post-action {action} failed for {uid}: {e}")
-                        except IMAPError as e:
-                            print(f"Failed to select folder {source_folder} for post-actions: {e}")
+                        except IMAPError:
                             results["post_actions"]["failed"] += len(email_list)
                 
-                except Exception as e:
-                    print(f"Post-action connection failed for account {account_id}: {e}")
+                except Exception:
                     for folders_data in folders_data.values():
                         results["post_actions"]["failed"] += len(folders_data)
                 finally:
@@ -1143,8 +1140,7 @@ def _get_raw_email_from_import(source_path: str, uid: str) -> bytes:
                 if plist_marker > 0:
                     email_content = email_content[:plist_marker]
                 return email_content
-        except Exception as e:
-            print(f"Error reading emlx: {e}")
+        except Exception:
             return None
     
     # Handle mbox files
@@ -1160,8 +1156,7 @@ def _get_raw_email_from_import(source_path: str, uid: str) -> bytes:
                 for i, message in enumerate(mbox):
                     if i == index:
                         return message.as_bytes()
-        except Exception as e:
-            print(f"Error reading mbox: {e}")
+        except Exception:
             return None
     
     # Handle standalone .eml files
@@ -1169,8 +1164,7 @@ def _get_raw_email_from_import(source_path: str, uid: str) -> bytes:
         try:
             with open(source_path, 'rb') as f:
                 return f.read()
-        except Exception as e:
-            print(f"Error reading eml: {e}")
+        except Exception:
             return None
     
     return None

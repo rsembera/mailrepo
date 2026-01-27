@@ -418,7 +418,7 @@
 
 .drilldown-breadcrumbs {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: var(--space-sm);
     padding: var(--space-sm) var(--space-md);
     background: var(--color-background-secondary);
@@ -426,34 +426,13 @@
     min-height: 40px;
 }
 
-.drilldown-back {
-    padding: var(--space-xs) var(--space-sm);
-    flex-shrink: 0;
-}
-
-.drilldown-back i {
-    width: 16px;
-    height: 16px;
-}
-
 .drilldown-path {
     display: flex;
     align-items: center;
     gap: var(--space-xs);
     font-size: 0.85rem;
-    overflow-x: auto;
-    white-space: nowrap;
+    flex-wrap: wrap;
     flex: 1;
-    scrollbar-width: thin;
-}
-
-.drilldown-path::-webkit-scrollbar {
-    height: 4px;
-}
-
-.drilldown-path::-webkit-scrollbar-thumb {
-    background: var(--color-border);
-    border-radius: 2px;
 }
 
 .breadcrumb-sep {
@@ -466,7 +445,6 @@
 .breadcrumb-link {
     color: var(--color-primary);
     text-decoration: none;
-    white-space: nowrap;
 }
 
 .breadcrumb-link:hover {

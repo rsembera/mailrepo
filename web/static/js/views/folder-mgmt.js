@@ -77,7 +77,7 @@ export async function showFolderManagementView() {
     if (toolbar) toolbar.style.display = 'none';
     if (headerActions) headerActions.style.display = 'none';
     
-    if (contextTitle) contextTitle.textContent = 'Manage Archives';
+    if (contextTitle) contextTitle.textContent = 'Manage Archive';
     if (contextMeta) contextMeta.textContent = '';
     
     await loadFolders();
