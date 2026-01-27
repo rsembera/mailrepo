@@ -153,14 +153,11 @@
     font-size: 0.8rem;
 }
 
-/* Import badge for non-IMAP sources */
-.review-import-badge {
-    font-size: 0.75rem;
+/* Import label for non-IMAP sources (explains why no After dropdown) */
+.review-import-label {
+    font-size: 0.8rem;
     color: var(--color-text-muted);
-    background: var(--color-background-secondary);
-    padding: 2px 8px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--color-border);
+    font-style: italic;
 }
 
 /* === Icon Select (dropdowns) === */

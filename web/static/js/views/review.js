@@ -220,6 +220,7 @@ function renderReviewView() {
                     <div class="review-destination-header-right">
                         ${renderDestinationDropdown(destId)}
                         <button class="btn btn-sm btn-danger-subtle" onclick="unstageDestination('${destId}')" title="Unstage all items going to this folder">
+                            <i data-lucide="x"></i>
                             Unstage
                         </button>
                     </div>
@@ -269,8 +270,14 @@ function renderSourceGroup(source, sourceKey, destId, type) {
         });
         itemSummary = folderParts.join(' · ');
     } else {
+        // For folders, show folder names
         totalItems = source.items.length;
-        itemSummary = `${totalItems} folder${totalItems !== 1 ? 's' : ''}`;
+        const folderNames = source.items.map(sf => sf.archivePath || sf.folder.split('/').pop() || '(folder)');
+        if (folderNames.length <= 3) {
+            itemSummary = folderNames.join(' · ');
+        } else {
+            itemSummary = `${folderNames.slice(0, 2).join(' · ')} + ${folderNames.length - 2} more`;
+        }
     }
     
     const escapedSourceKey = escapeForOnclick(sourceKey);
@@ -293,10 +300,11 @@ function renderSourceGroup(source, sourceKey, destId, type) {
                             ${renderSourceActionDropdown(`${sourceKey}:${destId}`)}
                         </label>
                     ` : `
-                        <span class="review-import-badge">Import</span>
+                        <span class="review-import-label">No server action</span>
                     `}
-                    <button class="btn btn-sm btn-icon btn-danger-subtle" onclick="unstageSource('${escapedSourceKey}', '${escapedDestId}', '${type}')" title="Unstage">
+                    <button class="btn btn-sm btn-danger-subtle" onclick="unstageSource('${escapedSourceKey}', '${escapedDestId}', '${type}')" title="Unstage">
                         <i data-lucide="x"></i>
+                        Unstage
                     </button>
                 </div>
             </div>
