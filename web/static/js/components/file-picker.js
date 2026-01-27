@@ -382,21 +382,17 @@ async function confirmFilePicker() {
     closeModal('filePickerModal');
     
     try {
-        console.log('confirmFilePicker:', filePickerMode, filePickerSelected);
         if (filePickerMode === 'mbox') {
             if (filePickerSelected.type === 'apple-mbox') {
-                console.log('Calling onAppleMboxSelected:', !!onAppleMboxSelected);
                 if (onAppleMboxSelected) {
                     await onAppleMboxSelected(filePickerSelected.path, filePickerSelected.name, filePickerSelected.tree);
                 }
             } else {
-                console.log('Calling onMboxSelected:', !!onMboxSelected);
                 if (onMboxSelected) {
                     await onMboxSelected(filePickerSelected.path, filePickerSelected.name);
                 }
             }
         } else {
-            console.log('Calling onEmlFolderSelected:', !!onEmlFolderSelected);
             if (onEmlFolderSelected) {
                 await onEmlFolderSelected(filePickerSelected.path, filePickerSelected.name);
             }
