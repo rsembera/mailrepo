@@ -3,11 +3,11 @@
  * 
  * Handles mounting/unmounting of .mbox and .eml files,
  * displaying them in the sidebar, and browsing their contents.
- * Uses custom file picker for filesystem navigation.
  */
 
 import { escapeHtml } from '../utils.js';
 import { confirmNavigation } from '../state.js';
+import { initFilePicker, openFilePicker } from './file-picker.js';
 
 // Mounted imports stored in memory (session-only)
 const mountedImports = new Map();
@@ -17,12 +17,6 @@ let onImportSelect = null;
 let onImportFolderSelect = null;
 let onImportUnmount = null;
 
-// File picker state
-let filePickerMode = null; // 'mbox' or 'eml'
-let filePickerPath = null;
-let filePickerSelected = null;
-let filePickerResolve = null;
-
 /**
  * Initialize the imports component.
  */
@@ -30,6 +24,13 @@ export function initImports(config = {}) {
     onImportSelect = config.onImportSelect;
     onImportFolderSelect = config.onImportFolderSelect;
     onImportUnmount = config.onImportUnmount;
+    
+    // Initialize file picker with mount callbacks
+    initFilePicker({
+        onMboxSelected: mountMboxFromPath,
+        onAppleMboxSelected: mountAppleMboxFolder,
+        onEmlFolderSelected: mountEmlFolderFromPath,
+    });
     
     // Set up import button click
     const importBtn = document.getElementById('importRailBtn');
