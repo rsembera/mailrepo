@@ -67,6 +67,13 @@
 ### Future Refactoring (Non-blocking)
 - [ ] Split progress.py (~1200 lines) into streaming, commit, and email parsing modules
 - [ ] Consolidate folder-tree rendering logic (duplicated in sidebar, staging, folder-mgmt)
+- [ ] See docs/Refactoring_Plan_V2.md for full plan
+
+---
+
+## Next Session
+
+**Flag:** Start with refactoring review (docs/Refactoring_Plan_V2.md) or continue with feature work.
 
 ---
 

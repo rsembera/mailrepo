@@ -21,17 +21,23 @@
 - Replaced subfolder pills with inline text links ("Subfolders: January, February, March")
 - Root folders treated as distinct entities - navigate between them via sidebar
 
+### IMAP Folder Navigation
+- Added breadcrumbs + subfolder links to IMAP folder browsing (matches archive view)
+- Fixed title to show folder name only, not full path
+- Fixed subfolder duplicate bug (was showing each twice)
+- Fixed IMAP cache lookup (string/number accountId mismatch)
+
 ### Bug Fixes
 - Fixed logout triggering browser's "Changes may not be saved" warning
 
 ### Verified Working
 - Multi-account staging already supported (was on TODO but already implemented)
 
-### Code Review Notes
-Architecture is solid. Areas for future refactoring (non-blocking):
-- progress.py is ~1200 lines, could be split into streaming/commit/parsing modules
-- Some folder-tree rendering duplication across components
-- Consider automated tests for import parsing (most bug-prone area)
+### Code Review & Refactoring Plan
+- Full codebase scan completed
+- Created docs/Refactoring_Plan_V2.md with prioritized improvements
+- Key targets: progress.py split, folder-mgmt.js split, shared utilities
+- Estimated 8-12 hours total, non-blocking for release
 
 ---
 
@@ -55,9 +61,10 @@ Architecture is solid. Areas for future refactoring (non-blocking):
 
 ## TODO / Next Steps
 
-1. Test Apple mbox imports thoroughly
-2. Comprehensive manual testing checklist for release
-3. Address remaining items in TODO.md
+1. **Next Session:** Review refactoring plan or continue with features
+2. Test Apple mbox imports thoroughly
+3. Comprehensive manual testing checklist for release
+4. Address remaining items in TODO.md
 
 ---
 

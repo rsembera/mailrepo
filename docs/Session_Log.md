@@ -24,25 +24,38 @@ Running record of planning sessions and decisions. Most recent first.
 - Replaced awkward subfolder pills with inline text links ("Subfolders: January, February, March")
 - Design decision: Root folders are distinct archives; navigate between them via sidebar, not breadcrumbs
 
+### IMAP Folder Navigation
+- Added breadcrumbs + subfolder links to IMAP folder browsing (consistency with archive view)
+- Fixed title to show folder name only, not full path (e.g., "Comfort King" not "Home/Comfort King")
+- Fixed duplicate subfolder bug (was showing each folder twice)
+- Fixed IMAP cache lookup bug (string/number accountId mismatch in Map key)
+
 ### Bug Fixes
 - Fixed logout triggering browser's "Changes may not be saved" warning (added skip flag for intentional navigation)
 
 ### Verified
 - Multi-account staging already works (emails from different accounts can be staged together)
 
-### Code Review
-Reviewed overall codebase health. Architecture is solid with clean separation of concerns. Non-blocking items for future refactoring:
-- `progress.py` (~1200 lines) could be split into streaming, commit, and email parsing modules
-- Some folder-tree rendering logic duplicated across components
-- Automated tests would be valuable for import parsing (most bug-prone area)
+### Code Review & Refactoring Plan
+- Full codebase scan: ~12,000 lines total across Python + JavaScript
+- Created `docs/Refactoring_Plan_V2.md` with prioritized improvements
+- Key targets: split `progress.py` (1,202 lines), split `folder-mgmt.js` (1,200 lines), consolidate shared utilities
+- Estimated 8-12 hours total work, non-blocking for release
+- Discussion: MailRepo's "curated archive" model is the right scope; don't try to compete with corporate archiving software
 
 **Commits:**
 - `50a5f40` — UI polish: remove debug logging, breadcrumb wrapping, remove redundant back button
 - `7e9764c` — Add full breadcrumb trail to archive folder navigation
 - `dd4ccd9` — Replace subfolder pills with inline links, remove Archive root from breadcrumbs
 - `3cdfb96` — Fix: Skip beforeunload warning on logout
+- `35aabf6` — Update docs for Session 19
+- `72c401d` — Add IMAP folder breadcrumbs and subfolder navigation (matches archive view)
+- `6f1e7c0` — Fix: Remove duplicate subfolder detection in IMAP navigation
+- `0b0ab2b` — Fix: IMAP navigation cache lookup with string/number accountId
 
-**Status:** UI polish complete. Code is in good shape for release. Ready for comprehensive testing.
+**Status:** Navigation consistency complete. Refactoring plan documented. Ready for next session.
+
+**Next Session:** Review refactoring plan (docs/Refactoring_Plan_V2.md) or continue with feature work.
 
 ---
 
