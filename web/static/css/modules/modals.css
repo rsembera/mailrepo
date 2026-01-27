@@ -111,6 +111,11 @@
     background: var(--color-primary-lighter);
 }
 
+/* Move folder modal uses simpler structure without .folder-tree-row */
+.folder-select-item.selected {
+    background: var(--color-primary-lighter);
+}
+
 .folder-select-item.new-folder {
     color: var(--color-primary);
     font-weight: 600;
