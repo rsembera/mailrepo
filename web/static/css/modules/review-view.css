@@ -3,7 +3,7 @@
    ============================================ */
 
 .review-view {
-    max-width: 850px;
+    max-width: 900px;
     margin: 0 auto;
     padding: var(--space-lg);
 }
@@ -11,13 +11,14 @@
 .review-list {
     display: flex;
     flex-direction: column;
-    gap: var(--space-lg);
+    gap: var(--space-md);
 }
 
+/* Main group (account or import level) */
 .review-group {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
-    overflow: visible; /* Allow dropdowns to extend outside */
+    overflow: visible;
 }
 
 .review-group-header {
@@ -26,17 +27,12 @@
     align-items: center;
     padding: var(--space-md) var(--space-lg);
     background: var(--color-background-secondary);
-    border-bottom: 1px solid var(--color-border);
+    cursor: pointer;
+    user-select: none;
 }
 
-.review-group-title {
-    font-weight: 600;
-    color: var(--color-text-heading);
-}
-
-.review-group-count {
-    font-size: 0.875rem;
-    color: var(--color-text-muted);
+.review-group-header:hover {
+    background: var(--color-background-hover);
 }
 
 .review-group-header-left {
@@ -50,43 +46,124 @@
     align-items: center;
 }
 
-.source-action-label {
+.review-chevron {
+    width: 16px;
+    height: 16px;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+}
+
+.review-source-icon {
+    width: 18px;
+    height: 18px;
+    color: var(--color-primary);
+    flex-shrink: 0;
+}
+
+.review-group-title {
+    font-weight: 600;
+    color: var(--color-text-heading);
+}
+
+.review-group-count {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    margin-left: var(--space-xs);
+}
+
+/* Collapsible content */
+.review-group-content {
+    overflow: hidden;
+}
+
+.review-group-content.collapsed {
+    display: none;
+}
+
+.review-group-content.expanded {
+    display: block;
+}
+
+/* Subgroup (folder within account) */
+.review-subgroup {
+    border-top: 1px solid var(--color-border);
+}
+
+.review-subgroup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm) var(--space-lg);
+    padding-left: calc(var(--space-lg) + 24px);
+    background: var(--color-background);
+    cursor: pointer;
+    user-select: none;
+}
+
+.review-subgroup-header:hover {
+    background: var(--color-background-secondary);
+}
+
+.review-subgroup-header-left {
     display: flex;
     align-items: center;
     gap: var(--space-sm);
-    font-size: 0.875rem;
+}
+
+.review-subgroup-header-right {
+    display: flex;
+    align-items: center;
+}
+
+.review-folder-icon {
+    width: 16px;
+    height: 16px;
     color: var(--color-text-muted);
 }
 
-.source-action-label > span {
-    white-space: nowrap;
+.review-subgroup-title {
+    font-weight: 500;
+    color: var(--color-text);
 }
 
-.source-action-dropdown {
-    min-width: 160px;
+/* Subgroup items (emails within folder) */
+.review-subgroup-items {
+    overflow: hidden;
 }
 
-.source-action-dropdown .icon-select-trigger {
-    padding: var(--space-xs) var(--space-sm);
-    font-size: 0.875rem;
+.review-subgroup-items.collapsed {
+    display: none;
 }
 
+.review-subgroup-items.expanded {
+    display: block;
+}
+
+.review-subgroup-items .review-item {
+    padding-left: calc(var(--space-lg) + 48px);
+}
+
+/* Direct items in a group (for imports without subfolders) */
 .review-group-items {
     display: flex;
     flex-direction: column;
-    padding-bottom: var(--space-md); /* Space for last item's dropdown */
 }
 
+.review-group-items .review-item {
+    padding-left: calc(var(--space-lg) + 24px);
+}
+
+/* Individual item row */
 .review-item {
     display: flex;
     align-items: center;
     gap: var(--space-md);
-    padding: var(--space-md) var(--space-lg);
-    border-bottom: 1px solid var(--color-border);
+    padding: var(--space-sm) var(--space-lg);
+    border-top: 1px solid var(--color-border-light);
 }
 
-.review-item:last-child {
-    border-bottom: none;
+.review-item:first-child {
+    border-top: 1px solid var(--color-border);
 }
 
 .review-item:hover {
@@ -104,19 +181,42 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-size: 0.9rem;
 }
 
 .review-item-meta {
     display: flex;
     gap: var(--space-md);
-    font-size: 0.875rem;
+    font-size: 0.8rem;
     color: var(--color-text-muted);
     margin-top: 2px;
 }
 
 .review-item-dest {
     flex-shrink: 0;
-    min-width: 180px;
+    min-width: 160px;
+}
+
+/* Source action dropdown styling */
+.source-action-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+}
+
+.source-action-label > span {
+    white-space: nowrap;
+}
+
+.source-action-dropdown {
+    min-width: 150px;
+}
+
+.source-action-dropdown .icon-select-trigger {
+    padding: var(--space-xs) var(--space-sm);
+    font-size: 0.8rem;
 }
 
 /* Icon Select (folder dropdown) */
@@ -128,12 +228,12 @@
     display: flex;
     align-items: center;
     gap: var(--space-sm);
-    padding: var(--space-sm) var(--space-md);
+    padding: var(--space-xs) var(--space-sm);
     background: var(--color-background);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     cursor: pointer;
-    font-size: 0.875rem;
+    font-size: 0.8rem;
     width: 100%;
     text-align: left;
     font-family: var(--font-ui);
@@ -144,8 +244,8 @@
 }
 
 .icon-select-trigger i {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     flex-shrink: 0;
 }
 
@@ -186,7 +286,7 @@
     gap: var(--space-sm);
     padding: var(--space-sm) var(--space-md);
     cursor: pointer;
-    font-size: 0.875rem;
+    font-size: 0.8rem;
 }
 
 .icon-select-option:hover {
@@ -199,15 +299,15 @@
 }
 
 .icon-select-option i {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     flex-shrink: 0;
 }
 
 .icon-select-empty {
     padding: var(--space-md);
     color: var(--color-text-muted);
-    font-size: 0.875rem;
+    font-size: 0.8rem;
     text-align: center;
 }
 

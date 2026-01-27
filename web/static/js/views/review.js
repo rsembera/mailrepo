@@ -2,6 +2,7 @@
  * Review View
  * 
  * Renders the staged items review as a view within the main app layout.
+ * Uses collapsible sections for better readability with large numbers of items.
  */
 
 import { getStagedEmails, getStagedFolders, clearStagedEmail, clearStagedFolder, clearAllStaged, updateStagedBadge } from '../components/staging.js';
@@ -16,6 +17,7 @@ let emailList = null;
 let folders = [];
 let accounts = [];
 let sourceActions = {};
+let expandedSections = new Set(); // Track which sections are expanded
 let dropdownClickListenerAdded = false;
 
 /**
@@ -109,6 +111,7 @@ async function loadFoldersForReview() {
     }
 }
 
+
 function renderReviewView() {
     const stagedEmails = getStagedEmails();
     const stagedFolders = getStagedFolders();
@@ -131,162 +134,224 @@ function renderReviewView() {
     
     let html = '<div class="review-view"><div class="review-list">';
     
-    // Group emails by source
-    const emailsBySource = new Map();
+    // Build hierarchical structure: Account -> Folder -> Emails
+    // For IMAP: group by account, then by source folder
+    // For imports: group by import source
+    
+    const emailsByAccount = new Map(); // accountId -> Map(folder -> emails[])
+    const emailsByImport = new Map();  // importId -> emails[]
+    
     stagedEmails.forEach((data, emailId) => {
-        const key = data.sourceType === 'import' 
-            ? `import:${data.sourceImportId}` 
-            : `account:${data.sourceAccountId}:${data.sourceFolder || 'INBOX'}`;
-        if (!emailsBySource.has(key)) {
-            emailsBySource.set(key, []);
-        }
-        // Flatten email data for easier access in template
-        emailsBySource.get(key).push({ 
+        const emailData = { 
             emailId, 
             ...data,
-            // Pull email properties to top level for template access
             subject: data.email?.subject,
             from: data.email?.from,
             date: data.email?.date,
-        });
+        };
+        
+        if (data.sourceType === 'import') {
+            const importId = data.sourceImportId;
+            if (!emailsByImport.has(importId)) {
+                emailsByImport.set(importId, []);
+            }
+            emailsByImport.get(importId).push(emailData);
+        } else {
+            const accountId = data.sourceAccountId;
+            const folder = data.sourceFolder || 'INBOX';
+            
+            if (!emailsByAccount.has(accountId)) {
+                emailsByAccount.set(accountId, new Map());
+            }
+            const accountFolders = emailsByAccount.get(accountId);
+            if (!accountFolders.has(folder)) {
+                accountFolders.set(folder, []);
+            }
+            accountFolders.get(folder).push(emailData);
+        }
     });
     
-    // Render email groups
-    emailsBySource.forEach((emails, sourceKey) => {
-        const firstEmail = emails[0];
-        const sourceName = getSourceName(sourceKey, firstEmail);
-        const isImapSource = sourceKey.startsWith('account:');
+    // Render IMAP account groups (emails)
+    emailsByAccount.forEach((folderMap, accountId) => {
+        const accountName = getAccountName(accountId);
+        let totalEmails = 0;
+        folderMap.forEach(emails => totalEmails += emails.length);
+        
+        const accountKey = `account:${accountId}`;
+        const isAccountExpanded = expandedSections.has(accountKey);
         
         html += `
-            <div class="review-group">
-                <div class="review-group-header">
+            <div class="review-group review-group-account">
+                <div class="review-group-header review-group-header-account" onclick="toggleReviewSection('${accountKey}')">
                     <div class="review-group-header-left">
-                        <span class="review-group-title">${escapeHtml(sourceName)}</span>
+                        <i data-lucide="${isAccountExpanded ? 'chevron-down' : 'chevron-right'}" class="review-chevron"></i>
+                        <i data-lucide="mail" class="review-source-icon"></i>
+                        <span class="review-group-title">${escapeHtml(accountName)}</span>
+                        <span class="review-group-count">${totalEmails} email${totalEmails !== 1 ? 's' : ''}</span>
+                    </div>
+                </div>
+                <div class="review-group-content ${isAccountExpanded ? 'expanded' : 'collapsed'}">
+        `;
+        
+        // Render each folder within this account
+        folderMap.forEach((emails, folder) => {
+            const folderKey = `account:${accountId}:${folder}`;
+            const isFolderExpanded = expandedSections.has(folderKey);
+            
+            html += `
+                <div class="review-subgroup">
+                    <div class="review-subgroup-header" onclick="toggleReviewSection('${escapeHtml(folderKey)}'); event.stopPropagation();">
+                        <div class="review-subgroup-header-left">
+                            <i data-lucide="${isFolderExpanded ? 'chevron-down' : 'chevron-right'}" class="review-chevron"></i>
+                            <i data-lucide="folder" class="review-folder-icon"></i>
+                            <span class="review-subgroup-title">${escapeHtml(folder)}</span>
+                            <span class="review-group-count">${emails.length} email${emails.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        <div class="review-subgroup-header-right" onclick="event.stopPropagation();">
+                            <label class="source-action-label">
+                                <span>After commit:</span>
+                                ${renderSourceActionDropdown(folderKey)}
+                            </label>
+                        </div>
+                    </div>
+                    <div class="review-subgroup-items ${isFolderExpanded ? 'expanded' : 'collapsed'}">
+            `;
+            
+            emails.forEach(email => {
+                html += renderEmailItem(email);
+            });
+            
+            html += `
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `
+                </div>
+            </div>
+        `;
+    });
+    
+    // Render import groups (emails)
+    emailsByImport.forEach((emails, importId) => {
+        const importName = getImportName(importId);
+        const importKey = `import:${importId}`;
+        const isExpanded = expandedSections.has(importKey);
+        
+        html += `
+            <div class="review-group review-group-import">
+                <div class="review-group-header" onclick="toggleReviewSection('${importKey}')">
+                    <div class="review-group-header-left">
+                        <i data-lucide="${isExpanded ? 'chevron-down' : 'chevron-right'}" class="review-chevron"></i>
+                        <i data-lucide="archive" class="review-source-icon"></i>
+                        <span class="review-group-title">${escapeHtml(importName)}</span>
                         <span class="review-group-count">${emails.length} email${emails.length !== 1 ? 's' : ''}</span>
                     </div>
-                    ${isImapSource ? `
-                    <div class="review-group-header-right">
-                        <label class="source-action-label">
-                            <span>After commit:</span>
-                            ${renderSourceActionDropdown(sourceKey)}
-                        </label>
-                    </div>
-                    ` : ''}
                 </div>
-                <div class="review-group-items">
+                <div class="review-group-content ${isExpanded ? 'expanded' : 'collapsed'}">
+                    <div class="review-group-items">
         `;
         
         emails.forEach(email => {
-            const destFolder = folders.find(f => f.id == email.destinationFolderId);
-            const destName = destFolder ? destFolder.name : 'Select folder...';
+            html += renderEmailItem(email);
+        });
+        
+        html += `
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+
+    // Render staged folders - group by source
+    if (stagedFolders.length > 0) {
+        const foldersByAccount = new Map();
+        const foldersByImport = new Map();
+        
+        stagedFolders.forEach((sf, index) => {
+            const folderData = { ...sf, originalIndex: index };
+            
+            if (sf.sourceType === 'import') {
+                if (!foldersByImport.has(sf.importId)) {
+                    foldersByImport.set(sf.importId, []);
+                }
+                foldersByImport.get(sf.importId).push(folderData);
+            } else {
+                if (!foldersByAccount.has(sf.accountId)) {
+                    foldersByAccount.set(sf.accountId, []);
+                }
+                foldersByAccount.get(sf.accountId).push(folderData);
+            }
+        });
+        
+        // Render IMAP folder groups
+        foldersByAccount.forEach((foldersInSource, accountId) => {
+            const accountName = getAccountName(accountId);
+            const groupKey = `folders:account:${accountId}`;
+            const isExpanded = expandedSections.has(groupKey);
             
             html += `
-                <div class="review-item" data-email-id="${email.emailId}">
-                    <div class="review-item-info">
-                        <div class="review-item-subject">${escapeHtml(email.subject || '(no subject)')}</div>
-                        <div class="review-item-meta">
-                            <span class="review-item-from">${escapeHtml(extractName(email.from))}</span>
-                            <span class="review-item-date">${formatDate(email.date)}</span>
+                <div class="review-group review-group-folders">
+                    <div class="review-group-header" onclick="toggleReviewSection('${groupKey}')">
+                        <div class="review-group-header-left">
+                            <i data-lucide="${isExpanded ? 'chevron-down' : 'chevron-right'}" class="review-chevron"></i>
+                            <i data-lucide="folders" class="review-source-icon"></i>
+                            <span class="review-group-title">${escapeHtml(accountName)} (Folders)</span>
+                            <span class="review-group-count">${foldersInSource.length} folder${foldersInSource.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        <div class="review-group-header-right" onclick="event.stopPropagation();">
+                            <label class="source-action-label">
+                                <span>After commit:</span>
+                                ${renderSourceActionDropdown(`folder:account:${accountId}`)}
+                            </label>
                         </div>
                     </div>
-                    <div class="review-item-dest">
-                        <div class="icon-select" data-email-id="${email.emailId}" data-value="${email.destinationFolderId || ''}">
-                            <button class="icon-select-trigger">
-                                <i data-lucide="folder"></i>
-                                <span>${escapeHtml(destName)}</span>
-                                <i data-lucide="chevron-down" class="icon-select-arrow"></i>
-                            </button>
-                            <div class="icon-select-dropdown">
-                                ${renderFolderOptions(email.destinationFolderId)}
-                            </div>
+                    <div class="review-group-content ${isExpanded ? 'expanded' : 'collapsed'}">
+                        <div class="review-group-items">
+            `;
+            
+            foldersInSource.forEach(sf => {
+                html += renderFolderItem(sf);
+            });
+            
+            html += `
                         </div>
                     </div>
-                    <button class="btn btn-sm btn-icon btn-danger-subtle" onclick="unstageEmailFromReview('${email.emailId}')" title="Unstage">
-                        <i data-lucide="x"></i>
-                    </button>
                 </div>
             `;
         });
         
-        html += '</div></div>';
-    });
-
-    // Render staged folders - group by source
-    if (stagedFolders.length > 0) {
-        // Group folders by source
-        const foldersBySource = new Map();
-        stagedFolders.forEach((sf, index) => {
-            const key = sf.sourceType === 'import'
-                ? `import:${sf.importId}`
-                : `account:${sf.accountId}`;
-            if (!foldersBySource.has(key)) {
-                foldersBySource.set(key, []);
-            }
-            foldersBySource.get(key).push({ ...sf, originalIndex: index });
-        });
-        
-        foldersBySource.forEach((foldersInSource, sourceKey) => {
-            const firstFolder = foldersInSource[0];
-            const isImapSource = sourceKey.startsWith('account:');
-            const sourceName = firstFolder.sourceType === 'import'
-                ? getImportName(firstFolder.importId)
-                : getAccountName(firstFolder.accountId);
+        // Render import folder groups
+        foldersByImport.forEach((foldersInSource, importId) => {
+            const importName = getImportName(importId);
+            const groupKey = `folders:import:${importId}`;
+            const isExpanded = expandedSections.has(groupKey);
             
             html += `
-                <div class="review-group">
-                    <div class="review-group-header">
+                <div class="review-group review-group-folders">
+                    <div class="review-group-header" onclick="toggleReviewSection('${groupKey}')">
                         <div class="review-group-header-left">
-                            <span class="review-group-title">${escapeHtml(sourceName)} (Folders)</span>
+                            <i data-lucide="${isExpanded ? 'chevron-down' : 'chevron-right'}" class="review-chevron"></i>
+                            <i data-lucide="folders" class="review-source-icon"></i>
+                            <span class="review-group-title">${escapeHtml(importName)} (Folders)</span>
                             <span class="review-group-count">${foldersInSource.length} folder${foldersInSource.length !== 1 ? 's' : ''}</span>
                         </div>
-                        ${isImapSource ? `
-                        <div class="review-group-header-right">
-                            <label class="source-action-label">
-                                <span>After commit:</span>
-                                ${renderSourceActionDropdown(`folder:${sourceKey}`)}
-                            </label>
-                        </div>
-                        ` : ''}
                     </div>
-                    <div class="review-group-items">
+                    <div class="review-group-content ${isExpanded ? 'expanded' : 'collapsed'}">
+                        <div class="review-group-items">
             `;
             
-            foldersInSource.forEach((sf) => {
-                const index = sf.originalIndex;
-                const destFolder = folders.find(f => f.id == sf.destinationFolderId);
-                const destName = destFolder ? destFolder.name : 'Select folder...';
-                
-                html += `
-                    <div class="review-item review-item-folder" data-folder-index="${index}">
-                        <div class="review-item-info">
-                            <div class="review-item-subject">
-                                <i data-lucide="folder" style="width: 16px; height: 16px; margin-right: 4px;"></i>
-                                ${escapeHtml(sf.archivePath || sf.folder.split('/').pop() || '(root)')}
-                            </div>
-                            <div class="review-item-meta">
-                                <span class="review-item-from">${escapeHtml(sf.folder)}</span>
-                            </div>
-                        </div>
-                        <div class="review-item-dest">
-                            <div class="icon-select" data-folder-index="${index}" data-value="${sf.destinationFolderId || ''}">
-                                <button class="icon-select-trigger">
-                                    <i data-lucide="folder"></i>
-                                    <span>${escapeHtml(destName)}</span>
-                                    <i data-lucide="chevron-down" class="icon-select-arrow"></i>
-                                </button>
-                                <div class="icon-select-dropdown">
-                                    ${renderFolderOptions(sf.destinationFolderId)}
-                                </div>
-                            </div>
-                        </div>
-                        <button class="btn btn-sm btn-icon btn-danger-subtle" onclick="unstageFolderFromReview(${index})" title="Unstage">
-                            <i data-lucide="x"></i>
-                        </button>
-                    </div>
-                `;
+            foldersInSource.forEach(sf => {
+                html += renderFolderItem(sf);
             });
             
-            html += '</div></div>';
+            html += `
+                        </div>
+                    </div>
+                </div>
+            `;
         });
     }
     
@@ -298,6 +363,84 @@ function renderReviewView() {
     initIconSelects();
     updateButtons();
 }
+
+function renderEmailItem(email) {
+    const destFolder = folders.find(f => f.id == email.destinationFolderId);
+    const destName = destFolder ? destFolder.name : 'Select folder...';
+    
+    return `
+        <div class="review-item" data-email-id="${email.emailId}">
+            <div class="review-item-info">
+                <div class="review-item-subject">${escapeHtml(email.subject || '(no subject)')}</div>
+                <div class="review-item-meta">
+                    <span class="review-item-from">${escapeHtml(extractName(email.from))}</span>
+                    <span class="review-item-date">${formatDate(email.date)}</span>
+                </div>
+            </div>
+            <div class="review-item-dest">
+                <div class="icon-select" data-email-id="${email.emailId}" data-value="${email.destinationFolderId || ''}">
+                    <button class="icon-select-trigger">
+                        <i data-lucide="folder"></i>
+                        <span>${escapeHtml(destName)}</span>
+                        <i data-lucide="chevron-down" class="icon-select-arrow"></i>
+                    </button>
+                    <div class="icon-select-dropdown">
+                        ${renderFolderOptions(email.destinationFolderId)}
+                    </div>
+                </div>
+            </div>
+            <button class="btn btn-sm btn-icon btn-danger-subtle" onclick="unstageEmailFromReview('${email.emailId}')" title="Unstage">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+    `;
+}
+
+function renderFolderItem(sf) {
+    const index = sf.originalIndex;
+    const destFolder = folders.find(f => f.id == sf.destinationFolderId);
+    const destName = destFolder ? destFolder.name : 'Select folder...';
+    
+    return `
+        <div class="review-item review-item-folder" data-folder-index="${index}">
+            <div class="review-item-info">
+                <div class="review-item-subject">
+                    <i data-lucide="folder" style="width: 16px; height: 16px; margin-right: 4px;"></i>
+                    ${escapeHtml(sf.archivePath || sf.folder.split('/').pop() || '(root)')}
+                </div>
+                <div class="review-item-meta">
+                    <span class="review-item-from">${escapeHtml(sf.folder)}</span>
+                </div>
+            </div>
+            <div class="review-item-dest">
+                <div class="icon-select" data-folder-index="${index}" data-value="${sf.destinationFolderId || ''}">
+                    <button class="icon-select-trigger">
+                        <i data-lucide="folder"></i>
+                        <span>${escapeHtml(destName)}</span>
+                        <i data-lucide="chevron-down" class="icon-select-arrow"></i>
+                    </button>
+                    <div class="icon-select-dropdown">
+                        ${renderFolderOptions(sf.destinationFolderId)}
+                    </div>
+                </div>
+            </div>
+            <button class="btn btn-sm btn-icon btn-danger-subtle" onclick="unstageFolderFromReview(${index})" title="Unstage">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+    `;
+}
+
+// Toggle section expansion
+window.toggleReviewSection = function(sectionKey) {
+    if (expandedSections.has(sectionKey)) {
+        expandedSections.delete(sectionKey);
+    } else {
+        expandedSections.add(sectionKey);
+    }
+    renderReviewView();
+};
+
 
 function getSourceName(sourceKey, firstEmail) {
     if (sourceKey.startsWith('import:')) {
@@ -321,14 +464,6 @@ function getImportName(importId) {
     const imports = window.getMountedImports ? window.getMountedImports() : [];
     const imp = imports.find(i => i.id === importId);
     return imp ? imp.name : `Import`;
-}
-
-function getFolderSourceName(sf) {
-    if (sf.sourceType === 'import') {
-        return getImportName(sf.importId);
-    } else {
-        return getAccountName(sf.accountId);
-    }
 }
 
 function renderSourceActionDropdown(sourceKey, selectedValue = 'leave') {
@@ -393,7 +528,6 @@ function initIconSelects() {
     document.querySelectorAll('.icon-select').forEach(select => {
         const trigger = select.querySelector('.icon-select-trigger');
         const dropdown = select.querySelector('.icon-select-dropdown');
-        const isSourceAction = select.classList.contains('source-action-dropdown');
         
         trigger?.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -405,20 +539,17 @@ function initIconSelects() {
                 }
             });
             
-            // Check if dropdown would go off screen
             if (dropdown) {
                 const triggerRect = trigger.getBoundingClientRect();
-                const dropdownHeight = 200; // max-height from CSS
+                const dropdownHeight = 200;
                 const spaceBelow = window.innerHeight - triggerRect.bottom;
                 
                 if (spaceBelow < dropdownHeight && triggerRect.top > dropdownHeight) {
-                    // Show above
                     dropdown.style.bottom = '100%';
                     dropdown.style.top = 'auto';
                     dropdown.style.marginBottom = '4px';
                     dropdown.style.marginTop = '0';
                 } else {
-                    // Show below (default)
                     dropdown.style.top = '100%';
                     dropdown.style.bottom = 'auto';
                     dropdown.style.marginTop = '4px';
@@ -437,16 +568,13 @@ function initIconSelects() {
                 const sourceKey = select.dataset.sourceKey;
                 
                 if (sourceKey) {
-                    // Source action dropdown - just update the display and store the value
                     select.dataset.value = value;
                     const triggerSpan = trigger.querySelector('span');
                     if (triggerSpan) {
                         triggerSpan.textContent = option.querySelector('span')?.textContent || value;
                     }
-                    // Update selected state
                     dropdown.querySelectorAll('.icon-select-option').forEach(o => o.classList.remove('selected'));
                     option.classList.add('selected');
-                    // Store in module state
                     sourceActions[sourceKey] = value;
                 } else if (emailId) {
                     changeEmailDestination(emailId, value);
@@ -459,7 +587,6 @@ function initIconSelects() {
         });
     });
     
-    // Close dropdowns when clicking outside (only add once)
     if (!dropdownClickListenerAdded) {
         document.addEventListener('click', () => {
             document.querySelectorAll('.icon-select-dropdown.open').forEach(d => {
@@ -507,6 +634,7 @@ window.unstageFolderFromReview = function(index) {
     renderReviewView();
 };
 
+
 function updateButtons() {
     const stagedEmails = getStagedEmails();
     const stagedFolders = getStagedFolders();
@@ -515,7 +643,6 @@ function updateButtons() {
     const commitBtn = document.getElementById('commitBtn');
     const unstageAllBtn = document.getElementById('unstageAllBtn');
     
-    // Check if all items have destinations
     let allHaveDestinations = true;
     stagedEmails.forEach(data => {
         if (!data.destinationFolderId) allHaveDestinations = false;
@@ -543,17 +670,14 @@ async function commitAll() {
         commitBtn.disabled = true;
     }
     
-    // Show progress modal
     const modal = document.getElementById('commitProgressModal');
     const progressContainer = document.getElementById('commitProgressContent');
     modal.classList.add('active');
     
-    // Import and create progress component
     const { createProgress } = await import('../components/progress.js');
     const progress = createProgress(progressContainer);
     
     try {
-        // Prepare commit data
         const emails = [];
         stagedEmails.forEach((data, emailId) => {
             emails.push({
@@ -577,7 +701,6 @@ async function commitAll() {
             destinationFolderId: sf.destinationFolderId,
         }));
         
-        // Collect source actions from icon-select dropdowns
         const postCommitActions = { ...sourceActions };
         document.querySelectorAll('.source-action-dropdown').forEach(dropdown => {
             const sourceKey = dropdown.dataset.sourceKey;
@@ -585,28 +708,17 @@ async function commitAll() {
             postCommitActions[sourceKey] = value;
         });
         
-        // Use progress component for streaming
         await progress.startPostStream('/api/commit/stream', {
             staged: emails,
             folders: foldersToCommit,
             sourceActions: postCommitActions,
         }, {
             onComplete: async (data) => {
-                // Close modal
                 modal.classList.remove('active');
-                
-                // Clear all staged items after commit
                 clearAllStaged();
                 updateStagedBadge();
-                
-                // Refresh sidebar to show new folders
                 await refreshSidebar();
-                
-                // Re-render the review view (now empty)
                 renderReviewView();
-                
-                // Show results
-                const results = data.results || {};
                 const msg = data.message || 'Commit complete.';
                 showAlert('Commit Complete', msg);
             },
