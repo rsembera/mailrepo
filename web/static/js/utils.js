@@ -15,6 +15,17 @@ export function escapeHtml(str) {
 }
 
 /**
+ * Escape a string for use in an onclick attribute.
+ * Handles backslashes, single quotes, and double quotes.
+ * @param {string} str - String to escape
+ * @returns {string} Escaped string
+ */
+export function escapeForOnclick(str) {
+    if (!str) return '';
+    return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+/**
  * Extract name from email address format "Name <email>".
  * @param {string} sender - Sender string
  * @returns {string} Extracted name or original string

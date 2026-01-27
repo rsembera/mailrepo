@@ -8,21 +8,13 @@
  * - Color picker
  */
 
-import { escapeHtml } from '../utils.js';
+import { escapeHtml, escapeForOnclick } from '../utils.js';
 import { state, loadFolders, setSelectedFoldersGetter, setSelectedFoldersClearer } from '../state.js';
 import { closeModal, showPrompt, showConfirm, showAlert } from '../modals.js';
 import { refreshSidebarFolders, buildImapFolderTree, getFolderIcon } from '../components/sidebar.js';
 import { updateStagedBadge } from '../components/staging.js';
 import { getMountedImports } from '../components/imports.js';
 import { updateTrashBadge } from './trash.js';
-
-/**
- * Escape a string for use in an onclick attribute.
- * Handles quotes and backslashes.
- */
-function escapeForOnclick(str) {
-    return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-}
 
 // Module state
 let movingFolderId = null;

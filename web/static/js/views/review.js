@@ -5,6 +5,7 @@
  * Bulk operations only - individual item management happens during staging.
  */
 
+import { escapeHtml, escapeForOnclick } from '../utils.js';
 import { getStagedEmails, getStagedFolders, clearAllStaged, updateStagedBadge } from '../components/staging.js';
 import { showConfirm, showAlert } from '../modals.js';
 import { state, loadFolders } from '../state.js';
@@ -787,18 +788,6 @@ function updateButtons() {
     if (unstageAllBtn) {
         unstageAllBtn.disabled = totalCount === 0;
     }
-}
-
-function escapeHtml(str) {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
-
-function escapeForOnclick(str) {
-    if (!str) return '';
-    return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 }
 
 

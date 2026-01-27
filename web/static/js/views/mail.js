@@ -8,16 +8,9 @@
  * - View state management
  */
 
-import { escapeHtml } from '../utils.js';
+import { escapeHtml, escapeForOnclick } from '../utils.js';
 import { state } from '../state.js';
 import { renderEmailList } from '../components/email-list.js';
-
-/**
- * Escape a string for use in an onclick attribute.
- */
-function escapeForOnclick(str) {
-    return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-}
 
 // DOM element references
 let contextTitle = null;
