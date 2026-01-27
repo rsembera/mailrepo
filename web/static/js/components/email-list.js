@@ -28,6 +28,8 @@ export function initEmailList(config) {
 export function renderEmailList() {
     if (!emailListEl) return;
     
+    const isArchiveView = state.currentView?.type === 'folder';
+    
     if (state.emails.length === 0) {
         emailListEl.innerHTML = `
             <div class="empty-state">
@@ -42,9 +44,22 @@ export function renderEmailList() {
     
     const selectedCount = state.selectedEmails.size;
     
-    // Build table-style layout matching folder selection
-    let html = `
-        <div class="folder-management-list">
+    // Build table-style layout
+    let html = `<div class="folder-management-list">`;
+    
+    if (isArchiveView) {
+        // Archive view - simple list, no staging toolbar
+        html += `
+            <div class="folder-management-toolbar">
+                <h2>${state.emails.length} Archived Email${state.emails.length !== 1 ? 's' : ''}</h2>
+            </div>
+            <div class="folder-management-header email-list-header">
+                <span>Email</span>
+            </div>
+        `;
+    } else {
+        // IMAP/Import view - staging toolbar
+        html += `
             <div class="folder-management-toolbar">
                 <h2>${state.emails.length} Email${state.emails.length !== 1 ? 's' : ''}</h2>
                 <div class="toolbar-actions">
@@ -66,7 +81,8 @@ export function renderEmailList() {
                 <span>Email</span>
                 <span>Actions</span>
             </div>
-    `;
+        `;
+    }
     
     html += state.emails.map(email => {
         const emailId = email.uid || email.id;
@@ -74,38 +90,42 @@ export function renderEmailList() {
         const isSelected = state.selectedEmails.has(emailId);
         
         let rowClass = 'folder-management-item email-list-item';
-        if (isStaged) rowClass += ' staged';
-        if (isSelected) rowClass += ' selected';
+        if (!isArchiveView) {
+            if (isStaged) rowClass += ' staged';
+            if (isSelected) rowClass += ' selected';
+        }
         
-        // Determine which action buttons to show
+        // Determine which action buttons to show (only for non-archive views)
         let actionsHtml = '';
-        if (isStaged) {
-            actionsHtml = `
-                <button class="btn btn-sm btn-icon" disabled title="Already staged">
-                    <i data-lucide="circle"></i>
-                </button>
-                <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); clearEmail('${emailId}')" title="Unstage">
-                    <i data-lucide="x"></i>
-                </button>
-            `;
-        } else if (isSelected) {
-            actionsHtml = `
-                <button class="btn btn-sm btn-icon btn-selected" disabled title="Selected">
-                    <i data-lucide="check"></i>
-                </button>
-                <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); clearEmail('${emailId}')" title="Deselect">
-                    <i data-lucide="x"></i>
-                </button>
-            `;
-        } else {
-            actionsHtml = `
-                <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); selectEmail('${emailId}')" title="Select">
-                    <i data-lucide="circle"></i>
-                </button>
-                <button class="btn btn-sm btn-icon" disabled title="Not selected">
-                    <i data-lucide="x"></i>
-                </button>
-            `;
+        if (!isArchiveView) {
+            if (isStaged) {
+                actionsHtml = `
+                    <button class="btn btn-sm btn-icon" disabled title="Already staged">
+                        <i data-lucide="circle"></i>
+                    </button>
+                    <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); clearEmail('${emailId}')" title="Unstage">
+                        <i data-lucide="x"></i>
+                    </button>
+                `;
+            } else if (isSelected) {
+                actionsHtml = `
+                    <button class="btn btn-sm btn-icon btn-selected" disabled title="Selected">
+                        <i data-lucide="check"></i>
+                    </button>
+                    <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); clearEmail('${emailId}')" title="Deselect">
+                        <i data-lucide="x"></i>
+                    </button>
+                `;
+            } else {
+                actionsHtml = `
+                    <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); selectEmail('${emailId}')" title="Select">
+                        <i data-lucide="circle"></i>
+                    </button>
+                    <button class="btn btn-sm btn-icon" disabled title="Not selected">
+                        <i data-lucide="x"></i>
+                    </button>
+                `;
+            }
         }
         
         return `
@@ -119,9 +139,7 @@ export function renderEmailList() {
                         <span class="email-subject">${escapeHtml(email.subject || '(no subject)')}</span>
                     </div>
                 </div>
-                <div class="folder-management-actions" onclick="event.stopPropagation()">
-                    ${actionsHtml}
-                </div>
+                ${!isArchiveView ? `<div class="folder-management-actions" onclick="event.stopPropagation()">${actionsHtml}</div>` : ''}
             </div>
         `;
     }).join('');
