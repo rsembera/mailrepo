@@ -111,7 +111,9 @@ export async function loadAccountEmails(accountId, folder = 'INBOX') {
     // Render IMAP breadcrumbs and subfolders
     renderImapNavigation(accountId, folder);
     
-    if (contextTitle) contextTitle.textContent = folder;
+    // Show just the folder name in title, not full path
+    const folderName = folder.includes('/') ? folder.split('/').pop() : folder;
+    if (contextTitle) contextTitle.textContent = folderName;
     if (contextMeta) contextMeta.textContent = 'Loading...';
     
     // Show progress UI
@@ -190,8 +192,14 @@ function renderImapNavigation(accountId, folderPath) {
     const subfoldersBar = document.getElementById('subfoldersBar');
     if (!subfoldersBar) return;
     
-    // Get cached IMAP folder data
-    const imapData = state.imapFolders.get(accountId);
+    // Get cached IMAP folder data (accountId might be string or number, try both)
+    let imapData = state.imapFolders.get(accountId);
+    if (!imapData) {
+        imapData = state.imapFolders.get(String(accountId));
+    }
+    if (!imapData) {
+        imapData = state.imapFolders.get(Number(accountId));
+    }
     if (!imapData) {
         subfoldersBar.style.display = 'none';
         subfoldersBar.innerHTML = '';
