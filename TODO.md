@@ -39,7 +39,7 @@
 ## Medium Priority
 
 ### IMAP UX
-- [ ] Clicking chevron on IMAP folder should load emails in Inbox
+- [x] Clicking chevron on IMAP account should load emails in Inbox
 
 ### Trash View
 - [ ] Sort/search in Trash
@@ -61,6 +61,24 @@
 - [ ] Remove debug logging from progress.py
 
 ---
+
+## Completed (Session 17 - January 27, 2026)
+
+### Review Page Redesign
+- [x] Redesigned Review page with destination-first grouping
+- [x] Collapsible source groups (by account/import)
+- [x] Alphabetical sorting of sources and items within
+- [x] Bulk unstage actions at destination and source levels
+- [x] "After commit" dropdown at source level (applies to all items from that source)
+- [x] "No server action" label for imports (explains missing dropdown)
+- [x] X buttons match folder/email selection pages (icon-only style)
+
+### UI/UX Improvements
+- [x] Remove "Folders Staged" alert modal (consistency with email staging)
+- [x] Add navigation guard for unsaved selections (warns before losing selected items)
+- [x] Update rail button tooltips: Mail→"Browse & Stage", Staged→"Review Staged", Manage Folders→"Manage Archives"
+- [x] Auto-load INBOX when expanding IMAP account chevron
+- [x] Fix archive email list view - remove staging UI (was showing Select All/Stage buttons)
 
 ## Completed (Session 16 - January 26, 2026)
 
