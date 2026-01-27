@@ -248,7 +248,6 @@ export function confirmStage() {
         // Refresh the folder selection view to show staged folders as greyed out
         refreshFolderSelectionView();
         
-        showAlert('Folders Staged', `${pending.folders.length} folder(s) staged for archiving. Go to Review to commit.`);
         return;
     }
     
