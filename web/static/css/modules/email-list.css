@@ -384,7 +384,7 @@
 }
 
 /* ============================================
-   SUBFOLDERS BAR (breadcrumbs + pill navigation)
+   SUBFOLDERS BAR (breadcrumbs + subfolder links)
    ============================================ */
 .subfolders-bar {
     display: flex;
@@ -403,42 +403,20 @@
     font-size: 0.85rem;
 }
 
-.subfolder-pills {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-sm);
+.subfolder-links {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
 }
 
-.subfolder-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-xs);
-    padding: var(--space-xs) var(--space-sm);
-    background: var(--color-background);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-full, 9999px);
-    font-size: 0.8125rem;
-    font-family: var(--font-ui);
-    color: var(--color-text);
-    cursor: pointer;
-    transition: all 0.15s ease;
+.subfolder-label {
+    color: var(--color-text-muted);
 }
 
-.subfolder-pill:hover {
-    border-color: var(--color-primary);
+.subfolder-link {
     color: var(--color-primary);
-    background: var(--color-primary-lighter, rgba(var(--color-primary-rgb), 0.1));
+    text-decoration: none;
 }
 
-.subfolder-pill i {
-    width: 14px;
-    height: 14px;
-    flex-shrink: 0;
-}
-
-.subfolder-pill span {
-    max-width: 150px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.subfolder-link:hover {
+    text-decoration: underline;
 }

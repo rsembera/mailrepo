@@ -214,13 +214,6 @@ export function selectFolderInSidebar(folderId) {
 }
 
 /**
- * Clear all folder selections in the sidebar.
- */
-export function clearSidebarSelection() {
-    document.querySelectorAll('.tree-item-row').forEach(r => r.classList.remove('active'));
-}
-
-/**
  * Add a new folder to the sidebar.
  * @param {Object} newFolder - Folder object with id, name, color
  */
