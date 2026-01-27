@@ -219,9 +219,8 @@ function renderReviewView() {
                     </div>
                     <div class="review-destination-header-right">
                         ${renderDestinationDropdown(destId)}
-                        <button class="btn btn-sm btn-danger-subtle" onclick="unstageDestination('${destId}')" title="Unstage all items going to this folder">
+                        <button class="btn btn-sm btn-icon" onclick="unstageDestination('${destId}')" title="Unstage all items going to this folder">
                             <i data-lucide="x"></i>
-                            Unstage
                         </button>
                     </div>
                 </div>
@@ -257,59 +256,73 @@ function renderReviewView() {
 function renderSourceGroup(source, sourceKey, destId, type) {
     const isImap = sourceKey.startsWith('account:');
     const sourceName = isImap ? getAccountName(source.accountId) : getImportName(source.importId);
-    const typeLabel = type === 'folders' ? ' (Folders)' : '';
     
-    let itemSummary = '';
-    let totalItems = 0;
+    let html = '';
     
     if (type === 'emails') {
-        const folderParts = [];
+        // For emails: one line per source folder within the account
         source.byFolder.forEach((items, folderName) => {
-            folderParts.push(`${folderName} (${items.length})`);
-            totalItems += items.length;
+            const lineKey = `${sourceKey}:${folderName}`;
+            const escapedLineKey = escapeForOnclick(lineKey);
+            const escapedDestId = escapeForOnclick(String(destId));
+            
+            html += `
+                <div class="review-source-line" data-source-key="${escapeHtml(lineKey)}" data-dest-id="${destId}">
+                    <div class="review-source-line-left">
+                        <i data-lucide="${isImap ? 'mail' : 'archive'}" class="review-source-icon"></i>
+                        <span class="review-source-name">${escapeHtml(sourceName)}</span>
+                        <span class="review-source-folder">${escapeHtml(folderName)}</span>
+                        <span class="review-source-count">(${items.length})</span>
+                    </div>
+                    <div class="review-source-line-right">
+                        ${isImap ? `
+                            <label class="source-action-label">
+                                <span>After:</span>
+                                ${renderSourceActionDropdown(`${sourceKey}:${folderName}:${destId}`)}
+                            </label>
+                        ` : `
+                            <span class="review-import-label">No server action</span>
+                        `}
+                        <button class="btn btn-sm btn-icon" onclick="unstageSourceFolder('${escapedLineKey}', '${escapedDestId}')" title="Unstage">
+                            <i data-lucide="x"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
         });
-        itemSummary = folderParts.join(' · ');
     } else {
-        // For folders, show folder names
-        totalItems = source.items.length;
-        const folderNames = source.items.map(sf => sf.archivePath || sf.folder.split('/').pop() || '(folder)');
-        if (folderNames.length <= 3) {
-            itemSummary = folderNames.join(' · ');
-        } else {
-            itemSummary = `${folderNames.slice(0, 2).join(' · ')} + ${folderNames.length - 2} more`;
-        }
+        // For folders: one line per staged folder
+        source.items.forEach((sf) => {
+            const folderDisplayName = sf.archivePath || sf.folder.split('/').pop() || '(folder)';
+            const index = sf.originalIndex;
+            const escapedDestId = escapeForOnclick(String(destId));
+            
+            html += `
+                <div class="review-source-line" data-folder-index="${index}" data-dest-id="${destId}">
+                    <div class="review-source-line-left">
+                        <i data-lucide="folder" class="review-source-icon"></i>
+                        <span class="review-source-name">${escapeHtml(sourceName)}</span>
+                        <span class="review-source-folder">${escapeHtml(folderDisplayName)}</span>
+                    </div>
+                    <div class="review-source-line-right">
+                        ${isImap ? `
+                            <label class="source-action-label">
+                                <span>After:</span>
+                                ${renderSourceActionDropdown(`folder:${sourceKey}:${index}:${destId}`)}
+                            </label>
+                        ` : `
+                            <span class="review-import-label">No server action</span>
+                        `}
+                        <button class="btn btn-sm btn-icon" onclick="unstageFolderByIndex(${index})" title="Unstage">
+                            <i data-lucide="x"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
     }
     
-    const escapedSourceKey = escapeForOnclick(sourceKey);
-    const escapedDestId = escapeForOnclick(String(destId));
-    
-    return `
-        <div class="review-source-group" data-source-key="${escapeHtml(sourceKey)}" data-dest-id="${destId}">
-            <div class="review-source-header">
-                <div class="review-source-header-left">
-                    <i data-lucide="${isImap ? 'mail' : 'archive'}" class="review-source-icon"></i>
-                    <span class="review-source-title">${escapeHtml(sourceName)}${typeLabel}</span>
-                </div>
-                <div class="review-source-header-middle">
-                    <span class="review-source-summary">${escapeHtml(itemSummary)}</span>
-                </div>
-                <div class="review-source-header-right">
-                    ${isImap ? `
-                        <label class="source-action-label">
-                            <span>After:</span>
-                            ${renderSourceActionDropdown(`${sourceKey}:${destId}`)}
-                        </label>
-                    ` : `
-                        <span class="review-import-label">No server action</span>
-                    `}
-                    <button class="btn btn-sm btn-danger-subtle" onclick="unstageSource('${escapedSourceKey}', '${escapedDestId}', '${type}')" title="Unstage">
-                        <i data-lucide="x"></i>
-                        Unstage
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
+    return html;
 }
 
 function renderDestinationDropdown(currentDestId) {
@@ -497,6 +510,84 @@ window.unstageSource = async function(sourceKey, destId, type) {
         });
         sessionStorage.setItem('stagedFolders', JSON.stringify(newFolders));
     }
+    
+    updateStagedBadge();
+    renderReviewView();
+};
+
+// Unstage emails from a specific source folder (account:id:folderName)
+window.unstageSourceFolder = async function(lineKey, destId) {
+    const stagedEmails = getStagedEmails();
+    
+    // Parse lineKey: "account:123:INBOX" or "import:abc:FolderName"
+    const parts = lineKey.split(':');
+    const sourceType = parts[0];
+    const sourceId = parts[1];
+    const folderName = parts.slice(2).join(':'); // Handle folder names with colons
+    
+    // Count matching emails
+    let count = 0;
+    stagedEmails.forEach(data => {
+        const itemSourceKey = data.sourceType === 'import'
+            ? `import:${data.sourceImportId}`
+            : `account:${data.sourceAccountId}`;
+        const itemFolder = data.sourceFolder || 'INBOX';
+        const itemDestId = String(data.destinationFolderId || 'unassigned');
+        
+        if (`${sourceType}:${sourceId}` === itemSourceKey && 
+            itemFolder === folderName && 
+            itemDestId === String(destId)) {
+            count++;
+        }
+    });
+    
+    const confirmed = await showConfirm(
+        'Unstage Emails',
+        `Unstage ${count} email${count !== 1 ? 's' : ''} from ${folderName}?`,
+        { confirmText: 'Unstage', confirmClass: 'btn-danger' }
+    );
+    
+    if (!confirmed) return;
+    
+    const newEmails = new Map();
+    stagedEmails.forEach((data, emailId) => {
+        const itemSourceKey = data.sourceType === 'import'
+            ? `import:${data.sourceImportId}`
+            : `account:${data.sourceAccountId}`;
+        const itemFolder = data.sourceFolder || 'INBOX';
+        const itemDestId = String(data.destinationFolderId || 'unassigned');
+        
+        const matches = `${sourceType}:${sourceId}` === itemSourceKey && 
+                       itemFolder === folderName && 
+                       itemDestId === String(destId);
+        if (!matches) {
+            newEmails.set(emailId, data);
+        }
+    });
+    sessionStorage.setItem('stagedEmails', JSON.stringify([...newEmails.entries()]));
+    
+    updateStagedBadge();
+    renderReviewView();
+};
+
+// Unstage a single folder by its index
+window.unstageFolderByIndex = async function(index) {
+    const stagedFolders = getStagedFolders();
+    const sf = stagedFolders[index];
+    if (!sf) return;
+    
+    const folderName = sf.archivePath || sf.folder.split('/').pop() || 'this folder';
+    
+    const confirmed = await showConfirm(
+        'Unstage Folder',
+        `Unstage "${folderName}"?`,
+        { confirmText: 'Unstage', confirmClass: 'btn-danger' }
+    );
+    
+    if (!confirmed) return;
+    
+    stagedFolders.splice(index, 1);
+    sessionStorage.setItem('stagedFolders', JSON.stringify(stagedFolders));
     
     updateStagedBadge();
     renderReviewView();
