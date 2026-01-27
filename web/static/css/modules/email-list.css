@@ -384,15 +384,29 @@
 }
 
 /* ============================================
-   SUBFOLDERS BAR (pill navigation)
+   SUBFOLDERS BAR (breadcrumbs + pill navigation)
    ============================================ */
 .subfolders-bar {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: var(--space-sm);
     padding: var(--space-sm) var(--space-lg);
     background: var(--color-background-secondary);
     border-bottom: 1px solid var(--color-border);
+}
+
+.subfolder-breadcrumbs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-xs);
+    font-size: 0.85rem;
+}
+
+.subfolder-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
 }
 
 .subfolder-pill {

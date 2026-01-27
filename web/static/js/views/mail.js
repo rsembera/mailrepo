@@ -188,37 +188,53 @@ function renderFolderContents(folderId, subfolders) {
     
     const subfoldersBar = document.getElementById('subfoldersBar');
     const currentFolder = state.folders.find(f => f.id == folderId);
-    const parentFolder = currentFolder?.parent_id ? state.folders.find(f => f.id == currentFolder.parent_id) : null;
     
-    // Show bar if we have subfolders OR a parent to go up to
-    if ((subfolders.length > 0 || parentFolder) && subfoldersBar) {
-        let pillsHtml = '';
+    // Build breadcrumb trail from root to current folder
+    const breadcrumbs = [];
+    let folder = currentFolder;
+    while (folder) {
+        breadcrumbs.unshift(folder);
+        folder = folder.parent_id ? state.folders.find(f => f.id == folder.parent_id) : null;
+    }
+    
+    // Show bar if we have breadcrumbs (not at root) OR subfolders
+    if ((breadcrumbs.length > 0 || subfolders.length > 0) && subfoldersBar) {
+        let html = '';
         
-        // Add "Up" pill if there's a parent
-        if (parentFolder) {
-            pillsHtml += `
-                <button class="subfolder-pill subfolder-pill-up" onclick="window.navigateToSubfolder(${parentFolder.id})">
-                    <i data-lucide="arrow-up"></i>
-                    <span>${escapeHtml(parentFolder.name)}</span>
-                </button>
-            `;
+        // Breadcrumb trail (only if we're in a subfolder)
+        if (breadcrumbs.length > 0) {
+            html += `<div class="subfolder-breadcrumbs">`;
+            html += `<a href="#" onclick="window.navigateToArchiveRoot(); return false;" class="breadcrumb-link">Archive</a>`;
+            breadcrumbs.forEach((crumb, i) => {
+                html += ` <i data-lucide="chevron-right" class="breadcrumb-sep"></i> `;
+                if (i === breadcrumbs.length - 1) {
+                    html += `<span class="breadcrumb-current">${escapeHtml(crumb.name)}</span>`;
+                } else {
+                    html += `<a href="#" onclick="window.navigateToSubfolder(${crumb.id}); return false;" class="breadcrumb-link">${escapeHtml(crumb.name)}</a>`;
+                }
+            });
+            html += `</div>`;
         }
         
-        // Add subfolder pills
-        pillsHtml += subfolders.map(sf => {
-            const childFolders = state.folders.filter(f => f.parent_id == sf.id && !f.deleted_at);
-            const hasChildren = childFolders.length > 0;
-            
-            return `
-                <button class="subfolder-pill" onclick="window.navigateToSubfolder(${sf.id})">
-                    <i data-lucide="${hasChildren ? 'folder-tree' : 'folder'}"></i>
-                    <span>${escapeHtml(sf.name)}</span>
-                </button>
-            `;
-        }).join('');
+        // Subfolder pills
+        if (subfolders.length > 0) {
+            html += `<div class="subfolder-pills">`;
+            html += subfolders.map(sf => {
+                const childFolders = state.folders.filter(f => f.parent_id == sf.id && !f.deleted_at);
+                const hasChildren = childFolders.length > 0;
+                
+                return `
+                    <button class="subfolder-pill" onclick="window.navigateToSubfolder(${sf.id})">
+                        <i data-lucide="${hasChildren ? 'folder-tree' : 'folder'}"></i>
+                        <span>${escapeHtml(sf.name)}</span>
+                    </button>
+                `;
+            }).join('');
+            html += `</div>`;
+        }
         
-        subfoldersBar.innerHTML = pillsHtml;
-        subfoldersBar.style.display = 'flex';
+        subfoldersBar.innerHTML = html;
+        subfoldersBar.style.display = 'block';
         if (typeof lucide !== 'undefined') lucide.createIcons();
     } else if (subfoldersBar) {
         subfoldersBar.style.display = 'none';
@@ -244,6 +260,41 @@ window.navigateToSubfolder = function(folderId) {
     import('../components/sidebar.js').then(m => {
         if (m.selectFolderInSidebar) {
             m.selectFolderInSidebar(folderId);
+        }
+    });
+};
+
+/**
+ * Navigate to archive root (show all top-level folders).
+ */
+window.navigateToArchiveRoot = function() {
+    // Clear view state
+    state.currentView = { type: 'archive' };
+    state.selectedEmails.clear();
+    state.emails = [];
+    
+    // Hide subfolders bar
+    const subfoldersBar = document.getElementById('subfoldersBar');
+    if (subfoldersBar) {
+        subfoldersBar.style.display = 'none';
+        subfoldersBar.innerHTML = '';
+    }
+    
+    // Show welcome/empty state
+    if (emailList) {
+        emailList.innerHTML = `
+            <div class="empty-state">
+                <i data-lucide="archive" class="empty-icon"></i>
+                <p>Select a folder from the sidebar to view archived emails.</p>
+            </div>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+    
+    // Clear sidebar selection
+    import('../components/sidebar.js').then(m => {
+        if (m.clearSidebarSelection) {
+            m.clearSidebarSelection();
         }
     });
 };
