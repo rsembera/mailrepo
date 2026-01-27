@@ -200,7 +200,7 @@ function renderReviewView() {
             
             html += `
                 <div class="review-subgroup">
-                    <div class="review-subgroup-header" onclick="toggleReviewSection('${escapeHtml(folderKey)}'); event.stopPropagation();">
+                    <div class="review-subgroup-header" onclick="toggleReviewSection('${escapeForOnclick(folderKey)}'); event.stopPropagation();">
                         <div class="review-subgroup-header-left">
                             <i data-lucide="${isFolderExpanded ? 'chevron-down' : 'chevron-right'}" class="review-chevron"></i>
                             <i data-lucide="folder" class="review-folder-icon"></i>
@@ -745,6 +745,11 @@ function escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+}
+
+function escapeForOnclick(str) {
+    if (!str) return '';
+    return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 }
 
 function extractName(sender) {
