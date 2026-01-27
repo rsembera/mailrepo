@@ -8,7 +8,7 @@
  */
 
 import { escapeHtml, escapeForOnclick } from '../utils.js';
-import { state } from '../state.js';
+import { state, setSelectedFoldersGetter, setSelectedFoldersClearer } from '../state.js';
 import { showAlert } from '../modals.js';
 import { buildImapFolderTree, getFolderIcon } from '../components/sidebar.js';
 import { updateStagedBadge } from '../components/staging.js';
@@ -33,6 +33,10 @@ export function initFolderSelection(config) {
     contextTitle = config.contextTitle;
     contextMeta = config.contextMeta;
     emailList = config.emailList;
+    
+    // Register getter and clearer for selected folders (for navigation guard)
+    setSelectedFoldersGetter(() => selectedFoldersForStaging.size);
+    setSelectedFoldersClearer(() => selectedFoldersForStaging.clear());
 }
 
 /**

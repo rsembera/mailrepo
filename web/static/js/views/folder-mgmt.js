@@ -45,10 +45,6 @@ export function initFolderMgmt(config) {
     contextTitle = config.contextTitle;
     contextMeta = config.contextMeta;
     emailList = config.emailList;
-    
-    // Register getter and clearer for selected folders (for navigation guard)
-    setSelectedFoldersGetter(() => selectedFoldersForStaging.size);
-    setSelectedFoldersClearer(() => selectedFoldersForStaging.clear());
 }
 
 /**
@@ -484,3 +480,4 @@ async function setFolderColor(folderId, color) {
     } catch (error) {
         console.error('Error updating folder color:', error);
     }
+}
