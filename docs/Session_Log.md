@@ -24,15 +24,25 @@ Running record of planning sessions and decisions. Most recent first.
 - Replaced awkward subfolder pills with inline text links ("Subfolders: January, February, March")
 - Design decision: Root folders are distinct archives; navigate between them via sidebar, not breadcrumbs
 
+### Bug Fixes
+- Fixed logout triggering browser's "Changes may not be saved" warning (added skip flag for intentional navigation)
+
 ### Verified
 - Multi-account staging already works (emails from different accounts can be staged together)
+
+### Code Review
+Reviewed overall codebase health. Architecture is solid with clean separation of concerns. Non-blocking items for future refactoring:
+- `progress.py` (~1200 lines) could be split into streaming, commit, and email parsing modules
+- Some folder-tree rendering logic duplicated across components
+- Automated tests would be valuable for import parsing (most bug-prone area)
 
 **Commits:**
 - `50a5f40` — UI polish: remove debug logging, breadcrumb wrapping, remove redundant back button
 - `7e9764c` — Add full breadcrumb trail to archive folder navigation
 - `dd4ccd9` — Replace subfolder pills with inline links, remove Archive root from breadcrumbs
+- `3cdfb96` — Fix: Skip beforeunload warning on logout
 
-**Status:** UI polish complete. Ready for comprehensive testing.
+**Status:** UI polish complete. Code is in good shape for release. Ready for comprehensive testing.
 
 ---
 

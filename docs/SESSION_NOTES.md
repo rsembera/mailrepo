@@ -14,7 +14,6 @@
 - Breadcrumbs now wrap to next line instead of horizontal scrolling
 - Removed redundant back arrow button (breadcrumb links handle navigation)
 - Added "Archive" root link to breadcrumbs for returning to top level
-- Renamed root link to "Archive" for consistency with main view
 
 ### Archive Folder Navigation Redesign
 - Full breadcrumb trail in main view (e.g., "Client A > 2024 > Q1")
@@ -22,8 +21,17 @@
 - Replaced subfolder pills with inline text links ("Subfolders: January, February, March")
 - Root folders treated as distinct entities - navigate between them via sidebar
 
+### Bug Fixes
+- Fixed logout triggering browser's "Changes may not be saved" warning
+
 ### Verified Working
 - Multi-account staging already supported (was on TODO but already implemented)
+
+### Code Review Notes
+Architecture is solid. Areas for future refactoring (non-blocking):
+- progress.py is ~1200 lines, could be split into streaming/commit/parsing modules
+- Some folder-tree rendering duplication across components
+- Consider automated tests for import parsing (most bug-prone area)
 
 ---
 
@@ -48,7 +56,7 @@
 ## TODO / Next Steps
 
 1. Test Apple mbox imports thoroughly
-2. Comprehensive manual testing checklist
+2. Comprehensive manual testing checklist for release
 3. Address remaining items in TODO.md
 
 ---

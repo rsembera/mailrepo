@@ -62,6 +62,33 @@
 
 ### Testing
 - [ ] Automated test suite (start with import parsing, encryption/decryption)
+- [ ] Manual testing checklist for release
+
+### Future Refactoring (Non-blocking)
+- [ ] Split progress.py (~1200 lines) into streaming, commit, and email parsing modules
+- [ ] Consolidate folder-tree rendering logic (duplicated in sidebar, staging, folder-mgmt)
+
+---
+
+## Completed (Session 19 - January 27, 2026)
+
+### Code Cleanup
+- [x] Remove debug logging from progress.py (10 print statements removed)
+
+### UI Polish
+- [x] Destination modal breadcrumbs now wrap instead of horizontal scroll
+- [x] Remove redundant back arrow from destination modal (breadcrumbs sufficient)
+- [x] Add "Archive" root link to destination modal breadcrumbs
+
+### Archive Folder Navigation Redesign
+- [x] Replace subfolder pills with full breadcrumb trail
+- [x] Breadcrumbs only show when nested (root folders have no trail)
+- [x] Subfolder links shown as inline text: "Subfolders: A, B, C"
+- [x] Root folders treated as distinct top-level entities (no "Archive" root)
+
+### Bug Fixes
+- [x] Fix logout triggering "Changes may not be saved" browser warning
+- [x] Confirm multi-account staging already works (was on TODO but already implemented)
 
 ---
 
