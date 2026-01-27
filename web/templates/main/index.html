@@ -12,14 +12,14 @@
             <div class="rail-logo">
                 <img src="{{ url_for('static', filename='assets/icon.png') }}" alt="MailRepo" class="logo-icon">
             </div>
-            <button class="rail-btn active" data-view="mail" title="Mail">
+            <button class="rail-btn active" data-view="mail" title="Browse & Stage">
                 <i data-lucide="inbox"></i>
             </button>
-            <button class="rail-btn" data-view="staged" title="Staged Emails" id="stagedRailBtn">
+            <button class="rail-btn" data-view="staged" title="Review Staged" id="stagedRailBtn">
                 <i data-lucide="package"></i>
                 <span class="rail-badge hidden" id="stagedBadge">0</span>
             </button>
-            <button class="rail-btn" data-view="folders" title="Manage Folders" id="foldersRailBtn">
+            <button class="rail-btn" data-view="folders" title="Manage Archives" id="foldersRailBtn">
                 <i data-lucide="folder-cog"></i>
             </button>
             <button class="rail-btn" data-view="trash" title="Trash" id="trashRailBtn">
