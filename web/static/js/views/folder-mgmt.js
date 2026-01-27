@@ -364,12 +364,34 @@ export async function exportFolder(folderId) {
     const folder = state.folders.find(f => f.id == folderId);
     if (!folder) return;
     
+    // Show progress modal
+    const modal = document.getElementById('exportProgressModal');
+    const content = document.getElementById('exportProgressContent');
+    if (modal && content) {
+        content.innerHTML = `
+            <div class="progress-display">
+                <div class="progress-status">
+                    <i data-lucide="loader" class="progress-icon spin"></i>
+                    <span class="progress-message">Preparing export...</span>
+                </div>
+                <div class="progress-detail">
+                    <span class="progress-subject">Decrypting and packaging "${folder.name}"</span>
+                </div>
+            </div>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        modal.classList.add('active');
+    }
+    
     try {
         const response = await fetch(`/api/folders/${folderId}/export`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ include_subfolders: true }),
         });
+        
+        // Hide progress modal
+        if (modal) modal.classList.remove('active');
         
         if (!response.ok) {
             const data = await response.json();
@@ -396,6 +418,8 @@ export async function exportFolder(folderId) {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     } catch (error) {
+        // Hide progress modal on error
+        if (modal) modal.classList.remove('active');
         console.error('Error exporting folder:', error);
         showAlert('Error', 'Failed to export folder');
     }
