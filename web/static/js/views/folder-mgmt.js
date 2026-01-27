@@ -382,19 +382,6 @@ export async function exportFolder(folderId) {
     const folder = state.folders.find(f => f.id == folderId);
     if (!folder) return;
     
-    const children = state.folders.filter(f => f.parent_id == folderId && !f.deleted_at);
-    
-    // Confirm export if there are subfolders
-    if (children.length > 0) {
-        const confirmed = await showConfirm(
-            'Export Folder',
-            `Export "${folder.name}" and its ${children.length} subfolder${children.length > 1 ? 's' : ''}?`,
-            { okText: 'Export', cancelText: 'Cancel' }
-        );
-        
-        if (!confirmed) return; // Cancel - abort entirely
-    }
-    
     try {
         const response = await fetch(`/api/folders/${folderId}/export`, {
             method: 'POST',
