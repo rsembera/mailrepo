@@ -585,22 +585,26 @@ window.unstageDestination = async function(destId) {
     
     if (!confirmed) return;
     
-    // Remove matching emails
-    const newEmails = new Map();
+    // Remove matching emails - modify the Map directly
+    const toDelete = [];
     stagedEmails.forEach((data, emailId) => {
         const matches = String(data.destinationFolderId) === String(destId) || (destId === 'unassigned' && !data.destinationFolderId);
-        if (!matches) {
-            newEmails.set(emailId, data);
+        if (matches) {
+            toDelete.push(emailId);
         }
     });
-    sessionStorage.setItem('stagedEmails', JSON.stringify([...newEmails.entries()]));
+    toDelete.forEach(id => stagedEmails.delete(id));
+    sessionStorage.setItem('stagedEmails', JSON.stringify([...stagedEmails.entries()]));
     
-    // Remove matching folders
-    const newFolders = stagedFolders.filter(sf => {
+    // Remove matching folders - modify the array in place
+    for (let i = stagedFolders.length - 1; i >= 0; i--) {
+        const sf = stagedFolders[i];
         const matches = String(sf.destinationFolderId) === String(destId) || (destId === 'unassigned' && !sf.destinationFolderId);
-        return !matches;
-    });
-    sessionStorage.setItem('stagedFolders', JSON.stringify(newFolders));
+        if (matches) {
+            stagedFolders.splice(i, 1);
+        }
+    }
+    sessionStorage.setItem('stagedFolders', JSON.stringify(stagedFolders));
     
     updateStagedBadge();
     renderReviewView();
@@ -641,24 +645,28 @@ window.unstageSource = async function(sourceKey, destId, type) {
     if (!confirmed) return;
     
     if (type === 'emails') {
-        const newEmails = new Map();
+        // Modify the Map directly
+        const toDelete = [];
         stagedEmails.forEach((data, emailId) => {
             const itemSourceKey = buildSourceKey(data);
             const itemDestId = normalizeDestId(data.destinationFolderId);
-            const matches = itemSourceKey === sourceKey && itemDestId === normalizedDestId;
-            if (!matches) {
-                newEmails.set(emailId, data);
+            if (itemSourceKey === sourceKey && itemDestId === normalizedDestId) {
+                toDelete.push(emailId);
             }
         });
-        sessionStorage.setItem('stagedEmails', JSON.stringify([...newEmails.entries()]));
+        toDelete.forEach(id => stagedEmails.delete(id));
+        sessionStorage.setItem('stagedEmails', JSON.stringify([...stagedEmails.entries()]));
     } else {
-        const newFolders = stagedFolders.filter(sf => {
+        // Modify the array in place
+        for (let i = stagedFolders.length - 1; i >= 0; i--) {
+            const sf = stagedFolders[i];
             const itemSourceKey = buildSourceKey(sf);
             const itemDestId = normalizeDestId(sf.destinationFolderId);
-            const matches = itemSourceKey === sourceKey && itemDestId === normalizedDestId;
-            return !matches;
-        });
-        sessionStorage.setItem('stagedFolders', JSON.stringify(newFolders));
+            if (itemSourceKey === sourceKey && itemDestId === normalizedDestId) {
+                stagedFolders.splice(i, 1);
+            }
+        }
+        sessionStorage.setItem('stagedFolders', JSON.stringify(stagedFolders));
     }
     
     updateStagedBadge();
@@ -692,7 +700,8 @@ window.unstageSourceFolder = async function(lineKey, destId) {
     
     if (!confirmed) return;
     
-    const newEmails = new Map();
+    // Modify the Map directly
+    const toDelete = [];
     stagedEmails.forEach((data, emailId) => {
         const itemSourceKey = buildSourceKey(data);
         const itemFolder = data.sourceFolder || 'INBOX';
@@ -701,11 +710,12 @@ window.unstageSourceFolder = async function(lineKey, destId) {
         const matches = `${sourceType}:${sourceId}` === itemSourceKey && 
                        itemFolder === folderName && 
                        itemDestId === normalizeDestId(destId);
-        if (!matches) {
-            newEmails.set(emailId, data);
+        if (matches) {
+            toDelete.push(emailId);
         }
     });
-    sessionStorage.setItem('stagedEmails', JSON.stringify([...newEmails.entries()]));
+    toDelete.forEach(id => stagedEmails.delete(id));
+    sessionStorage.setItem('stagedEmails', JSON.stringify([...stagedEmails.entries()]));
     
     updateStagedBadge();
     renderReviewView();
