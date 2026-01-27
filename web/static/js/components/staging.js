@@ -100,7 +100,7 @@ export function renderFolderSelectDrilldown() {
     
     let html = '';
     
-    // Breadcrumb navigation
+    // Breadcrumb navigation (only when drilled into a folder)
     if (currentFolder) {
         const breadcrumbs = buildBreadcrumbs(currentFolder, visibleFolders);
         html += `<div class="drilldown-breadcrumbs">`;
@@ -119,13 +119,9 @@ export function renderFolderSelectDrilldown() {
         html += `</span>`;
         html += `</div>`;
         
-        // "Select This Folder" button for current level
-        html += `<div class="drilldown-select-current">
-            <button class="btn btn-primary" onclick="selectCurrentDrilldownFolder()">
-                <i data-lucide="check"></i>
-                Select "${escapeHtml(currentFolder.name)}"
-            </button>
-        </div>`;
+        // Enable Stage button when drilled into a folder
+        selectedDestinationFolder = currentFolder.id;
+        document.getElementById('confirmStageBtn').disabled = false;
     }
     
     // Folder list
@@ -134,13 +130,13 @@ export function renderFolderSelectDrilldown() {
     // New Folder option
     html += `<div class="drilldown-item drilldown-new" onclick="createSubfolderInDrilldown()">
         <i data-lucide="plus" class="drilldown-icon"></i>
-        <span class="drilldown-label">New Folder${currentFolder ? ' Here' : ''}</span>
+        <span class="drilldown-label">New Folder</span>
     </div>`;
     
     if (levelFolders.length === 0 && !currentFolder) {
         html += `<div class="drilldown-empty">No folders yet. Create one to get started.</div>`;
     } else if (levelFolders.length === 0) {
-        html += `<div class="drilldown-empty">No subfolders. Select this folder or create one.</div>`;
+        html += `<div class="drilldown-empty">No subfolders.</div>`;
     } else {
         levelFolders.forEach(folder => {
             const children = visibleFolders.filter(f => f.parent_id == folder.id);
@@ -208,23 +204,6 @@ window.drilldownTo = function(folderId) {
     selectedDestinationFolder = null;
     document.getElementById('confirmStageBtn').disabled = true;
     renderFolderSelectDrilldown();
-};
-
-/**
- * Select the current drilldown folder as destination.
- */
-window.selectCurrentDrilldownFolder = function() {
-    if (!currentDrilldownFolder) return;
-    selectedDestinationFolder = currentDrilldownFolder;
-    document.getElementById('confirmStageBtn').disabled = false;
-    
-    // Visual feedback - highlight the "Select" button
-    const btn = document.querySelector('.drilldown-select-current .btn');
-    if (btn) {
-        btn.classList.add('btn-success');
-        btn.innerHTML = `<i data-lucide="check"></i> Selected!`;
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-    }
 };
 
 /**

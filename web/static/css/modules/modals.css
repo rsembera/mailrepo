@@ -479,22 +479,6 @@
     white-space: nowrap;
 }
 
-.drilldown-select-current {
-    padding: var(--space-sm) var(--space-md);
-    border-bottom: 1px solid var(--color-border);
-    background: var(--color-primary-lighter);
-}
-
-.drilldown-select-current .btn {
-    width: 100%;
-    justify-content: center;
-}
-
-.drilldown-select-current .btn i {
-    width: 16px;
-    height: 16px;
-}
-
 .drilldown-list {
     max-height: 250px;
     overflow-y: auto;
