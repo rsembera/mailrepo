@@ -55,9 +55,6 @@ export function initImports(config = {}) {
             openFilePicker('eml');
         });
     }
-    
-    // Set up file picker handlers
-    initFilePicker();
 }
 
 /**

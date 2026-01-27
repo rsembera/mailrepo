@@ -392,6 +392,9 @@
     background: var(--color-primary-lighter);
     border-radius: var(--radius-md);
     font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
 }
 
 .file-picker-selected span:first-child {
@@ -400,6 +403,9 @@
 
 #filePickerSelectedName {
     font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
 }
 
 .file-picker-hidden-toggle {

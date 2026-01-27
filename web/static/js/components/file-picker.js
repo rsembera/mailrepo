@@ -110,7 +110,7 @@ async function loadFilePickerDirectory(path) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
-                path: path,
+                path: path || '',
                 show_hidden: showHidden,
                 filter: filter
             }),
@@ -136,14 +136,15 @@ async function loadFilePickerDirectory(path) {
         
         let html = '';
         for (const item of data.items) {
-            const icon = item.is_dir ? 'folder' : 'file';
-            const sizeStr = item.is_dir ? '' : formatFileSize(item.size);
+            const isDir = item.type === 'dir';
+            const icon = isDir ? 'folder' : 'file';
+            const sizeStr = item.size != null ? formatFileSize(item.size) : '';
             
             html += `
                 <div class="file-picker-item" 
                      data-path="${escapeHtml(item.path)}"
                      data-name="${escapeHtml(item.name)}"
-                     data-is-dir="${item.is_dir}"
+                     data-type="${item.type}"
                      data-is-mbox="${item.is_mbox || false}">
                     <i data-lucide="${icon}"></i>
                     <span class="file-name">${escapeHtml(item.name)}</span>
@@ -235,7 +236,7 @@ function selectAppleMboxFolder(path, name, emailCount, tree) {
 function handleFilePickerClick(item) {
     const path = item.dataset.path;
     const name = item.dataset.name;
-    const isDir = item.dataset.isDir === 'true';
+    const isDir = item.dataset.type === 'dir';
     const isMbox = item.dataset.isMbox === 'true';
     
     document.querySelectorAll('.file-picker-item').forEach(i => i.classList.remove('selected'));
@@ -282,7 +283,7 @@ async function checkFolderForAppleMbox(path) {
 
 function handleFilePickerDblClick(item) {
     const path = item.dataset.path;
-    const isDir = item.dataset.isDir === 'true';
+    const isDir = item.dataset.type === 'dir';
     const isMbox = item.dataset.isMbox === 'true';
     
     if (isDir && !isMbox) {
@@ -381,17 +382,21 @@ async function confirmFilePicker() {
     closeModal('filePickerModal');
     
     try {
+        console.log('confirmFilePicker:', filePickerMode, filePickerSelected);
         if (filePickerMode === 'mbox') {
             if (filePickerSelected.type === 'apple-mbox') {
+                console.log('Calling onAppleMboxSelected:', !!onAppleMboxSelected);
                 if (onAppleMboxSelected) {
                     await onAppleMboxSelected(filePickerSelected.path, filePickerSelected.name, filePickerSelected.tree);
                 }
             } else {
+                console.log('Calling onMboxSelected:', !!onMboxSelected);
                 if (onMboxSelected) {
                     await onMboxSelected(filePickerSelected.path, filePickerSelected.name);
                 }
             }
         } else {
+            console.log('Calling onEmlFolderSelected:', !!onEmlFolderSelected);
             if (onEmlFolderSelected) {
                 await onEmlFolderSelected(filePickerSelected.path, filePickerSelected.name);
             }
@@ -408,6 +413,7 @@ function closeModal(id) {
 }
 
 function formatFileSize(bytes) {
+    if (bytes == null) return '';
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
