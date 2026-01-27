@@ -73,6 +73,24 @@ export async function handleTreeItemClick(e, row) {
                     children.querySelectorAll('.imap-folder-chevron').forEach(chevron => {
                         chevron.style.transform = 'rotate(0deg)';
                     });
+                } else {
+                    // When expanding, auto-load INBOX
+                    if (!await confirmNavigation()) {
+                        // User cancelled - collapse back
+                        row.classList.remove('expanded');
+                        children.style.display = 'none';
+                        return;
+                    }
+                    
+                    // Find and activate the INBOX row
+                    const inboxRow = children.querySelector('.tree-item-row[data-folder="INBOX"]');
+                    if (inboxRow) {
+                        document.querySelectorAll('.tree-item-row').forEach(r => r.classList.remove('active'));
+                        inboxRow.classList.add('active');
+                    }
+                    
+                    // Load INBOX emails
+                    if (onImapFolderSelect) onImapFolderSelect(id, 'INBOX');
                 }
             }
             return;
