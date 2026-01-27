@@ -55,9 +55,11 @@ Running record of planning sessions and decisions. Most recent first.
 - `bda9a6d` — Fix: Grey out already-staged folders in folder selection view
 - `719291b` — Add: ZIP export for archive folders
 - `fa7efcc` — Fix: SQLCipher Row object doesn't support .get() in ZIP export
+- `148ac47` — Change: Selecting a parent folder now auto-selects all children
+- `6a11ac4` — Remove dead checkbox-based folder selection code
 - (additional commits for UI redesign work)
 
-**Status:** ZIP export working. Folder and email selection UI unified and polished.
+**Status:** ZIP export working. Folder selection now cascades to children. Dead code removed (~115 lines).
 
 ---
 

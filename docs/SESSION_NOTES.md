@@ -10,6 +10,7 @@
 ### Features
 - **Grey out staged folders** - Staged folders now appear greyed out with disabled checkboxes
 - **ZIP export** - Full implementation for exporting archive folders as decrypted ZIP files
+- **Parent selects children** - Selecting a parent folder now auto-selects all its children (and clearing cascades down too)
 
 ### Folder Selection UI Redesign
 - Replaced checkboxes with select/clear icon buttons per folder
@@ -32,6 +33,9 @@
 
 ### Bug Fixes
 - Fixed SQLCipher Row object `.get()` compatibility in ZIP export
+
+### Code Cleanup
+- Removed dead checkbox-based folder selection code (~115 lines)
 
 ---
 

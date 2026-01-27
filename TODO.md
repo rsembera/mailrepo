@@ -67,6 +67,8 @@
 - [x] Grey out staged folders on folder selection pages
 - [x] ZIP export for archived folders (full implementation)
 - [x] Fix SQLCipher Row .get() compatibility in ZIP export
+- [x] Selecting parent folder now auto-selects all children
+- [x] Removed dead checkbox-based folder selection code (~115 lines)
 
 ### Folder Selection UI Redesign
 - [x] Replaced checkboxes with select/clear icon buttons per folder
