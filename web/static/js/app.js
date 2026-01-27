@@ -274,13 +274,22 @@ function handleSearch(e) {
     state.emails = original;
 }
 
+// Flag to skip beforeunload warning on intentional navigation (logout)
+let skipBeforeUnload = false;
+
 function handleBeforeUnload(e) {
+    if (skipBeforeUnload) return;
     if (state.staged.size > 0) {
         e.preventDefault();
         e.returnValue = '';
         return '';
     }
 }
+
+// Allow other modules to set the skip flag
+window.skipBeforeUnloadWarning = function() {
+    skipBeforeUnload = true;
+};
 
 /**
  * Handle click on import name - decide whether to show folder selection or emails.
