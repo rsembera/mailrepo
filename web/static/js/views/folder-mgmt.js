@@ -102,11 +102,12 @@ export async function showFolderManagementView() {
 
 function renderFolderManagementList() {
     const topLevelFolders = state.folders.filter(f => !f.parent_id && !f.deleted_at);
+    const totalFolders = state.folders.filter(f => !f.deleted_at).length;
     
     let html = `
         <div class="folder-management-list">
             <div class="folder-management-toolbar">
-                <h2>Manage Archives</h2>
+                <h2>${totalFolders} Folder${totalFolders !== 1 ? 's' : ''}</h2>
                 <button class="btn btn-primary" onclick="openNewFolderModal(false)">
                     <i data-lucide="plus"></i>
                     New Folder
