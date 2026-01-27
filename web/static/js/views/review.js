@@ -334,6 +334,7 @@ function getFolderSourceName(sf) {
 function renderSourceActionDropdown(sourceKey, selectedValue = 'leave') {
     const options = [
         { value: 'leave', label: 'Leave in place' },
+        { value: 'archive', label: 'Move to Archive' },
         { value: 'trash', label: 'Move to Trash' },
         { value: 'delete', label: 'Delete permanently' },
     ];
