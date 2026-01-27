@@ -1,13 +1,13 @@
 /**
  * Review View
  * 
- * Renders the staged items review as a view within the main app layout.
- * Uses collapsible sections for better readability with large numbers of items.
+ * Renders the staged items review grouped by destination folder.
+ * Bulk operations only - individual item management happens during staging.
  */
 
-import { getStagedEmails, getStagedFolders, clearStagedEmail, clearStagedFolder, clearAllStaged, updateStagedBadge } from '../components/staging.js';
+import { getStagedEmails, getStagedFolders, clearAllStaged, updateStagedBadge } from '../components/staging.js';
 import { showConfirm, showAlert } from '../modals.js';
-import { loadFolders } from '../state.js';
+import { state, loadFolders } from '../state.js';
 import { refreshSidebarFolders } from '../components/sidebar.js';
 
 let contextTitle = null;
@@ -17,7 +17,6 @@ let emailList = null;
 let folders = [];
 let accounts = [];
 let sourceActions = {};
-let expandedSections = new Set(); // Track which sections are expanded
 let dropdownClickListenerAdded = false;
 
 /**
@@ -45,14 +44,12 @@ export async function showReviewView() {
     const toolbar = document.querySelector('.content-toolbar');
     const headerActions = document.querySelector('.header-actions');
     
-    // Hide sidebar and toolbar
     if (sidebar) sidebar.style.display = 'none';
     if (toolbar) toolbar.style.display = 'none';
     
     if (contextTitle) contextTitle.textContent = 'Review Staged Items';
     if (contextMeta) contextMeta.textContent = '';
     
-    // Set up header actions
     if (headerActions) {
         headerActions.innerHTML = `
             <button class="btn btn-secondary" id="unstageAllBtn" title="Unstage all items">
@@ -80,9 +77,7 @@ export async function showReviewView() {
         document.getElementById('commitBtn')?.addEventListener('click', commitAll);
     }
     
-    // Load accounts from API
     await loadAccounts();
-    
     await loadFoldersForReview();
     renderReviewView();
 }
@@ -112,6 +107,66 @@ async function loadFoldersForReview() {
 }
 
 
+/**
+ * Build data structure grouped by destination, then source.
+ * Returns: Map<destinationId, { emails: Map<sourceKey, items[]>, folders: Map<sourceKey, items[]> }>
+ */
+function buildGroupedData() {
+    const stagedEmails = getStagedEmails();
+    const stagedFolders = getStagedFolders();
+    
+    // Group by destination folder ID
+    const byDestination = new Map();
+    
+    // Process emails
+    stagedEmails.forEach((data, emailId) => {
+        const destId = data.destinationFolderId || 'unassigned';
+        if (!byDestination.has(destId)) {
+            byDestination.set(destId, { emails: new Map(), folders: new Map() });
+        }
+        
+        const sourceKey = data.sourceType === 'import'
+            ? `import:${data.sourceImportId}`
+            : `account:${data.sourceAccountId}`;
+        
+        const sourceFolder = data.sourceFolder || 'INBOX';
+        const fullSourceKey = data.sourceType === 'import' 
+            ? sourceKey 
+            : `${sourceKey}:${sourceFolder}`;
+        
+        const dest = byDestination.get(destId);
+        if (!dest.emails.has(sourceKey)) {
+            dest.emails.set(sourceKey, { byFolder: new Map(), sourceType: data.sourceType, accountId: data.sourceAccountId, importId: data.sourceImportId });
+        }
+        
+        const source = dest.emails.get(sourceKey);
+        if (!source.byFolder.has(sourceFolder)) {
+            source.byFolder.set(sourceFolder, []);
+        }
+        source.byFolder.get(sourceFolder).push({ emailId, ...data });
+    });
+    
+    // Process folders
+    stagedFolders.forEach((sf, index) => {
+        const destId = sf.destinationFolderId || 'unassigned';
+        if (!byDestination.has(destId)) {
+            byDestination.set(destId, { emails: new Map(), folders: new Map() });
+        }
+        
+        const sourceKey = sf.sourceType === 'import'
+            ? `import:${sf.importId}`
+            : `account:${sf.accountId}`;
+        
+        const dest = byDestination.get(destId);
+        if (!dest.folders.has(sourceKey)) {
+            dest.folders.set(sourceKey, { items: [], sourceType: sf.sourceType, accountId: sf.accountId, importId: sf.importId });
+        }
+        dest.folders.get(sourceKey).items.push({ ...sf, originalIndex: index });
+    });
+    
+    return byDestination;
+}
+
 function renderReviewView() {
     const stagedEmails = getStagedEmails();
     const stagedFolders = getStagedFolders();
@@ -123,7 +178,7 @@ function renderReviewView() {
                 <div class="empty-state">
                     <i data-lucide="package" class="empty-icon"></i>
                     <h3>No Staged Items</h3>
-                    <p>Select emails from an account or archive folder, then click Stage to queue them for archiving.</p>
+                    <p>Select emails or folders from an account or import, then click Stage to queue them for archiving.</p>
                 </div>
             </div>
         `;
@@ -132,99 +187,54 @@ function renderReviewView() {
         return;
     }
     
+    const byDestination = buildGroupedData();
+    
     let html = '<div class="review-view"><div class="review-list">';
     
-    // Build hierarchical structure: Account -> Folder -> Emails
-    // For IMAP: group by account, then by source folder
-    // For imports: group by import source
-    
-    const emailsByAccount = new Map(); // accountId -> Map(folder -> emails[])
-    const emailsByImport = new Map();  // importId -> emails[]
-    
-    stagedEmails.forEach((data, emailId) => {
-        const emailData = { 
-            emailId, 
-            ...data,
-            subject: data.email?.subject,
-            from: data.email?.from,
-            date: data.email?.date,
-        };
+    byDestination.forEach((destData, destId) => {
+        const destFolder = folders.find(f => f.id == destId);
+        const destName = destFolder ? destFolder.name : (destId === 'unassigned' ? 'No destination selected' : 'Unknown folder');
         
-        if (data.sourceType === 'import') {
-            const importId = data.sourceImportId;
-            if (!emailsByImport.has(importId)) {
-                emailsByImport.set(importId, []);
-            }
-            emailsByImport.get(importId).push(emailData);
-        } else {
-            const accountId = data.sourceAccountId;
-            const folder = data.sourceFolder || 'INBOX';
-            
-            if (!emailsByAccount.has(accountId)) {
-                emailsByAccount.set(accountId, new Map());
-            }
-            const accountFolders = emailsByAccount.get(accountId);
-            if (!accountFolders.has(folder)) {
-                accountFolders.set(folder, []);
-            }
-            accountFolders.get(folder).push(emailData);
-        }
-    });
-    
-    // Render IMAP account groups (emails)
-    emailsByAccount.forEach((folderMap, accountId) => {
-        const accountName = getAccountName(accountId);
-        let totalEmails = 0;
-        folderMap.forEach(emails => totalEmails += emails.length);
+        // Count totals for this destination
+        let emailCount = 0;
+        let folderCount = 0;
+        destData.emails.forEach(source => {
+            source.byFolder.forEach(items => emailCount += items.length);
+        });
+        destData.folders.forEach(source => {
+            folderCount += source.items.length;
+        });
         
-        const accountKey = `account:${accountId}`;
-        const isAccountExpanded = expandedSections.has(accountKey);
+        const countParts = [];
+        if (emailCount > 0) countParts.push(`${emailCount} email${emailCount !== 1 ? 's' : ''}`);
+        if (folderCount > 0) countParts.push(`${folderCount} folder${folderCount !== 1 ? 's' : ''}`);
         
         html += `
-            <div class="review-group review-group-account">
-                <div class="review-group-header review-group-header-account" onclick="toggleReviewSection('${accountKey}')">
-                    <div class="review-group-header-left">
-                        <i data-lucide="${isAccountExpanded ? 'chevron-down' : 'chevron-right'}" class="review-chevron"></i>
-                        <i data-lucide="mail" class="review-source-icon"></i>
-                        <span class="review-group-title">${escapeHtml(accountName)}</span>
-                        <span class="review-group-count">${totalEmails} email${totalEmails !== 1 ? 's' : ''}</span>
+            <div class="review-destination-group" data-dest-id="${destId}">
+                <div class="review-destination-header">
+                    <div class="review-destination-header-left">
+                        <i data-lucide="folder" class="review-dest-icon"></i>
+                        <span class="review-destination-title">→ ${escapeHtml(destName)}</span>
+                        <span class="review-destination-count">(${countParts.join(', ')})</span>
+                    </div>
+                    <div class="review-destination-header-right">
+                        ${renderDestinationDropdown(destId)}
+                        <button class="btn btn-sm btn-secondary" onclick="unstageDestination('${destId}')" title="Unstage all items going to this folder">
+                            Unstage All
+                        </button>
                     </div>
                 </div>
-                <div class="review-group-content ${isAccountExpanded ? 'expanded' : 'collapsed'}">
+                <div class="review-destination-content">
         `;
         
-        // Render each folder within this account
-        folderMap.forEach((emails, folder) => {
-            const folderKey = `account:${accountId}:${folder}`;
-            const isFolderExpanded = expandedSections.has(folderKey);
-            
-            html += `
-                <div class="review-subgroup">
-                    <div class="review-subgroup-header" onclick="toggleReviewSection('${escapeForOnclick(folderKey)}'); event.stopPropagation();">
-                        <div class="review-subgroup-header-left">
-                            <i data-lucide="${isFolderExpanded ? 'chevron-down' : 'chevron-right'}" class="review-chevron"></i>
-                            <i data-lucide="folder" class="review-folder-icon"></i>
-                            <span class="review-subgroup-title">${escapeHtml(folder)}</span>
-                            <span class="review-group-count">${emails.length} email${emails.length !== 1 ? 's' : ''}</span>
-                        </div>
-                        <div class="review-subgroup-header-right" onclick="event.stopPropagation();">
-                            <label class="source-action-label">
-                                <span>After commit:</span>
-                                ${renderSourceActionDropdown(folderKey)}
-                            </label>
-                        </div>
-                    </div>
-                    <div class="review-subgroup-items ${isFolderExpanded ? 'expanded' : 'collapsed'}">
-            `;
-            
-            emails.forEach(email => {
-                html += renderEmailItem(email);
-            });
-            
-            html += `
-                    </div>
-                </div>
-            `;
+        // Render email sources
+        destData.emails.forEach((source, sourceKey) => {
+            html += renderSourceGroup(source, sourceKey, destId, 'emails');
+        });
+        
+        // Render folder sources
+        destData.folders.forEach((source, sourceKey) => {
+            html += renderSourceGroup(source, sourceKey, destId, 'folders');
         });
         
         html += `
@@ -232,128 +242,6 @@ function renderReviewView() {
             </div>
         `;
     });
-    
-    // Render import groups (emails)
-    emailsByImport.forEach((emails, importId) => {
-        const importName = getImportName(importId);
-        const importKey = `import:${importId}`;
-        const isExpanded = expandedSections.has(importKey);
-        
-        html += `
-            <div class="review-group review-group-import">
-                <div class="review-group-header" onclick="toggleReviewSection('${importKey}')">
-                    <div class="review-group-header-left">
-                        <i data-lucide="${isExpanded ? 'chevron-down' : 'chevron-right'}" class="review-chevron"></i>
-                        <i data-lucide="archive" class="review-source-icon"></i>
-                        <span class="review-group-title">${escapeHtml(importName)}</span>
-                        <span class="review-group-count">${emails.length} email${emails.length !== 1 ? 's' : ''}</span>
-                    </div>
-                </div>
-                <div class="review-group-content ${isExpanded ? 'expanded' : 'collapsed'}">
-                    <div class="review-group-items">
-        `;
-        
-        emails.forEach(email => {
-            html += renderEmailItem(email);
-        });
-        
-        html += `
-                    </div>
-                </div>
-            </div>
-        `;
-    });
-
-
-    // Render staged folders - group by source
-    if (stagedFolders.length > 0) {
-        const foldersByAccount = new Map();
-        const foldersByImport = new Map();
-        
-        stagedFolders.forEach((sf, index) => {
-            const folderData = { ...sf, originalIndex: index };
-            
-            if (sf.sourceType === 'import') {
-                if (!foldersByImport.has(sf.importId)) {
-                    foldersByImport.set(sf.importId, []);
-                }
-                foldersByImport.get(sf.importId).push(folderData);
-            } else {
-                if (!foldersByAccount.has(sf.accountId)) {
-                    foldersByAccount.set(sf.accountId, []);
-                }
-                foldersByAccount.get(sf.accountId).push(folderData);
-            }
-        });
-        
-        // Render IMAP folder groups
-        foldersByAccount.forEach((foldersInSource, accountId) => {
-            const accountName = getAccountName(accountId);
-            const groupKey = `folders:account:${accountId}`;
-            const isExpanded = expandedSections.has(groupKey);
-            
-            html += `
-                <div class="review-group review-group-folders">
-                    <div class="review-group-header" onclick="toggleReviewSection('${groupKey}')">
-                        <div class="review-group-header-left">
-                            <i data-lucide="${isExpanded ? 'chevron-down' : 'chevron-right'}" class="review-chevron"></i>
-                            <i data-lucide="folders" class="review-source-icon"></i>
-                            <span class="review-group-title">${escapeHtml(accountName)} (Folders)</span>
-                            <span class="review-group-count">${foldersInSource.length} folder${foldersInSource.length !== 1 ? 's' : ''}</span>
-                        </div>
-                        <div class="review-group-header-right" onclick="event.stopPropagation();">
-                            <label class="source-action-label">
-                                <span>After commit:</span>
-                                ${renderSourceActionDropdown(`folder:account:${accountId}`)}
-                            </label>
-                        </div>
-                    </div>
-                    <div class="review-group-content ${isExpanded ? 'expanded' : 'collapsed'}">
-                        <div class="review-group-items">
-            `;
-            
-            foldersInSource.forEach(sf => {
-                html += renderFolderItem(sf);
-            });
-            
-            html += `
-                        </div>
-                    </div>
-                </div>
-            `;
-        });
-        
-        // Render import folder groups
-        foldersByImport.forEach((foldersInSource, importId) => {
-            const importName = getImportName(importId);
-            const groupKey = `folders:import:${importId}`;
-            const isExpanded = expandedSections.has(groupKey);
-            
-            html += `
-                <div class="review-group review-group-folders">
-                    <div class="review-group-header" onclick="toggleReviewSection('${groupKey}')">
-                        <div class="review-group-header-left">
-                            <i data-lucide="${isExpanded ? 'chevron-down' : 'chevron-right'}" class="review-chevron"></i>
-                            <i data-lucide="folders" class="review-source-icon"></i>
-                            <span class="review-group-title">${escapeHtml(importName)} (Folders)</span>
-                            <span class="review-group-count">${foldersInSource.length} folder${foldersInSource.length !== 1 ? 's' : ''}</span>
-                        </div>
-                    </div>
-                    <div class="review-group-content ${isExpanded ? 'expanded' : 'collapsed'}">
-                        <div class="review-group-items">
-            `;
-            
-            foldersInSource.forEach(sf => {
-                html += renderFolderItem(sf);
-            });
-            
-            html += `
-                        </div>
-                    </div>
-                </div>
-            `;
-        });
-    }
     
     html += '</div></div>';
     
@@ -364,114 +252,106 @@ function renderReviewView() {
     updateButtons();
 }
 
-function renderEmailItem(email) {
-    const destFolder = folders.find(f => f.id == email.destinationFolderId);
-    const destName = destFolder ? destFolder.name : 'Select folder...';
+
+function renderSourceGroup(source, sourceKey, destId, type) {
+    const isImap = sourceKey.startsWith('account:');
+    const sourceName = isImap ? getAccountName(source.accountId) : getImportName(source.importId);
+    const typeLabel = type === 'folders' ? ' (Folders)' : '';
+    
+    let itemSummary = '';
+    let totalItems = 0;
+    
+    if (type === 'emails') {
+        const folderParts = [];
+        source.byFolder.forEach((items, folderName) => {
+            folderParts.push(`${folderName} (${items.length})`);
+            totalItems += items.length;
+        });
+        itemSummary = folderParts.join(' · ');
+    } else {
+        totalItems = source.items.length;
+        itemSummary = `${totalItems} folder${totalItems !== 1 ? 's' : ''}`;
+    }
+    
+    const escapedSourceKey = escapeForOnclick(sourceKey);
+    const escapedDestId = escapeForOnclick(String(destId));
     
     return `
-        <div class="review-item" data-email-id="${email.emailId}">
-            <div class="review-item-info">
-                <div class="review-item-subject">${escapeHtml(email.subject || '(no subject)')}</div>
-                <div class="review-item-meta">
-                    <span class="review-item-from">${escapeHtml(extractName(email.from))}</span>
-                    <span class="review-item-date">${formatDate(email.date)}</span>
+        <div class="review-source-group" data-source-key="${escapeHtml(sourceKey)}" data-dest-id="${destId}">
+            <div class="review-source-header">
+                <div class="review-source-header-left">
+                    <i data-lucide="${isImap ? 'mail' : 'archive'}" class="review-source-icon"></i>
+                    <span class="review-source-title">${escapeHtml(sourceName)}${typeLabel}</span>
                 </div>
-            </div>
-            <div class="review-item-dest">
-                <div class="icon-select" data-email-id="${email.emailId}" data-value="${email.destinationFolderId || ''}">
-                    <button class="icon-select-trigger">
-                        <i data-lucide="folder"></i>
-                        <span>${escapeHtml(destName)}</span>
-                        <i data-lucide="chevron-down" class="icon-select-arrow"></i>
+                <div class="review-source-header-middle">
+                    <span class="review-source-summary">${escapeHtml(itemSummary)}</span>
+                </div>
+                <div class="review-source-header-right">
+                    ${isImap ? `
+                        <label class="source-action-label">
+                            <span>After:</span>
+                            ${renderSourceActionDropdown(`${sourceKey}:${destId}`)}
+                        </label>
+                    ` : ''}
+                    <button class="btn btn-sm btn-icon btn-secondary" onclick="unstageSource('${escapedSourceKey}', '${escapedDestId}', '${type}')" title="Unstage">
+                        <i data-lucide="x"></i>
                     </button>
-                    <div class="icon-select-dropdown">
-                        ${renderFolderOptions(email.destinationFolderId)}
-                    </div>
                 </div>
             </div>
-            <button class="btn btn-sm btn-icon btn-danger-subtle" onclick="unstageEmailFromReview('${email.emailId}')" title="Unstage">
-                <i data-lucide="x"></i>
-            </button>
         </div>
     `;
 }
 
-function renderFolderItem(sf) {
-    const index = sf.originalIndex;
-    const destFolder = folders.find(f => f.id == sf.destinationFolderId);
-    const destName = destFolder ? destFolder.name : 'Select folder...';
+function renderDestinationDropdown(currentDestId) {
+    const topLevel = folders.filter(f => !f.parent_id && !f.deleted_at);
+    
+    function renderFolder(folder, depth) {
+        const indent = depth * 12;
+        const isSelected = folder.id == currentDestId;
+        
+        let html = `
+            <div class="icon-select-option ${isSelected ? 'selected' : ''}" 
+                 data-value="${folder.id}" style="padding-left: ${8 + indent}px">
+                <i data-lucide="folder"></i>
+                <span>${escapeHtml(folder.name)}</span>
+            </div>
+        `;
+        
+        const children = folders.filter(f => f.parent_id == folder.id && !f.deleted_at);
+        children.forEach(child => {
+            html += renderFolder(child, depth + 1);
+        });
+        
+        return html;
+    }
+    
+    let optionsHtml = '';
+    topLevel.forEach(folder => {
+        optionsHtml += renderFolder(folder, 0);
+    });
+    
+    const currentFolder = folders.find(f => f.id == currentDestId);
+    const currentName = currentFolder ? currentFolder.name : 'Select...';
     
     return `
-        <div class="review-item review-item-folder" data-folder-index="${index}">
-            <div class="review-item-info">
-                <div class="review-item-subject">
-                    <i data-lucide="folder" style="width: 16px; height: 16px; margin-right: 4px;"></i>
-                    ${escapeHtml(sf.archivePath || sf.folder.split('/').pop() || '(root)')}
-                </div>
-                <div class="review-item-meta">
-                    <span class="review-item-from">${escapeHtml(sf.folder)}</span>
-                </div>
-            </div>
-            <div class="review-item-dest">
-                <div class="icon-select" data-folder-index="${index}" data-value="${sf.destinationFolderId || ''}">
-                    <button class="icon-select-trigger">
-                        <i data-lucide="folder"></i>
-                        <span>${escapeHtml(destName)}</span>
-                        <i data-lucide="chevron-down" class="icon-select-arrow"></i>
-                    </button>
-                    <div class="icon-select-dropdown">
-                        ${renderFolderOptions(sf.destinationFolderId)}
-                    </div>
-                </div>
-            </div>
-            <button class="btn btn-sm btn-icon btn-danger-subtle" onclick="unstageFolderFromReview(${index})" title="Unstage">
-                <i data-lucide="x"></i>
+        <div class="icon-select dest-change-dropdown" data-dest-id="${currentDestId}">
+            <button class="icon-select-trigger">
+                <span>Change</span>
+                <i data-lucide="chevron-down" class="icon-select-arrow"></i>
             </button>
+            <div class="icon-select-dropdown">
+                ${optionsHtml || '<div class="icon-select-empty">No folders available</div>'}
+            </div>
         </div>
     `;
-}
-
-// Toggle section expansion
-window.toggleReviewSection = function(sectionKey) {
-    if (expandedSections.has(sectionKey)) {
-        expandedSections.delete(sectionKey);
-    } else {
-        expandedSections.add(sectionKey);
-    }
-    renderReviewView();
-};
-
-
-function getSourceName(sourceKey, firstEmail) {
-    if (sourceKey.startsWith('import:')) {
-        const importId = sourceKey.split(':')[1];
-        return getImportName(importId);
-    } else {
-        const parts = sourceKey.split(':');
-        const accountId = parts[1];
-        const folder = parts[2] || 'INBOX';
-        const accountName = getAccountName(accountId);
-        return `${accountName} / ${folder}`;
-    }
-}
-
-function getAccountName(accountId) {
-    const account = accounts.find(a => a.id == accountId);
-    return account ? account.name : `Account ${accountId}`;
-}
-
-function getImportName(importId) {
-    const imports = window.getMountedImports ? window.getMountedImports() : [];
-    const imp = imports.find(i => i.id === importId);
-    return imp ? imp.name : `Import`;
 }
 
 function renderSourceActionDropdown(sourceKey, selectedValue = 'leave') {
     const options = [
-        { value: 'leave', label: 'Leave in place' },
-        { value: 'archive', label: 'Move to Archive' },
-        { value: 'trash', label: 'Move to Trash' },
-        { value: 'delete', label: 'Delete permanently' },
+        { value: 'leave', label: 'Leave' },
+        { value: 'archive', label: 'Archive' },
+        { value: 'trash', label: 'Trash' },
+        { value: 'delete', label: 'Delete' },
     ];
     
     const selected = options.find(o => o.value === selectedValue) || options[0];
@@ -493,36 +373,153 @@ function renderSourceActionDropdown(sourceKey, selectedValue = 'leave') {
     `;
 }
 
-function renderFolderOptions(selectedId) {
-    const topLevel = folders.filter(f => !f.parent_id && !f.deleted_at);
+
+// === Unstage functions ===
+
+window.unstageDestination = async function(destId) {
+    const stagedEmails = getStagedEmails();
+    const stagedFolders = getStagedFolders();
     
-    function renderFolder(folder, depth) {
-        const indent = depth * 12;
-        const isSelected = folder.id == selectedId;
-        
-        let html = `
-            <div class="icon-select-option ${isSelected ? 'selected' : ''}" 
-                 data-value="${folder.id}" style="padding-left: ${8 + indent}px">
-                <i data-lucide="folder"></i>
-                <span>${escapeHtml(folder.name)}</span>
-            </div>
-        `;
-        
-        const children = folders.filter(f => f.parent_id == folder.id && !f.deleted_at);
-        children.forEach(child => {
-            html += renderFolder(child, depth + 1);
-        });
-        
-        return html;
-    }
-    
-    let html = '';
-    topLevel.forEach(folder => {
-        html += renderFolder(folder, 0);
+    // Count items to unstage
+    let count = 0;
+    stagedEmails.forEach(data => {
+        if (String(data.destinationFolderId) === String(destId) || (destId === 'unassigned' && !data.destinationFolderId)) {
+            count++;
+        }
+    });
+    stagedFolders.forEach(sf => {
+        if (String(sf.destinationFolderId) === String(destId) || (destId === 'unassigned' && !sf.destinationFolderId)) {
+            count++;
+        }
     });
     
-    return html || '<div class="icon-select-empty">No folders available</div>';
+    const destFolder = folders.find(f => f.id == destId);
+    const destName = destFolder ? destFolder.name : 'this destination';
+    
+    const confirmed = await showConfirm(
+        'Unstage Items',
+        `Unstage all ${count} item${count !== 1 ? 's' : ''} going to "${destName}"?`,
+        { confirmText: 'Unstage', confirmClass: 'btn-danger' }
+    );
+    
+    if (!confirmed) return;
+    
+    // Remove matching emails
+    const newEmails = new Map();
+    stagedEmails.forEach((data, emailId) => {
+        const matches = String(data.destinationFolderId) === String(destId) || (destId === 'unassigned' && !data.destinationFolderId);
+        if (!matches) {
+            newEmails.set(emailId, data);
+        }
+    });
+    sessionStorage.setItem('stagedEmails', JSON.stringify([...newEmails.entries()]));
+    
+    // Remove matching folders
+    const newFolders = stagedFolders.filter(sf => {
+        const matches = String(sf.destinationFolderId) === String(destId) || (destId === 'unassigned' && !sf.destinationFolderId);
+        return !matches;
+    });
+    sessionStorage.setItem('stagedFolders', JSON.stringify(newFolders));
+    
+    updateStagedBadge();
+    renderReviewView();
+};
+
+window.unstageSource = async function(sourceKey, destId, type) {
+    const stagedEmails = getStagedEmails();
+    const stagedFolders = getStagedFolders();
+    
+    // Count items to unstage
+    let count = 0;
+    
+    if (type === 'emails') {
+        stagedEmails.forEach(data => {
+            const itemSourceKey = data.sourceType === 'import'
+                ? `import:${data.sourceImportId}`
+                : `account:${data.sourceAccountId}`;
+            const itemDestId = String(data.destinationFolderId || 'unassigned');
+            if (itemSourceKey === sourceKey && itemDestId === String(destId)) {
+                count++;
+            }
+        });
+    } else {
+        stagedFolders.forEach(sf => {
+            const itemSourceKey = sf.sourceType === 'import'
+                ? `import:${sf.importId}`
+                : `account:${sf.accountId}`;
+            const itemDestId = String(sf.destinationFolderId || 'unassigned');
+            if (itemSourceKey === sourceKey && itemDestId === String(destId)) {
+                count++;
+            }
+        });
+    }
+    
+    const confirmed = await showConfirm(
+        'Unstage Items',
+        `Unstage ${count} ${type === 'emails' ? 'email' : 'folder'}${count !== 1 ? 's' : ''} from this source?`,
+        { confirmText: 'Unstage', confirmClass: 'btn-danger' }
+    );
+    
+    if (!confirmed) return;
+    
+    if (type === 'emails') {
+        const newEmails = new Map();
+        stagedEmails.forEach((data, emailId) => {
+            const itemSourceKey = data.sourceType === 'import'
+                ? `import:${data.sourceImportId}`
+                : `account:${data.sourceAccountId}`;
+            const itemDestId = String(data.destinationFolderId || 'unassigned');
+            const matches = itemSourceKey === sourceKey && itemDestId === String(destId);
+            if (!matches) {
+                newEmails.set(emailId, data);
+            }
+        });
+        sessionStorage.setItem('stagedEmails', JSON.stringify([...newEmails.entries()]));
+    } else {
+        const newFolders = stagedFolders.filter(sf => {
+            const itemSourceKey = sf.sourceType === 'import'
+                ? `import:${sf.importId}`
+                : `account:${sf.accountId}`;
+            const itemDestId = String(sf.destinationFolderId || 'unassigned');
+            const matches = itemSourceKey === sourceKey && itemDestId === String(destId);
+            return !matches;
+        });
+        sessionStorage.setItem('stagedFolders', JSON.stringify(newFolders));
+    }
+    
+    updateStagedBadge();
+    renderReviewView();
+};
+
+// === Change destination ===
+
+function changeDestination(oldDestId, newDestId) {
+    const stagedEmails = getStagedEmails();
+    const stagedFolders = getStagedFolders();
+    
+    // Update emails
+    stagedEmails.forEach(data => {
+        const itemDestId = String(data.destinationFolderId || 'unassigned');
+        if (itemDestId === String(oldDestId)) {
+            data.destinationFolderId = newDestId;
+        }
+    });
+    sessionStorage.setItem('stagedEmails', JSON.stringify([...stagedEmails.entries()]));
+    
+    // Update folders
+    stagedFolders.forEach(sf => {
+        const itemDestId = String(sf.destinationFolderId || 'unassigned');
+        if (itemDestId === String(oldDestId)) {
+            sf.destinationFolderId = newDestId;
+        }
+    });
+    sessionStorage.setItem('stagedFolders', JSON.stringify(stagedFolders));
+    
+    renderReviewView();
 }
+
+
+// === Icon select initialization ===
 
 function initIconSelects() {
     document.querySelectorAll('.icon-select').forEach(select => {
@@ -532,11 +529,7 @@ function initIconSelects() {
         trigger?.addEventListener('click', (e) => {
             e.stopPropagation();
             document.querySelectorAll('.icon-select-dropdown.open').forEach(d => {
-                if (d !== dropdown) {
-                    d.classList.remove('open');
-                    d.style.removeProperty('bottom');
-                    d.style.removeProperty('top');
-                }
+                if (d !== dropdown) d.classList.remove('open');
             });
             
             if (dropdown) {
@@ -563,11 +556,14 @@ function initIconSelects() {
         dropdown?.querySelectorAll('.icon-select-option').forEach(option => {
             option.addEventListener('click', () => {
                 const value = option.dataset.value;
-                const emailId = select.dataset.emailId;
-                const folderIndex = select.dataset.folderIndex;
-                const sourceKey = select.dataset.sourceKey;
                 
-                if (sourceKey) {
+                if (select.classList.contains('dest-change-dropdown')) {
+                    // Change destination dropdown
+                    const oldDestId = select.dataset.destId;
+                    changeDestination(oldDestId, value);
+                } else if (select.classList.contains('source-action-dropdown')) {
+                    // Source action dropdown
+                    const sourceKey = select.dataset.sourceKey;
                     select.dataset.value = value;
                     const triggerSpan = trigger.querySelector('span');
                     if (triggerSpan) {
@@ -576,10 +572,6 @@ function initIconSelects() {
                     dropdown.querySelectorAll('.icon-select-option').forEach(o => o.classList.remove('selected'));
                     option.classList.add('selected');
                     sourceActions[sourceKey] = value;
-                } else if (emailId) {
-                    changeEmailDestination(emailId, value);
-                } else if (folderIndex !== undefined) {
-                    changeFolderDestination(parseInt(folderIndex), value);
                 }
                 
                 dropdown.classList.remove('open');
@@ -589,31 +581,23 @@ function initIconSelects() {
     
     if (!dropdownClickListenerAdded) {
         document.addEventListener('click', () => {
-            document.querySelectorAll('.icon-select-dropdown.open').forEach(d => {
-                d.classList.remove('open');
-            });
+            document.querySelectorAll('.icon-select-dropdown.open').forEach(d => d.classList.remove('open'));
         });
         dropdownClickListenerAdded = true;
     }
 }
 
-function changeEmailDestination(emailId, folderId) {
-    const stagedEmails = getStagedEmails();
-    const data = stagedEmails.get(emailId);
-    if (data) {
-        data.destinationFolderId = folderId;
-        sessionStorage.setItem('stagedEmails', JSON.stringify([...stagedEmails.entries()]));
-        renderReviewView();
-    }
+// === Helper functions ===
+
+function getAccountName(accountId) {
+    const account = accounts.find(a => a.id == accountId);
+    return account ? account.name : `Account ${accountId}`;
 }
 
-function changeFolderDestination(index, folderId) {
-    const stagedFolders = getStagedFolders();
-    if (stagedFolders[index]) {
-        stagedFolders[index].destinationFolderId = folderId;
-        sessionStorage.setItem('stagedFolders', JSON.stringify(stagedFolders));
-        renderReviewView();
-    }
+function getImportName(importId) {
+    const imports = window.getMountedImports ? window.getMountedImports() : [];
+    const imp = imports.find(i => i.id === importId);
+    return imp ? imp.name : `Import`;
 }
 
 function unstageAll() {
@@ -621,19 +605,6 @@ function unstageAll() {
     updateStagedBadge();
     renderReviewView();
 }
-
-window.unstageEmailFromReview = function(emailId) {
-    clearStagedEmail(emailId);
-    updateStagedBadge();
-    renderReviewView();
-};
-
-window.unstageFolderFromReview = function(index) {
-    clearStagedFolder(index);
-    updateStagedBadge();
-    renderReviewView();
-};
-
 
 function updateButtons() {
     const stagedEmails = getStagedEmails();
@@ -643,6 +614,7 @@ function updateButtons() {
     const commitBtn = document.getElementById('commitBtn');
     const unstageAllBtn = document.getElementById('unstageAllBtn');
     
+    // Check if all items have destinations
     let allHaveDestinations = true;
     stagedEmails.forEach(data => {
         if (!data.destinationFolderId) allHaveDestinations = false;
@@ -659,6 +631,21 @@ function updateButtons() {
     }
 }
 
+function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function escapeForOnclick(str) {
+    if (!str) return '';
+    return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+
+// === Commit function ===
+
 async function commitAll() {
     const stagedEmails = getStagedEmails();
     const stagedFolders = getStagedFolders();
@@ -666,9 +653,7 @@ async function commitAll() {
     if (stagedEmails.size === 0 && stagedFolders.length === 0) return;
     
     const commitBtn = document.getElementById('commitBtn');
-    if (commitBtn) {
-        commitBtn.disabled = true;
-    }
+    if (commitBtn) commitBtn.disabled = true;
     
     const modal = document.getElementById('commitProgressModal');
     const progressContainer = document.getElementById('commitProgressContent');
@@ -701,6 +686,7 @@ async function commitAll() {
             destinationFolderId: sf.destinationFolderId,
         }));
         
+        // Collect source actions
         const postCommitActions = { ...sourceActions };
         document.querySelectorAll('.source-action-dropdown').forEach(dropdown => {
             const sourceKey = dropdown.dataset.sourceKey;
@@ -733,37 +719,7 @@ async function commitAll() {
         modal.classList.remove('active');
         showAlert('Commit Error', 'Failed to commit: ' + e.message);
     } finally {
-        if (commitBtn) {
-            commitBtn.disabled = false;
-        }
+        if (commitBtn) commitBtn.disabled = false;
         updateButtons();
-    }
-}
-
-function escapeHtml(str) {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
-
-function escapeForOnclick(str) {
-    if (!str) return '';
-    return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-}
-
-function extractName(sender) {
-    if (!sender) return 'Unknown';
-    const match = sender.match(/^([^<]+)/);
-    return match ? match[1].trim().replace(/"/g, '') : sender;
-}
-
-function formatDate(dateStr) {
-    if (!dateStr) return '';
-    try {
-        const date = new Date(dateStr);
-        return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    } catch (e) {
-        return dateStr;
     }
 }
