@@ -817,15 +817,21 @@ export function handleFolderCheckbox(checkbox) {
     
     const folderPath = checkbox.dataset.folder;
     const isChecked = checkbox.checked;
+    const item = checkbox.closest('.folder-selection-item');
+    const childCheckboxes = item.querySelectorAll('.folder-selection-children input[type="checkbox"]:not(:disabled)');
     
     if (isChecked) {
+        // Select this folder and all children (archive the whole branch)
         selectedFoldersForStaging.add(folderPath);
-        // Don't auto-check children - user might want just the parent's direct emails
+        childCheckboxes.forEach(child => {
+            child.checked = true;
+            child.indeterminate = false;
+            const childPath = child.dataset.folder;
+            selectedFoldersForStaging.add(childPath);
+        });
     } else {
-        selectedFoldersForStaging.delete(folderPath);
         // Uncheck all children when parent is unchecked (cascade down)
-        const item = checkbox.closest('.folder-selection-item');
-        const childCheckboxes = item.querySelectorAll('.folder-selection-children input[type="checkbox"]:not(:disabled)');
+        selectedFoldersForStaging.delete(folderPath);
         childCheckboxes.forEach(child => {
             child.checked = false;
             child.indeterminate = false;
@@ -956,37 +962,100 @@ function updateStageFoldersButton() {
 let pendingFolderStaging = null;
 
 /**
- * Select a folder (add to pending selection).
+ * Find all descendant folder paths from a tree node.
+ */
+function getDescendantPaths(nodes, parentPath) {
+    let paths = [];
+    for (const node of nodes) {
+        // Check if this node is a descendant of parentPath
+        if (node.fullPath && node.fullPath.startsWith(parentPath + '/')) {
+            paths.push(node.fullPath);
+        }
+        // Also check children recursively
+        if (node.children && node.children.length > 0) {
+            paths = paths.concat(getDescendantPaths(node.children, parentPath));
+        }
+    }
+    return paths;
+}
+
+/**
+ * Find all paths in tree that start with given prefix (descendants).
+ */
+function findAllDescendants(tree, folderPath) {
+    let descendants = [];
+    
+    function traverse(nodes) {
+        for (const node of nodes) {
+            // If this node's path starts with folderPath + '/', it's a descendant
+            if (node.fullPath && node.fullPath.startsWith(folderPath + '/')) {
+                descendants.push(node.fullPath);
+            }
+            if (node.children && node.children.length > 0) {
+                traverse(node.children);
+            }
+        }
+    }
+    
+    traverse(tree);
+    return descendants;
+}
+
+/**
+ * Select a folder and all its children (archive the whole branch).
  */
 export function selectFolder(folderPath) {
     selectedFoldersForStaging.add(folderPath);
+    
+    // Also select all descendants
+    const descendants = findAllDescendants(folderSelectionTree, folderPath);
+    descendants.forEach(path => selectedFoldersForStaging.add(path));
+    
     refreshFolderSelectionView();
 }
 window.selectFolder = selectFolder;
 
 /**
- * Clear a folder - deselects if selected, unstages if staged.
+ * Clear a folder and all its children - deselects if selected, unstages if staged.
  */
 export function clearFolder(folderPath) {
-    // Check if it's selected (pending)
-    if (selectedFoldersForStaging.has(folderPath)) {
-        selectedFoldersForStaging.delete(folderPath);
+    // Get all descendants to also clear
+    const descendants = findAllDescendants(folderSelectionTree, folderPath);
+    const allPathsToClear = [folderPath, ...descendants];
+    
+    // Check if any are selected (pending) - clear them
+    let clearedSelected = false;
+    allPathsToClear.forEach(path => {
+        if (selectedFoldersForStaging.has(path)) {
+            selectedFoldersForStaging.delete(path);
+            clearedSelected = true;
+        }
+    });
+    
+    if (clearedSelected) {
         refreshFolderSelectionView();
         return;
     }
     
-    // Check if it's staged - find and remove
-    const index = state.stagedFolders.findIndex(sf => {
-        if (currentFolderSelectionAccountId) {
-            return sf.sourceType === 'account' && sf.accountId == currentFolderSelectionAccountId && sf.folder === folderPath;
-        } else if (currentFolderSelectionImportId) {
-            return sf.sourceType === 'import' && sf.importId == currentFolderSelectionImportId && sf.folder === folderPath;
+    // Check if staged - find and remove all matching
+    let clearedStaged = false;
+    allPathsToClear.forEach(path => {
+        const index = state.stagedFolders.findIndex(sf => {
+            if (currentFolderSelectionAccountId) {
+                return sf.sourceType === 'account' && sf.accountId == currentFolderSelectionAccountId && sf.folder === path;
+            } else if (currentFolderSelectionImportId) {
+                return sf.sourceType === 'import' && sf.importId == currentFolderSelectionImportId && sf.folder === path;
+            }
+            return false;
+        });
+        
+        if (index !== -1) {
+            state.stagedFolders.splice(index, 1);
+            clearedStaged = true;
         }
-        return false;
     });
     
-    if (index !== -1) {
-        state.stagedFolders.splice(index, 1);
+    if (clearedStaged) {
         sessionStorage.setItem('stagedFolders', JSON.stringify(state.stagedFolders));
         updateStagedBadge();
         refreshFolderSelectionView();
