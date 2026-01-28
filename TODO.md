@@ -37,11 +37,6 @@
 ### Trash View
 - [ ] Auto-empty Trash bin (configurable in Settings?)
 - [ ] Sort/search in Trash
-- [ ] If folder X in Trash, can't create new folder with same name
-- [ ] Table in Trash is too wide
-- [ ] Empty Trash button should be at top
-- [ ] Folders don't appear, persist when deleted (?)
-- [ ] When child folder deleted, chevron for parent folder still present in main view (?)
 
 ---
 
@@ -62,6 +57,25 @@
 
 ### UI/UX
 - [ ] Responsive design (?)
+
+---
+
+## Completed (Session 21 - January 27, 2026)
+
+### Trash View Fixes
+- [x] Empty Trash button moved to top toolbar
+- [x] Table width fixed (matches Manage Archive style)
+- [x] Can now create folder with same name as trashed folder
+- [x] Child folders trashed independently now appear in Trash
+- [x] Trash badge counts independently-trashed children
+- [x] Empty Trash works for child folders
+- [x] Parent chevron removed when child is trashed
+- [x] Recursive descendant counts in delete/trash confirmations
+
+### UI Polish
+- [x] Tree lines in Manage Archive view
+- [x] Tree lines in folder selection screens (IMAP and import)
+- [x] Bottom padding added to Manage Archive and Trash views
 
 ---
 
