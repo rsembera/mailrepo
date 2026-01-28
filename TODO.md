@@ -24,9 +24,10 @@
 - [ ] Export to .eml
 
 ### Archived Email Management
+- [x] Move/delete (archive only) - soft delete to Trash
+- [x] Batch select/move/delete for archived emails
 - [ ] Load remote content (server & archive)
 - [ ] View/download attachments (server & archive)
-- [ ] Move/delete (archive only) - soft delete to Trash, not hard delete
 - [ ] Indexed search of all email content (FTS)
 
 ### Core Features (from EdgeCase)
@@ -37,6 +38,7 @@
 ### Trash View
 - [x] Auto-empty Trash bin (configurable in Settings)
 - [x] Sort/search in Trash
+- [x] Emails tab in Trash (restore/permanent delete)
 
 ---
 
@@ -57,6 +59,29 @@
 
 ### UI/UX
 - [ ] Responsive design (?)
+
+---
+
+## Completed (Session 24 - January 28, 2026)
+
+### Archived Email File Operations
+- [x] Move archived emails to different folders
+- [x] Delete archived emails (soft delete to Trash)
+- [x] Move email modal with folder tree selection
+- [x] Batch select/move/delete for archived emails
+- [x] Select All / Clear buttons in archive view toolbar
+- [x] Selection count shown in context meta ("X of Y archived emails selected")
+
+### Trash View - Emails Tab
+- [x] Tabs to switch between Folders and Emails in Trash
+- [x] Restore and permanent delete for trashed emails
+- [x] Delete Emails button (bulk permanent delete)
+- [x] Trash badge counts both folders and emails
+- [x] Badge updates immediately when trashing emails
+
+### Bug Fixes
+- [x] Hide subfoldersBar on Trash and Manage Archive views
+- [x] Renamed "Empty Trash"/"Empty Emails" to "Delete Folders"/"Delete Emails"
 
 ---
 
