@@ -19,6 +19,21 @@ let contextMeta = null;
 let emailList = null;
 
 /**
+ * Get folders that should appear in Trash view.
+ * Shows trashed folders that are either:
+ * - Top-level (no parent), OR
+ * - Their parent is NOT trashed (child was deleted independently)
+ */
+function getVisibleTrashedFolders() {
+    return state.folders.filter(f => {
+        if (!f.deleted_at) return false;
+        if (!f.parent_id) return true;
+        const parent = state.folders.find(p => p.id == f.parent_id);
+        return !parent || !parent.deleted_at;
+    });
+}
+
+/**
  * Initialize trash view.
  */
 export function initTrashView(config) {
@@ -44,16 +59,7 @@ export async function showTrashView() {
     
     await loadFolders();
     
-    // Show trashed folders that are either:
-    // - Top-level (no parent), OR
-    // - Their parent is NOT trashed (child was deleted independently)
-    const trashedFolders = state.folders
-        .filter(f => {
-            if (!f.deleted_at) return false;
-            if (!f.parent_id) return true;
-            const parent = state.folders.find(p => p.id == f.parent_id);
-            return !parent || !parent.deleted_at;
-        })
+    const trashedFolders = getVisibleTrashedFolders()
         .sort((a, b) => b.deleted_at - a.deleted_at);
     
     if (trashedFolders.length === 0) {
@@ -196,7 +202,7 @@ export async function permanentlyDeleteFolder(folderId) {
 window.permanentlyDeleteFolder = permanentlyDeleteFolder;
 
 export async function emptyTrash() {
-    const trashedFolders = state.folders.filter(f => f.deleted_at && !f.parent_id);
+    const trashedFolders = getVisibleTrashedFolders();
     if (trashedFolders.length === 0) return;
     
     const message = `Permanently delete ${trashedFolders.length} folder${trashedFolders.length > 1 ? 's' : ''} and all their contents? This cannot be undone.`;
@@ -228,7 +234,7 @@ export function updateTrashBadge() {
     const badge = document.getElementById('trashBadge');
     if (!badge) return;
     
-    const trashedCount = state.folders.filter(f => f.deleted_at && !f.parent_id).length;
+    const trashedCount = getVisibleTrashedFolders().length;
     badge.textContent = trashedCount;
     badge.classList.toggle('hidden', trashedCount === 0);
 }
