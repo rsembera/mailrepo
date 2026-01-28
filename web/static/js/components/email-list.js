@@ -97,6 +97,7 @@ export function renderEmailList() {
             </div>
             <div class="folder-management-header email-list-header">
                 <span>Email</span>
+                <span>Actions</span>
             </div>
         `;
     } else {
@@ -152,10 +153,19 @@ export function renderEmailList() {
             if (isSelected) rowClass += ' selected';
         }
         
-        // Determine which action buttons to show (only for non-archive views)
+        // Determine which action buttons to show
         let actionsHtml = '';
-        if (!isArchiveView) {
-            if (isStaged) {
+        if (isArchiveView) {
+            // Archive view - move and delete buttons
+            actionsHtml = `
+                <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); moveArchivedEmail(${emailId})" title="Move to folder">
+                    <i data-lucide="folder-input"></i>
+                </button>
+                <button class="btn btn-sm btn-icon btn-danger-subtle" onclick="event.stopPropagation(); deleteArchivedEmail(${emailId})" title="Move to trash">
+                    <i data-lucide="trash-2"></i>
+                </button>
+            `;
+        } else if (isStaged) {
                 actionsHtml = `
                     <button class="btn btn-sm btn-icon" disabled title="Already staged">
                         <i data-lucide="circle"></i>
@@ -196,7 +206,7 @@ export function renderEmailList() {
                         <span class="email-subject">${escapeHtml(email.subject || '(no subject)')}</span>
                     </div>
                 </div>
-                ${!isArchiveView ? `<div class="folder-management-actions" onclick="event.stopPropagation()">${actionsHtml}</div>` : ''}
+                <div class="folder-management-actions" onclick="event.stopPropagation()">${actionsHtml}</div>
             </div>
         `;
         }).join('');
@@ -342,3 +352,53 @@ function clearEmailFilterInput() {
     if (input) input.focus();
 }
 window.clearEmailFilterInput = clearEmailFilterInput;
+
+/**
+ * Delete an archived email (move to trash).
+ */
+async function deleteArchivedEmail(emailId) {
+    const email = state.emails.find(e => e.id == emailId);
+    if (!email) return;
+    
+    const { showConfirm, showAlert } = await import('../modals.js');
+    const confirmed = await showConfirm('Delete Email', `Move "${email.subject || '(no subject)'}" to trash?`, { okText: 'Move to Trash' });
+    if (!confirmed) return;
+    
+    try {
+        const response = await fetch(`/api/messages/${emailId}`, { method: 'DELETE' });
+        if (!response.ok) {
+            const data = await response.json();
+            showAlert('Error', data.error || 'Failed to delete email');
+            return;
+        }
+        
+        // Remove from state and re-render
+        state.emails = state.emails.filter(e => e.id != emailId);
+        renderEmailList();
+    } catch (error) {
+        console.error('Error deleting email:', error);
+        showAlert('Error', 'Failed to delete email');
+    }
+}
+window.deleteArchivedEmail = deleteArchivedEmail;
+
+/**
+ * Move an archived email to a different folder.
+ */
+async function moveArchivedEmail(emailId) {
+    const email = state.emails.find(e => e.id == emailId);
+    if (!email) return;
+    
+    // Store the email ID for the move modal
+    window.pendingMoveEmailId = emailId;
+    
+    // Open the move email modal
+    const modal = document.getElementById('moveEmailModal');
+    if (modal) {
+        // Render folder tree in modal
+        const { renderMoveEmailFolderTree } = await import('./move-email-modal.js');
+        renderMoveEmailFolderTree();
+        modal.classList.add('active');
+    }
+}
+window.moveArchivedEmail = moveArchivedEmail;

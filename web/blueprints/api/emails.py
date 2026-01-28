@@ -4,6 +4,7 @@ MailRepo API - Email Routes
 Handles search and archived email retrieval endpoints.
 """
 
+import time
 import email as email_lib
 from email.header import decode_header
 from flask import request, jsonify
@@ -74,7 +75,7 @@ def get_folder_emails(folder_id):
     messages = Database.fetchall(
         """
         SELECT id, subject, sender, date, filepath
-        FROM messages WHERE folder_id = ?
+        FROM messages WHERE folder_id = ? AND deleted_at IS NULL
         ORDER BY date DESC
         """,
         (folder_id,)
@@ -178,3 +179,122 @@ def get_archived_email(folder_id, message_id):
         return jsonify({"email": result})
     except Exception as e:
         return jsonify({"error": f"Failed to read email: {e}"}), 500
+
+
+@api_bp.route("/messages/<int:message_id>", methods=["DELETE"])
+def delete_message(message_id):
+    """Soft-delete a message (move to trash)."""
+    message = Database.fetchone("SELECT id FROM messages WHERE id = ?", (message_id,))
+    if not message:
+        return jsonify({"error": "Message not found"}), 404
+    
+    now = int(time.time())
+    Database.execute(
+        "UPDATE messages SET deleted_at = ? WHERE id = ?",
+        (now, message_id)
+    )
+    Database.commit()
+    return jsonify({"success": True})
+
+
+@api_bp.route("/messages/<int:message_id>/restore", methods=["POST"])
+def restore_message(message_id):
+    """Restore a message from trash."""
+    message = Database.fetchone(
+        "SELECT id, deleted_at FROM messages WHERE id = ?",
+        (message_id,)
+    )
+    if not message:
+        return jsonify({"error": "Message not found"}), 404
+    if not message["deleted_at"]:
+        return jsonify({"error": "Message is not in trash"}), 400
+    
+    Database.execute(
+        "UPDATE messages SET deleted_at = NULL WHERE id = ?",
+        (message_id,)
+    )
+    Database.commit()
+    return jsonify({"success": True})
+
+
+@api_bp.route("/messages/<int:message_id>/permanent", methods=["DELETE"])
+def permanently_delete_message(message_id):
+    """Permanently delete a message from trash."""
+    message = Database.fetchone(
+        "SELECT id, deleted_at, filepath FROM messages WHERE id = ?",
+        (message_id,)
+    )
+    if not message:
+        return jsonify({"error": "Message not found"}), 404
+    if not message["deleted_at"]:
+        return jsonify({"error": "Message must be in trash before permanent deletion"}), 400
+    
+    # Delete the email file
+    try:
+        filepath = Config.get_base_path() / message["filepath"]
+        if filepath.exists():
+            filepath.unlink()
+    except Exception as e:
+        print(f"Warning: Could not delete file {message['filepath']}: {e}")
+    
+    Database.execute("DELETE FROM messages WHERE id = ?", (message_id,))
+    Database.commit()
+    return jsonify({"success": True})
+
+
+@api_bp.route("/messages/<int:message_id>", methods=["PATCH"])
+def update_message(message_id):
+    """Update message properties (move to different folder)."""
+    message = Database.fetchone(
+        "SELECT id, folder_id FROM messages WHERE id = ?",
+        (message_id,)
+    )
+    if not message:
+        return jsonify({"error": "Message not found"}), 404
+    
+    data = request.get_json()
+    
+    if "folder_id" in data:
+        new_folder_id = data["folder_id"]
+        # Verify destination folder exists
+        folder = Database.fetchone(
+            "SELECT id FROM folders WHERE id = ? AND deleted_at IS NULL",
+            (new_folder_id,)
+        )
+        if not folder:
+            return jsonify({"error": "Destination folder not found"}), 404
+        
+        Database.execute(
+            "UPDATE messages SET folder_id = ? WHERE id = ?",
+            (new_folder_id, message_id)
+        )
+        Database.commit()
+    
+    return jsonify({"success": True})
+
+
+@api_bp.route("/trash/emails", methods=["GET"])
+def get_trashed_emails():
+    """Get all trashed emails."""
+    messages = Database.fetchall(
+        """
+        SELECT m.id, m.subject, m.sender, m.date, m.deleted_at, m.folder_id, f.name as folder_name
+        FROM messages m
+        LEFT JOIN folders f ON m.folder_id = f.id
+        WHERE m.deleted_at IS NOT NULL
+        ORDER BY m.deleted_at DESC
+        """,
+        ()
+    )
+    
+    emails = [{
+        "id": m["id"],
+        "subject": m["subject"],
+        "sender": m["sender"],
+        "date": m["date"],
+        "deleted_at": m["deleted_at"],
+        "folder_id": m["folder_id"],
+        "folder_name": m["folder_name"],
+    } for m in messages]
+    
+    return jsonify({"emails": emails})

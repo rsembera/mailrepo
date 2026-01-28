@@ -300,6 +300,23 @@
     </div>
 </div>
 
+<!-- Move Email Modal -->
+<div class="modal-overlay" id="moveEmailModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Move Email</h2>
+        </div>
+        <p>Select destination folder:</p>
+        <div class="folder-select-list" id="moveEmailFolderList">
+            <!-- Populated by JS -->
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeModal('moveEmailModal')">Cancel</button>
+            <button class="btn btn-primary" id="confirmMoveEmailBtn" disabled onclick="confirmMoveEmail()">Move</button>
+        </div>
+    </div>
+</div>
+
 <!-- Import Modal -->
 <div class="modal-overlay" id="importModal">
     <div class="modal-content modal-sm">
