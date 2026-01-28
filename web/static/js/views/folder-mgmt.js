@@ -352,7 +352,7 @@ export async function deleteFolder(folderId) {
         
         showFolderManagementView();
         updateTrashBadge();
-        updateSidebarFoldersAfterDelete(folderId);
+        updateSidebarFoldersAfterDelete();
     } catch (error) {
         console.error('Error deleting folder:', error);
         showAlert('Error', 'Failed to delete folder');
@@ -426,18 +426,8 @@ export async function exportFolder(folderId) {
 }
 window.exportFolder = exportFolder;
 
-function updateSidebarFoldersAfterDelete(folderId) {
-    const archiveSection = document.getElementById('archiveSection');
-    if (!archiveSection) return;
-    
-    const folderEl = archiveSection.querySelector(`.tree-item-row[data-id="${folderId}"]`);
-    if (folderEl) folderEl.closest('.tree-item')?.remove();
-    
-    const countEl = document.getElementById('folderCount');
-    if (countEl) {
-        const visibleFolders = state.folders.filter(f => !f.deleted_at);
-        countEl.textContent = visibleFolders.length;
-    }
+function updateSidebarFoldersAfterDelete() {
+    refreshSidebarFolders();
 }
 
 export function openColorPicker(folderId, event) {
