@@ -12,22 +12,15 @@
     padding-bottom: calc(var(--space-lg) * 3);
 }
 
-.trash-management-header-row {
-    margin-bottom: var(--space-md);
-}
-
-.trash-management-header-row h2 {
-    margin: 0;
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: var(--color-text-heading);
-}
-
 .trash-management-toolbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--space-lg);
+    padding: var(--space-md) var(--space-lg);
+    margin-bottom: var(--space-md);
+    gap: var(--space-md);
+    background: var(--color-background-secondary);
+    border-radius: var(--radius-md);
 }
 
 .trash-toolbar-left {

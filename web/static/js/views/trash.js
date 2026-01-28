@@ -122,11 +122,18 @@ function renderTrashList(trashedFolders) {
     const totalCount = getVisibleTrashedFolders().length;
     const showingFiltered = searchQuery && trashedFolders.length !== totalCount;
     
+    // Update context meta with count
+    const contextMeta = document.getElementById('contextMeta');
+    if (contextMeta) {
+        if (showingFiltered) {
+            contextMeta.textContent = `${trashedFolders.length} of ${totalCount} deleted folders`;
+        } else {
+            contextMeta.textContent = `${totalCount} deleted folder${totalCount !== 1 ? 's' : ''}`;
+        }
+    }
+    
     let html = `
         <div class="trash-management-list">
-            <div class="trash-management-header-row">
-                <h2>${showingFiltered ? `${trashedFolders.length} of ${totalCount}` : totalCount} Deleted Folder${totalCount !== 1 ? 's' : ''}</h2>
-            </div>
             <div class="trash-management-toolbar">
                 <div class="trash-toolbar-left">
                     <div class="trash-search">
@@ -145,7 +152,7 @@ function renderTrashList(trashedFolders) {
                         <option value="name-desc" ${currentSort === 'name-desc' ? 'selected' : ''}>Name Z-A</option>
                     </select>
                 </div>
-                <button class="btn btn-outline-danger" onclick="emptyTrash()">
+                <button class="btn btn-danger" onclick="emptyTrash()">
                     <i data-lucide="trash-2"></i>
                     Empty Trash
                 </button>
