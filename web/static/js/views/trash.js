@@ -126,27 +126,29 @@ function renderTrashList(trashedFolders) {
         <div class="trash-management-list">
             <div class="trash-management-header-row">
                 <h2>${showingFiltered ? `${trashedFolders.length} of ${totalCount}` : totalCount} Deleted Folder${totalCount !== 1 ? 's' : ''}</h2>
+            </div>
+            <div class="trash-management-toolbar">
+                <div class="trash-toolbar-left">
+                    <div class="trash-search">
+                        <i data-lucide="search" class="search-icon"></i>
+                        <input type="text" 
+                               id="trashSearch" 
+                               placeholder="Search folders..." 
+                               value="${escapeHtml(searchQuery)}"
+                               oninput="handleTrashSearch(this.value)">
+                        ${searchQuery ? '<button class="search-clear" onclick="clearTrashSearch()"><i data-lucide="x"></i></button>' : ''}
+                    </div>
+                    <select id="trashSort" class="trash-sort" onchange="handleTrashSort(this.value)">
+                        <option value="date-desc" ${currentSort === 'date-desc' ? 'selected' : ''}>Newest first</option>
+                        <option value="date-asc" ${currentSort === 'date-asc' ? 'selected' : ''}>Oldest first</option>
+                        <option value="name-asc" ${currentSort === 'name-asc' ? 'selected' : ''}>Name A-Z</option>
+                        <option value="name-desc" ${currentSort === 'name-desc' ? 'selected' : ''}>Name Z-A</option>
+                    </select>
+                </div>
                 <button class="btn btn-outline-danger" onclick="emptyTrash()">
                     <i data-lucide="trash-2"></i>
                     Empty Trash
                 </button>
-            </div>
-            <div class="trash-management-toolbar">
-                <div class="trash-search">
-                    <i data-lucide="search" class="search-icon"></i>
-                    <input type="text" 
-                           id="trashSearch" 
-                           placeholder="Search folders..." 
-                           value="${escapeHtml(searchQuery)}"
-                           oninput="handleTrashSearch(this.value)">
-                    ${searchQuery ? '<button class="search-clear" onclick="clearTrashSearch()"><i data-lucide="x"></i></button>' : ''}
-                </div>
-                <select id="trashSort" class="trash-sort" onchange="handleTrashSort(this.value)">
-                    <option value="date-desc" ${currentSort === 'date-desc' ? 'selected' : ''}>Newest first</option>
-                    <option value="date-asc" ${currentSort === 'date-asc' ? 'selected' : ''}>Oldest first</option>
-                    <option value="name-asc" ${currentSort === 'name-asc' ? 'selected' : ''}>Name A-Z</option>
-                    <option value="name-desc" ${currentSort === 'name-desc' ? 'selected' : ''}>Name Z-A</option>
-                </select>
             </div>
     `;
     
