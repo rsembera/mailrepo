@@ -66,12 +66,24 @@ export async function showTrashView() {
 
 function renderTrashList(trashedFolders) {
     let html = `
-        <div class="trash-list">
-            <div class="trash-header">
-                <span>Folder</span>
-                <span>Deleted</span>
-                <span>Actions</span>
+        <div class="trash-view">
+            <div class="trash-toolbar">
+                <div class="trash-toolbar-left">
+                    <span class="trash-count">${trashedFolders.length} item${trashedFolders.length !== 1 ? 's' : ''}</span>
+                </div>
+                <div class="trash-toolbar-right">
+                    <button class="btn btn-sm btn-danger" onclick="emptyTrash()">
+                        <i data-lucide="trash-2"></i>
+                        Empty Trash
+                    </button>
+                </div>
             </div>
+            <div class="trash-list">
+                <div class="trash-header">
+                    <span>Folder</span>
+                    <span>Deleted</span>
+                    <span>Actions</span>
+                </div>
     `;
     
     trashedFolders.forEach(folder => {
@@ -101,10 +113,6 @@ function renderTrashList(trashedFolders) {
     });
     
     html += `
-            <div class="trash-footer">
-                <button class="btn btn-sm btn-danger" onclick="emptyTrash()">
-                    <i data-lucide="trash-2"></i> Empty Trash
-                </button>
             </div>
         </div>
     `;

@@ -4,15 +4,45 @@
    TRASH VIEW
    ============================================ */
 
-.trash-list {
+.trash-view {
     padding: var(--space-md);
     padding-left: var(--space-xl);
     padding-right: var(--space-xl);
 }
 
+.trash-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-md);
+    padding-bottom: var(--space-md);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.trash-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.trash-count {
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+}
+
+.trash-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.trash-list {
+    max-width: 700px;
+}
+
 .trash-header {
     display: grid;
-    grid-template-columns: 1fr 120px 80px;
+    grid-template-columns: 1fr auto auto;
     gap: var(--space-md);
     padding: var(--space-sm) var(--space-md);
     font-size: 0.75rem;
@@ -30,7 +60,7 @@
 
 .trash-item {
     display: grid;
-    grid-template-columns: 1fr 120px 80px;
+    grid-template-columns: 1fr auto auto;
     gap: var(--space-md);
     align-items: center;
     padding: var(--space-sm) var(--space-md);
@@ -82,10 +112,4 @@
     display: flex;
     gap: var(--space-xs);
     justify-content: center;
-}
-
-.trash-footer {
-    padding: var(--space-md);
-    padding-top: var(--space-lg);
-    text-align: right;
 }
