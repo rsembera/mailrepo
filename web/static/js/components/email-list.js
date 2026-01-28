@@ -73,17 +73,9 @@ export function renderEmailList() {
     // Build table-style layout
     let html = `<div class="folder-management-list">`;
     
-    // Header row with count
-    const countText = showingFiltered 
-        ? `${filteredEmails.length} of ${state.emails.length}` 
-        : state.emails.length;
-    
     if (isArchiveView) {
-        // Archive view - simple list, no staging toolbar
+        // Archive view - simple toolbar with just filter
         html += `
-            <div class="email-list-header-row">
-                <h2>${countText} Archived Email${state.emails.length !== 1 ? 's' : ''}</h2>
-            </div>
             <div class="email-list-toolbar">
                 <div class="email-filter">
                     <i data-lucide="search" class="search-icon"></i>
@@ -102,9 +94,6 @@ export function renderEmailList() {
     } else {
         // IMAP/Import view - staging toolbar
         html += `
-            <div class="email-list-header-row">
-                <h2>${countText} Email${state.emails.length !== 1 ? 's' : ''}</h2>
-            </div>
             <div class="email-list-toolbar">
                 <div class="email-filter">
                     <i data-lucide="search" class="search-icon"></i>
@@ -122,7 +111,7 @@ export function renderEmailList() {
                     </button>
                     <button class="btn btn-secondary" onclick="clearSelectedEmails()" ${selectedCount === 0 ? 'disabled' : ''}>
                         <i data-lucide="x"></i>
-                        Clear Selected
+                        Clear
                     </button>
                     <button class="btn btn-primary" id="stageSelectedEmailsBtn" onclick="openStageModalForSelected()" ${selectedCount === 0 ? 'disabled' : ''}>
                         <i data-lucide="archive"></i>
