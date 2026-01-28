@@ -86,7 +86,7 @@
     top: 0;
     bottom: 0;
     width: 1px;
-    background: var(--color-border);
+    background: var(--color-text-muted);
 }
 
 .tree-line-branch::before {
@@ -96,7 +96,7 @@
     top: 0;
     height: 12px;
     width: 1px;
-    background: var(--color-border);
+    background: var(--color-text-muted);
 }
 
 .tree-line-branch::after {
@@ -106,7 +106,7 @@
     top: 12px;
     width: 10px;
     height: 1px;
-    background: var(--color-border);
+    background: var(--color-text-muted);
 }
 
 .tree-line-last::before {
@@ -116,7 +116,7 @@
     top: 0;
     height: 12px;
     width: 1px;
-    background: var(--color-border);
+    background: var(--color-text-muted);
 }
 
 .tree-line-last::after {
@@ -126,7 +126,7 @@
     top: 12px;
     width: 10px;
     height: 1px;
-    background: var(--color-border);
+    background: var(--color-text-muted);
 }
 
 .folder-management-name .folder-icon {
