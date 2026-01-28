@@ -75,7 +75,6 @@ export function renderEmailList() {
     
     const filteredEmails = getFilteredEmails();
     const selectedCount = state.selectedEmails.size;
-    const isArchiveView = state.currentView?.type === 'folder';
     const archiveSelectedCount = selectedArchivedEmails.size;
     
     // Notify about filter/selection state
