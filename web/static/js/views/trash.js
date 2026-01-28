@@ -229,7 +229,14 @@ export async function restoreFolder(folderId) {
             if (data.folder && data.folder.name) {
                 folder.name = data.folder.name;
             }
-            state.folders.filter(f => f.parent_id == folderId).forEach(c => c.deleted_at = null);
+            // Recursively restore all descendants in state
+            function restoreDescendants(parentId) {
+                state.folders.filter(f => f.parent_id == parentId).forEach(child => {
+                    child.deleted_at = null;
+                    restoreDescendants(child.id);
+                });
+            }
+            restoreDescendants(folderId);
         }
         
         showTrashView();

@@ -220,14 +220,26 @@ def restore_folder(folder_id):
         else:
             return jsonify({"error": "Could not generate unique folder name"}), 500
     
+    # Restore the folder itself
     Database.execute(
         "UPDATE folders SET deleted_at = NULL, parent_id = ?, name = ? WHERE id = ?",
         (target_parent_id, folder_name, folder_id)
     )
-    Database.execute(
-        "UPDATE folders SET deleted_at = NULL WHERE parent_id = ?",
-        (folder_id,)
-    )
+    
+    # Recursively restore all descendants
+    def restore_descendants(parent_id):
+        children = Database.fetchall(
+            "SELECT id FROM folders WHERE parent_id = ?",
+            (parent_id,)
+        )
+        for child in children:
+            Database.execute(
+                "UPDATE folders SET deleted_at = NULL WHERE id = ?",
+                (child["id"],)
+            )
+            restore_descendants(child["id"])
+    
+    restore_descendants(folder_id)
     Database.commit()
     
     return jsonify({
