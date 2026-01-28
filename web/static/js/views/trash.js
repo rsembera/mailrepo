@@ -87,12 +87,6 @@ async function loadTrashedEmails() {
         trashedEmails = [];
     }
 }
-    
-    await loadFolders();
-    
-    renderTrashView();
-    updateTrashBadge();
-}
 
 /**
  * Render the trash view with current filters/sort.
