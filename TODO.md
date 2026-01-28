@@ -60,6 +60,24 @@
 
 ---
 
+## Completed (Session 23 - January 28, 2026)
+
+### Trash Fixes
+- [x] Fix recursive soft-delete (was only marking direct children)
+- [x] Fix recursive permanent delete (was only deleting direct children)
+- [x] Fix recursive restore (was only restoring direct children)
+
+### UI Consistency Overhaul
+- [x] Unified toolbar styling across all list views (background, padding, rounded corners)
+- [x] Email list: filter field, remove redundant header, update context meta with filter count
+- [x] Folder selection: filter field, remove redundant header, update context meta
+- [x] Trash view: remove redundant header, update context meta with filter count
+- [x] Manage Archive: add filter field, remove redundant header, update context meta
+- [x] Remove unused sidebar filter input
+- [x] Consistent "Clear" button text (was "Clear Selected")
+
+---
+
 ## Completed (Session 22 - January 28, 2026)
 
 ### IMAP Fixes
