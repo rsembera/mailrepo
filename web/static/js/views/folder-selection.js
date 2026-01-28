@@ -20,6 +20,7 @@ let currentFolderSelectionAccountId = null;
 let currentFolderSelectionImportId = null;
 let folderSelectionTree = [];
 let pendingFolderStaging = null;
+let folderFilter = '';
 
 // DOM references
 let contextTitle = null;
@@ -40,11 +41,59 @@ export function initFolderSelection(config) {
 }
 
 /**
+ * Clear folder filter (called when switching views).
+ */
+export function clearFolderFilter() {
+    folderFilter = '';
+}
+
+/**
+ * Count total folders in tree (recursive).
+ */
+function countFolders(nodes) {
+    let count = 0;
+    for (const node of nodes) {
+        count++;
+        if (node.children && node.children.length > 0) {
+            count += countFolders(node.children);
+        }
+    }
+    return count;
+}
+
+/**
+ * Filter folder tree by name.
+ */
+function filterFolderTree(nodes, query) {
+    if (!query) return nodes;
+    const lowerQuery = query.toLowerCase();
+    
+    function filterNodes(nodes) {
+        const result = [];
+        for (const node of nodes) {
+            const nameMatches = node.name.toLowerCase().includes(lowerQuery);
+            const filteredChildren = node.children ? filterNodes(node.children) : [];
+            
+            if (nameMatches || filteredChildren.length > 0) {
+                result.push({
+                    ...node,
+                    children: filteredChildren
+                });
+            }
+        }
+        return result;
+    }
+    
+    return filterNodes(nodes);
+}
+
+/**
  * Show folder selection view for bulk IMAP folder staging.
  */
 export async function showFolderSelectionView(accountId) {
     currentFolderSelectionAccountId = accountId;
     selectedFoldersForStaging.clear();
+    folderFilter = '';
     
     // Track this view so it can be restored
     state.currentView = { type: 'accountFolders', id: accountId };
@@ -89,6 +138,7 @@ export function showImportFolderSelectionView(importId) {
     currentFolderSelectionImportId = importId;
     currentFolderSelectionAccountId = null;
     selectedFoldersForStaging.clear();
+    folderFilter = '';
     
     state.currentView = { type: 'importFolders', id: importId };
     
@@ -125,11 +175,31 @@ export function showImportFolderSelectionView(importId) {
 
 function renderImportFolderSelectionView(tree, importId) {
     const selectedCount = selectedFoldersForStaging.size;
+    const filteredTree = filterFolderTree(tree, folderFilter);
+    const totalCount = countFolders(tree);
+    const filteredCount = countFolders(filteredTree);
+    
+    // Update context meta
+    if (contextMeta) {
+        if (folderFilter && filteredCount !== totalCount) {
+            contextMeta.textContent = `${filteredCount} of ${totalCount} folders`;
+        } else {
+            contextMeta.textContent = `${totalCount} folders to archive`;
+        }
+    }
     
     let html = `
         <div class="folder-management-list">
-            <div class="folder-management-toolbar">
-                <h2>Select Folders to Archive</h2>
+            <div class="folder-selection-toolbar">
+                <div class="folder-filter">
+                    <i data-lucide="search" class="search-icon"></i>
+                    <input type="text" 
+                           id="folderFilterInput" 
+                           placeholder="Filter folders..." 
+                           value="${escapeHtml(folderFilter)}"
+                           oninput="handleFolderFilter(this.value)">
+                    ${folderFilter ? '<button class="search-clear" onclick="clearFolderFilterInput()"><i data-lucide="x"></i></button>' : ''}
+                </div>
                 <div class="toolbar-actions">
                     <button class="btn btn-secondary" onclick="selectAllFolders()">
                         <i data-lucide="check-square"></i>
@@ -137,7 +207,7 @@ function renderImportFolderSelectionView(tree, importId) {
                     </button>
                     <button class="btn btn-secondary" onclick="clearAllSelected()" ${selectedCount === 0 ? 'disabled' : ''}>
                         <i data-lucide="x"></i>
-                        Clear Selected
+                        Clear
                     </button>
                     <button class="btn btn-primary" id="stageSelectedBtn" onclick="stageSelectedFoldersFromSelection()" ${selectedCount === 0 ? 'disabled' : ''}>
                         <i data-lucide="archive"></i>
@@ -149,9 +219,19 @@ function renderImportFolderSelectionView(tree, importId) {
                 <span>Folder</span>
                 <span>Actions</span>
             </div>
-            ${renderImportFolderSelectionTree(tree, importId, 0, [])}
-        </div>
     `;
+    
+    if (filteredCount === 0 && folderFilter) {
+        html += `
+            <div class="empty-state" style="padding: var(--space-xl);">
+                <p>No folders match "${escapeHtml(folderFilter)}"</p>
+            </div>
+        `;
+    } else {
+        html += renderImportFolderSelectionTree(filteredTree, importId, 0, []);
+    }
+    
+    html += `</div>`;
     
     emailList.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -242,11 +322,31 @@ function renderImportFolderSelectionTree(nodes, importId, depth, ancestry = []) 
 
 function renderFolderSelectionView(tree, accountId) {
     const selectedCount = selectedFoldersForStaging.size;
+    const filteredTree = filterFolderTree(tree, folderFilter);
+    const totalCount = countFolders(tree);
+    const filteredCount = countFolders(filteredTree);
+    
+    // Update context meta
+    if (contextMeta) {
+        if (folderFilter && filteredCount !== totalCount) {
+            contextMeta.textContent = `${filteredCount} of ${totalCount} folders`;
+        } else {
+            contextMeta.textContent = `${totalCount} folders to archive`;
+        }
+    }
     
     let html = `
         <div class="folder-management-list">
-            <div class="folder-management-toolbar">
-                <h2>Select Folders to Archive</h2>
+            <div class="folder-selection-toolbar">
+                <div class="folder-filter">
+                    <i data-lucide="search" class="search-icon"></i>
+                    <input type="text" 
+                           id="folderFilterInput" 
+                           placeholder="Filter folders..." 
+                           value="${escapeHtml(folderFilter)}"
+                           oninput="handleFolderFilter(this.value)">
+                    ${folderFilter ? '<button class="search-clear" onclick="clearFolderFilterInput()"><i data-lucide="x"></i></button>' : ''}
+                </div>
                 <div class="toolbar-actions">
                     <button class="btn btn-secondary" onclick="selectAllFolders()">
                         <i data-lucide="check-square"></i>
@@ -254,7 +354,7 @@ function renderFolderSelectionView(tree, accountId) {
                     </button>
                     <button class="btn btn-secondary" onclick="clearAllSelected()" ${selectedCount === 0 ? 'disabled' : ''}>
                         <i data-lucide="x"></i>
-                        Clear Selected
+                        Clear
                     </button>
                     <button class="btn btn-primary" id="stageSelectedBtn" onclick="stageSelectedFoldersFromSelection()" ${selectedCount === 0 ? 'disabled' : ''}>
                         <i data-lucide="archive"></i>
@@ -266,9 +366,19 @@ function renderFolderSelectionView(tree, accountId) {
                 <span>Folder</span>
                 <span>Actions</span>
             </div>
-            ${renderFolderSelectionTree(tree, accountId, 0, [])}
-        </div>
     `;
+    
+    if (filteredCount === 0 && folderFilter) {
+        html += `
+            <div class="empty-state" style="padding: var(--space-xl);">
+                <p>No folders match "${escapeHtml(folderFilter)}"</p>
+            </div>
+        `;
+    } else {
+        html += renderFolderSelectionTree(filteredTree, accountId, 0, []);
+    }
+    
+    html += `</div>`;
     
     emailList.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -696,3 +806,42 @@ function openStageFoldersModal() {
     modal.dataset.stagingMode = 'folders';
     modal.classList.add('active');
 }
+
+/**
+ * Handle folder filter input.
+ */
+function handleFolderFilter(query) {
+    folderFilter = query;
+    
+    // Re-render the appropriate view
+    if (currentFolderSelectionAccountId) {
+        renderFolderSelectionView(folderSelectionTree, currentFolderSelectionAccountId);
+    } else if (currentFolderSelectionImportId) {
+        renderImportFolderSelectionView(folderSelectionTree, currentFolderSelectionImportId);
+    }
+    
+    // Refocus the input and restore cursor position
+    const input = document.getElementById('folderFilterInput');
+    if (input) {
+        input.focus();
+        input.setSelectionRange(query.length, query.length);
+    }
+}
+window.handleFolderFilter = handleFolderFilter;
+
+/**
+ * Clear folder filter.
+ */
+function clearFolderFilterInput() {
+    folderFilter = '';
+    
+    if (currentFolderSelectionAccountId) {
+        renderFolderSelectionView(folderSelectionTree, currentFolderSelectionAccountId);
+    } else if (currentFolderSelectionImportId) {
+        renderImportFolderSelectionView(folderSelectionTree, currentFolderSelectionImportId);
+    }
+    
+    const input = document.getElementById('folderFilterInput');
+    if (input) input.focus();
+}
+window.clearFolderFilterInput = clearFolderFilterInput;
