@@ -11,6 +11,9 @@ import { state } from '../state.js';
 let emailListEl = null;
 let onSelectionChange = null;
 
+// Filter state
+let emailFilter = '';
+
 /**
  * Initialize the email list component.
  * @param {Object} config
@@ -20,6 +23,27 @@ let onSelectionChange = null;
 export function initEmailList(config) {
     emailListEl = config.emailList;
     onSelectionChange = config.onSelectionChange;
+}
+
+/**
+ * Clear the email filter (called when switching views).
+ */
+export function clearEmailFilter() {
+    emailFilter = '';
+}
+
+/**
+ * Get filtered emails based on current filter.
+ */
+function getFilteredEmails() {
+    if (!emailFilter) return state.emails;
+    
+    const query = emailFilter.toLowerCase();
+    return state.emails.filter(email => {
+        const sender = (email.from || email.sender || '').toLowerCase();
+        const subject = (email.subject || '').toLowerCase();
+        return sender.includes(query) || subject.includes(query);
+    });
 }
 
 /**
@@ -42,16 +66,34 @@ export function renderEmailList() {
         return;
     }
     
+    const filteredEmails = getFilteredEmails();
     const selectedCount = state.selectedEmails.size;
+    const showingFiltered = emailFilter && filteredEmails.length !== state.emails.length;
     
     // Build table-style layout
     let html = `<div class="folder-management-list">`;
     
+    // Header row with count
+    const countText = showingFiltered 
+        ? `${filteredEmails.length} of ${state.emails.length}` 
+        : state.emails.length;
+    
     if (isArchiveView) {
         // Archive view - simple list, no staging toolbar
         html += `
-            <div class="folder-management-toolbar">
-                <h2>${state.emails.length} Archived Email${state.emails.length !== 1 ? 's' : ''}</h2>
+            <div class="email-list-header-row">
+                <h2>${countText} Archived Email${state.emails.length !== 1 ? 's' : ''}</h2>
+            </div>
+            <div class="email-list-toolbar">
+                <div class="email-filter">
+                    <i data-lucide="search" class="search-icon"></i>
+                    <input type="text" 
+                           id="emailFilterInput" 
+                           placeholder="Filter by sender or subject..." 
+                           value="${escapeHtml(emailFilter)}"
+                           oninput="handleEmailFilter(this.value)">
+                    ${emailFilter ? '<button class="search-clear" onclick="clearEmailFilterInput()"><i data-lucide="x"></i></button>' : ''}
+                </div>
             </div>
             <div class="folder-management-header email-list-header">
                 <span>Email</span>
@@ -60,8 +102,19 @@ export function renderEmailList() {
     } else {
         // IMAP/Import view - staging toolbar
         html += `
-            <div class="folder-management-toolbar">
-                <h2>${state.emails.length} Email${state.emails.length !== 1 ? 's' : ''}</h2>
+            <div class="email-list-header-row">
+                <h2>${countText} Email${state.emails.length !== 1 ? 's' : ''}</h2>
+            </div>
+            <div class="email-list-toolbar">
+                <div class="email-filter">
+                    <i data-lucide="search" class="search-icon"></i>
+                    <input type="text" 
+                           id="emailFilterInput" 
+                           placeholder="Filter by sender or subject..." 
+                           value="${escapeHtml(emailFilter)}"
+                           oninput="handleEmailFilter(this.value)">
+                    ${emailFilter ? '<button class="search-clear" onclick="clearEmailFilterInput()"><i data-lucide="x"></i></button>' : ''}
+                </div>
                 <div class="toolbar-actions">
                     <button class="btn btn-secondary" onclick="selectAllEmails()">
                         <i data-lucide="check-square"></i>
@@ -84,7 +137,14 @@ export function renderEmailList() {
         `;
     }
     
-    html += state.emails.map(email => {
+    if (filteredEmails.length === 0) {
+        html += `
+            <div class="empty-state" style="padding: var(--space-xl);">
+                <p>No emails match "${escapeHtml(emailFilter)}"</p>
+            </div>
+        `;
+    } else {
+        html += filteredEmails.map(email => {
         const emailId = email.uid || email.id;
         const isStaged = state.staged.has(emailId);
         const isSelected = state.selectedEmails.has(emailId);
@@ -142,7 +202,8 @@ export function renderEmailList() {
                 ${!isArchiveView ? `<div class="folder-management-actions" onclick="event.stopPropagation()">${actionsHtml}</div>` : ''}
             </div>
         `;
-    }).join('');
+        }).join('');
+    }
     
     html += `</div>`;
     
@@ -258,3 +319,29 @@ export function handleSelectAll(e) {
 export function updateSelectAllState() {
     updateToolbarButtons();
 }
+
+/**
+ * Handle email filter input.
+ */
+function handleEmailFilter(query) {
+    emailFilter = query;
+    renderEmailList();
+    // Refocus the input and restore cursor position
+    const input = document.getElementById('emailFilterInput');
+    if (input) {
+        input.focus();
+        input.setSelectionRange(query.length, query.length);
+    }
+}
+window.handleEmailFilter = handleEmailFilter;
+
+/**
+ * Clear email filter.
+ */
+function clearEmailFilterInput() {
+    emailFilter = '';
+    renderEmailList();
+    const input = document.getElementById('emailFilterInput');
+    if (input) input.focus();
+}
+window.clearEmailFilterInput = clearEmailFilterInput;

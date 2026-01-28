@@ -10,7 +10,7 @@
 
 import { escapeHtml, escapeForOnclick } from '../utils.js';
 import { state } from '../state.js';
-import { renderEmailList } from '../components/email-list.js';
+import { renderEmailList, clearEmailFilter } from '../components/email-list.js';
 
 // DOM element references
 let contextTitle = null;
@@ -83,6 +83,7 @@ export function initMailView(config) {
 export function selectView(view) {
     state.currentView = view;
     state.selectedEmails.clear();
+    clearEmailFilter();
     
     if (view.type === 'account') {
         loadAccountEmails(view.id, view.folder);

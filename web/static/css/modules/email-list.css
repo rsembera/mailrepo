@@ -420,3 +420,86 @@
 .subfolder-link:hover {
     text-decoration: underline;
 }
+
+/* ============================================
+   EMAIL LIST HEADER AND TOOLBAR
+   ============================================ */
+.email-list-header-row {
+    margin-bottom: var(--space-md);
+}
+
+.email-list-header-row h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-text-heading);
+}
+
+.email-list-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-lg);
+    gap: var(--space-md);
+}
+
+.email-filter {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.email-filter .search-icon {
+    position: absolute;
+    left: 10px;
+    width: 16px;
+    height: 16px;
+    color: var(--color-text-muted);
+    pointer-events: none;
+}
+
+.email-filter input {
+    padding: var(--space-sm) var(--space-md);
+    padding-left: 32px;
+    padding-right: 28px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-background);
+    color: var(--color-text);
+    font-family: var(--font-family);
+    font-size: 0.875rem;
+    width: 270px;
+    height: 38px;
+    box-sizing: border-box;
+}
+
+.email-filter input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+}
+
+.email-filter input::placeholder {
+    color: var(--color-text-muted);
+}
+
+.email-filter .search-clear {
+    position: absolute;
+    right: 6px;
+    background: none;
+    border: none;
+    padding: 2px;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    display: flex;
+    align-items: center;
+}
+
+.email-filter .search-clear:hover {
+    color: var(--color-text);
+}
+
+.email-filter .search-clear i,
+.email-filter .search-clear svg {
+    width: 12px;
+    height: 12px;
+}
