@@ -133,7 +133,7 @@
     font-family: var(--font-family);
     font-size: 0.875rem;
     width: 180px;
-    height: 36px;
+    height: 38px;
     box-sizing: border-box;
 }
 
@@ -176,7 +176,7 @@
     font-family: var(--font-family);
     font-size: 0.875rem;
     cursor: pointer;
-    height: 36px;
+    height: 38px;
     box-sizing: border-box;
 }
 
