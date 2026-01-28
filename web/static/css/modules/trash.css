@@ -12,6 +12,17 @@
     padding-bottom: calc(var(--space-lg) * 3);
 }
 
+.trash-management-header-row {
+    margin-bottom: var(--space-md);
+}
+
+.trash-management-header-row h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-text-heading);
+}
+
 .trash-management-toolbar {
     display: flex;
     justify-content: space-between;
@@ -19,11 +30,10 @@
     margin-bottom: var(--space-lg);
 }
 
-.trash-management-toolbar h2 {
-    margin: 0;
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: var(--color-text-heading);
+.trash-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
 }
 
 .trash-management-header {
@@ -101,12 +111,6 @@
 }
 
 /* Search and sort controls */
-.trash-toolbar-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-md);
-}
-
 .trash-search {
     position: relative;
     display: flex;
@@ -127,7 +131,7 @@
     padding-left: 32px;
     padding-right: 28px;
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-lg);
     background: var(--color-background);
     color: var(--color-text);
     font-family: var(--font-family);
@@ -171,7 +175,7 @@
 .trash-sort {
     padding: var(--space-sm) var(--space-md);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-lg);
     background: var(--color-background);
     color: var(--color-text);
     font-family: var(--font-family);

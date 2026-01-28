@@ -124,9 +124,11 @@ function renderTrashList(trashedFolders) {
     
     let html = `
         <div class="trash-management-list">
-            <div class="trash-management-toolbar">
+            <div class="trash-management-header-row">
                 <h2>${showingFiltered ? `${trashedFolders.length} of ${totalCount}` : totalCount} Deleted Folder${totalCount !== 1 ? 's' : ''}</h2>
-                <div class="trash-toolbar-actions">
+            </div>
+            <div class="trash-management-toolbar">
+                <div class="trash-toolbar-left">
                     <div class="trash-search">
                         <i data-lucide="search" class="search-icon"></i>
                         <input type="text" 
@@ -142,11 +144,11 @@ function renderTrashList(trashedFolders) {
                         <option value="name-asc" ${currentSort === 'name-asc' ? 'selected' : ''}>Name A-Z</option>
                         <option value="name-desc" ${currentSort === 'name-desc' ? 'selected' : ''}>Name Z-A</option>
                     </select>
-                    <button class="btn btn-danger" onclick="emptyTrash()">
-                        <i data-lucide="trash-2"></i>
-                        Empty Trash
-                    </button>
                 </div>
+                <button class="btn btn-danger" onclick="emptyTrash()">
+                    <i data-lucide="trash-2"></i>
+                    Empty Trash
+                </button>
             </div>
     `;
     
