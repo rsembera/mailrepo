@@ -149,7 +149,7 @@ function renderImportFolderSelectionView(tree, importId) {
                 <span>Folder</span>
                 <span>Actions</span>
             </div>
-            ${renderImportFolderSelectionTree(tree, importId, 0)}
+            ${renderImportFolderSelectionTree(tree, importId, 0, [])}
         </div>
     `;
     
@@ -157,12 +157,13 @@ function renderImportFolderSelectionView(tree, importId) {
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-function renderImportFolderSelectionTree(nodes, importId, depth) {
+function renderImportFolderSelectionTree(nodes, importId, depth, ancestry = []) {
     let html = '';
     
-    nodes.forEach(node => {
+    nodes.forEach((node, index) => {
         const hasChildren = node.children && node.children.length > 0;
         const folderPath = node.fullPath;
+        const isLast = index === nodes.length - 1;
         
         const isStaged = state.stagedFolders.some(
             sf => sf.sourceType === 'import' && sf.importId == importId && sf.folder === folderPath
@@ -205,9 +206,23 @@ function renderImportFolderSelectionTree(nodes, importId, depth) {
             `;
         }
         
+        // Build tree lines
+        let treePrefix = '';
+        if (depth > 0) {
+            for (let i = 0; i < ancestry.length; i++) {
+                treePrefix += ancestry[i] 
+                    ? '<span class="tree-spacer"></span>' 
+                    : '<span class="tree-line-vertical"></span>';
+            }
+            treePrefix += isLast 
+                ? '<span class="tree-line-last"></span>' 
+                : '<span class="tree-line-branch"></span>';
+        }
+        
         html += `
             <div class="${rowClass}" data-folder="${escapeHtml(folderPath)}">
-                <div class="folder-management-name" style="padding-left: ${depth * 24}px">
+                <div class="folder-management-name">
+                    ${treePrefix}
                     <i data-lucide="folder" class="folder-icon"></i>
                     <span class="folder-label">${escapeHtml(node.name)}</span>
                 </div>
@@ -218,7 +233,7 @@ function renderImportFolderSelectionTree(nodes, importId, depth) {
         `;
         
         if (hasChildren) {
-            html += renderImportFolderSelectionTree(node.children, importId, depth + 1);
+            html += renderImportFolderSelectionTree(node.children, importId, depth + 1, [...ancestry, isLast]);
         }
     });
     
@@ -251,7 +266,7 @@ function renderFolderSelectionView(tree, accountId) {
                 <span>Folder</span>
                 <span>Actions</span>
             </div>
-            ${renderFolderSelectionTree(tree, accountId, 0)}
+            ${renderFolderSelectionTree(tree, accountId, 0, [])}
         </div>
     `;
     
@@ -259,12 +274,13 @@ function renderFolderSelectionView(tree, accountId) {
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-function renderFolderSelectionTree(nodes, accountId, depth) {
+function renderFolderSelectionTree(nodes, accountId, depth, ancestry = []) {
     let html = '';
     
-    nodes.forEach(node => {
+    nodes.forEach((node, index) => {
         const hasChildren = node.children && node.children.length > 0;
         const folderPath = node.fullPath;
+        const isLast = index === nodes.length - 1;
         
         const isStaged = state.stagedFolders.some(
             sf => sf.sourceType === 'account' && sf.accountId == accountId && sf.folder === folderPath
@@ -307,9 +323,23 @@ function renderFolderSelectionTree(nodes, accountId, depth) {
             `;
         }
         
+        // Build tree lines
+        let treePrefix = '';
+        if (depth > 0) {
+            for (let i = 0; i < ancestry.length; i++) {
+                treePrefix += ancestry[i] 
+                    ? '<span class="tree-spacer"></span>' 
+                    : '<span class="tree-line-vertical"></span>';
+            }
+            treePrefix += isLast 
+                ? '<span class="tree-line-last"></span>' 
+                : '<span class="tree-line-branch"></span>';
+        }
+        
         html += `
             <div class="${rowClass}" data-folder="${escapeHtml(folderPath)}">
-                <div class="folder-management-name" style="padding-left: ${depth * 24}px">
+                <div class="folder-management-name">
+                    ${treePrefix}
                     <i data-lucide="${getFolderIcon(node.name)}" class="folder-icon"></i>
                     <span class="folder-label">${escapeHtml(node.name)}</span>
                 </div>
@@ -320,7 +350,7 @@ function renderFolderSelectionTree(nodes, accountId, depth) {
         `;
         
         if (hasChildren) {
-            html += renderFolderSelectionTree(node.children, accountId, depth + 1);
+            html += renderFolderSelectionTree(node.children, accountId, depth + 1, [...ancestry, isLast]);
         }
     });
     
