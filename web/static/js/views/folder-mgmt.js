@@ -102,13 +102,21 @@ function renderFolderManagementList() {
             </div>
     `;
     
-    function renderFolderWithChildren(folder, depth) {
-        html += renderFolderManagementItem(folder, depth);
+    // ancestry is an array of booleans - true if that ancestor is the last child at its level
+    function renderFolderWithChildren(folder, depth, ancestry = []) {
+        const siblings = depth === 0 
+            ? topLevelFolders 
+            : state.folders.filter(f => f.parent_id == folder.parent_id && !f.deleted_at);
+        const isLast = siblings[siblings.length - 1].id === folder.id;
+        
+        html += renderFolderManagementItem(folder, depth, ancestry, isLast);
+        
         const children = state.folders.filter(f => f.parent_id == folder.id && !f.deleted_at);
-        children.forEach(child => renderFolderWithChildren(child, depth + 1));
+        children.sort((a, b) => a.name.localeCompare(b.name));
+        children.forEach(child => renderFolderWithChildren(child, depth + 1, [...ancestry, isLast]));
     }
     
-    topLevelFolders.forEach(folder => renderFolderWithChildren(folder, 0));
+    topLevelFolders.forEach(folder => renderFolderWithChildren(folder, 0, []));
     
     html += `
         </div>
@@ -118,14 +126,32 @@ function renderFolderManagementList() {
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-function renderFolderManagementItem(folder, depth = 0) {
+function renderFolderManagementItem(folder, depth = 0, ancestry = [], isLast = false) {
     const colorDot = folder.color ? 
         `<span class="color-dot" style="background: ${folder.color}"></span>` : 
         `<span class="color-dot color-dot-none"></span>`;
     
+    // Build tree lines
+    let treePrefix = '';
+    if (depth > 0) {
+        // Draw vertical lines for ancestors that aren't last at their level
+        for (let i = 0; i < ancestry.length; i++) {
+            if (ancestry[i]) {
+                treePrefix += '<span class="tree-spacer"></span>';
+            } else {
+                treePrefix += '<span class="tree-line-vertical"></span>';
+            }
+        }
+        // Draw branch for this item
+        treePrefix += isLast 
+            ? '<span class="tree-line-last"></span>' 
+            : '<span class="tree-line-branch"></span>';
+    }
+    
     return `
-        <div class="folder-management-item" data-id="${folder.id}" style="padding-left: ${20 + depth * 24}px">
+        <div class="folder-management-item" data-id="${folder.id}">
             <div class="folder-management-name">
+                ${treePrefix}
                 ${colorDot}
                 <i data-lucide="folder" class="folder-icon"></i>
                 <span class="folder-label" data-id="${folder.id}">${escapeHtml(folder.name)}</span>

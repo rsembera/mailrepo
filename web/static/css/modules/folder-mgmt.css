@@ -68,6 +68,67 @@
     min-width: 0;
 }
 
+/* Tree line styles */
+.tree-spacer,
+.tree-line-vertical,
+.tree-line-branch,
+.tree-line-last {
+    width: 20px;
+    height: 100%;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.tree-line-vertical::before {
+    content: '';
+    position: absolute;
+    left: 9px;
+    top: -50%;
+    bottom: -50%;
+    width: 1px;
+    background: var(--color-border);
+}
+
+.tree-line-branch::before {
+    content: '';
+    position: absolute;
+    left: 9px;
+    top: -50%;
+    bottom: 50%;
+    width: 1px;
+    background: var(--color-border);
+}
+
+.tree-line-branch::after {
+    content: '';
+    position: absolute;
+    left: 9px;
+    top: 50%;
+    width: 10px;
+    height: 1px;
+    background: var(--color-border);
+}
+
+.tree-line-last::before {
+    content: '';
+    position: absolute;
+    left: 9px;
+    top: -50%;
+    height: calc(50% + 1px);
+    width: 1px;
+    background: var(--color-border);
+}
+
+.tree-line-last::after {
+    content: '';
+    position: absolute;
+    left: 9px;
+    top: 50%;
+    width: 10px;
+    height: 1px;
+    background: var(--color-border);
+}
+
 .folder-management-name .folder-icon {
     width: 18px;
     height: 18px;
