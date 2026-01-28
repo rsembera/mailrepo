@@ -328,11 +328,19 @@ export async function deleteFolder(folderId) {
     const folder = state.folders.find(f => f.id == folderId);
     if (!folder) return;
     
-    const children = state.folders.filter(f => f.parent_id == folderId && !f.deleted_at);
+    // Count ALL descendants recursively
+    function countDescendants(parentId) {
+        const children = state.folders.filter(f => f.parent_id == parentId && !f.deleted_at);
+        let count = children.length;
+        children.forEach(c => count += countDescendants(c.id));
+        return count;
+    }
+    
+    const descendantCount = countDescendants(folderId);
     
     let message = `Move "${folder.name}" to trash?`;
-    if (children.length > 0) {
-        message = `Move "${folder.name}" and ${children.length} subfolder${children.length > 1 ? 's' : ''} to trash?`;
+    if (descendantCount > 0) {
+        message = `Move "${folder.name}" and ${descendantCount} subfolder${descendantCount > 1 ? 's' : ''} to trash?`;
     }
     
     const confirmed = await showConfirm('Delete Folder', message, { okText: 'Move to Trash' });
@@ -347,8 +355,16 @@ export async function deleteFolder(folderId) {
             return;
         }
         
+        // Mark folder and ALL descendants as deleted
+        function markDeleted(parentId) {
+            const children = state.folders.filter(f => f.parent_id == parentId);
+            children.forEach(c => {
+                c.deleted_at = Date.now() / 1000;
+                markDeleted(c.id);
+            });
+        }
         folder.deleted_at = Date.now() / 1000;
-        children.forEach(c => c.deleted_at = Date.now() / 1000);
+        markDeleted(folderId);
         
         showFolderManagementView();
         updateTrashBadge();

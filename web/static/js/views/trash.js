@@ -108,14 +108,22 @@ function renderTrashList(trashedFolders) {
 
 function renderTrashItem(folder) {
     const deletedDate = new Date(folder.deleted_at * 1000);
-    const children = state.folders.filter(f => f.parent_id == folder.id);
+    
+    // Count ALL descendants recursively
+    function countDescendants(parentId) {
+        const children = state.folders.filter(f => f.parent_id == parentId);
+        let count = children.length;
+        children.forEach(c => count += countDescendants(c.id));
+        return count;
+    }
+    const descendantCount = countDescendants(folder.id);
     
     return `
         <div class="trash-management-item" data-id="${folder.id}">
             <div class="trash-management-name">
                 <i data-lucide="folder" class="folder-icon"></i>
                 <span class="folder-label">${escapeHtml(folder.name)}</span>
-                ${children.length > 0 ? `<span class="subfolder-count">(+${children.length})</span>` : ''}
+                ${descendantCount > 0 ? `<span class="subfolder-count">(+${descendantCount})</span>` : ''}
             </div>
             <div class="trash-management-date">
                 ${formatDate(deletedDate)}
@@ -171,11 +179,18 @@ export async function permanentlyDeleteFolder(folderId) {
     const folder = state.folders.find(f => f.id == folderId);
     if (!folder) return;
     
-    const children = state.folders.filter(f => f.parent_id == folderId);
+    // Count ALL descendants recursively
+    function countDescendants(parentId) {
+        const children = state.folders.filter(f => f.parent_id == parentId);
+        let count = children.length;
+        children.forEach(c => count += countDescendants(c.id));
+        return count;
+    }
+    const descendantCount = countDescendants(folderId);
     
     let message = `Permanently delete "${folder.name}"? This cannot be undone.`;
-    if (children.length > 0) {
-        message = `Permanently delete "${folder.name}" and ${children.length} subfolder${children.length > 1 ? 's' : ''}? This cannot be undone.`;
+    if (descendantCount > 0) {
+        message = `Permanently delete "${folder.name}" and ${descendantCount} subfolder${descendantCount > 1 ? 's' : ''}? This cannot be undone.`;
     }
     
     const confirmed = await showConfirm('Permanent Delete', message, { okText: 'Delete Forever', danger: true });
