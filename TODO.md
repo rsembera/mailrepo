@@ -26,7 +26,7 @@
 ### Archived Email Management
 - [ ] Load remote content (server & archive)
 - [ ] View/download attachments (server & archive)
-- [ ] Move/delete (archive only) - trash, not hard delete
+- [ ] Move/delete (archive only) - soft delete to Trash, not hard delete
 - [ ] Indexed search of all email content (FTS)
 
 ### Core Features (from EdgeCase)
@@ -35,8 +35,8 @@
 - [ ] Backup system (← EdgeCase) - new icon & page
 
 ### Trash View
-- [ ] Auto-empty Trash bin (configurable in Settings?)
-- [ ] Sort/search in Trash
+- [x] Auto-empty Trash bin (configurable in Settings)
+- [x] Sort/search in Trash
 
 ---
 
@@ -57,6 +57,19 @@
 
 ### UI/UX
 - [ ] Responsive design (?)
+
+---
+
+## Completed (Session 22 - January 28, 2026)
+
+### IMAP Fixes
+- [x] Remove deleted emails from cache on sync
+- [x] Retry logic for email viewer (intermittent blank body)
+
+### Trash Features
+- [x] Trash retention setting in Settings (Never, 7/30/90/365 days)
+- [x] Auto-cleanup on login for expired trash items
+- [x] Search and sort in Trash view
 
 ---
 
