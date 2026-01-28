@@ -11,69 +11,76 @@
 
 ## High Priority
 
+### Testing
+- [ ] Test full import workflow from multiple sources (multiple accounts/imports) & post-commit server actions
+- [ ] Create comprehensive testing doc
+
 ### Import/Export
-- [ ] Test Apple mbox imports thoroughly; test full import workflow
+- [ ] Test Apple mbox imports thoroughly
 - [ ] Add .pst import support
 - [x] ZIP export for archived folders
+- [x] Progress indicator for ZIP export
 - [ ] PDF export for emails
-- [ ] View/download attachments in emails (server and archive)
+- [ ] Export to .eml
 
-### Core Features
-- [ ] Show remote content button in emails
+### Archived Email Management
+- [ ] Load remote content (server & archive)
+- [ ] View/download attachments (server & archive)
+- [ ] Move/delete (archive only) - trash, not hard delete
 - [ ] Indexed search of all email content (FTS)
-- [ ] Operations on archived emails: move/delete/export
-- [ ] Backup system (copy from EdgeCase)
-- [ ] Automatic timeout (security)
-- [ ] Settings → reset database option
 
-### Staging/Commit UX
-- [x] Grey out staged folders on folder selection pages (like emails)
-- [x] Support staging emails/folders from multiple accounts simultaneously
-- [x] Create subfolders in destination modal (drill-down approach)
-
-### Error Handling
-- [ ] Duplicate names: folders/emails with identical names in same archive folder
-- [ ] Duplicate names: if email/folder already exists; if part of same commit
-- [ ] If folder X in Trash, can't create new folder with same name
-
-## Medium Priority
-
-### IMAP UX
-- [x] Clicking chevron on IMAP account should load emails in Inbox
+### Core Features (from EdgeCase)
+- [ ] Automatic timeout (← EdgeCase)
+- [ ] Settings → reset database (← EdgeCase)
+- [ ] Backup system (← EdgeCase) - new icon & page
 
 ### Trash View
+- [ ] Auto-empty Trash bin (configurable in Settings?)
 - [ ] Sort/search in Trash
+- [ ] If folder X in Trash, can't create new folder with same name
 - [ ] Table in Trash is too wide
-- [ ] Scrolling not right in Trash - folders don't appear, seem to persist when deleted
-- [ ] Auto-empty Trash bin (configurable?)
+- [ ] Empty Trash button should be at top
+- [ ] Folders don't appear, persist when deleted (?)
+- [ ] When child folder deleted, chevron for parent folder still present in main view (?)
 
-### Archive View
+---
 
-## Low Priority
+## Medium Priority
 
 ### Security
 - [ ] Security audit
 
 ### Infrastructure
-- [ ] mailrepo.ca placeholder on Sentinel
-
-### Code Cleanup
-- [x] Remove debug logging from progress.py
+- [ ] mailrepo.ca placeholder page on Sentinel
 
 ### Testing
 - [ ] Automated test suite (start with import parsing, encryption/decryption)
-- [ ] Manual testing checklist for release
-
-### Future Refactoring (Non-blocking)
-- [ ] Split progress.py (~1200 lines) into streaming, commit, and email parsing modules
-- [ ] Consolidate folder-tree rendering logic (duplicated in sidebar, staging, folder-mgmt)
-- [ ] See docs/Refactoring_Plan_V2.md for full plan
 
 ---
 
-## Next Session
+## Low Priority
 
-**Flag:** Start with refactoring review (docs/Refactoring_Plan_V2.md) or continue with feature work.
+### UI/UX
+- [ ] Responsive design (?)
+
+---
+
+## Completed (Session 20 - January 27, 2026)
+
+### Refactoring
+- [x] Complete Refactoring Plan V2:
+  - Split progress.py (extracted email_parser.py)
+  - Split folder-mgmt.js (extracted folder-selection.js)
+  - Move escapeForOnclick to utils.js
+  - Extract file-picker.js from imports.js
+  - Clean up review.js (JSDoc, helpers)
+  - Evaluated tree-renderer consolidation (not beneficial)
+
+### Bug Fixes
+- [x] Fix review.js unstage functions (were only updating sessionStorage, not in-memory state)
+
+### UI Polish
+- [x] Progress indicator for ZIP export
 
 ---
 
@@ -119,6 +126,8 @@
 - [x] New Folder creates subfolder at current level
 - [x] Breadcrumbs horizontally scrollable for deep hierarchies
 
+---
+
 ## Completed (Session 17 - January 27, 2026)
 
 ### Review Page Redesign
@@ -136,6 +145,8 @@
 - [x] Update rail button tooltips: Mail→"Browse & Stage", Staged→"Review Staged", Manage Folders→"Manage Archives"
 - [x] Auto-load INBOX when expanding IMAP account chevron
 - [x] Fix archive email list view - remove staging UI (was showing Select All/Stage buttons)
+
+---
 
 ## Completed (Session 16 - January 26, 2026)
 
@@ -168,6 +179,8 @@
 - [x] Fixed email list grid column alignment with increased specificity
 - [x] Added inline-icon class for icons in links
 
+---
+
 ## Completed (Session 15 - January 25, 2026)
 
 - [x] Dropdown to Leave/Archive/Trash emails on server after commit
@@ -179,6 +192,8 @@
 - [x] When folder deleted, chevron still in main view - FIXED (Mail view reset)
 - [x] Review parent/child folder selection when staging folders (checkboxes)
 - [x] Selecting parent folder (when collapsed) should select all children
+
+---
 
 ## Completed (Session 14 - January 24, 2026)
 
