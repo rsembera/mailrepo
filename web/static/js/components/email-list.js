@@ -10,6 +10,7 @@ import { state } from '../state.js';
 // Reference to DOM elements (set via init)
 let emailListEl = null;
 let onSelectionChange = null;
+let onFilterChange = null;
 
 // Filter state
 let emailFilter = '';
@@ -19,10 +20,12 @@ let emailFilter = '';
  * @param {Object} config
  * @param {HTMLElement} config.emailList - Email list container
  * @param {Function} config.onSelectionChange - Callback when selection changes
+ * @param {Function} config.onFilterChange - Callback when filter changes (receives filteredCount, totalCount)
  */
 export function initEmailList(config) {
     emailListEl = config.emailList;
     onSelectionChange = config.onSelectionChange;
+    onFilterChange = config.onFilterChange;
 }
 
 /**
@@ -63,12 +66,17 @@ export function renderEmailList() {
             </div>
         `;
         if (typeof lucide !== 'undefined') lucide.createIcons();
+        if (onFilterChange) onFilterChange(0, 0);
         return;
     }
     
     const filteredEmails = getFilteredEmails();
     const selectedCount = state.selectedEmails.size;
-    const showingFiltered = emailFilter && filteredEmails.length !== state.emails.length;
+    
+    // Notify about filter state
+    if (onFilterChange) {
+        onFilterChange(filteredEmails.length, state.emails.length);
+    }
     
     // Build table-style layout
     let html = `<div class="folder-management-list">`;

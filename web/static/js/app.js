@@ -69,6 +69,16 @@ document.addEventListener('DOMContentLoaded', () => {
     initEmailList({
         emailList: elements.emailList,
         onSelectionChange: updateButtonStates,
+        onFilterChange: (filteredCount, totalCount) => {
+            if (!elements.contextMeta) return;
+            const isArchiveView = state.currentView?.type === 'folder';
+            const label = isArchiveView ? 'archived emails' : 'emails';
+            if (filteredCount === totalCount) {
+                elements.contextMeta.textContent = `${totalCount} ${label}`;
+            } else {
+                elements.contextMeta.textContent = `${filteredCount} of ${totalCount} ${label}`;
+            }
+        },
     });
     
     // Initialize mail view component
