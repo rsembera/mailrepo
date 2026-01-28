@@ -75,10 +75,12 @@ export function renderEmailList() {
     
     const filteredEmails = getFilteredEmails();
     const selectedCount = state.selectedEmails.size;
+    const isArchiveView = state.currentView?.type === 'folder';
+    const archiveSelectedCount = selectedArchivedEmails.size;
     
-    // Notify about filter state
+    // Notify about filter/selection state
     if (onFilterChange) {
-        onFilterChange(filteredEmails.length, state.emails.length);
+        onFilterChange(filteredEmails.length, state.emails.length, isArchiveView ? archiveSelectedCount : 0);
     }
     
     // Build table-style layout
@@ -109,11 +111,11 @@ export function renderEmailList() {
                     </button>
                     <button class="btn btn-secondary" onclick="moveSelectedArchivedEmails()" ${archiveSelectedCount === 0 ? 'disabled' : ''}>
                         <i data-lucide="folder-input"></i>
-                        Move${archiveSelectedCount > 0 ? ` (${archiveSelectedCount})` : ''}
+                        Move
                     </button>
                     <button class="btn btn-danger" onclick="deleteSelectedArchivedEmails()" ${archiveSelectedCount === 0 ? 'disabled' : ''}>
                         <i data-lucide="trash-2"></i>
-                        Trash${archiveSelectedCount > 0 ? ` (${archiveSelectedCount})` : ''}
+                        Trash
                     </button>
                 </div>
             </div>

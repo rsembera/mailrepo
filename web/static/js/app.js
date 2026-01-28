@@ -69,11 +69,15 @@ document.addEventListener('DOMContentLoaded', () => {
     initEmailList({
         emailList: elements.emailList,
         onSelectionChange: updateButtonStates,
-        onFilterChange: (filteredCount, totalCount) => {
+        onFilterChange: (filteredCount, totalCount, selectedCount = 0) => {
             if (!elements.contextMeta) return;
             const isArchiveView = state.currentView?.type === 'folder';
             const label = isArchiveView ? 'archived emails' : 'emails';
-            if (filteredCount === totalCount) {
+            
+            if (selectedCount > 0) {
+                // Show selection count
+                elements.contextMeta.textContent = `${selectedCount} of ${totalCount} ${label} selected`;
+            } else if (filteredCount === totalCount) {
                 elements.contextMeta.textContent = `${totalCount} ${label}`;
             } else {
                 elements.contextMeta.textContent = `${filteredCount} of ${totalCount} ${label}`;
