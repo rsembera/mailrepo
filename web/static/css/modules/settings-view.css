@@ -331,6 +331,7 @@
     text-align: center;
     margin-top: var(--space-xl);
     padding-top: var(--space-lg);
+    padding-bottom: calc(var(--space-lg) * 3);
     border-top: 1px solid var(--color-border);
 }
 
@@ -418,13 +419,13 @@
 }
 
 .setting-select {
-    width: auto;
-    min-width: 150px;
+    width: fit-content;
     padding: var(--space-sm) var(--space-md);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     background: var(--color-background);
     color: var(--color-text);
+    font-family: var(--font-family);
     font-size: 0.875rem;
 }
 
