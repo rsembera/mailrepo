@@ -86,10 +86,15 @@ function renderFolderManagementList() {
     const topLevelFolders = state.folders.filter(f => !f.parent_id && !f.deleted_at);
     const totalFolders = state.folders.filter(f => !f.deleted_at).length;
     
+    // Update context meta
+    if (contextMeta) {
+        contextMeta.textContent = `${totalFolders} folder${totalFolders !== 1 ? 's' : ''}`;
+    }
+    
     let html = `
         <div class="folder-management-list">
             <div class="folder-management-toolbar">
-                <h2>${totalFolders} Folder${totalFolders !== 1 ? 's' : ''}</h2>
+                <div></div>
                 <button class="btn btn-primary" onclick="openNewFolderModal(false)">
                     <i data-lucide="plus"></i>
                     New Folder

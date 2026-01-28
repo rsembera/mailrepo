@@ -15,14 +15,11 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--space-lg);
-}
-
-.folder-management-toolbar h2 {
-    margin: 0;
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: var(--color-text-heading);
+    padding: var(--space-md) var(--space-lg);
+    margin-bottom: var(--space-md);
+    gap: var(--space-md);
+    background: var(--color-background-secondary);
+    border-radius: var(--radius-md);
 }
 
 .folder-management-header {
