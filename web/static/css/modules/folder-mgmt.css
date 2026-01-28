@@ -8,6 +8,7 @@
     max-width: 850px;
     margin: 0 auto;
     padding: var(--space-lg);
+    padding-bottom: calc(var(--space-lg) * 3);
 }
 
 .folder-management-toolbar {
