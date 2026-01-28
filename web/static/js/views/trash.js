@@ -145,7 +145,7 @@ function renderTrashList(trashedFolders) {
                         <option value="name-desc" ${currentSort === 'name-desc' ? 'selected' : ''}>Name Z-A</option>
                     </select>
                 </div>
-                <button class="btn btn-danger" onclick="emptyTrash()">
+                <button class="btn btn-outline-danger" onclick="emptyTrash()">
                     <i data-lucide="trash-2"></i>
                     Empty Trash
                 </button>
