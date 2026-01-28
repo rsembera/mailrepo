@@ -374,6 +374,10 @@ async function deleteArchivedEmail(emailId) {
         // Remove from state and re-render
         state.emails = state.emails.filter(e => e.id != emailId);
         renderEmailList();
+        
+        // Update trash badge
+        const { updateTrashBadge } = await import('../views/trash.js');
+        updateTrashBadge();
     } catch (error) {
         console.error('Error deleting email:', error);
         showAlert('Error', 'Failed to delete email');

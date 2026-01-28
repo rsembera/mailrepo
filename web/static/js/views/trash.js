@@ -57,10 +57,12 @@ export async function showTrashView() {
     const sidebar = document.getElementById('sidebar');
     const toolbar = document.querySelector('.content-toolbar');
     const headerActions = document.querySelector('.header-actions');
+    const subfoldersBar = document.getElementById('subfoldersBar');
     
     sidebar.style.display = 'none';
     if (toolbar) toolbar.style.display = 'none';
     if (headerActions) headerActions.style.display = 'none';
+    if (subfoldersBar) subfoldersBar.style.display = 'none';
     
     if (contextTitle) contextTitle.textContent = 'Trash';
     if (contextMeta) contextMeta.textContent = '';
@@ -203,7 +205,7 @@ function renderFoldersTab(allTrashedFolders) {
                 </div>
                 <button class="btn btn-danger" onclick="emptyTrash()">
                     <i data-lucide="trash-2"></i>
-                    Empty Trash
+                    Delete Folders
                 </button>
             </div>
     `;
@@ -322,7 +324,7 @@ function renderEmailsTab() {
                 </div>
                 <button class="btn btn-danger" onclick="emptyTrashEmails()">
                     <i data-lucide="trash-2"></i>
-                    Empty Emails
+                    Delete Emails
                 </button>
             </div>
     `;
@@ -507,7 +509,7 @@ export async function emptyTrash() {
     
     const message = `Permanently delete ${trashedFolders.length} folder${trashedFolders.length > 1 ? 's' : ''} and all their contents? This cannot be undone.`;
     
-    const confirmed = await showConfirm('Empty Trash', message, { okText: 'Empty Trash', danger: true });
+    const confirmed = await showConfirm('Delete All Folders', message, { okText: 'Delete All', okClass: 'btn-danger' });
     if (!confirmed) return;
     
     try {
@@ -530,12 +532,25 @@ export async function emptyTrash() {
 }
 window.emptyTrash = emptyTrash;
 
-export function updateTrashBadge() {
+export async function updateTrashBadge() {
     const badge = document.getElementById('trashBadge');
     if (!badge) return;
     
     const trashedFolderCount = getVisibleTrashedFolders().length;
-    const trashedEmailCount = trashedEmails.length;
+    
+    // Fetch current trashed email count from server
+    let trashedEmailCount = trashedEmails.length;
+    try {
+        const response = await fetch('/api/trash/emails');
+        if (response.ok) {
+            const data = await response.json();
+            trashedEmails = data.emails || [];
+            trashedEmailCount = trashedEmails.length;
+        }
+    } catch (error) {
+        // Use cached count on error
+    }
+    
     const trashedCount = trashedFolderCount + trashedEmailCount;
     badge.textContent = trashedCount;
     badge.classList.toggle('hidden', trashedCount === 0);
@@ -654,7 +669,7 @@ async function emptyTrashEmails() {
     if (trashedEmails.length === 0) return;
     
     const confirmed = await showConfirm(
-        'Empty Trash (Emails)',
+        'Delete All Emails',
         `Permanently delete ${trashedEmails.length} email${trashedEmails.length !== 1 ? 's' : ''}? This cannot be undone.`,
         { okText: 'Delete All', okClass: 'btn-danger' }
     );
