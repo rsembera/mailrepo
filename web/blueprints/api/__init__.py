@@ -18,3 +18,4 @@ from . import staging
 from . import imports
 from . import progress
 from . import filesystem
+from . import settings

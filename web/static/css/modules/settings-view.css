@@ -404,3 +404,38 @@
 .form-row .form-group {
     flex: 1;
 }
+
+/* Trash settings */
+.trash-setting-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.setting-label {
+    font-weight: 500;
+    color: var(--color-text);
+}
+
+.setting-select {
+    width: auto;
+    min-width: 150px;
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-background);
+    color: var(--color-text);
+    font-size: 0.875rem;
+}
+
+.setting-select:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px var(--color-primary-alpha, rgba(31, 143, 116, 0.2));
+}
+
+.setting-hint {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    margin: 0;
+}

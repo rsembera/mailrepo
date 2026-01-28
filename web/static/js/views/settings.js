@@ -88,6 +88,21 @@ function renderSettingsView() {
                 </div>
             </section>
             
+            <!-- Trash Section -->
+            <section class="settings-section-inline">
+                <div class="settings-section-header-inline" data-section="trash">
+                    <i data-lucide="chevron-right" class="section-chevron"></i>
+                    <i data-lucide="trash-2" class="section-icon"></i>
+                    <div class="section-text">
+                        <h3>Trash</h3>
+                        <p>Automatic cleanup of deleted items</p>
+                    </div>
+                </div>
+                <div class="settings-section-body" id="trashBody" style="display: none;">
+                    ${renderTrashSection()}
+                </div>
+            </section>
+            
             <!-- About Link -->
             <div class="settings-about-link">
                 <a href="javascript:void(0);" onclick="showAboutModal()">About MailRepo</a>
@@ -101,6 +116,7 @@ function renderSettingsView() {
     
     initSettingsSectionToggles();
     initAppearanceHandlers();
+    initTrashHandlers();
     loadCurrentSettings();
 }
 
@@ -209,6 +225,25 @@ function renderSecuritySection() {
 }
 
 /**
+ * Render trash section content.
+ */
+function renderTrashSection() {
+    return `
+        <div class="trash-setting-group">
+            <label class="setting-label" for="trashRetention">Automatically delete items in Trash after:</label>
+            <select id="trashRetention" class="setting-select">
+                <option value="0">Never</option>
+                <option value="7">7 days</option>
+                <option value="30">30 days</option>
+                <option value="90">90 days</option>
+                <option value="365">1 year</option>
+            </select>
+            <p class="setting-hint">Deleted folders and their emails will be permanently removed after this period.</p>
+        </div>
+    `;
+}
+
+/**
  * Initialize section toggle behavior.
  */
 function initSettingsSectionToggles() {
@@ -272,7 +307,7 @@ function initAppearanceHandlers() {
 /**
  * Load current settings and mark active options.
  */
-function loadCurrentSettings() {
+async function loadCurrentSettings() {
     // Get current theme
     const currentTheme = localStorage.getItem('mailrepo-theme') || 'pine';
     const themeBtn = document.querySelector(`.theme-option[data-theme="${currentTheme}"]`);
@@ -287,6 +322,38 @@ function loadCurrentSettings() {
     const currentSize = localStorage.getItem('mailrepo-font-size') || 'm';
     const sizeBtn = document.querySelector(`.size-btn[data-size="${currentSize}"]`);
     if (sizeBtn) sizeBtn.classList.add('active');
+    
+    // Load trash retention setting from server
+    try {
+        const response = await fetch('/api/settings/trash-retention');
+        if (response.ok) {
+            const data = await response.json();
+            const select = document.getElementById('trashRetention');
+            if (select) select.value = data.value || '0';
+        }
+    } catch (err) {
+        console.error('Failed to load trash retention setting:', err);
+    }
+}
+
+/**
+ * Initialize trash settings handlers.
+ */
+function initTrashHandlers() {
+    const select = document.getElementById('trashRetention');
+    if (select) {
+        select.addEventListener('change', async () => {
+            try {
+                await fetch('/api/settings/trash-retention', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ value: select.value }),
+                });
+            } catch (err) {
+                console.error('Failed to save trash retention setting:', err);
+            }
+        });
+    }
 }
 
 /**
