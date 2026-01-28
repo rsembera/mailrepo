@@ -44,8 +44,16 @@ export async function showTrashView() {
     
     await loadFolders();
     
+    // Show trashed folders that are either:
+    // - Top-level (no parent), OR
+    // - Their parent is NOT trashed (child was deleted independently)
     const trashedFolders = state.folders
-        .filter(f => f.deleted_at && !f.parent_id)
+        .filter(f => {
+            if (!f.deleted_at) return false;
+            if (!f.parent_id) return true;
+            const parent = state.folders.find(p => p.id == f.parent_id);
+            return !parent || !parent.deleted_at;
+        })
         .sort((a, b) => b.deleted_at - a.deleted_at);
     
     if (trashedFolders.length === 0) {
