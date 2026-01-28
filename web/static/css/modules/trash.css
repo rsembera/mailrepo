@@ -182,3 +182,67 @@
     outline: none;
     border-color: var(--color-primary);
 }
+
+/* Tabs */
+.trash-tabs {
+    display: flex;
+    gap: var(--space-xs);
+    margin-bottom: var(--space-md);
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: var(--space-sm);
+}
+
+.trash-tab {
+    padding: var(--space-sm) var(--space-lg);
+    background: none;
+    border: none;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    font-family: var(--font-family);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.trash-tab:hover {
+    color: var(--color-text);
+    background: var(--color-background-secondary);
+}
+
+.trash-tab.active {
+    color: var(--color-primary);
+    background: var(--color-background-secondary);
+    border-bottom: 2px solid var(--color-primary);
+    margin-bottom: -1px;
+}
+
+/* Email items in trash */
+.trash-email-item .trash-management-name {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.trash-email-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.trash-email-info .email-subject {
+    font-weight: 500;
+    color: var(--color-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.trash-email-info .email-sender {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
