@@ -84,14 +84,21 @@ def delete_folder(folder_id):
         return jsonify({"error": "Folder not found"}), 404
     
     now = int(time.time())
-    Database.execute(
-        "UPDATE folders SET deleted_at = ? WHERE id = ?",
-        (now, folder_id)
-    )
-    Database.execute(
-        "UPDATE folders SET deleted_at = ? WHERE parent_id = ?",
-        (now, folder_id)
-    )
+    
+    # Recursively soft-delete folder and all descendants
+    def soft_delete_recursive(parent_id):
+        Database.execute(
+            "UPDATE folders SET deleted_at = ? WHERE id = ?",
+            (now, parent_id)
+        )
+        children = Database.fetchall(
+            "SELECT id FROM folders WHERE parent_id = ?",
+            (parent_id,)
+        )
+        for child in children:
+            soft_delete_recursive(child["id"])
+    
+    soft_delete_recursive(folder_id)
     Database.commit()
     return jsonify({"success": True})
 
@@ -264,9 +271,24 @@ def permanently_delete_folder(folder_id):
     if not folder["deleted_at"]:
         return jsonify({"error": "Folder must be in trash before permanent deletion"}), 400
     
+    # Collect all descendant folder IDs recursively
+    def collect_descendants(parent_id):
+        ids = [parent_id]
+        children = Database.fetchall(
+            "SELECT id FROM folders WHERE parent_id = ?",
+            (parent_id,)
+        )
+        for child in children:
+            ids.extend(collect_descendants(child["id"]))
+        return ids
+    
+    all_folder_ids = collect_descendants(folder_id)
+    placeholders = ",".join(["?" for _ in all_folder_ids])
+    
+    # Delete message files for all folders in the tree
     messages = Database.fetchall(
-        "SELECT filepath FROM messages WHERE folder_id = ? OR folder_id IN (SELECT id FROM folders WHERE parent_id = ?)",
-        (folder_id, folder_id)
+        f"SELECT filepath FROM messages WHERE folder_id IN ({placeholders})",
+        tuple(all_folder_ids)
     )
     
     for msg in messages:
@@ -277,14 +299,17 @@ def permanently_delete_folder(folder_id):
         except Exception as e:
             print(f"Warning: Could not delete file {msg['filepath']}: {e}")
     
-    try:
-        folder_path = Config.get_archive_path() / str(folder_id)
-        if folder_path.exists() and folder_path.is_dir():
-            folder_path.rmdir()
-    except:
-        pass
+    # Try to remove folder directories
+    for fid in all_folder_ids:
+        try:
+            folder_path = Config.get_archive_path() / str(fid)
+            if folder_path.exists() and folder_path.is_dir():
+                folder_path.rmdir()
+        except:
+            pass
     
-    Database.execute("DELETE FROM folders WHERE id = ? OR parent_id = ?", (folder_id, folder_id))
+    # Delete all folders (CASCADE will handle messages)
+    Database.execute(f"DELETE FROM folders WHERE id IN ({placeholders})", tuple(all_folder_ids))
     Database.commit()
     return jsonify({"success": True})
 

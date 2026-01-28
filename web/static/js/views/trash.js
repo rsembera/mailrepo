@@ -284,7 +284,17 @@ export async function permanentlyDeleteFolder(folderId) {
             return;
         }
         
-        state.folders = state.folders.filter(f => f.id != folderId && f.parent_id != folderId);
+        // Recursively collect all descendant IDs
+        function collectDescendantIds(parentId) {
+            let ids = [parentId];
+            state.folders.filter(f => f.parent_id == parentId).forEach(child => {
+                ids = ids.concat(collectDescendantIds(child.id));
+            });
+            return ids;
+        }
+        const idsToRemove = collectDescendantIds(folderId);
+        
+        state.folders = state.folders.filter(f => !idsToRemove.includes(f.id));
         showTrashView();
     } catch (error) {
         console.error('Error deleting folder:', error);
