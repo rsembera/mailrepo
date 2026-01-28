@@ -133,6 +133,8 @@
     font-family: var(--font-family);
     font-size: 0.875rem;
     width: 180px;
+    height: 36px;
+    box-sizing: border-box;
 }
 
 .trash-search input:focus {
@@ -174,10 +176,6 @@
     font-family: var(--font-family);
     font-size: 0.875rem;
     cursor: pointer;
-    height: 36px;
-}
-
-.trash-search input {
     height: 36px;
     box-sizing: border-box;
 }
