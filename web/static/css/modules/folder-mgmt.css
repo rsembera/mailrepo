@@ -254,3 +254,67 @@
     background: color-mix(in srgb, var(--color-danger) 20%, transparent);
     border-color: transparent;
 }
+
+/* ============================================
+   ARCHIVE FILTER
+   ============================================ */
+.archive-filter {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.archive-filter .search-icon {
+    position: absolute;
+    left: 10px;
+    width: 16px;
+    height: 16px;
+    color: var(--color-text-muted);
+    pointer-events: none;
+}
+
+.archive-filter input {
+    padding: var(--space-sm) var(--space-md);
+    padding-left: 32px;
+    padding-right: 28px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-background);
+    color: var(--color-text);
+    font-family: var(--font-family);
+    font-size: 0.875rem;
+    width: 220px;
+    height: 38px;
+    box-sizing: border-box;
+}
+
+.archive-filter input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+}
+
+.archive-filter input::placeholder {
+    color: var(--color-text-muted);
+}
+
+.archive-filter .search-clear {
+    position: absolute;
+    right: 6px;
+    background: none;
+    border: none;
+    padding: 2px;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    display: flex;
+    align-items: center;
+}
+
+.archive-filter .search-clear:hover {
+    color: var(--color-text);
+}
+
+.archive-filter .search-clear i,
+.archive-filter .search-clear svg {
+    width: 12px;
+    height: 12px;
+}

@@ -19,6 +19,7 @@ import { updateTrashBadge } from './trash.js';
 // Module state
 let movingFolderId = null;
 let moveDestinationId = null;
+let archiveFilter = '';
 
 // DOM references
 let contextTitle = null;
@@ -48,9 +49,37 @@ export function initFolderMgmt(config) {
 }
 
 /**
+ * Filter folders by name (keeps parent chain visible).
+ */
+function filterFolders(folders, query) {
+    if (!query) return folders.filter(f => !f.deleted_at);
+    
+    const lowerQuery = query.toLowerCase();
+    const matchingIds = new Set();
+    
+    // Find all folders that match
+    folders.forEach(f => {
+        if (!f.deleted_at && f.name.toLowerCase().includes(lowerQuery)) {
+            matchingIds.add(f.id);
+            // Also include all ancestors
+            let parentId = f.parent_id;
+            while (parentId) {
+                matchingIds.add(parentId);
+                const parent = folders.find(p => p.id === parentId);
+                parentId = parent?.parent_id;
+            }
+        }
+    });
+    
+    return folders.filter(f => !f.deleted_at && matchingIds.has(f.id));
+}
+
+/**
  * Show the folder management view.
  */
 export async function showFolderManagementView() {
+    archiveFilter = '';
+    
     const sidebar = document.getElementById('sidebar');
     const toolbar = document.querySelector('.content-toolbar');
     const headerActions = document.querySelector('.header-actions');
@@ -83,49 +112,72 @@ export async function showFolderManagementView() {
 }
 
 function renderFolderManagementList() {
-    const topLevelFolders = state.folders.filter(f => !f.parent_id && !f.deleted_at);
     const totalFolders = state.folders.filter(f => !f.deleted_at).length;
+    const filteredFolders = filterFolders(state.folders, archiveFilter);
+    const filteredCount = filteredFolders.length;
+    const topLevelFolders = filteredFolders.filter(f => !f.parent_id);
     
     // Update context meta
     if (contextMeta) {
-        contextMeta.textContent = `${totalFolders} folder${totalFolders !== 1 ? 's' : ''}`;
+        if (archiveFilter && filteredCount !== totalFolders) {
+            contextMeta.textContent = `${filteredCount} of ${totalFolders} folders`;
+        } else {
+            contextMeta.textContent = `${totalFolders} folder${totalFolders !== 1 ? 's' : ''}`;
+        }
     }
     
     let html = `
         <div class="folder-management-list">
             <div class="folder-management-toolbar">
-                <div></div>
+                <div class="archive-filter">
+                    <i data-lucide="search" class="search-icon"></i>
+                    <input type="text" 
+                           id="archiveFilterInput" 
+                           placeholder="Filter folders..." 
+                           value="${escapeHtml(archiveFilter)}"
+                           oninput="handleArchiveFilter(this.value)">
+                    ${archiveFilter ? '<button class="search-clear" onclick="clearArchiveFilter()"><i data-lucide="x"></i></button>' : ''}
+                </div>
                 <button class="btn btn-primary" onclick="openNewFolderModal(false)">
                     <i data-lucide="plus"></i>
                     New Folder
                 </button>
             </div>
+    `;
+    
+    if (filteredCount === 0 && archiveFilter) {
+        html += `
+            <div class="empty-state" style="padding: var(--space-xl);">
+                <p>No folders match "${escapeHtml(archiveFilter)}"</p>
+            </div>
+        `;
+    } else {
+        html += `
             <div class="folder-management-header">
                 <span>Folder</span>
                 <span>Color</span>
                 <span>Actions</span>
             </div>
-    `;
-    
-    // ancestry is an array of booleans - true if that ancestor is the last child at its level
-    function renderFolderWithChildren(folder, depth, ancestry = []) {
-        const siblings = depth === 0 
-            ? topLevelFolders 
-            : state.folders.filter(f => f.parent_id == folder.parent_id && !f.deleted_at);
-        const isLast = siblings[siblings.length - 1].id === folder.id;
+        `;
         
-        html += renderFolderManagementItem(folder, depth, ancestry, isLast);
+        // ancestry is an array of booleans - true if that ancestor is the last child at its level
+        function renderFolderWithChildren(folder, depth, ancestry = []) {
+            const siblings = depth === 0 
+                ? topLevelFolders 
+                : filteredFolders.filter(f => f.parent_id == folder.parent_id);
+            const isLast = siblings[siblings.length - 1].id === folder.id;
+            
+            html += renderFolderManagementItem(folder, depth, ancestry, isLast);
+            
+            const children = filteredFolders.filter(f => f.parent_id == folder.id);
+            children.sort((a, b) => a.name.localeCompare(b.name));
+            children.forEach(child => renderFolderWithChildren(child, depth + 1, [...ancestry, isLast]));
+        }
         
-        const children = state.folders.filter(f => f.parent_id == folder.id && !f.deleted_at);
-        children.sort((a, b) => a.name.localeCompare(b.name));
-        children.forEach(child => renderFolderWithChildren(child, depth + 1, [...ancestry, isLast]));
+        topLevelFolders.forEach(folder => renderFolderWithChildren(folder, 0, []));
     }
     
-    topLevelFolders.forEach(folder => renderFolderWithChildren(folder, 0, []));
-    
-    html += `
-        </div>
-    `;
+    html += `</div>`;
     
     emailList.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -542,3 +594,30 @@ async function setFolderColor(folderId, color) {
         console.error('Error updating folder color:', error);
     }
 }
+
+/**
+ * Handle archive filter input.
+ */
+function handleArchiveFilter(query) {
+    archiveFilter = query;
+    renderFolderManagementList();
+    
+    // Refocus the input and restore cursor position
+    const input = document.getElementById('archiveFilterInput');
+    if (input) {
+        input.focus();
+        input.setSelectionRange(query.length, query.length);
+    }
+}
+window.handleArchiveFilter = handleArchiveFilter;
+
+/**
+ * Clear archive filter.
+ */
+function clearArchiveFilter() {
+    archiveFilter = '';
+    renderFolderManagementList();
+    const input = document.getElementById('archiveFilterInput');
+    if (input) input.focus();
+}
+window.clearArchiveFilter = clearArchiveFilter;
