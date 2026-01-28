@@ -114,3 +114,43 @@ def cache_email(account_id: int, folder: str, uidvalidity: int, email: dict):
             email.get("message_id"),
         )
     )
+
+
+def remove_stale_cache_entries(account_id: int, folder: str, uidvalidity: int, valid_uids: list) -> int:
+    """
+    Remove cached emails that no longer exist on the server.
+    
+    Args:
+        account_id: IMAP account ID
+        folder: Folder name
+        uidvalidity: Current UIDVALIDITY
+        valid_uids: List of UIDs that currently exist on server
+        
+    Returns:
+        Number of stale entries removed
+    """
+    if not valid_uids:
+        return 0
+    
+    # Get all cached UIDs for this folder
+    cached = Database.fetchall(
+        """SELECT uid FROM email_cache
+           WHERE account_id = ? AND folder_name = ? AND uidvalidity = ?""",
+        (account_id, folder, uidvalidity)
+    )
+    
+    cached_uids = {str(row["uid"]) for row in cached}
+    valid_uid_set = {str(uid) for uid in valid_uids}
+    stale_uids = cached_uids - valid_uid_set
+    
+    if stale_uids:
+        # Delete stale entries
+        placeholders = ",".join("?" * len(stale_uids))
+        Database.execute(
+            f"""DELETE FROM email_cache
+               WHERE account_id = ? AND folder_name = ? AND uid IN ({placeholders})""",
+            (account_id, folder, *stale_uids)
+        )
+        Database.commit()
+    
+    return len(stale_uids)

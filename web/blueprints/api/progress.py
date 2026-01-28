@@ -21,6 +21,7 @@ from .streaming import (
     clear_folder_cache,
     get_any_cached_emails,
     cache_email,
+    remove_stale_cache_entries,
 )
 from .commit import (
     create_archive_folder_from_path,
@@ -123,6 +124,14 @@ def stream_account_emails(account_id):
             
             # Get all UIDs from server
             all_uids = client.search("ALL", limit=0)
+            
+            # Remove cached emails that no longer exist on server
+            stale_removed = 0
+            if cache_valid and uidvalidity:
+                stale_removed = remove_stale_cache_entries(account_id, folder, uidvalidity, all_uids)
+                if stale_removed > 0:
+                    # Refresh cached_emails after removing stale entries
+                    cached_emails = get_cached_emails(account_id, folder, uidvalidity)
             
             # Determine which UIDs are new (not in cache)
             if cache_valid and highest_cached_uid > 0:
