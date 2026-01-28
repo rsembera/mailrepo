@@ -34,15 +34,15 @@ def create_folder():
     if len(name) > 100:
         return jsonify({"error": "Folder name must be 100 characters or less"}), 400
 
-    # Check for duplicate name at same level
+    # Check for duplicate name at same level (excluding trashed folders)
     if parent_id:
         existing = Database.fetchone(
-            "SELECT id FROM folders WHERE name = ? AND parent_id = ?",
+            "SELECT id FROM folders WHERE name = ? AND parent_id = ? AND deleted_at IS NULL",
             (name, parent_id)
         )
     else:
         existing = Database.fetchone(
-            "SELECT id FROM folders WHERE name = ? AND parent_id IS NULL",
+            "SELECT id FROM folders WHERE name = ? AND parent_id IS NULL AND deleted_at IS NULL",
             (name,)
         )
     
