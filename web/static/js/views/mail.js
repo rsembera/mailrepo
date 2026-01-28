@@ -406,18 +406,47 @@ export async function openEmailViewer(emailId) {
     
     if (typeof lucide !== 'undefined') lucide.createIcons();
     
+    // Helper to fetch with retry (for intermittent IMAP connection issues)
+    async function fetchWithRetry(url, options = {}, maxRetries = 2) {
+        let lastError;
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.error || 'Request failed');
+                }
+                const data = await response.json();
+                // Check for empty body (might indicate incomplete fetch)
+                if (data.email && !data.email.html_body && !data.email.text_body && attempt < maxRetries) {
+                    console.warn(`Email body empty on attempt ${attempt + 1}, retrying...`);
+                    await new Promise(r => setTimeout(r, 500));
+                    continue;
+                }
+                return data;
+            } catch (err) {
+                lastError = err;
+                if (attempt < maxRetries) {
+                    console.warn(`Fetch attempt ${attempt + 1} failed, retrying...`, err);
+                    await new Promise(r => setTimeout(r, 500));
+                }
+            }
+        }
+        throw lastError;
+    }
+    
     try {
-        let response;
+        let data;
         
         if (state.currentView?.type === 'account') {
             const accountId = state.currentView.id;
             const folder = state.currentView.folder || 'INBOX';
             const uid = email.uid || email.id;
-            response = await fetch(`/api/accounts/${accountId}/emails/${uid}?folder=${encodeURIComponent(folder)}`);
+            data = await fetchWithRetry(`/api/accounts/${accountId}/emails/${uid}?folder=${encodeURIComponent(folder)}`);
         } else if (state.currentView?.type === 'folder') {
             const folderId = state.currentView.id;
             const messageId = email.id;
-            response = await fetch(`/api/folders/${folderId}/emails/${messageId}`);
+            data = await fetchWithRetry(`/api/folders/${folderId}/emails/${messageId}`);
         } else if (state.currentView?.type === 'import') {
             // Get import details from mounted imports
             const imports = window.getMountedImports ? window.getMountedImports() : [];
@@ -425,7 +454,7 @@ export async function openEmailViewer(emailId) {
             if (!imp) {
                 throw new Error('Import not found');
             }
-            response = await fetch('/api/import/email', {
+            data = await fetchWithRetry('/api/import/email', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -440,12 +469,6 @@ export async function openEmailViewer(emailId) {
             throw new Error('Unknown view type');
         }
         
-        if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.error || 'Failed to load email');
-        }
-        
-        const data = await response.json();
         renderEmailContent(data.email);
         
     } catch (error) {
