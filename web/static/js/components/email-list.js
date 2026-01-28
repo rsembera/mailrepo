@@ -166,33 +166,32 @@ export function renderEmailList() {
                 </button>
             `;
         } else if (isStaged) {
-                actionsHtml = `
-                    <button class="btn btn-sm btn-icon" disabled title="Already staged">
-                        <i data-lucide="circle"></i>
-                    </button>
-                    <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); clearEmail('${emailId}')" title="Unstage">
-                        <i data-lucide="x"></i>
-                    </button>
-                `;
-            } else if (isSelected) {
-                actionsHtml = `
-                    <button class="btn btn-sm btn-icon btn-selected" disabled title="Selected">
-                        <i data-lucide="check"></i>
-                    </button>
-                    <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); clearEmail('${emailId}')" title="Deselect">
-                        <i data-lucide="x"></i>
-                    </button>
-                `;
-            } else {
-                actionsHtml = `
-                    <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); selectEmail('${emailId}')" title="Select">
-                        <i data-lucide="circle"></i>
-                    </button>
-                    <button class="btn btn-sm btn-icon" disabled title="Not selected">
-                        <i data-lucide="x"></i>
-                    </button>
-                `;
-            }
+            actionsHtml = `
+                <button class="btn btn-sm btn-icon" disabled title="Already staged">
+                    <i data-lucide="circle"></i>
+                </button>
+                <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); clearEmail('${emailId}')" title="Unstage">
+                    <i data-lucide="x"></i>
+                </button>
+            `;
+        } else if (isSelected) {
+            actionsHtml = `
+                <button class="btn btn-sm btn-icon btn-selected" disabled title="Selected">
+                    <i data-lucide="check"></i>
+                </button>
+                <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); clearEmail('${emailId}')" title="Deselect">
+                    <i data-lucide="x"></i>
+                </button>
+            `;
+        } else {
+            actionsHtml = `
+                <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); selectEmail('${emailId}')" title="Select">
+                    <i data-lucide="circle"></i>
+                </button>
+                <button class="btn btn-sm btn-icon" disabled title="Not selected">
+                    <i data-lucide="x"></i>
+                </button>
+            `;
         }
         
         return `
