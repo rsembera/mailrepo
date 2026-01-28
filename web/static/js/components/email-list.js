@@ -113,7 +113,7 @@ export function renderEmailList() {
                     </button>
                     <button class="btn btn-danger" onclick="deleteSelectedArchivedEmails()" ${archiveSelectedCount === 0 ? 'disabled' : ''}>
                         <i data-lucide="trash-2"></i>
-                        Delete${archiveSelectedCount > 0 ? ` (${archiveSelectedCount})` : ''}
+                        Trash${archiveSelectedCount > 0 ? ` (${archiveSelectedCount})` : ''}
                     </button>
                 </div>
             </div>
@@ -181,7 +181,7 @@ export function renderEmailList() {
         // Determine which action buttons to show
         let actionsHtml = '';
         if (isArchiveView) {
-            // Archive view - select/deselect + move/delete buttons
+            // Archive view - select/deselect buttons (same pattern as staging)
             if (isArchivedSelected) {
                 actionsHtml = `
                     <button class="btn btn-sm btn-icon btn-selected" disabled title="Selected">
@@ -196,8 +196,8 @@ export function renderEmailList() {
                     <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); toggleArchivedEmailSelection(${emailId})" title="Select">
                         <i data-lucide="circle"></i>
                     </button>
-                    <button class="btn btn-sm btn-icon btn-danger-subtle" onclick="event.stopPropagation(); deleteArchivedEmail(${emailId})" title="Move to trash">
-                        <i data-lucide="trash-2"></i>
+                    <button class="btn btn-sm btn-icon" disabled title="Not selected">
+                        <i data-lucide="x"></i>
                     </button>
                 `;
             }
