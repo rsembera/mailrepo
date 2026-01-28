@@ -15,6 +15,9 @@ let onFilterChange = null;
 // Filter state
 let emailFilter = '';
 
+// Archive selection state (separate from staging selection)
+let selectedArchivedEmails = new Set();
+
 /**
  * Initialize the email list component.
  * @param {Object} config
@@ -82,7 +85,8 @@ export function renderEmailList() {
     let html = `<div class="folder-management-list">`;
     
     if (isArchiveView) {
-        // Archive view - simple toolbar with just filter
+        // Archive view - filter + selection buttons
+        const archiveSelectedCount = selectedArchivedEmails.size;
         html += `
             <div class="email-list-toolbar">
                 <div class="email-filter">
@@ -93,6 +97,24 @@ export function renderEmailList() {
                            value="${escapeHtml(emailFilter)}"
                            oninput="handleEmailFilter(this.value)">
                     ${emailFilter ? '<button class="search-clear" onclick="clearEmailFilterInput()"><i data-lucide="x"></i></button>' : ''}
+                </div>
+                <div class="toolbar-actions">
+                    <button class="btn btn-secondary" onclick="selectAllArchivedEmails()">
+                        <i data-lucide="check-square"></i>
+                        Select All
+                    </button>
+                    <button class="btn btn-secondary" onclick="clearSelectedArchivedEmails()" ${archiveSelectedCount === 0 ? 'disabled' : ''}>
+                        <i data-lucide="x"></i>
+                        Clear
+                    </button>
+                    <button class="btn btn-secondary" onclick="moveSelectedArchivedEmails()" ${archiveSelectedCount === 0 ? 'disabled' : ''}>
+                        <i data-lucide="folder-input"></i>
+                        Move${archiveSelectedCount > 0 ? ` (${archiveSelectedCount})` : ''}
+                    </button>
+                    <button class="btn btn-danger" onclick="deleteSelectedArchivedEmails()" ${archiveSelectedCount === 0 ? 'disabled' : ''}>
+                        <i data-lucide="trash-2"></i>
+                        Delete${archiveSelectedCount > 0 ? ` (${archiveSelectedCount})` : ''}
+                    </button>
                 </div>
             </div>
             <div class="folder-management-header email-list-header">
@@ -146,9 +168,12 @@ export function renderEmailList() {
         const emailId = email.uid || email.id;
         const isStaged = state.staged.has(emailId);
         const isSelected = state.selectedEmails.has(emailId);
+        const isArchivedSelected = selectedArchivedEmails.has(emailId);
         
         let rowClass = 'folder-management-item email-list-item';
-        if (!isArchiveView) {
+        if (isArchiveView) {
+            if (isArchivedSelected) rowClass += ' selected';
+        } else {
             if (isStaged) rowClass += ' staged';
             if (isSelected) rowClass += ' selected';
         }
@@ -156,15 +181,26 @@ export function renderEmailList() {
         // Determine which action buttons to show
         let actionsHtml = '';
         if (isArchiveView) {
-            // Archive view - move and delete buttons
-            actionsHtml = `
-                <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); moveArchivedEmail(${emailId})" title="Move to folder">
-                    <i data-lucide="folder-input"></i>
-                </button>
-                <button class="btn btn-sm btn-icon btn-danger-subtle" onclick="event.stopPropagation(); deleteArchivedEmail(${emailId})" title="Move to trash">
-                    <i data-lucide="trash-2"></i>
-                </button>
-            `;
+            // Archive view - select/deselect + move/delete buttons
+            if (isArchivedSelected) {
+                actionsHtml = `
+                    <button class="btn btn-sm btn-icon btn-selected" disabled title="Selected">
+                        <i data-lucide="check"></i>
+                    </button>
+                    <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); toggleArchivedEmailSelection(${emailId})" title="Deselect">
+                        <i data-lucide="x"></i>
+                    </button>
+                `;
+            } else {
+                actionsHtml = `
+                    <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); toggleArchivedEmailSelection(${emailId})" title="Select">
+                        <i data-lucide="circle"></i>
+                    </button>
+                    <button class="btn btn-sm btn-icon btn-danger-subtle" onclick="event.stopPropagation(); deleteArchivedEmail(${emailId})" title="Move to trash">
+                        <i data-lucide="trash-2"></i>
+                    </button>
+                `;
+            }
         } else if (isStaged) {
             actionsHtml = `
                 <button class="btn btn-sm btn-icon" disabled title="Already staged">
@@ -393,7 +429,7 @@ async function moveArchivedEmail(emailId) {
     if (!email) return;
     
     // Store the email ID for the move modal
-    window.pendingMoveEmailId = emailId;
+    window.pendingMoveEmailIds = [emailId];
     
     // Open the move email modal
     const modal = document.getElementById('moveEmailModal');
@@ -405,3 +441,102 @@ async function moveArchivedEmail(emailId) {
     }
 }
 window.moveArchivedEmail = moveArchivedEmail;
+
+/**
+ * Toggle selection of an archived email.
+ */
+function toggleArchivedEmailSelection(emailId) {
+    if (selectedArchivedEmails.has(emailId)) {
+        selectedArchivedEmails.delete(emailId);
+    } else {
+        selectedArchivedEmails.add(emailId);
+    }
+    renderEmailList();
+}
+window.toggleArchivedEmailSelection = toggleArchivedEmailSelection;
+
+/**
+ * Select all archived emails.
+ */
+function selectAllArchivedEmails() {
+    const filteredEmails = getFilteredEmails();
+    filteredEmails.forEach(email => {
+        selectedArchivedEmails.add(email.id);
+    });
+    renderEmailList();
+}
+window.selectAllArchivedEmails = selectAllArchivedEmails;
+
+/**
+ * Clear all archived email selections.
+ */
+function clearSelectedArchivedEmails() {
+    selectedArchivedEmails.clear();
+    renderEmailList();
+}
+window.clearSelectedArchivedEmails = clearSelectedArchivedEmails;
+
+/**
+ * Clear archived selection when switching views.
+ */
+export function clearArchivedEmailSelection() {
+    selectedArchivedEmails.clear();
+}
+
+/**
+ * Move selected archived emails.
+ */
+async function moveSelectedArchivedEmails() {
+    if (selectedArchivedEmails.size === 0) return;
+    
+    // Store the email IDs for the move modal
+    window.pendingMoveEmailIds = Array.from(selectedArchivedEmails);
+    
+    // Open the move email modal
+    const modal = document.getElementById('moveEmailModal');
+    if (modal) {
+        const { renderMoveEmailFolderTree } = await import('./move-email-modal.js');
+        renderMoveEmailFolderTree();
+        modal.classList.add('active');
+    }
+}
+window.moveSelectedArchivedEmails = moveSelectedArchivedEmails;
+
+/**
+ * Delete selected archived emails.
+ */
+async function deleteSelectedArchivedEmails() {
+    if (selectedArchivedEmails.size === 0) return;
+    
+    const count = selectedArchivedEmails.size;
+    const { showConfirm, showAlert } = await import('../modals.js');
+    const confirmed = await showConfirm(
+        'Delete Emails',
+        `Move ${count} email${count > 1 ? 's' : ''} to trash?`,
+        { okText: 'Move to Trash' }
+    );
+    if (!confirmed) return;
+    
+    try {
+        const ids = Array.from(selectedArchivedEmails);
+        for (const emailId of ids) {
+            const response = await fetch(`/api/messages/${emailId}`, { method: 'DELETE' });
+            if (!response.ok) {
+                console.error(`Failed to delete email ${emailId}`);
+            }
+        }
+        
+        // Remove from state and clear selection
+        state.emails = state.emails.filter(e => !selectedArchivedEmails.has(e.id));
+        selectedArchivedEmails.clear();
+        renderEmailList();
+        
+        // Update trash badge
+        const { updateTrashBadge } = await import('../views/trash.js');
+        updateTrashBadge();
+    } catch (error) {
+        console.error('Error deleting emails:', error);
+        showAlert('Error', 'Failed to delete some emails');
+    }
+}
+window.deleteSelectedArchivedEmails = deleteSelectedArchivedEmails;

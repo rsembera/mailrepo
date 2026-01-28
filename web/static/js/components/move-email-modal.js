@@ -23,6 +23,17 @@ export async function renderMoveEmailFolderTree() {
     selectedFolderId = null;
     document.getElementById('confirmMoveEmailBtn').disabled = true;
     
+    // Update modal title based on count
+    const emailIds = window.pendingMoveEmailIds || [];
+    const titleEl = document.querySelector('#moveEmailModal h2');
+    if (titleEl) {
+        if (emailIds.length > 1) {
+            titleEl.textContent = `Move ${emailIds.length} Emails`;
+        } else {
+            titleEl.textContent = 'Move Email';
+        }
+    }
+    
     // Get current folder (to exclude from list)
     const currentFolderId = state.currentView?.id;
     
@@ -78,31 +89,38 @@ window.selectMoveEmailFolder = selectMoveEmailFolder;
  * Confirm and execute the email move.
  */
 async function confirmMoveEmail() {
-    const emailId = window.pendingMoveEmailId;
-    if (!emailId || !selectedFolderId) return;
+    const emailIds = window.pendingMoveEmailIds;
+    if (!emailIds || emailIds.length === 0 || !selectedFolderId) return;
     
     try {
-        const response = await fetch(`/api/messages/${emailId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ folder_id: selectedFolderId })
-        });
-        
-        if (!response.ok) {
-            const data = await response.json();
-            showAlert('Error', data.error || 'Failed to move email');
-            return;
+        // Move all emails
+        for (const emailId of emailIds) {
+            const response = await fetch(`/api/messages/${emailId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ folder_id: selectedFolderId })
+            });
+            
+            if (!response.ok) {
+                console.error(`Failed to move email ${emailId}`);
+            }
         }
         
         // Remove from current view and re-render
-        state.emails = state.emails.filter(e => e.id != emailId);
+        const movedIds = new Set(emailIds);
+        state.emails = state.emails.filter(e => !movedIds.has(e.id));
+        
+        // Clear archived selection if any were selected
+        const { clearArchivedEmailSelection } = await import('./email-list.js');
+        clearArchivedEmailSelection();
+        
         renderEmailList();
         
         closeModal('moveEmailModal');
-        window.pendingMoveEmailId = null;
+        window.pendingMoveEmailIds = null;
     } catch (error) {
-        console.error('Error moving email:', error);
-        showAlert('Error', 'Failed to move email');
+        console.error('Error moving emails:', error);
+        showAlert('Error', 'Failed to move some emails');
     }
 }
 window.confirmMoveEmail = confirmMoveEmail;
