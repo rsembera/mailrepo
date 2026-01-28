@@ -6,6 +6,7 @@
  * - Folder restore
  * - Permanent deletion
  * - Empty trash
+ * - Search and sort
  */
 
 import { escapeHtml, formatDate } from '../utils.js';
@@ -17,6 +18,10 @@ import { updateSidebarFolders } from '../components/sidebar.js';
 let contextTitle = null;
 let contextMeta = null;
 let emailList = null;
+
+// Sort/filter state
+let currentSort = 'date-desc';  // 'date-desc', 'date-asc', 'name-asc', 'name-desc'
+let searchQuery = '';
 
 /**
  * Get folders that should appear in Trash view.
@@ -59,10 +64,26 @@ export async function showTrashView() {
     
     await loadFolders();
     
-    const trashedFolders = getVisibleTrashedFolders()
-        .sort((a, b) => b.deleted_at - a.deleted_at);
+    renderTrashView();
+    updateTrashBadge();
+}
+
+/**
+ * Render the trash view with current filters/sort.
+ */
+function renderTrashView() {
+    let trashedFolders = getVisibleTrashedFolders();
     
-    if (trashedFolders.length === 0) {
+    // Apply search filter
+    if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        trashedFolders = trashedFolders.filter(f => f.name.toLowerCase().includes(query));
+    }
+    
+    // Apply sort
+    trashedFolders = sortFolders(trashedFolders);
+    
+    if (getVisibleTrashedFolders().length === 0) {
         emailList.innerHTML = `
             <div class="empty-state">
                 <i data-lucide="trash-2" class="empty-icon"></i>
@@ -74,30 +95,79 @@ export async function showTrashView() {
         renderTrashList(trashedFolders);
     }
     
-    updateTrashBadge();
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
+/**
+ * Sort folders based on current sort setting.
+ */
+function sortFolders(folders) {
+    return [...folders].sort((a, b) => {
+        switch (currentSort) {
+            case 'date-desc':
+                return b.deleted_at - a.deleted_at;
+            case 'date-asc':
+                return a.deleted_at - b.deleted_at;
+            case 'name-asc':
+                return a.name.localeCompare(b.name);
+            case 'name-desc':
+                return b.name.localeCompare(a.name);
+            default:
+                return b.deleted_at - a.deleted_at;
+        }
+    });
+}
+
 function renderTrashList(trashedFolders) {
+    const totalCount = getVisibleTrashedFolders().length;
+    const showingFiltered = searchQuery && trashedFolders.length !== totalCount;
+    
     let html = `
         <div class="trash-management-list">
             <div class="trash-management-toolbar">
-                <h2>${trashedFolders.length} Deleted Folder${trashedFolders.length !== 1 ? 's' : ''}</h2>
-                <button class="btn btn-danger" onclick="emptyTrash()">
-                    <i data-lucide="trash-2"></i>
-                    Empty Trash
-                </button>
+                <h2>${showingFiltered ? `${trashedFolders.length} of ${totalCount}` : totalCount} Deleted Folder${totalCount !== 1 ? 's' : ''}</h2>
+                <div class="trash-toolbar-actions">
+                    <div class="trash-search">
+                        <i data-lucide="search" class="search-icon"></i>
+                        <input type="text" 
+                               id="trashSearch" 
+                               placeholder="Search folders..." 
+                               value="${escapeHtml(searchQuery)}"
+                               oninput="handleTrashSearch(this.value)">
+                        ${searchQuery ? '<button class="search-clear" onclick="clearTrashSearch()"><i data-lucide="x"></i></button>' : ''}
+                    </div>
+                    <select id="trashSort" class="trash-sort" onchange="handleTrashSort(this.value)">
+                        <option value="date-desc" ${currentSort === 'date-desc' ? 'selected' : ''}>Newest first</option>
+                        <option value="date-asc" ${currentSort === 'date-asc' ? 'selected' : ''}>Oldest first</option>
+                        <option value="name-asc" ${currentSort === 'name-asc' ? 'selected' : ''}>Name A-Z</option>
+                        <option value="name-desc" ${currentSort === 'name-desc' ? 'selected' : ''}>Name Z-A</option>
+                    </select>
+                    <button class="btn btn-danger" onclick="emptyTrash()">
+                        <i data-lucide="trash-2"></i>
+                        Empty Trash
+                    </button>
+                </div>
             </div>
+    `;
+    
+    if (trashedFolders.length === 0) {
+        html += `
+            <div class="empty-state" style="padding: var(--space-xl);">
+                <p>No folders match "${escapeHtml(searchQuery)}"</p>
+            </div>
+        `;
+    } else {
+        html += `
             <div class="trash-management-header">
                 <span>Folder</span>
                 <span>Deleted</span>
                 <span>Actions</span>
             </div>
-    `;
-    
-    trashedFolders.forEach(folder => {
-        html += renderTrashItem(folder);
-    });
+        `;
+        trashedFolders.forEach(folder => {
+            html += renderTrashItem(folder);
+        });
+    }
     
     html += `
         </div>
@@ -253,3 +323,38 @@ export function updateTrashBadge() {
     badge.textContent = trashedCount;
     badge.classList.toggle('hidden', trashedCount === 0);
 }
+
+/**
+ * Handle search input.
+ */
+function handleTrashSearch(query) {
+    searchQuery = query;
+    renderTrashView();
+    // Refocus the search input and restore cursor position
+    const input = document.getElementById('trashSearch');
+    if (input) {
+        input.focus();
+        input.setSelectionRange(query.length, query.length);
+    }
+}
+window.handleTrashSearch = handleTrashSearch;
+
+/**
+ * Clear search.
+ */
+function clearTrashSearch() {
+    searchQuery = '';
+    renderTrashView();
+    const input = document.getElementById('trashSearch');
+    if (input) input.focus();
+}
+window.clearTrashSearch = clearTrashSearch;
+
+/**
+ * Handle sort change.
+ */
+function handleTrashSort(sort) {
+    currentSort = sort;
+    renderTrashView();
+}
+window.handleTrashSort = handleTrashSort;
