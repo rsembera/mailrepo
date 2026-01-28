@@ -66,57 +66,56 @@ export async function showTrashView() {
 
 function renderTrashList(trashedFolders) {
     let html = `
-        <div class="trash-view">
-            <div class="trash-toolbar">
-                <div class="trash-toolbar-left">
-                    <span class="trash-count">${trashedFolders.length} item${trashedFolders.length !== 1 ? 's' : ''}</span>
-                </div>
-                <div class="trash-toolbar-right">
-                    <button class="btn btn-sm btn-danger" onclick="emptyTrash()">
-                        <i data-lucide="trash-2"></i>
-                        Empty Trash
-                    </button>
-                </div>
+        <div class="trash-management-list">
+            <div class="trash-management-toolbar">
+                <h2>${trashedFolders.length} Deleted Folder${trashedFolders.length !== 1 ? 's' : ''}</h2>
+                <button class="btn btn-danger" onclick="emptyTrash()">
+                    <i data-lucide="trash-2"></i>
+                    Empty Trash
+                </button>
             </div>
-            <div class="trash-list">
-                <div class="trash-header">
-                    <span>Folder</span>
-                    <span>Deleted</span>
-                    <span>Actions</span>
-                </div>
+            <div class="trash-management-header">
+                <span>Folder</span>
+                <span>Deleted</span>
+                <span>Actions</span>
+            </div>
     `;
     
     trashedFolders.forEach(folder => {
-        const deletedDate = new Date(folder.deleted_at * 1000);
-        const children = state.folders.filter(f => f.parent_id == folder.id);
-        
-        html += `
-            <div class="trash-item" data-id="${folder.id}">
-                <div class="trash-item-name">
-                    <i data-lucide="folder" class="folder-icon"></i>
-                    <span class="folder-name">${escapeHtml(folder.name)}</span>
-                    ${children.length > 0 ? `<span class="subfolder-count">(+${children.length})</span>` : ''}
-                </div>
-                <div class="trash-item-date">
-                    ${formatDate(deletedDate)}
-                </div>
-                <div class="trash-item-actions">
-                    <button class="btn btn-sm btn-icon" onclick="restoreFolder(${folder.id})" title="Restore">
-                        <i data-lucide="undo-2"></i>
-                    </button>
-                    <button class="btn btn-sm btn-icon btn-danger-subtle" onclick="permanentlyDeleteFolder(${folder.id})" title="Delete permanently">
-                        <i data-lucide="x"></i>
-                    </button>
-                </div>
-            </div>
-        `;
+        html += renderTrashItem(folder);
     });
     
     html += `
+        </div>
+    `;
+    
+    emailList.innerHTML = html;
+}
+
+function renderTrashItem(folder) {
+    const deletedDate = new Date(folder.deleted_at * 1000);
+    const children = state.folders.filter(f => f.parent_id == folder.id);
+    
+    return `
+        <div class="trash-management-item" data-id="${folder.id}">
+            <div class="trash-management-name">
+                <i data-lucide="folder" class="folder-icon"></i>
+                <span class="folder-label">${escapeHtml(folder.name)}</span>
+                ${children.length > 0 ? `<span class="subfolder-count">(+${children.length})</span>` : ''}
+            </div>
+            <div class="trash-management-date">
+                ${formatDate(deletedDate)}
+            </div>
+            <div class="trash-management-actions">
+                <button class="btn btn-sm btn-icon" onclick="restoreFolder(${folder.id})" title="Restore">
+                    <i data-lucide="undo-2"></i>
+                </button>
+                <button class="btn btn-sm btn-icon btn-danger-subtle" onclick="permanentlyDeleteFolder(${folder.id})" title="Delete permanently">
+                    <i data-lucide="x"></i>
+                </button>
             </div>
         </div>
     `;
-    emailList.innerHTML = html;
 }
 
 export async function restoreFolder(folderId) {
