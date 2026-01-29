@@ -34,7 +34,7 @@ def search_emails():
             FROM messages m
             JOIN messages_fts fts ON m.id = fts.rowid
             JOIN folders f ON m.folder_id = f.id
-            WHERE messages_fts MATCH ? AND m.folder_id = ?
+            WHERE messages_fts MATCH ? AND m.folder_id = ? AND m.deleted_at IS NULL
             ORDER BY m.date DESC
             LIMIT ?
             """,
@@ -47,17 +47,34 @@ def search_emails():
             FROM messages m
             JOIN messages_fts fts ON m.id = fts.rowid
             JOIN folders f ON m.folder_id = f.id
-            WHERE messages_fts MATCH ?
+            WHERE messages_fts MATCH ? AND m.deleted_at IS NULL
             ORDER BY m.date DESC
             LIMIT ?
             """,
             (fts_query, limit)
         )
 
+    # Build folder paths for display
+    def get_folder_path(folder_id):
+        """Build full folder path from folder_id."""
+        path_parts = []
+        current_id = folder_id
+        while current_id:
+            folder = Database.fetchone(
+                "SELECT id, name, parent_id FROM folders WHERE id = ?",
+                (current_id,)
+            )
+            if not folder:
+                break
+            path_parts.insert(0, folder["name"])
+            current_id = folder["parent_id"]
+        return " › ".join(path_parts) if path_parts else ""
+
     emails = [{
         "id": r["id"],
         "folder_id": r["folder_id"],
         "folder_name": r["folder_name"],
+        "folder_path": get_folder_path(r["folder_id"]),
         "subject": r["subject"],
         "sender": r["sender"],
         "date": r["date"],
