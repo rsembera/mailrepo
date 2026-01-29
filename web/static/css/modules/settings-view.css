@@ -441,6 +441,16 @@
     margin: 0;
 }
 
+/* Consistent button width in settings sections */
+.settings-section-body > .btn {
+    min-width: 200px;
+}
+
+/* Consistent select width in settings sections */
+.settings-section-body .setting-select {
+    min-width: 200px;
+}
+
 /* Password change form */
 .password-change-form {
     display: none;

@@ -80,7 +80,7 @@ function renderSettingsView() {
                     <i data-lucide="shield" class="section-icon"></i>
                     <div class="section-text">
                         <h3>Security</h3>
-                        <p>Master password and encryption settings</p>
+                        <p>Change your password</p>
                     </div>
                 </div>
                 <div class="settings-section-body" id="securityBody" style="display: none;">
@@ -213,11 +213,11 @@ function renderAccountsSection() {
 function renderSecuritySection() {
     return `
         <p class="setting-hint" style="margin-bottom: var(--space-lg);">
-            Your master password protects your IMAP credentials and encrypted archives.
+            Your password protects your IMAP credentials and encrypted archives.
         </p>
         <button class="btn btn-primary" id="changePasswordBtn">
             <i data-lucide="key"></i>
-            Change Master Password
+            Change Password
         </button>
         
         <div id="changePasswordForm" class="password-change-form">
