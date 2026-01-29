@@ -460,10 +460,7 @@
     color: var(--color-text);
     font-family: var(--font-family);
     font-size: 0.875rem;
-    width: 270px;
-    min-width: 270px;
-    flex: 1;
-    max-width: 450px;
+    width: 400px;
     height: 38px;
     box-sizing: border-box;
 }
