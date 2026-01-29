@@ -693,11 +693,11 @@ def convert_pst_to_mbox():
         temp_dir = tempfile.mkdtemp(prefix="mailrepo_pst_")
         
         # Run readpst to convert PST to mbox
-        # -r: recursive (process all folders)
+        # -r: recursive (outputs folders as subdirectories with mbox files)
         # -o: output directory
-        # -M: create one mbox file per folder (preserves folder structure)
+        # -w: overwrite existing files
         result = subprocess.run(
-            [readpst_path, "-r", "-o", temp_dir, "-M", pst_path],
+            [readpst_path, "-r", "-w", "-o", temp_dir, pst_path],
             capture_output=True,
             text=True,
             timeout=300,  # 5 minute timeout
@@ -710,18 +710,24 @@ def convert_pst_to_mbox():
             return jsonify({"error": f"PST conversion failed: {error_msg}"}), 500
         
         # Find all generated mbox files
+        # readpst with -r creates directory structure with mbox files (no extension)
         mbox_files = []
         for root, dirs, files in os.walk(temp_dir):
             for f in files:
-                # readpst creates files without extension - they're mbox format
                 filepath = os.path.join(root, f)
                 if os.path.isfile(filepath):
-                    # Get relative path for folder name
-                    rel_path = os.path.relpath(filepath, temp_dir)
-                    mbox_files.append({
-                        "path": filepath,
-                        "name": rel_path,
-                    })
+                    # Check if it's an mbox file (starts with "From ")
+                    try:
+                        with open(filepath, 'rb') as mf:
+                            header = mf.read(5)
+                            if header == b'From ':
+                                rel_path = os.path.relpath(filepath, temp_dir)
+                                mbox_files.append({
+                                    "path": filepath,
+                                    "name": rel_path,
+                                })
+                    except:
+                        pass
         
         if not mbox_files:
             shutil.rmtree(temp_dir, ignore_errors=True)
