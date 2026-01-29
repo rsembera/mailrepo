@@ -67,10 +67,6 @@ export function initImports(config = {}) {
  * Show the import type selection modal.
  */
 function showImportModal() {
-    // Switch to Mail view first
-    const mailBtn = document.querySelector('.rail-btn[data-view="mail"]');
-    if (mailBtn) mailBtn.click();
-    
     const modal = document.getElementById('importModal');
     if (modal) {
         modal.classList.add('active');

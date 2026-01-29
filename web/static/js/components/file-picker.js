@@ -101,7 +101,7 @@ async function loadFilePickerDirectory(path) {
     const confirmBtn = document.getElementById('filePickerConfirm');
     if (filePickerMode === 'mbox') {
         if (appleMode) {
-            title.textContent = 'Select Apple Mail Export Folder';
+            title.textContent = 'Select Apple Mail Folder';
             confirmBtn.textContent = 'Import Folder';
         } else {
             title.textContent = 'Select .mbox File';
@@ -231,7 +231,7 @@ function selectAppleMboxFolder(path, name, emailCount, tree) {
     selectedName.innerHTML = `
         <i data-lucide="folder"></i>
         <strong>${escapeHtml(name)}</strong>
-        <span class="file-picker-info">(Apple Mail export, ${emailCount} email${emailCount !== 1 ? 's' : ''})</span>
+        <span class="file-picker-info">(Apple Mail, ${emailCount} email${emailCount !== 1 ? 's' : ''})</span>
     `;
     selectedDiv.style.display = 'flex';
     confirmBtn.disabled = false;
