@@ -530,7 +530,7 @@
    ============================================ */
 .folder-tree-toolbar {
     display: flex;
-    justify-content: flex-end;
+    justify-content: flex-start;
     padding: var(--space-sm) var(--space-md);
     border-bottom: 1px solid var(--color-border);
     background: var(--color-background-secondary);

@@ -93,7 +93,7 @@ export function renderFolderSelectTree() {
     
     // Toolbar with New Folder button
     html += `<div class="folder-tree-toolbar">
-        <button class="btn btn-secondary btn-sm" onclick="createFolderInTree(null)">
+        <button class="btn btn-secondary btn-sm" onclick="createFolderInSelected()">
             <i data-lucide="folder-plus"></i>
             New Folder
         </button>
@@ -182,6 +182,26 @@ window.toggleTreeFolder = function(folderId) {
 };
 
 /**
+ * Expand a folder to show its children.
+ */
+function expandTreeFolder(folderId) {
+    const children = document.querySelector(`.folder-tree-children[data-parent-id="${folderId}"]`);
+    const icon = document.querySelector(`.tree-toggle-icon[data-folder-id="${folderId}"]`);
+    
+    if (children) {
+        children.style.display = 'block';
+        if (icon) icon.style.transform = 'rotate(90deg)';
+    }
+}
+
+/**
+ * Create folder inside currently selected folder (or root if none selected).
+ */
+window.createFolderInSelected = function() {
+    createFolderInTree(selectedDestinationFolder);
+};
+
+/**
  * Create a new folder in the tree.
  */
 window.createFolderInTree = async function(parentId) {
@@ -233,12 +253,7 @@ window.createFolderInTree = async function(parentId) {
         
         // Expand parent if created as subfolder
         if (parentId) {
-            const children = document.querySelector(`.folder-tree-children[data-parent-id="${parentId}"]`);
-            const icon = document.querySelector(`.tree-toggle-icon[data-folder-id="${parentId}"]`);
-            if (children) {
-                children.style.display = 'block';
-                if (icon) icon.style.transform = 'rotate(90deg)';
-            }
+            expandTreeFolder(parentId);
         }
         
     } catch (error) {
