@@ -693,6 +693,54 @@ function loadRemoteContent() {
 window.loadRemoteContent = loadRemoteContent;
 
 /**
+ * View raw source of the current email.
+ */
+async function viewEmailSource() {
+    if (!currentViewerContext) return;
+    
+    let sourceUrl = null;
+    
+    if (currentViewerContext.type === 'account') {
+        sourceUrl = `/api/accounts/${currentViewerContext.accountId}/emails/${currentViewerContext.uid}/source?folder=${encodeURIComponent(currentViewerContext.folder)}`;
+    } else if (currentViewerContext.type === 'folder') {
+        sourceUrl = `/api/folders/${currentViewerContext.folderId}/emails/${currentViewerContext.messageId}/source`;
+    }
+    
+    if (!sourceUrl) return;
+    
+    try {
+        const response = await fetch(sourceUrl);
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error || 'Failed to fetch source');
+        }
+        
+        const data = await response.json();
+        
+        // Open in new window
+        const win = window.open('', '_blank');
+        win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+    <title>Email Source</title>
+    <style>
+        body { font-family: monospace; white-space: pre-wrap; word-wrap: break-word; 
+               padding: 20px; background: #1e1e1e; color: #d4d4d4; margin: 0; }
+    </style>
+</head>
+<body></body>
+</html>`);
+        win.document.body.textContent = data.source;
+        win.document.close();
+    } catch (error) {
+        console.error('Error fetching email source:', error);
+        const { showAlert } = await import('../modals.js');
+        showAlert('Error', error.message);
+    }
+}
+window.viewEmailSource = viewEmailSource;
+
+/**
  * Initialize email viewer event listeners.
  */
 function initEmailViewerListeners() {

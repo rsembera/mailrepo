@@ -111,6 +111,8 @@ def commit_import_email(item: dict, results: dict) -> dict:
         if not raw_email:
             raise ValueError("Could not retrieve email content")
         
+        # Extract all metadata from raw email
+        metadata = parse_email_metadata(raw_email)
         body_text = extract_body_text(raw_email)
         
         archive_path = Config.get_archive_path() / str(folder_id)
@@ -124,16 +126,17 @@ def commit_import_email(item: dict, results: dict) -> dict:
         Database.execute(
             """
             INSERT INTO messages 
-            (folder_id, source_account_id, message_id, subject, sender, date, filepath, body_text)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (folder_id, source_account_id, message_id, subject, sender, recipients, date, filepath, body_text)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 folder_id,
                 None,  # No source account for imports
-                message_id,
-                email_data.get("subject", ""),
-                email_data.get("from", email_data.get("sender", "")),
-                email_data.get("date"),
+                metadata.get("message_id", ""),
+                metadata.get("subject", ""),
+                metadata.get("sender", ""),
+                metadata.get("recipients", ""),
+                metadata.get("date"),
                 str(filepath.relative_to(Config.get_base_path())),
                 body_text,
             )
@@ -192,6 +195,9 @@ def commit_imap_email(client, account_id: int, email_data: dict, folder_id: int,
         
         # Fetch and save email
         raw_email = client.fetch_raw(uid)
+        
+        # Extract all metadata from raw email
+        metadata = parse_email_metadata(raw_email)
         body_text = extract_body_text(raw_email)
         
         archive_path = Config.get_archive_path() / str(folder_id)
@@ -205,16 +211,17 @@ def commit_imap_email(client, account_id: int, email_data: dict, folder_id: int,
         Database.execute(
             """
             INSERT INTO messages 
-            (folder_id, source_account_id, message_id, subject, sender, date, filepath, body_text)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (folder_id, source_account_id, message_id, subject, sender, recipients, date, filepath, body_text)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 folder_id,
                 account_id,
-                message_id,
-                email_data.get("subject", ""),
-                email_data.get("from", email_data.get("sender", "")),
-                email_data.get("date"),
+                metadata.get("message_id", ""),
+                metadata.get("subject", ""),
+                metadata.get("sender", ""),
+                metadata.get("recipients", ""),
+                metadata.get("date"),
                 str(filepath.relative_to(Config.get_base_path())),
                 body_text,
             )
@@ -277,10 +284,10 @@ def commit_import_folder(folder_item: dict, target_folder_id: int, folder_idx: i
             
             Database.execute(
                 """INSERT INTO messages 
-                   (folder_id, source_account_id, message_id, subject, sender, date, filepath, body_text)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (folder_id, source_account_id, message_id, subject, sender, recipients, date, filepath, body_text)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (target_folder_id, None, metadata["message_id"], metadata["subject"], 
-                 metadata["sender"], metadata["date"],
+                 metadata["sender"], metadata.get("recipients", ""), metadata["date"],
                  str(filepath.relative_to(Config.get_base_path())), body_text)
             )
             results["success"].append(uid)
@@ -398,6 +405,8 @@ def commit_imap_folder(folder_item: dict, target_folder_id: int, folder_idx: int
                         }
                         continue
                 
+                # Extract all metadata from raw email
+                metadata = parse_email_metadata(raw_email)
                 body_text = extract_body_text(raw_email)
                 file_path = Config.get_archive_path() / str(target_folder_id)
                 file_path.mkdir(parents=True, exist_ok=True)
@@ -409,11 +418,12 @@ def commit_imap_folder(folder_item: dict, target_folder_id: int, folder_idx: int
                 
                 Database.execute(
                     """INSERT INTO messages 
-                       (folder_id, source_account_id, message_id, subject, sender, date, filepath, body_text)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (target_folder_id, account_id, message_id,
-                     email_data.get("subject", ""), email_data.get("from", ""),
-                     email_data.get("date"), str(filepath.relative_to(Config.get_base_path())), body_text)
+                       (folder_id, source_account_id, message_id, subject, sender, recipients, date, filepath, body_text)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (target_folder_id, account_id, metadata.get("message_id", ""),
+                     metadata.get("subject", ""), metadata.get("sender", ""),
+                     metadata.get("recipients", ""), metadata.get("date"),
+                     str(filepath.relative_to(Config.get_base_path())), body_text)
                 )
                 results["success"].append(uid)
                 

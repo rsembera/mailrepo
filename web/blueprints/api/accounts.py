@@ -353,3 +353,37 @@ def download_imap_attachment(account_id, uid, index):
     finally:
         if client:
             client.disconnect()
+
+
+@api_bp.route("/accounts/<int:account_id>/emails/<uid>/source", methods=["GET"])
+def get_imap_email_source(account_id, uid):
+    """Get raw source of an IMAP email."""
+    account = Database.fetchone(
+        "SELECT id, credentials_encrypted FROM accounts WHERE id = ?",
+        (account_id,)
+    )
+    if not account:
+        return jsonify({"error": "Account not found"}), 404
+    if not account["credentials_encrypted"]:
+        return jsonify({"error": "Account not configured"}), 401
+    
+    folder = request.args.get("folder", "INBOX")
+    
+    client = None
+    try:
+        client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+        client.select_folder(folder)
+        raw_bytes = client.fetch_raw(uid)
+        
+        # Try to decode as text, fallback to latin-1 if UTF-8 fails
+        try:
+            source = raw_bytes.decode('utf-8')
+        except UnicodeDecodeError:
+            source = raw_bytes.decode('latin-1')
+        
+        return jsonify({"source": source})
+    except IMAPError as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if client:
+            client.disconnect()

@@ -400,3 +400,35 @@ def download_archived_attachment(folder_id, message_id, index):
         )
     except Exception as e:
         return jsonify({"error": f"Failed to read attachment: {e}"}), 500
+
+
+@api_bp.route("/folders/<int:folder_id>/emails/<int:message_id>/source", methods=["GET"])
+def get_archived_email_source(folder_id, message_id):
+    """Get raw source of an archived email."""
+    message = Database.fetchone(
+        """
+        SELECT id, folder_id, filepath
+        FROM messages WHERE id = ? AND folder_id = ?
+        """,
+        (message_id, folder_id)
+    )
+    if not message:
+        return jsonify({"error": "Message not found"}), 404
+    
+    filepath = Config.get_base_path() / message["filepath"]
+    if not filepath.exists():
+        return jsonify({"error": "Email file not found"}), 404
+
+    try:
+        raw_bytes = filepath.read_bytes()
+        raw_bytes = Encryption.decrypt(raw_bytes)
+        
+        # Try to decode as text, fallback to latin-1 if UTF-8 fails
+        try:
+            source = raw_bytes.decode('utf-8')
+        except UnicodeDecodeError:
+            source = raw_bytes.decode('latin-1')
+        
+        return jsonify({"source": source})
+    except Exception as e:
+        return jsonify({"error": f"Failed to read email source: {e}"}), 500

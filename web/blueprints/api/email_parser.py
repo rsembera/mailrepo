@@ -261,7 +261,7 @@ def parse_email_metadata(raw_email: bytes) -> dict:
     """
     Parse email metadata from raw bytes.
     
-    Returns a dict with: subject, sender, message_id, date
+    Returns a dict with: subject, sender, recipients, message_id, date
     
     Args:
         raw_email: Raw email bytes
@@ -272,10 +272,25 @@ def parse_email_metadata(raw_email: bytes) -> dict:
     try:
         msg = email_lib.message_from_bytes(raw_email)
         
-        subject = decode_email_header(msg.get("Subject", ""))[:50] or "(no subject)"
+        subject = decode_email_header(msg.get("Subject", ""))[:500] or "(no subject)"
         sender = decode_email_header(msg.get("From", ""))
         message_id = msg.get("Message-ID", "")
         date_str = msg.get("Date", "")
+        
+        # Extract all recipient fields
+        to_addr = decode_email_header(msg.get("To", ""))
+        cc_addr = decode_email_header(msg.get("Cc", ""))
+        bcc_addr = decode_email_header(msg.get("Bcc", ""))
+        
+        # Combine recipients for storage and searching
+        recipients_parts = []
+        if to_addr:
+            recipients_parts.append(f"To: {to_addr}")
+        if cc_addr:
+            recipients_parts.append(f"Cc: {cc_addr}")
+        if bcc_addr:
+            recipients_parts.append(f"Bcc: {bcc_addr}")
+        recipients = "\n".join(recipients_parts)
         
         try:
             date_ts = parsedate_to_datetime(date_str).isoformat() if date_str else None
@@ -285,6 +300,7 @@ def parse_email_metadata(raw_email: bytes) -> dict:
         return {
             "subject": subject,
             "sender": sender,
+            "recipients": recipients,
             "message_id": message_id,
             "date": date_ts,
         }
@@ -292,6 +308,7 @@ def parse_email_metadata(raw_email: bytes) -> dict:
         return {
             "subject": "(error)",
             "sender": "",
+            "recipients": "",
             "message_id": "",
             "date": None,
         }

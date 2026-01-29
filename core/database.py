@@ -203,6 +203,7 @@ class Database:
                 CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
                     subject,
                     sender,
+                    recipients,
                     body_text,
                     content='messages',
                     content_rowid='id'
@@ -212,22 +213,22 @@ class Database:
             # Create triggers to keep FTS in sync
             conn.execute("""
                 CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
-                    INSERT INTO messages_fts(rowid, subject, sender, body_text)
-                    VALUES (new.id, new.subject, new.sender, new.body_text);
+                    INSERT INTO messages_fts(rowid, subject, sender, recipients, body_text)
+                    VALUES (new.id, new.subject, new.sender, new.recipients, new.body_text);
                 END
             """)
             conn.execute("""
                 CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
-                    INSERT INTO messages_fts(messages_fts, rowid, subject, sender, body_text)
-                    VALUES ('delete', old.id, old.subject, old.sender, old.body_text);
+                    INSERT INTO messages_fts(messages_fts, rowid, subject, sender, recipients, body_text)
+                    VALUES ('delete', old.id, old.subject, old.sender, old.recipients, old.body_text);
                 END
             """)
             conn.execute("""
                 CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
-                    INSERT INTO messages_fts(messages_fts, rowid, subject, sender, body_text)
-                    VALUES ('delete', old.id, old.subject, old.sender, old.body_text);
-                    INSERT INTO messages_fts(rowid, subject, sender, body_text)
-                    VALUES (new.id, new.subject, new.sender, new.body_text);
+                    INSERT INTO messages_fts(messages_fts, rowid, subject, sender, recipients, body_text)
+                    VALUES ('delete', old.id, old.subject, old.sender, old.recipients, old.body_text);
+                    INSERT INTO messages_fts(rowid, subject, sender, recipients, body_text)
+                    VALUES (new.id, new.subject, new.sender, new.recipients, new.body_text);
                 END
             """)
             
@@ -285,6 +286,7 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
     subject,
     sender,
+    recipients,
     body_text,
     content='messages',
     content_rowid='id'
@@ -292,20 +294,20 @@ CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
 
 -- Triggers to keep FTS in sync
 CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
-    INSERT INTO messages_fts(rowid, subject, sender, body_text)
-    VALUES (new.id, new.subject, new.sender, new.body_text);
+    INSERT INTO messages_fts(rowid, subject, sender, recipients, body_text)
+    VALUES (new.id, new.subject, new.sender, new.recipients, new.body_text);
 END;
 
 CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
-    INSERT INTO messages_fts(messages_fts, rowid, subject, sender, body_text)
-    VALUES ('delete', old.id, old.subject, old.sender, old.body_text);
+    INSERT INTO messages_fts(messages_fts, rowid, subject, sender, recipients, body_text)
+    VALUES ('delete', old.id, old.subject, old.sender, old.recipients, old.body_text);
 END;
 
 CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
-    INSERT INTO messages_fts(messages_fts, rowid, subject, sender, body_text)
-    VALUES ('delete', old.id, old.subject, old.sender, old.body_text);
-    INSERT INTO messages_fts(rowid, subject, sender, body_text)
-    VALUES (new.id, new.subject, new.sender, new.body_text);
+    INSERT INTO messages_fts(messages_fts, rowid, subject, sender, recipients, body_text)
+    VALUES ('delete', old.id, old.subject, old.sender, old.recipients, old.body_text);
+    INSERT INTO messages_fts(rowid, subject, sender, recipients, body_text)
+    VALUES (new.id, new.subject, new.sender, new.recipients, new.body_text);
 END;
 
 -- Indexes for common queries
