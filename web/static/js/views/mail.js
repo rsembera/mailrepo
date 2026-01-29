@@ -897,9 +897,9 @@ function loadRemoteContent() {
     const bodyDiv = document.getElementById('viewerBody');
     renderHtmlBody(bodyDiv, currentViewerContext.emailData.html_body, true);
     
-    // Hide the button after loading
+    // Disable the button after loading (keep visible as indicator)
     const loadRemoteBtn = document.getElementById('loadRemoteBtn');
-    if (loadRemoteBtn) loadRemoteBtn.style.display = 'none';
+    if (loadRemoteBtn) loadRemoteBtn.disabled = true;
 }
 window.loadRemoteContent = loadRemoteContent;
 
