@@ -266,7 +266,8 @@ def change_password_progress():
                             (new_creds.decode() if isinstance(new_creds, bytes) else new_creds, account["id"])
                         )
                     except Exception as e:
-                        yield f"data: {json.dumps({'status': 'warning', 'message': f'Failed to re-encrypt credentials for account {account[\"id\"]}: {e}'})}\n\n"
+                        account_id = account["id"]
+                        yield f"data: {json.dumps({'status': 'warning', 'message': f'Failed to re-encrypt credentials for account {account_id}: {e}'})}\n\n"
                 Database.commit()
             except Exception as e:
                 yield f"data: {json.dumps({'status': 'warning', 'message': f'Error re-encrypting credentials: {e}'})}\n\n"
