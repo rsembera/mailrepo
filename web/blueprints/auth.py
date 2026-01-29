@@ -127,7 +127,7 @@ def login():
     return render_template("auth/login.html")
 
 
-@auth_bp.route("/logout", methods=["POST"])
+@auth_bp.route("/logout", methods=["GET", "POST"])
 def logout():
     """Log out and lock encryption."""
     Database.close()
