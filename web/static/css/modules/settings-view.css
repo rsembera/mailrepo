@@ -455,6 +455,7 @@
 .password-change-form {
     display: none;
     margin-top: var(--space-lg);
+    max-width: 350px;
 }
 
 .password-change-form .form-group {
