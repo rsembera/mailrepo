@@ -571,8 +571,8 @@ function renderEmailContent(email, context = null) {
  */
 function renderHtmlBody(container, html, allowRemote = false) {
     const iframe = document.createElement('iframe');
-    // Use more permissive sandbox if allowing remote content
-    iframe.sandbox = allowRemote ? 'allow-same-origin' : 'allow-same-origin';
+    // Sandbox: allow-same-origin for script access, allow-modals for print dialog
+    iframe.sandbox = 'allow-same-origin allow-modals';
     iframe.style.width = '100%';
     iframe.style.border = 'none';
     container.innerHTML = '';
