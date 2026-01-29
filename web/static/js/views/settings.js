@@ -223,16 +223,31 @@ function renderSecuritySection() {
         <div id="changePasswordForm" class="password-change-form">
             <div class="form-group">
                 <label for="currentPassword">Current Password</label>
-                <input type="password" id="currentPassword" class="form-input" autocomplete="current-password">
+                <div class="password-input-wrapper">
+                    <input type="password" id="currentPassword" class="form-input" autocomplete="current-password">
+                    <button type="button" class="password-toggle" data-target="currentPassword" title="Show password">
+                        <i data-lucide="eye"></i>
+                    </button>
+                </div>
             </div>
             <div class="form-group">
                 <label for="newPassword">New Password</label>
-                <input type="password" id="newPassword" class="form-input" autocomplete="new-password">
+                <div class="password-input-wrapper">
+                    <input type="password" id="newPassword" class="form-input" autocomplete="new-password">
+                    <button type="button" class="password-toggle" data-target="newPassword" title="Show password">
+                        <i data-lucide="eye"></i>
+                    </button>
+                </div>
                 <small class="setting-hint">Minimum 8 characters</small>
             </div>
             <div class="form-group">
                 <label for="confirmPassword">Confirm New Password</label>
-                <input type="password" id="confirmPassword" class="form-input" autocomplete="new-password">
+                <div class="password-input-wrapper">
+                    <input type="password" id="confirmPassword" class="form-input" autocomplete="new-password">
+                    <button type="button" class="password-toggle" data-target="confirmPassword" title="Show password">
+                        <i data-lucide="eye"></i>
+                    </button>
+                </div>
             </div>
             <div id="passwordChangeProgress" class="password-progress">
                 <div class="progress-bar-container">
@@ -270,18 +285,40 @@ function initSecurityHandlers() {
         cancelBtn.addEventListener('click', () => {
             form.style.display = 'none';
             changeBtn.style.display = 'inline-flex';
-            // Clear form
+            // Clear form and reset toggles
             document.getElementById('currentPassword').value = '';
             document.getElementById('newPassword').value = '';
             document.getElementById('confirmPassword').value = '';
             document.getElementById('passwordChangeError').style.display = 'none';
             document.getElementById('passwordChangeProgress').style.display = 'none';
+            // Reset all password fields to hidden
+            document.querySelectorAll('.password-toggle').forEach(btn => {
+                const input = document.getElementById(btn.dataset.target);
+                if (input) input.type = 'password';
+            });
         });
     }
     
     if (confirmBtn) {
         confirmBtn.addEventListener('click', handleChangePassword);
     }
+    
+    // Password visibility toggles
+    document.querySelectorAll('.password-toggle').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const input = document.getElementById(btn.dataset.target);
+            if (input) {
+                const isPassword = input.type === 'password';
+                input.type = isPassword ? 'text' : 'password';
+                // Update icon
+                const icon = btn.querySelector('i, svg');
+                if (icon) {
+                    icon.setAttribute('data-lucide', isPassword ? 'eye-off' : 'eye');
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                }
+            }
+        });
+    });
 }
 
 /**
