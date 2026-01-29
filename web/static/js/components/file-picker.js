@@ -2,13 +2,13 @@
  * MailRepo - File Picker Component
  * 
  * Custom file picker for navigating the filesystem and selecting
- * .mbox files or folders containing .eml files.
+ * .mbox files, .pst files, or folders containing .eml files.
  */
 
 import { escapeHtml } from '../utils.js';
 
 // File picker state
-let filePickerMode = null; // 'mbox' or 'eml'
+let filePickerMode = null; // 'mbox', 'pst', or 'eml'
 let filePickerPath = null;
 let filePickerSelected = null;
 
@@ -16,6 +16,7 @@ let filePickerSelected = null;
 let onMboxSelected = null;
 let onAppleMboxSelected = null;
 let onEmlFolderSelected = null;
+let onPstSelected = null;
 
 /**
  * Initialize file picker with mount callbacks.
@@ -24,6 +25,7 @@ export function initFilePicker(config = {}) {
     onMboxSelected = config.onMboxSelected;
     onAppleMboxSelected = config.onAppleMboxSelected;
     onEmlFolderSelected = config.onEmlFolderSelected;
+    onPstSelected = config.onPstSelected;
     
     setupFilePickerHandlers();
 }
@@ -68,6 +70,10 @@ export async function openFilePicker(mode) {
         confirmBtn.textContent = 'Import';
         mboxOptions.style.display = 'flex';
         appleMode.checked = false;
+    } else if (mode === 'pst') {
+        title.textContent = 'Select .pst File (Outlook)';
+        confirmBtn.textContent = 'Import';
+        mboxOptions.style.display = 'none';
     } else {
         title.textContent = 'Select Folder with .eml Files';
         confirmBtn.textContent = 'Import Folder';
@@ -238,6 +244,7 @@ function handleFilePickerClick(item) {
     const name = item.dataset.name;
     const isDir = item.dataset.type === 'dir';
     const isMbox = item.dataset.isMbox === 'true';
+    const isPst = name.toLowerCase().endsWith('.pst');
     
     document.querySelectorAll('.file-picker-item').forEach(i => i.classList.remove('selected'));
     item.classList.add('selected');
@@ -247,6 +254,12 @@ function handleFilePickerClick(item) {
             selectFile(path, name);
         } else if (isDir && isAppleMailMode()) {
             checkFolderForAppleMbox(path);
+        } else {
+            clearSelection();
+        }
+    } else if (filePickerMode === 'pst') {
+        if (isPst) {
+            selectFile(path, name);
         } else {
             clearSelection();
         }
@@ -391,6 +404,10 @@ async function confirmFilePicker() {
                 if (onMboxSelected) {
                     await onMboxSelected(filePickerSelected.path, filePickerSelected.name);
                 }
+            }
+        } else if (filePickerMode === 'pst') {
+            if (onPstSelected) {
+                await onPstSelected(filePickerSelected.path, filePickerSelected.name);
             }
         } else {
             if (onEmlFolderSelected) {

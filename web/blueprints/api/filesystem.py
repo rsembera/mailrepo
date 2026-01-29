@@ -619,3 +619,160 @@ def scan_apple_mbox_folder():
         return jsonify({"error": "Permission denied"}), 403
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@api_bp.route("/filesystem/check-pst-support", methods=["GET"])
+def check_pst_support():
+    """
+    Check if PST import is supported (readpst is installed).
+    
+    Returns:
+        supported: Boolean indicating if PST import is available
+        message: Status message
+    """
+    import shutil
+    
+    readpst_path = shutil.which("readpst")
+    
+    if readpst_path:
+        return jsonify({
+            "supported": True,
+            "message": "PST import is available",
+            "readpst_path": readpst_path,
+        })
+    else:
+        return jsonify({
+            "supported": False,
+            "message": "PST import requires libpst-utils. Install with: apt install pst-utils",
+        })
+
+
+@api_bp.route("/filesystem/convert-pst", methods=["POST"])
+def convert_pst_to_mbox():
+    """
+    Convert a PST file to mbox format using readpst.
+    
+    Request body:
+        path: Path to .pst file
+    
+    Returns:
+        mbox_path: Path to the converted mbox file
+        folder_count: Number of folders extracted
+    """
+    import shutil
+    import subprocess
+    import tempfile
+    
+    data = request.get_json() or {}
+    pst_path = data.get("path", "").strip()
+    
+    if not pst_path:
+        return jsonify({"error": "Path is required"}), 400
+    
+    pst_path = os.path.expanduser(pst_path)
+    pst_path = os.path.realpath(pst_path)
+    
+    if not os.path.exists(pst_path):
+        return jsonify({"error": "File not found"}), 404
+    
+    if not os.path.isfile(pst_path):
+        return jsonify({"error": "Not a file"}), 400
+    
+    if not pst_path.lower().endswith('.pst'):
+        return jsonify({"error": "Not a PST file"}), 400
+    
+    # Check if readpst is available
+    readpst_path = shutil.which("readpst")
+    if not readpst_path:
+        return jsonify({
+            "error": "PST import requires libpst-utils. Install with: apt install pst-utils"
+        }), 400
+    
+    try:
+        # Create temp directory for conversion
+        temp_dir = tempfile.mkdtemp(prefix="mailrepo_pst_")
+        
+        # Run readpst to convert PST to mbox
+        # -r: recursive (process all folders)
+        # -o: output directory
+        # -M: create one mbox file per folder (preserves folder structure)
+        result = subprocess.run(
+            [readpst_path, "-r", "-o", temp_dir, "-M", pst_path],
+            capture_output=True,
+            text=True,
+            timeout=300,  # 5 minute timeout
+        )
+        
+        if result.returncode != 0:
+            # Clean up on error
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            error_msg = result.stderr.strip() if result.stderr else "Unknown error"
+            return jsonify({"error": f"PST conversion failed: {error_msg}"}), 500
+        
+        # Find all generated mbox files
+        mbox_files = []
+        for root, dirs, files in os.walk(temp_dir):
+            for f in files:
+                # readpst creates files without extension - they're mbox format
+                filepath = os.path.join(root, f)
+                if os.path.isfile(filepath):
+                    # Get relative path for folder name
+                    rel_path = os.path.relpath(filepath, temp_dir)
+                    mbox_files.append({
+                        "path": filepath,
+                        "name": rel_path,
+                    })
+        
+        if not mbox_files:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            return jsonify({"error": "No emails found in PST file"}), 400
+        
+        return jsonify({
+            "success": True,
+            "temp_dir": temp_dir,
+            "mbox_files": mbox_files,
+            "folder_count": len(mbox_files),
+        })
+        
+    except subprocess.TimeoutExpired:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        return jsonify({"error": "PST conversion timed out (file may be too large)"}), 500
+    except Exception as e:
+        if 'temp_dir' in locals():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        return jsonify({"error": f"PST conversion failed: {e}"}), 500
+
+
+@api_bp.route("/filesystem/cleanup-pst-temp", methods=["POST"])
+def cleanup_pst_temp():
+    """
+    Clean up temporary files from PST conversion.
+    
+    Request body:
+        temp_dir: Path to temporary directory to remove
+    """
+    import shutil
+    
+    data = request.get_json() or {}
+    temp_dir = data.get("temp_dir", "").strip()
+    
+    if not temp_dir:
+        return jsonify({"error": "temp_dir is required"}), 400
+    
+    # Security: only allow cleanup of paths in system temp directory
+    import tempfile
+    system_temp = tempfile.gettempdir()
+    
+    temp_dir = os.path.realpath(temp_dir)
+    if not temp_dir.startswith(system_temp):
+        return jsonify({"error": "Invalid temp directory"}), 400
+    
+    if not temp_dir.startswith(os.path.join(system_temp, "mailrepo_pst_")):
+        return jsonify({"error": "Invalid temp directory"}), 400
+    
+    try:
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

@@ -30,6 +30,7 @@ export function initImports(config = {}) {
         onMboxSelected: mountMboxFromPath,
         onAppleMboxSelected: mountAppleMboxFolder,
         onEmlFolderSelected: mountEmlFolderFromPath,
+        onPstSelected: mountPstFromPath,
     });
     
     // Set up import button click
@@ -41,6 +42,7 @@ export function initImports(config = {}) {
     // Set up modal buttons
     const mboxBtn = document.getElementById('importMboxBtn');
     const emlBtn = document.getElementById('importEmlBtn');
+    const pstBtn = document.getElementById('importPstBtn');
     
     if (mboxBtn) {
         mboxBtn.addEventListener('click', () => {
@@ -54,6 +56,10 @@ export function initImports(config = {}) {
             closeModal('importModal');
             openFilePicker('eml');
         });
+    }
+    
+    if (pstBtn) {
+        pstBtn.addEventListener('click', handlePstImport);
     }
 }
 
@@ -247,6 +253,131 @@ async function mountEmlFolderFromPath(path, name) {
     return importId;
 }
 
+/**
+ * Handle PST import - check support, then open file picker.
+ */
+async function handlePstImport() {
+    closeModal('importModal');
+    
+    // Check if PST support is available
+    try {
+        const response = await fetch('/api/filesystem/check-pst-support');
+        const data = await response.json();
+        
+        if (!data.supported) {
+            const { showAlert } = await import('../modals.js');
+            showAlert('PST Import Not Available', data.message);
+            return;
+        }
+        
+        // Open file picker for PST files
+        openFilePicker('pst');
+        
+    } catch (error) {
+        console.error('Error checking PST support:', error);
+        const { showAlert } = await import('../modals.js');
+        showAlert('Error', 'Failed to check PST support');
+    }
+}
+
+/**
+ * Mount a PST file - converts to mbox first.
+ */
+async function mountPstFromPath(path, name) {
+    const { showAlert } = await import('../modals.js');
+    
+    // Show converting status in header
+    const contextTitle = document.getElementById('contextTitle');
+    const contextMeta = document.getElementById('contextMeta');
+    const originalTitle = contextTitle?.textContent;
+    const originalMeta = contextMeta?.textContent;
+    
+    if (contextTitle) contextTitle.textContent = 'Converting PST...';
+    if (contextMeta) contextMeta.textContent = `Converting ${name} to mbox format. This may take a moment...`;
+    
+    try {
+        // Convert PST to mbox
+        const convertResponse = await fetch('/api/filesystem/convert-pst', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path }),
+        });
+        
+        if (!convertResponse.ok) {
+            const data = await convertResponse.json();
+            throw new Error(data.error || 'Failed to convert PST file');
+        }
+        
+        const convertData = await convertResponse.json();
+        
+        // Build folder structure from converted mbox files
+        const folders = [];
+        const allEmails = [];
+        
+        for (const mboxFile of convertData.mbox_files) {
+            // Parse each mbox file
+            const parseResponse = await fetch('/api/filesystem/parse-mbox', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: mboxFile.path }),
+            });
+            
+            if (parseResponse.ok) {
+                const parseData = await parseResponse.json();
+                const emails = parseData.emails || [];
+                
+                // Tag emails with their source path
+                emails.forEach(e => e.sourcePath = mboxFile.path);
+                
+                if (emails.length > 0) {
+                    folders.push({
+                        name: mboxFile.name,
+                        fullPath: mboxFile.path,
+                        emails: emails,
+                        children: [],
+                    });
+                    allEmails.push(...emails);
+                }
+            }
+        }
+        
+        if (allEmails.length === 0) {
+            // Clean up temp files
+            await fetch('/api/filesystem/cleanup-pst-temp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ temp_dir: convertData.temp_dir }),
+            });
+            throw new Error('No emails found in PST file');
+        }
+        
+        const importId = `pst-${Date.now()}`;
+        mountedImports.set(importId, {
+            type: 'pst',
+            name: name.replace(/\.pst$/i, ''),
+            path: path,
+            tempDir: convertData.temp_dir,  // Keep track for cleanup
+            folders: folders.length > 0 ? folders : null,
+            emails: allEmails,
+            mountedAt: Date.now(),
+        });
+        
+        renderImportsSection();
+        if (onImportSelect) onImportSelect(importId);
+        
+        return importId;
+        
+    } catch (error) {
+        // Restore original header
+        if (contextTitle) contextTitle.textContent = originalTitle || 'Welcome to MailRepo';
+        if (contextMeta) contextMeta.textContent = originalMeta || '';
+        
+        console.error('PST import error:', error);
+        showAlert('PST Import Failed', error.message);
+        throw error;
+    }
+}
+
 // ============================================
 // IMPORT MANAGEMENT
 // ============================================
@@ -254,7 +385,22 @@ async function mountEmlFolderFromPath(path, name) {
 /**
  * Unmount an import.
  */
-export function unmountImport(importId) {
+export async function unmountImport(importId) {
+    const imp = mountedImports.get(importId);
+    
+    // Clean up temp files for PST imports
+    if (imp && imp.type === 'pst' && imp.tempDir) {
+        try {
+            await fetch('/api/filesystem/cleanup-pst-temp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ temp_dir: imp.tempDir }),
+            });
+        } catch (error) {
+            console.warn('Failed to clean up PST temp files:', error);
+        }
+    }
+    
     mountedImports.delete(importId);
     renderImportsSection();
     
