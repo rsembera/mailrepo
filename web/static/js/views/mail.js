@@ -234,6 +234,7 @@ function renderSearchView(results = null, query = '') {
                        value="${escapeHtml(query)}"
                        onkeydown="if(event.key==='Enter') executeArchiveSearch()">
                 <button class="btn btn-primary" onclick="executeArchiveSearch()">Search</button>
+                ${query ? '<button class="btn btn-secondary" onclick="clearArchiveSearch()">Clear</button>' : ''}
             </div>
     `;
     
@@ -329,6 +330,15 @@ async function executeArchiveSearch() {
     }
 }
 window.executeArchiveSearch = executeArchiveSearch;
+
+/**
+ * Clear archive search and reset to initial state.
+ */
+function clearArchiveSearch() {
+    if (contextMeta) contextMeta.textContent = 'Search all archived emails';
+    renderSearchView(null, '');
+}
+window.clearArchiveSearch = clearArchiveSearch;
 
 /**
  * Open a search result - load the email in viewer.
