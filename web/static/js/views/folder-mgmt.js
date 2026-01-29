@@ -272,14 +272,28 @@ export async function renameFolder(folderId) {
 window.renameFolder = renameFolder;
 
 export async function createSubfolder(parentId) {
-    const name = await showPrompt('New subfolder name:', '');
-    if (!name || name.trim() === '') return;
+    const name = await showPrompt('New Subfolder Name', '');
+    
+    // Validate folder name
+    if (name === null) return; // User cancelled
+    
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+        showAlert('Invalid Name', 'Folder name cannot be empty.');
+        return;
+    }
+    
+    // Check for invalid characters/names
+    if (/^[.\s]+$/.test(trimmedName) || /[\/\\]/.test(trimmedName)) {
+        showAlert('Invalid Name', 'Folder name contains invalid characters.');
+        return;
+    }
     
     try {
         const response = await fetch('/api/folders', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: name.trim(), parent_id: parentId }),
+            body: JSON.stringify({ name: trimmedName, parent_id: parentId }),
         });
         
         if (!response.ok) {

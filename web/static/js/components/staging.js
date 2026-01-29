@@ -198,19 +198,30 @@ window.drilldownTo = function(folderId) {
 window.createSubfolderInDrilldown = async function() {
     const parentId = currentDrilldownFolder || null;
     
-    const name = await showPrompt(
-        'New Folder',
-        'Folder name:',
-        { placeholder: 'e.g., Client: Smith' }
-    );
+    const name = await showPrompt('New Folder Name', '');
     
-    if (!name || !name.trim()) return;
+    // Validate folder name
+    if (name === null) return; // User cancelled
+    
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+        const { showAlert } = await import('../modals.js');
+        showAlert('Invalid Name', 'Folder name cannot be empty.');
+        return;
+    }
+    
+    // Check for invalid characters/names
+    if (/^[.\s]+$/.test(trimmedName) || /[\/\\]/.test(trimmedName)) {
+        const { showAlert } = await import('../modals.js');
+        showAlert('Invalid Name', 'Folder name contains invalid characters.');
+        return;
+    }
     
     try {
         const response = await fetch('/api/folders', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: name.trim(), parent_id: parentId }),
+            body: JSON.stringify({ name: trimmedName, parent_id: parentId }),
         });
         
         if (!response.ok) {

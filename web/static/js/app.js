@@ -219,6 +219,14 @@ async function createFolder(returnToStage) {
     const fromStage = elements.newFolderModal.dataset.fromStage === 'true';
     
     if (!name) {
+        showAlert('Invalid Name', 'Folder name cannot be empty.');
+        document.getElementById('newFolderName').focus();
+        return;
+    }
+    
+    // Check for invalid characters/names
+    if (/^[.\s]+$/.test(name) || /[\/\\]/.test(name)) {
+        showAlert('Invalid Name', 'Folder name contains invalid characters.');
         document.getElementById('newFolderName').focus();
         return;
     }
