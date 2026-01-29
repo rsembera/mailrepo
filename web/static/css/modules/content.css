@@ -93,6 +93,10 @@
 /* ============================================
    ARCHIVE SEARCH VIEW
    ============================================ */
+.search-view .email-filter input {
+    width: 400px;
+}
+
 .search-help {
     color: var(--color-text-muted);
     max-width: 500px;

@@ -226,7 +226,7 @@ function renderSearchView(results = null, query = '') {
     const hasQuery = query.length > 0;
     
     let html = `
-        <div class="folder-management-list">
+        <div class="folder-management-list search-view">
             <div class="email-list-toolbar">
                 <div class="email-filter">
                     <i data-lucide="search" class="search-icon"></i>
