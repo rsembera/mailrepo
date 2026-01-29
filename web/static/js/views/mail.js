@@ -590,8 +590,9 @@ function renderHtmlBody(container, html, allowRemote = false) {
         <head>
             ${cspMeta}
             <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-                       font-size: 14px; line-height: 1.5; color: #333; margin: 0; padding: 0; }
+                html, body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                       font-size: 14px; line-height: 1.5; color: #333; margin: 0; padding: 0;
+                       overflow: hidden; }
                 img { max-width: 100%; height: auto; }
                 a { color: #1a73e8; }
             </style>
@@ -601,9 +602,14 @@ function renderHtmlBody(container, html, allowRemote = false) {
     `);
     doc.close();
     
-    setTimeout(() => {
-        iframe.style.height = doc.body.scrollHeight + 'px';
-    }, 100);
+    // Adjust iframe height to fit content (let parent container scroll)
+    const adjustHeight = () => {
+        const height = doc.documentElement.scrollHeight || doc.body.scrollHeight;
+        iframe.style.height = height + 'px';
+    };
+    setTimeout(adjustHeight, 100);
+    // Adjust again after images may have loaded
+    setTimeout(adjustHeight, 500);
 }
 
 /**
