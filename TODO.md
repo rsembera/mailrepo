@@ -17,18 +17,18 @@
 
 ### Import/Export
 - [ ] Test Apple mbox imports thoroughly
-- [ ] Add .pst import support
+- [ ] Add .pst import support (requires libpst-utils: apt install pst-utils)
 - [x] ZIP export for archived folders
 - [x] Progress indicator for ZIP export
 - [ ] PDF export for emails
-- [ ] Export to .eml
+- [x] Export to .eml (download from viewer)
 
 ### Archived Email Management
 - [x] Move/delete (archive only) - soft delete to Trash
 - [x] Batch select/move/delete for archived emails
-- [ ] Load remote content (server & archive)
-- [ ] View/download attachments (server & archive)
-- [ ] Indexed search of all email content (FTS)
+- [x] Load remote content (server & archive)
+- [x] View/download attachments (server & archive)
+- [x] Indexed search of all email content (FTS)
 
 ### Core Features (from EdgeCase)
 - [ ] Automatic timeout (← EdgeCase)

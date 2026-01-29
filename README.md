@@ -9,8 +9,8 @@ Encrypted email archiving for solo practitioners.
 - **Full encryption at rest** — Database and all archived emails encrypted with your master password using SQLCipher
 - **IMAP support** — Connect to Gmail, iCloud, Fastmail, or any IMAP server
 - **Batch filing workflow** — Stage → Review → Commit emails to organized folders
-- **Full-text search** — Search across subjects, senders, and email content (FTS5)
-- **Import existing archives** — Import .mbox and .eml files
+- **Full-text search** — Search across subjects, senders, recipients, and email content (FTS5)
+- **Import existing archives** — Import .mbox, .eml, and .pst files (PST requires libpst-utils)
 - **Export as ZIP** — Export archives as standard .eml files
 
 ## Installation
@@ -75,6 +75,7 @@ To use a different location, set the `MAILREPO_DATA_DIR` environment variable.
 
 - Python 3.11+
 - SQLCipher libraries (bundled with `sqlcipher3` package on most platforms)
+- **For PST import:** libpst-utils (`apt install pst-utils` on Debian/Ubuntu)
 
 ## License
 
