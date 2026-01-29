@@ -5,6 +5,7 @@
 
 let promptResolver = null;
 let confirmResolver = null;
+let alertResolver = null;
 
 /**
  * Close a modal by ID.
@@ -86,11 +87,26 @@ export function resolveConfirm(value) {
  * Show a styled alert modal.
  * @param {string} title - Modal title
  * @param {string} message - Alert message
+ * @returns {Promise<void>} Resolves when user clicks OK
  */
 export function showAlert(title, message) {
-    document.getElementById('alertTitle').textContent = title;
-    document.getElementById('alertMessage').textContent = message;
-    document.getElementById('alertModal').classList.add('active');
+    return new Promise(resolve => {
+        alertResolver = resolve;
+        document.getElementById('alertTitle').textContent = title;
+        document.getElementById('alertMessage').textContent = message;
+        document.getElementById('alertModal').classList.add('active');
+    });
+}
+
+/**
+ * Resolve the current alert modal.
+ */
+export function resolveAlert() {
+    closeModal('alertModal');
+    if (alertResolver) {
+        alertResolver();
+        alertResolver = null;
+    }
 }
 
 /**
@@ -111,4 +127,5 @@ export function initModalListeners() {
 // Expose to window for inline onclick handlers
 window.resolvePrompt = resolvePrompt;
 window.resolveConfirm = resolveConfirm;
+window.resolveAlert = resolveAlert;
 window.closeModal = closeModal;
