@@ -198,7 +198,7 @@ window.drilldownTo = function(folderId) {
 window.createSubfolderInDrilldown = async function() {
     const parentId = currentDrilldownFolder || null;
     
-    const name = await showPrompt('New Folder Name', '');
+    const name = await showPrompt('New Folder Name', '', { placeholder: 'e.g., Client: Smith' });
     
     // Validate folder name
     if (name === null) return; // User cancelled

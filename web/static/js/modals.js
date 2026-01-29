@@ -18,16 +18,20 @@ export function closeModal(modalId) {
  * Show a styled prompt modal.
  * @param {string} title - Modal title
  * @param {string} defaultValue - Default input value
+ * @param {Object} options - Optional settings
+ * @param {string} options.placeholder - Placeholder text for input
  * @returns {Promise<string|null>} User input or null if cancelled
  */
-export function showPrompt(title, defaultValue = '') {
+export function showPrompt(title, defaultValue = '', options = {}) {
     return new Promise(resolve => {
         promptResolver = resolve;
+        const input = document.getElementById('promptInput');
         document.getElementById('promptTitle').textContent = title;
-        document.getElementById('promptInput').value = defaultValue;
+        input.value = defaultValue;
+        input.placeholder = options.placeholder || '';
         document.getElementById('promptModal').classList.add('active');
-        document.getElementById('promptInput').focus();
-        document.getElementById('promptInput').select();
+        input.focus();
+        input.select();
     });
 }
 
