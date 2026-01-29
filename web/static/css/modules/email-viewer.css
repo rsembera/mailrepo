@@ -39,9 +39,15 @@
 
 .email-viewer-header {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
+    align-items: center;
     padding: var(--space-md);
     border-bottom: 1px solid var(--color-border);
+}
+
+.email-viewer-actions {
+    display: flex;
+    gap: var(--space-sm);
 }
 
 .btn-icon {
@@ -114,6 +120,28 @@
     font-size: 0.8125rem;
 }
 
+.attachment-link {
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+    transition: border-color 0.15s, background-color 0.15s;
+}
+
+.attachment-link:hover {
+    border-color: var(--color-primary);
+    background: var(--color-background-secondary);
+}
+
+.attachment-download-icon {
+    margin-left: var(--space-xs);
+    opacity: 0.5;
+}
+
+.attachment-link:hover .attachment-download-icon {
+    opacity: 1;
+    color: var(--color-primary);
+}
+
 .attachment-item i {
     width: 14px;
     height: 14px;
@@ -156,4 +184,49 @@
 
 .email-row:hover {
     background: var(--color-background-secondary);
+}
+
+/* ============================================
+   PRINT STYLES
+   ============================================ */
+
+@media print {
+    /* Hide everything except the email viewer */
+    body > *:not(.email-viewer-overlay) {
+        display: none !important;
+    }
+    
+    .email-viewer-overlay {
+        position: static !important;
+        display: block !important;
+        background: none !important;
+    }
+    
+    .email-viewer {
+        width: 100% !important;
+        max-width: none !important;
+        min-width: 0 !important;
+        box-shadow: none !important;
+        height: auto !important;
+        animation: none !important;
+    }
+    
+    .email-viewer-header {
+        display: none !important;
+    }
+    
+    .email-viewer-meta {
+        background: none !important;
+        border-bottom: 1px solid #ccc !important;
+    }
+    
+    .email-viewer-body {
+        overflow: visible !important;
+        padding: 0 !important;
+    }
+    
+    .email-viewer-body iframe {
+        height: auto !important;
+        min-height: 0 !important;
+    }
 }

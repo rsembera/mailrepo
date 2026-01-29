@@ -208,6 +208,17 @@
 <div class="email-viewer-overlay" id="emailViewerOverlay">
     <div class="email-viewer">
         <div class="email-viewer-header">
+            <div class="email-viewer-actions">
+                <button class="btn btn-secondary btn-icon" onclick="printEmail()" title="Print / Save as PDF">
+                    <i data-lucide="printer"></i>
+                </button>
+                <button class="btn btn-secondary btn-icon" onclick="downloadEmail()" title="Download as .eml">
+                    <i data-lucide="download"></i>
+                </button>
+                <button class="btn btn-secondary btn-icon" id="loadRemoteBtn" onclick="loadRemoteContent()" title="Load remote images" style="display: none;">
+                    <i data-lucide="image"></i>
+                </button>
+            </div>
             <button class="btn btn-secondary btn-icon" onclick="closeEmailViewer()">
                 <i data-lucide="x"></i>
             </button>

@@ -17,6 +17,9 @@ let contextTitle = null;
 let contextMeta = null;
 let emailList = null;
 
+// Current email viewer context (for download/print functions)
+let currentViewerContext = null;
+
 // Callbacks
 let onButtonStatesUpdate = null;
 
@@ -439,15 +442,18 @@ export async function openEmailViewer(emailId) {
     
     try {
         let data;
+        let context = { type: state.currentView?.type };
         
         if (state.currentView?.type === 'account') {
             const accountId = state.currentView.id;
             const folder = state.currentView.folder || 'INBOX';
             const uid = email.uid || email.id;
+            context = { type: 'account', accountId, folder, uid };
             data = await fetchWithRetry(`/api/accounts/${accountId}/emails/${uid}?folder=${encodeURIComponent(folder)}`);
         } else if (state.currentView?.type === 'folder') {
             const folderId = state.currentView.id;
             const messageId = email.id;
+            context = { type: 'folder', folderId, messageId };
             data = await fetchWithRetry(`/api/folders/${folderId}/emails/${messageId}`);
         } else if (state.currentView?.type === 'import') {
             // Get import details from mounted imports
@@ -456,6 +462,7 @@ export async function openEmailViewer(emailId) {
             if (!imp) {
                 throw new Error('Import not found');
             }
+            context = { type: 'import' };  // Imports don't support download yet
             data = await fetchWithRetry('/api/import/email', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -471,7 +478,9 @@ export async function openEmailViewer(emailId) {
             throw new Error('Unknown view type');
         }
         
-        renderEmailContent(data.email);
+        // Store context for download/print functions
+        currentViewerContext = context;
+        renderEmailContent(data.email, context);
         
     } catch (error) {
         console.error('Error loading email:', error);
@@ -482,8 +491,10 @@ export async function openEmailViewer(emailId) {
 
 /**
  * Render email content in the viewer.
+ * @param {Object} email - Email data
+ * @param {Object} context - Viewer context for building download URLs
  */
-function renderEmailContent(email) {
+function renderEmailContent(email, context = null) {
     document.getElementById('viewerSubject').textContent = email.subject || '(no subject)';
     document.getElementById('viewerFrom').textContent = email.from || '';
     document.getElementById('viewerTo').textContent = email.to || '';
@@ -494,62 +505,119 @@ function renderEmailContent(email) {
         document.getElementById('viewerCcRow').style.display = 'flex';
     }
     
-    // Attachments
+    // Attachments with download links
+    const attachDiv = document.getElementById('viewerAttachments');
     if (email.attachments && email.attachments.length > 0) {
-        const attachDiv = document.getElementById('viewerAttachments');
         let html = '<div class="attachment-list">';
-        email.attachments.forEach(att => {
-            html += `
-                <div class="attachment-item">
-                    <i data-lucide="paperclip"></i>
-                    <span>${escapeHtml(att.filename)}</span>
-                </div>
-            `;
+        email.attachments.forEach((att, index) => {
+            const downloadUrl = getAttachmentDownloadUrl(context, index);
+            if (downloadUrl) {
+                html += `
+                    <a href="${downloadUrl}" class="attachment-item attachment-link" download>
+                        <i data-lucide="paperclip"></i>
+                        <span>${escapeHtml(att.filename)}</span>
+                        <i data-lucide="download" class="attachment-download-icon"></i>
+                    </a>
+                `;
+            } else {
+                html += `
+                    <div class="attachment-item">
+                        <i data-lucide="paperclip"></i>
+                        <span>${escapeHtml(att.filename)}</span>
+                    </div>
+                `;
+            }
         });
         html += '</div>';
         attachDiv.innerHTML = html;
         attachDiv.style.display = 'block';
-        if (typeof lucide !== 'undefined') lucide.createIcons();
+    } else {
+        attachDiv.style.display = 'none';
+    }
+    
+    // Show/hide load remote content button based on HTML content
+    const loadRemoteBtn = document.getElementById('loadRemoteBtn');
+    const hasExternalContent = email.html_body && (
+        email.html_body.includes('src="http') || 
+        email.html_body.includes("src='http") ||
+        email.html_body.includes('url(http')
+    );
+    if (loadRemoteBtn) {
+        loadRemoteBtn.style.display = hasExternalContent ? '' : 'none';
     }
     
     // Body
     const bodyDiv = document.getElementById('viewerBody');
     
     if (email.html_body) {
-        const iframe = document.createElement('iframe');
-        iframe.sandbox = 'allow-same-origin';
-        iframe.style.width = '100%';
-        iframe.style.border = 'none';
-        bodyDiv.innerHTML = '';
-        bodyDiv.appendChild(iframe);
-        
-        const doc = iframe.contentDocument || iframe.contentWindow.document;
-        doc.open();
-        doc.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <style>
-                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-                           font-size: 14px; line-height: 1.5; color: #333; margin: 0; padding: 0; }
-                    img { max-width: 100%; height: auto; }
-                    a { color: #1a73e8; }
-                </style>
-            </head>
-            <body>${email.html_body}</body>
-            </html>
-        `);
-        doc.close();
-        
-        setTimeout(() => {
-            iframe.style.height = doc.body.scrollHeight + 'px';
-        }, 100);
-        
+        renderHtmlBody(bodyDiv, email.html_body, false);
     } else if (email.text_body) {
         bodyDiv.innerHTML = `<div class="email-text-body">${escapeHtml(email.text_body)}</div>`;
     } else {
         bodyDiv.innerHTML = '<div class="email-text-body">(No content)</div>';
     }
+    
+    // Store email data for remote content loading
+    currentViewerContext.emailData = email;
+    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+/**
+ * Render HTML body in an iframe.
+ * @param {HTMLElement} container - Container element
+ * @param {string} html - HTML content
+ * @param {boolean} allowRemote - Whether to allow remote content
+ */
+function renderHtmlBody(container, html, allowRemote = false) {
+    const iframe = document.createElement('iframe');
+    // Use more permissive sandbox if allowing remote content
+    iframe.sandbox = allowRemote ? 'allow-same-origin' : 'allow-same-origin';
+    iframe.style.width = '100%';
+    iframe.style.border = 'none';
+    container.innerHTML = '';
+    container.appendChild(iframe);
+    
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
+    doc.open();
+    
+    // If not allowing remote, block external resources via CSP
+    const cspMeta = allowRemote ? '' : `<meta http-equiv="Content-Security-Policy" content="img-src 'self' data: cid:; default-src 'self' 'unsafe-inline';">`;
+    
+    doc.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            ${cspMeta}
+            <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                       font-size: 14px; line-height: 1.5; color: #333; margin: 0; padding: 0; }
+                img { max-width: 100%; height: auto; }
+                a { color: #1a73e8; }
+            </style>
+        </head>
+        <body>${html}</body>
+        </html>
+    `);
+    doc.close();
+    
+    setTimeout(() => {
+        iframe.style.height = doc.body.scrollHeight + 'px';
+    }, 100);
+}
+
+/**
+ * Get attachment download URL based on viewer context.
+ */
+function getAttachmentDownloadUrl(context, index) {
+    if (!context) return null;
+    
+    if (context.type === 'account') {
+        return `/api/accounts/${context.accountId}/emails/${context.uid}/attachments/${index}?folder=${encodeURIComponent(context.folder)}`;
+    } else if (context.type === 'folder') {
+        return `/api/folders/${context.folderId}/emails/${context.messageId}/attachments/${index}`;
+    }
+    return null;
 }
 
 /**
@@ -557,7 +625,66 @@ function renderEmailContent(email) {
  */
 export function closeEmailViewer() {
     document.getElementById('emailViewerOverlay').classList.remove('active');
+    currentViewerContext = null;
 }
+
+/**
+ * Print the current email (browser print dialog).
+ */
+function printEmail() {
+    const viewerBody = document.getElementById('viewerBody');
+    const iframe = viewerBody.querySelector('iframe');
+    
+    if (iframe) {
+        // Print the iframe content
+        iframe.contentWindow.print();
+    } else {
+        // Fallback: print the whole viewer
+        window.print();
+    }
+}
+window.printEmail = printEmail;
+
+/**
+ * Download the current email as .eml file.
+ */
+function downloadEmail() {
+    if (!currentViewerContext) return;
+    
+    let downloadUrl = null;
+    
+    if (currentViewerContext.type === 'account') {
+        downloadUrl = `/api/accounts/${currentViewerContext.accountId}/emails/${currentViewerContext.uid}/download?folder=${encodeURIComponent(currentViewerContext.folder)}`;
+    } else if (currentViewerContext.type === 'folder') {
+        downloadUrl = `/api/folders/${currentViewerContext.folderId}/emails/${currentViewerContext.messageId}/download`;
+    }
+    
+    if (downloadUrl) {
+        // Create a temporary link and click it
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = '';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+}
+window.downloadEmail = downloadEmail;
+
+/**
+ * Load remote content (images, etc.) in the current email.
+ */
+function loadRemoteContent() {
+    if (!currentViewerContext?.emailData?.html_body) return;
+    
+    const bodyDiv = document.getElementById('viewerBody');
+    renderHtmlBody(bodyDiv, currentViewerContext.emailData.html_body, true);
+    
+    // Hide the button after loading
+    const loadRemoteBtn = document.getElementById('loadRemoteBtn');
+    if (loadRemoteBtn) loadRemoteBtn.style.display = 'none';
+}
+window.loadRemoteContent = loadRemoteContent;
 
 /**
  * Initialize email viewer event listeners.

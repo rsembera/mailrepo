@@ -4,12 +4,31 @@ MailRepo API - Account Routes
 Handles all /api/accounts/* endpoints for managing IMAP accounts.
 """
 
+import email
 import json
 import time
-from flask import request, jsonify
+from email.header import decode_header
+from flask import request, jsonify, Response
 from core import Database
 from core import IMAP, IMAPError
 from . import api_bp
+
+
+def _decode_header_value(header):
+    """Decode an email header value."""
+    if not header:
+        return ""
+    try:
+        parts = decode_header(header)
+        decoded = []
+        for content, charset in parts:
+            if isinstance(content, bytes):
+                decoded.append(content.decode(charset or "utf-8", errors="replace"))
+            else:
+                decoded.append(content)
+        return " ".join(decoded)
+    except:
+        return header
 
 
 @api_bp.route("/accounts", methods=["GET"])
@@ -245,3 +264,92 @@ def detect_imap_server():
             "detected": False,
             "message": "Could not auto-detect server. Please enter manually."
         })
+
+
+@api_bp.route("/accounts/<int:account_id>/emails/<uid>/download", methods=["GET"])
+def download_imap_email(account_id, uid):
+    """Download an IMAP email as .eml file."""
+    account = Database.fetchone(
+        "SELECT id, credentials_encrypted FROM accounts WHERE id = ?",
+        (account_id,)
+    )
+    if not account:
+        return jsonify({"error": "Account not found"}), 404
+    if not account["credentials_encrypted"]:
+        return jsonify({"error": "Account not configured"}), 401
+    
+    folder = request.args.get("folder", "INBOX")
+    
+    client = None
+    try:
+        client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+        client.select_folder(folder)
+        raw_bytes = client.fetch_raw(uid)
+        
+        # Parse to get subject for filename
+        msg = email.message_from_bytes(raw_bytes)
+        subject = _decode_header_value(msg.get("Subject", "")) or "email"
+        safe_filename = "".join(c for c in subject if c.isalnum() or c in " -_")[:50].strip() or "email"
+        filename = f"{safe_filename}.eml"
+        
+        return Response(
+            raw_bytes,
+            mimetype="message/rfc822",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+    except IMAPError as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if client:
+            client.disconnect()
+
+
+@api_bp.route("/accounts/<int:account_id>/emails/<uid>/attachments/<int:index>", methods=["GET"])
+def download_imap_attachment(account_id, uid, index):
+    """Download an attachment from an IMAP email."""
+    account = Database.fetchone(
+        "SELECT id, credentials_encrypted FROM accounts WHERE id = ?",
+        (account_id,)
+    )
+    if not account:
+        return jsonify({"error": "Account not found"}), 404
+    if not account["credentials_encrypted"]:
+        return jsonify({"error": "Account not configured"}), 401
+    
+    folder = request.args.get("folder", "INBOX")
+    
+    client = None
+    try:
+        client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+        client.select_folder(folder)
+        raw_bytes = client.fetch_raw(uid)
+        msg = email.message_from_bytes(raw_bytes)
+        
+        # Find attachments
+        attachments = []
+        if msg.is_multipart():
+            for part in msg.walk():
+                content_disposition = str(part.get("Content-Disposition", ""))
+                if "attachment" in content_disposition:
+                    filename = part.get_filename()
+                    if filename:
+                        attachments.append({
+                            "filename": _decode_header_value(filename),
+                            "content_type": part.get_content_type(),
+                            "payload": part.get_payload(decode=True),
+                        })
+        
+        if index < 0 or index >= len(attachments):
+            return jsonify({"error": "Attachment not found"}), 404
+        
+        att = attachments[index]
+        return Response(
+            att["payload"],
+            mimetype=att["content_type"],
+            headers={"Content-Disposition": f'attachment; filename="{att["filename"]}"'}
+        )
+    except IMAPError as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if client:
+            client.disconnect()

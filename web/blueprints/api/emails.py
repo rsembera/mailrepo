@@ -4,10 +4,11 @@ MailRepo API - Email Routes
 Handles search and archived email retrieval endpoints.
 """
 
+import base64
 import time
 import email as email_lib
 from email.header import decode_header
-from flask import request, jsonify
+from flask import request, jsonify, Response
 from core import Database
 from core import Config
 from core import Encryption
@@ -298,3 +299,87 @@ def get_trashed_emails():
     } for m in messages]
     
     return jsonify({"emails": emails})
+
+
+@api_bp.route("/folders/<int:folder_id>/emails/<int:message_id>/download", methods=["GET"])
+def download_archived_email(folder_id, message_id):
+    """Download an archived email as .eml file."""
+    message = Database.fetchone(
+        """
+        SELECT id, folder_id, subject, filepath
+        FROM messages WHERE id = ? AND folder_id = ?
+        """,
+        (message_id, folder_id)
+    )
+    if not message:
+        return jsonify({"error": "Message not found"}), 404
+    
+    filepath = Config.get_base_path() / message["filepath"]
+    if not filepath.exists():
+        return jsonify({"error": "Email file not found"}), 404
+
+    try:
+        raw_bytes = filepath.read_bytes()
+        raw_bytes = Encryption.decrypt(raw_bytes)
+        
+        # Clean subject for filename
+        subject = message["subject"] or "email"
+        safe_filename = "".join(c for c in subject if c.isalnum() or c in " -_")[:50].strip() or "email"
+        filename = f"{safe_filename}.eml"
+        
+        return Response(
+            raw_bytes,
+            mimetype="message/rfc822",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+    except Exception as e:
+        return jsonify({"error": f"Failed to read email: {e}"}), 500
+
+
+@api_bp.route("/folders/<int:folder_id>/emails/<int:message_id>/attachments/<int:index>", methods=["GET"])
+def download_archived_attachment(folder_id, message_id, index):
+    """Download an attachment from an archived email."""
+    message = Database.fetchone(
+        """
+        SELECT id, folder_id, filepath
+        FROM messages WHERE id = ? AND folder_id = ?
+        """,
+        (message_id, folder_id)
+    )
+    if not message:
+        return jsonify({"error": "Message not found"}), 404
+    
+    filepath = Config.get_base_path() / message["filepath"]
+    if not filepath.exists():
+        return jsonify({"error": "Email file not found"}), 404
+
+    try:
+        raw_bytes = filepath.read_bytes()
+        raw_bytes = Encryption.decrypt(raw_bytes)
+        msg = email_lib.message_from_bytes(raw_bytes)
+        
+        # Find attachments
+        attachments = []
+        if msg.is_multipart():
+            for part in msg.walk():
+                content_disposition = str(part.get("Content-Disposition", ""))
+                if "attachment" in content_disposition:
+                    filename = part.get_filename()
+                    if filename:
+                        attachments.append({
+                            "filename": _decode_header_value(filename),
+                            "content_type": part.get_content_type(),
+                            "payload": part.get_payload(decode=True),
+                        })
+        
+        if index < 0 or index >= len(attachments):
+            return jsonify({"error": "Attachment not found"}), 404
+        
+        att = attachments[index]
+        return Response(
+            att["payload"],
+            mimetype=att["content_type"],
+            headers={"Content-Disposition": f'attachment; filename="{att["filename"]}"'}
+        )
+    except Exception as e:
+        return jsonify({"error": f"Failed to read attachment: {e}"}), 500
