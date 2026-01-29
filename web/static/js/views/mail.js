@@ -184,6 +184,203 @@ export async function loadFolderEmails(folderId) {
 }
 
 /**
+ * Show archive search view.
+ */
+export function showArchiveSearch() {
+    // Update view state
+    state.currentView = { type: 'search' };
+    state.selectedEmails.clear();
+    clearArchivedEmailSelection();
+    clearEmailFilter();
+    
+    // Clear header actions
+    clearHeaderActions();
+    
+    // Hide subfolders bar
+    const subfoldersBar = document.getElementById('subfoldersBar');
+    if (subfoldersBar) {
+        subfoldersBar.style.display = 'none';
+        subfoldersBar.innerHTML = '';
+    }
+    
+    // Update sidebar selection
+    document.querySelectorAll('.tree-item-row').forEach(r => r.classList.remove('active'));
+    const searchRow = document.querySelector('.tree-item-row[data-type="search"]');
+    if (searchRow) searchRow.classList.add('active');
+    
+    // Set header
+    if (contextTitle) contextTitle.textContent = 'Search Archive';
+    if (contextMeta) contextMeta.textContent = 'Search all archived emails';
+    
+    // Render search interface
+    renderSearchView();
+}
+window.showArchiveSearch = showArchiveSearch;
+
+/**
+ * Render the search view interface.
+ */
+function renderSearchView(results = null, query = '') {
+    if (!emailList) return;
+    
+    let html = `
+        <div class="search-view">
+            <div class="search-input-container">
+                <i data-lucide="search" class="search-icon"></i>
+                <input type="text" 
+                       id="archiveSearchInput" 
+                       class="search-input"
+                       placeholder="Search by subject, sender, recipient, or content..." 
+                       value="${escapeHtml(query)}"
+                       onkeydown="if(event.key==='Enter') executeArchiveSearch()">
+                <button class="btn btn-primary" onclick="executeArchiveSearch()">Search</button>
+            </div>
+    `;
+    
+    if (results === null) {
+        // Initial state - show helpful text
+        html += `
+            <div class="search-help">
+                <p>Enter a search term to find emails across your entire archive.</p>
+                <p class="search-hint">Searches subject lines, sender/recipient addresses, and email content.</p>
+            </div>
+        `;
+    } else if (results.length === 0) {
+        html += `
+            <div class="empty-state">
+                <i data-lucide="search-x" class="empty-icon"></i>
+                <h3>No Results</h3>
+                <p>No emails found matching "${escapeHtml(query)}"</p>
+            </div>
+        `;
+    } else {
+        html += `
+            <div class="search-results-header">${results.length} result${results.length !== 1 ? 's' : ''} for "${escapeHtml(query)}"</div>
+            <div class="folder-management-list">
+        `;
+        
+        results.forEach(email => {
+            html += `
+                <div class="folder-management-item email-list-item search-result" 
+                     onclick="openSearchResult(${email.id}, ${email.folder_id})">
+                    <div class="email-list-content">
+                        <div class="email-list-main">
+                            <div class="email-list-header-row">
+                                <span class="email-sender">${escapeHtml(extractName(email.sender))}</span>
+                                <span class="email-date">${formatDate(email.date)}</span>
+                            </div>
+                            <span class="email-subject">${escapeHtml(email.subject || '(no subject)')}</span>
+                            <span class="email-folder-path">${escapeHtml(email.folder_path)}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `</div>`;
+    }
+    
+    html += `</div>`;
+    
+    emailList.innerHTML = html;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    
+    // Focus the search input
+    const input = document.getElementById('archiveSearchInput');
+    if (input && !query) input.focus();
+}
+
+/**
+ * Execute archive search.
+ */
+async function executeArchiveSearch() {
+    const input = document.getElementById('archiveSearchInput');
+    const query = input?.value?.trim();
+    
+    if (!query) {
+        renderSearchView(null, '');
+        return;
+    }
+    
+    // Show loading state
+    if (contextMeta) contextMeta.textContent = 'Searching...';
+    
+    try {
+        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&limit=100`);
+        
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error || 'Search failed');
+        }
+        
+        const data = await response.json();
+        
+        if (contextMeta) {
+            contextMeta.textContent = `${data.count} result${data.count !== 1 ? 's' : ''}`;
+        }
+        
+        renderSearchView(data.emails, query);
+        
+    } catch (error) {
+        console.error('Search error:', error);
+        if (contextMeta) contextMeta.textContent = 'Search failed';
+        const { showAlert } = await import('../modals.js');
+        showAlert('Search Error', error.message);
+    }
+}
+window.executeArchiveSearch = executeArchiveSearch;
+
+/**
+ * Open a search result - load the email in viewer.
+ */
+async function openSearchResult(messageId, folderId) {
+    // Open the email viewer with the search result
+    try {
+        const response = await fetch(`/api/folders/${folderId}/emails/${messageId}`);
+        
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error || 'Failed to load email');
+        }
+        
+        const data = await response.json();
+        
+        // Set viewer context for archive email
+        currentViewerContext = {
+            type: 'folder',
+            folderId: folderId,
+            messageId: messageId
+        };
+        
+        // Render email in viewer
+        renderEmailContent(data.email, currentViewerContext);
+        
+        // Show viewer overlay
+        document.getElementById('emailViewerOverlay').classList.add('active');
+        
+    } catch (error) {
+        console.error('Error loading email:', error);
+        const { showAlert } = await import('../modals.js');
+        showAlert('Error', error.message);
+    }
+}
+window.openSearchResult = openSearchResult;
+
+// Helper functions for search results display
+function extractName(sender) {
+    if (!sender) return '';
+    const match = sender.match(/^([^<]+)</);
+    return match ? match[1].trim() : sender;
+}
+
+function formatDate(dateVal) {
+    if (!dateVal) return '';
+    const date = typeof dateVal === 'number' ? new Date(dateVal * 1000) : new Date(dateVal);
+    if (isNaN(date.getTime())) return '';
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+/**
  * Render IMAP folder navigation: breadcrumbs and subfolder links.
  */
 function renderImapNavigation(accountId, folderPath) {

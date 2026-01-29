@@ -83,6 +83,15 @@
                 <span class="section-count" id="folderCount">{{ folders|length }}</span>
             </button>
             <div class="section-content expanded" id="archiveSection">
+                <!-- Search Archive -->
+                <div class="tree-item">
+                    <div class="tree-item-row" data-type="search" onclick="showArchiveSearch()">
+                        <span class="chevron-placeholder"></span>
+                        <span class="color-dot color-dot-empty"></span>
+                        <i data-lucide="search" class="tree-icon"></i>
+                        <span class="tree-label">Search Archive</span>
+                    </div>
+                </div>
                 {% if folders %}
                     {% for folder in folders if not folder.parent_id and not folder.deleted_at %}
                     <div class="tree-item folder-item">
