@@ -709,10 +709,16 @@ def convert_pst_to_mbox():
             error_msg = result.stderr.strip() if result.stderr else "Unknown error"
             return jsonify({"error": f"PST conversion failed: {error_msg}"}), 500
         
+        # Debug: log conversion output
+        print(f"[PST] readpst stdout: {result.stdout}")
+        print(f"[PST] readpst stderr: {result.stderr}")
+        print(f"[PST] temp_dir: {temp_dir}")
+        
         # Find all generated mbox files
         # readpst with -r creates directory structure with mbox files (no extension)
         mbox_files = []
         for root, dirs, files in os.walk(temp_dir):
+            print(f"[PST] Scanning dir: {root}, files: {files}")
             for f in files:
                 filepath = os.path.join(root, f)
                 if os.path.isfile(filepath):
@@ -720,14 +726,17 @@ def convert_pst_to_mbox():
                     try:
                         with open(filepath, 'rb') as mf:
                             header = mf.read(5)
+                            print(f"[PST] File {filepath} header: {header}")
                             if header == b'From ':
                                 rel_path = os.path.relpath(filepath, temp_dir)
                                 mbox_files.append({
                                     "path": filepath,
                                     "name": rel_path,
                                 })
-                    except:
-                        pass
+                    except Exception as e:
+                        print(f"[PST] Error reading {filepath}: {e}")
+        
+        print(f"[PST] Found mbox_files: {mbox_files}")
         
         if not mbox_files:
             shutil.rmtree(temp_dir, ignore_errors=True)
