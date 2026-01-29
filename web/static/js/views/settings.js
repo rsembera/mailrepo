@@ -116,6 +116,7 @@ function renderSettingsView() {
     
     initSettingsSectionToggles();
     initAppearanceHandlers();
+    initSecurityHandlers();
     initTrashHandlers();
     loadCurrentSettings();
 }
@@ -214,14 +215,199 @@ function renderSecuritySection() {
         <p style="color: var(--color-text-muted); margin-bottom: var(--space-lg);">
             Your master password protects your IMAP credentials and encrypted archives.
         </p>
-        <button class="btn btn-secondary" disabled>
+        <button class="btn btn-secondary" id="changePasswordBtn">
             <i data-lucide="key"></i>
             Change Master Password
         </button>
-        <span style="margin-left: var(--space-sm); color: var(--color-text-muted); font-size: 0.875rem;">
-            (Coming soon)
-        </span>
+        
+        <div id="changePasswordForm" style="display: none; margin-top: var(--space-lg);">
+            <div class="form-group" style="margin-bottom: var(--space-md);">
+                <label for="currentPassword">Current Password</label>
+                <input type="password" id="currentPassword" class="form-input" autocomplete="current-password">
+            </div>
+            <div class="form-group" style="margin-bottom: var(--space-md);">
+                <label for="newPassword">New Password</label>
+                <input type="password" id="newPassword" class="form-input" autocomplete="new-password">
+                <small style="color: var(--color-text-muted);">Minimum 8 characters</small>
+            </div>
+            <div class="form-group" style="margin-bottom: var(--space-md);">
+                <label for="confirmPassword">Confirm New Password</label>
+                <input type="password" id="confirmPassword" class="form-input" autocomplete="new-password">
+            </div>
+            <div id="passwordChangeProgress" style="display: none; margin-bottom: var(--space-md);">
+                <div class="progress-bar-container" style="height: 8px; background: var(--color-background-secondary); border-radius: 4px; overflow: hidden;">
+                    <div id="passwordProgressBar" style="height: 100%; width: 0%; background: var(--color-primary); transition: width 0.3s;"></div>
+                </div>
+                <p id="passwordProgressMessage" style="margin-top: var(--space-sm); font-size: 0.875rem; color: var(--color-text-muted);"></p>
+            </div>
+            <div id="passwordChangeError" style="display: none; color: var(--color-danger); margin-bottom: var(--space-md);"></div>
+            <div style="display: flex; gap: var(--space-sm);">
+                <button class="btn btn-primary" id="confirmChangePasswordBtn">Change Password</button>
+                <button class="btn btn-secondary" id="cancelChangePasswordBtn">Cancel</button>
+            </div>
+        </div>
     `;
+}
+
+/**
+ * Initialize security section handlers.
+ */
+function initSecurityHandlers() {
+    const changeBtn = document.getElementById('changePasswordBtn');
+    const form = document.getElementById('changePasswordForm');
+    const confirmBtn = document.getElementById('confirmChangePasswordBtn');
+    const cancelBtn = document.getElementById('cancelChangePasswordBtn');
+    
+    if (changeBtn && form) {
+        changeBtn.addEventListener('click', () => {
+            changeBtn.style.display = 'none';
+            form.style.display = 'block';
+            document.getElementById('currentPassword').focus();
+        });
+    }
+    
+    if (cancelBtn && form) {
+        cancelBtn.addEventListener('click', () => {
+            form.style.display = 'none';
+            changeBtn.style.display = 'inline-flex';
+            // Clear form
+            document.getElementById('currentPassword').value = '';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmPassword').value = '';
+            document.getElementById('passwordChangeError').style.display = 'none';
+            document.getElementById('passwordChangeProgress').style.display = 'none';
+        });
+    }
+    
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', handleChangePassword);
+    }
+}
+
+/**
+ * Handle the password change process.
+ */
+async function handleChangePassword() {
+    const currentPassword = document.getElementById('currentPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    const errorEl = document.getElementById('passwordChangeError');
+    const progressEl = document.getElementById('passwordChangeProgress');
+    const progressBar = document.getElementById('passwordProgressBar');
+    const progressMsg = document.getElementById('passwordProgressMessage');
+    const confirmBtn = document.getElementById('confirmChangePasswordBtn');
+    const cancelBtn = document.getElementById('cancelChangePasswordBtn');
+    
+    // Validate
+    errorEl.style.display = 'none';
+    
+    if (!currentPassword) {
+        errorEl.textContent = 'Please enter your current password.';
+        errorEl.style.display = 'block';
+        return;
+    }
+    
+    if (newPassword.length < 8) {
+        errorEl.textContent = 'New password must be at least 8 characters.';
+        errorEl.style.display = 'block';
+        return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+        errorEl.textContent = 'New passwords do not match.';
+        errorEl.style.display = 'block';
+        return;
+    }
+    
+    // Disable buttons
+    confirmBtn.disabled = true;
+    cancelBtn.disabled = true;
+    
+    try {
+        // Start password change on server
+        const response = await fetch('/auth/api/change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+        });
+        
+        const data = await response.json();
+        if (!response.ok || data.error) {
+            throw new Error(data.error || 'Failed to start password change');
+        }
+        
+        // Show progress
+        progressEl.style.display = 'block';
+        progressBar.style.width = '0%';
+        progressMsg.textContent = 'Starting...';
+        
+        // Connect to SSE for progress
+        const eventSource = new EventSource('/auth/api/change-password-progress');
+        
+        eventSource.onmessage = (event) => {
+            const progress = JSON.parse(event.data);
+            
+            if (progress.status === 'error') {
+                eventSource.close();
+                errorEl.textContent = progress.message;
+                errorEl.style.display = 'block';
+                progressEl.style.display = 'none';
+                confirmBtn.disabled = false;
+                cancelBtn.disabled = false;
+                return;
+            }
+            
+            progressMsg.textContent = progress.message || '';
+            
+            // Update progress bar based on status
+            switch (progress.status) {
+                case 'counting':
+                    progressBar.style.width = '5%';
+                    break;
+                case 'counted':
+                    progressBar.style.width = '10%';
+                    break;
+                case 'encrypting':
+                    if (progress.total > 0) {
+                        const pct = 10 + (progress.current / progress.total) * 70;
+                        progressBar.style.width = pct + '%';
+                    }
+                    break;
+                case 'credentials':
+                    progressBar.style.width = '85%';
+                    break;
+                case 'database':
+                    progressBar.style.width = '90%';
+                    break;
+                case 'finalizing':
+                    progressBar.style.width = '95%';
+                    break;
+                case 'complete':
+                    progressBar.style.width = '100%';
+                    eventSource.close();
+                    // Success - show message and reset form after delay
+                    setTimeout(() => {
+                        alert('Password changed successfully. Please log in with your new password.');
+                        window.location.href = '/auth/logout';
+                    }, 500);
+                    break;
+            }
+        };
+        
+        eventSource.onerror = () => {
+            eventSource.close();
+            errorEl.textContent = 'Connection lost during password change. Please check if the change completed.';
+            errorEl.style.display = 'block';
+            confirmBtn.disabled = false;
+            cancelBtn.disabled = false;
+        };
+        
+    } catch (error) {
+        errorEl.textContent = error.message;
+        errorEl.style.display = 'block';
+        confirmBtn.disabled = false;
+        cancelBtn.disabled = false;
+    }
 }
 
 /**

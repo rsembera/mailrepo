@@ -1,14 +1,17 @@
 """
 MailRepo - Authentication blueprint.
 
-Handles master password setup, login, and logout.
+Handles master password setup, login, logout, and password change.
 """
 
+import json
+import os
 import time
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, Response, current_app
 
 from core import Encryption, InvalidPasswordError, EncryptionError, Database
 from core.database import get_setting
+from core.config import Config
 
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
@@ -132,3 +135,158 @@ def logout():
     session.clear()
     flash("You have been logged out.", "info")
     return redirect(url_for("auth.login"))
+
+
+@auth_bp.route("/api/verify-password", methods=["POST"])
+def verify_password():
+    """Verify the current password before allowing password change."""
+    if not session.get("authenticated"):
+        return {"error": "Not authenticated"}, 401
+    
+    data = request.get_json()
+    current_password = data.get("current_password", "")
+    
+    try:
+        # Try to unlock with the provided password
+        # This verifies it matches without changing state
+        Encryption.unlock(current_password)
+        return {"valid": True}
+    except InvalidPasswordError:
+        return {"valid": False, "error": "Current password is incorrect"}
+    except Exception as e:
+        return {"valid": False, "error": str(e)}
+
+
+@auth_bp.route("/api/change-password", methods=["POST"])
+def change_password_start():
+    """Start the password change process - store new password in session."""
+    if not session.get("authenticated"):
+        return {"error": "Not authenticated"}, 401
+    
+    data = request.get_json()
+    current_password = data.get("current_password", "")
+    new_password = data.get("new_password", "")
+    
+    # Validate
+    if len(new_password) < 8:
+        return {"error": "New password must be at least 8 characters"}, 400
+    
+    # Verify current password
+    try:
+        Encryption.unlock(current_password)
+    except InvalidPasswordError:
+        return {"error": "Current password is incorrect"}, 400
+    
+    # Store in session for SSE endpoint
+    session["password_change_current"] = current_password
+    session["password_change_new"] = new_password
+    session.modified = True
+    
+    return {"success": True}
+
+
+@auth_bp.route("/api/change-password-progress")
+def change_password_progress():
+    """SSE endpoint for password change progress."""
+    if not session.get("authenticated"):
+        return {"error": "Not authenticated"}, 401
+    
+    # Get passwords from session
+    current_password = session.get("password_change_current")
+    new_password = session.get("password_change_new")
+    
+    # Clear from session immediately
+    session.pop("password_change_current", None)
+    session.pop("password_change_new", None)
+    session.modified = True
+    
+    def generate():
+        if not current_password or not new_password:
+            yield f"data: {json.dumps({'error': 'Missing password data'})}\n\n"
+            return
+        
+        try:
+            # Step 1: Count encrypted files
+            yield f"data: {json.dumps({'status': 'counting', 'message': 'Counting encrypted files...'})}\n\n"
+            
+            archive_dir = Config.get_archive_path()
+            enc_files = []
+            for root, dirs, files in os.walk(archive_dir):
+                for f in files:
+                    if f.endswith(".eml.enc"):
+                        enc_files.append(os.path.join(root, f))
+            
+            total_files = len(enc_files)
+            yield f"data: {json.dumps({'status': 'counted', 'total': total_files, 'message': f'Found {total_files} encrypted files'})}\n\n"
+            
+            # Step 2: Re-encrypt all files
+            if total_files > 0:
+                yield f"data: {json.dumps({'status': 'encrypting', 'total': total_files, 'current': 0, 'message': 'Re-encrypting files...'})}\n\n"
+                
+                old_fernet = Encryption.derive_fernet_for_password(current_password)
+                new_fernet = Encryption.derive_fernet_for_password(new_password)
+                
+                failed_files = []
+                for i, filepath in enumerate(enc_files):
+                    try:
+                        # Read and decrypt with old password
+                        with open(filepath, "rb") as f:
+                            encrypted_data = f.read()
+                        decrypted_data = old_fernet.decrypt(encrypted_data)
+                        
+                        # Re-encrypt with new password
+                        new_encrypted = new_fernet.encrypt(decrypted_data)
+                        
+                        # Write back
+                        with open(filepath, "wb") as f:
+                            f.write(new_encrypted)
+                        
+                    except Exception as e:
+                        failed_files.append({"file": os.path.basename(filepath), "error": str(e)})
+                    
+                    # Progress update every 10 files or on last file
+                    if (i + 1) % 10 == 0 or i == total_files - 1:
+                        yield f"data: {json.dumps({'status': 'encrypting', 'total': total_files, 'current': i + 1, 'message': f'Re-encrypting {i + 1} of {total_files}...'})}\n\n"
+                
+                if failed_files:
+                    yield f"data: {json.dumps({'status': 'warning', 'message': f'{len(failed_files)} files failed to re-encrypt', 'failed': failed_files})}\n\n"
+            
+            # Step 3: Re-encrypt IMAP credentials
+            yield f"data: {json.dumps({'status': 'credentials', 'message': 'Re-encrypting account credentials...'})}\n\n"
+            
+            try:
+                accounts = Database.fetchall("SELECT id, credentials_encrypted FROM accounts WHERE credentials_encrypted IS NOT NULL")
+                for account in accounts:
+                    try:
+                        # Decrypt with old key, re-encrypt with new key
+                        old_creds = old_fernet.decrypt(account["credentials_encrypted"].encode() if isinstance(account["credentials_encrypted"], str) else account["credentials_encrypted"])
+                        new_creds = new_fernet.encrypt(old_creds)
+                        Database.execute(
+                            "UPDATE accounts SET credentials_encrypted = ? WHERE id = ?",
+                            (new_creds.decode() if isinstance(new_creds, bytes) else new_creds, account["id"])
+                        )
+                    except Exception as e:
+                        yield f"data: {json.dumps({'status': 'warning', 'message': f'Failed to re-encrypt credentials for account {account[\"id\"]}: {e}'})}\n\n"
+                Database.commit()
+            except Exception as e:
+                yield f"data: {json.dumps({'status': 'warning', 'message': f'Error re-encrypting credentials: {e}'})}\n\n"
+            
+            # Step 4: Rekey the database
+            yield f"data: {json.dumps({'status': 'database', 'message': 'Updating database encryption...'})}\n\n"
+            
+            new_db_key = Encryption._derive_db_key(new_password, Encryption._salt)
+            conn = Database._connection
+            conn.execute(f"PRAGMA rekey = \"x'{new_db_key}'\"")
+            
+            # Step 5: Update the verification token
+            yield f"data: {json.dumps({'status': 'finalizing', 'message': 'Updating password verification...'})}\n\n"
+            
+            Encryption.update_password(new_password)
+            
+            # Success
+            yield f"data: {json.dumps({'status': 'complete', 'message': 'Password changed successfully!'})}\n\n"
+            
+        except Exception as e:
+            yield f"data: {json.dumps({'status': 'error', 'message': str(e)})}\n\n"
+    
+    return Response(generate(), mimetype="text/event-stream")

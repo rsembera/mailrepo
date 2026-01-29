@@ -262,6 +262,57 @@ class Encryption:
         )
         key_bytes = kdf.derive(password.encode("utf-8"))
         return key_bytes.hex()
+    
+    @classmethod
+    def derive_fernet_for_password(cls, password: str) -> Fernet:
+        """
+        Derive a Fernet instance for an arbitrary password using current salt.
+        Used for re-encryption during password change.
+        
+        Args:
+            password: The password to derive key from.
+            
+        Returns:
+            Fernet instance with derived key.
+            
+        Raises:
+            EncryptionError: If salt not loaded.
+        """
+        if cls._salt is None:
+            raise EncryptionError("Encryption not unlocked. Call unlock() first.")
+        return cls._derive_fernet(password, cls._salt)
+    
+    @classmethod
+    def update_password(cls, new_password: str) -> None:
+        """
+        Update the master password after re-encryption is complete.
+        
+        Updates the salt file with new verification token and
+        updates in-memory keys.
+        
+        Args:
+            new_password: The new master password.
+            
+        Raises:
+            EncryptionError: If encryption not unlocked.
+        """
+        if cls._salt is None:
+            raise EncryptionError("Encryption not unlocked. Call unlock() first.")
+        
+        # Derive new Fernet and DB key
+        new_fernet = cls._derive_fernet(new_password, cls._salt)
+        new_db_key = cls._derive_db_key(new_password, cls._salt)
+        
+        # Encrypt verification token with new password
+        encrypted_verification = new_fernet.encrypt(cls.VERIFICATION_TOKEN)
+        
+        # Save updated salt file (salt stays same, verification changes)
+        with open(Config.get_salt_path(), "wb") as f:
+            f.write(cls._salt + encrypted_verification)
+        
+        # Update in-memory keys
+        cls._fernet = new_fernet
+        cls._db_key = new_db_key
 
 
 def generate_flask_secret_key() -> str:
