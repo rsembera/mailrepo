@@ -110,7 +110,11 @@ async function loadFilePickerDirectory(path) {
     }
     
     try {
-        const filter = (filePickerMode === 'mbox' && !appleMode) ? 'mbox' : null;
+        // Filter: mbox mode shows only mbox files, apple mode shows only directories
+        let filter = null;
+        if (filePickerMode === 'mbox') {
+            filter = appleMode ? 'dirs_only' : 'mbox';
+        }
         
         const response = await fetch('/api/filesystem/browse', {
             method: 'POST',
