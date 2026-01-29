@@ -18,7 +18,6 @@ import { escapeHtml } from '../utils.js';
 
 // Module state
 let selectedDestinationFolder = null;
-let currentDrilldownFolder = null;  // null = root level
 
 // DOM references
 let stageModal = null;
@@ -70,86 +69,43 @@ export function openStageModal() {
     }
     
     selectedDestinationFolder = null;
-    currentDrilldownFolder = null;  // Reset to root
     modal.dataset.stagingMode = '';
     
-    renderFolderSelectDrilldown();
+    renderFolderSelectTree();
     
     document.getElementById('confirmStageBtn').disabled = true;
     modal.classList.add('active');
 }
 
 /**
- * Render drill-down folder selector in the stage modal.
- * Shows folders at current level with ability to drill into children.
+ * Render tree-style folder selector in the stage modal.
+ * Click folder to select, use button to add subfolder.
  */
-export function renderFolderSelectDrilldown() {
+export function renderFolderSelectTree() {
     const list = document.getElementById('folderSelectList');
     if (!list) return;
     
     const visibleFolders = state.folders.filter(f => !f.deleted_at);
-    const currentFolder = currentDrilldownFolder 
-        ? visibleFolders.find(f => f.id == currentDrilldownFolder)
-        : null;
-    
-    // Get folders at current level
-    const levelFolders = visibleFolders.filter(f => 
-        currentDrilldownFolder ? f.parent_id == currentDrilldownFolder : !f.parent_id
-    );
-    levelFolders.sort((a, b) => a.name.localeCompare(b.name));
+    const rootFolders = visibleFolders.filter(f => !f.parent_id);
+    rootFolders.sort((a, b) => a.name.localeCompare(b.name));
     
     let html = '';
     
-    // Breadcrumb navigation (only when drilled into a folder)
-    if (currentFolder) {
-        const breadcrumbs = buildBreadcrumbs(currentFolder, visibleFolders);
-        html += `<div class="drilldown-breadcrumbs">`;
-        html += `<span class="drilldown-path">`;
-        // Root link to get back to top level
-        html += `<a href="#" onclick="drilldownTo(null); return false;" class="breadcrumb-link">Archive</a>`;
-        breadcrumbs.forEach((crumb, i) => {
-            html += ` <i data-lucide="chevron-right" class="breadcrumb-sep"></i> `;
-            if (i === breadcrumbs.length - 1) {
-                html += `<span class="breadcrumb-current">${escapeHtml(crumb.name)}</span>`;
-            } else {
-                html += `<a href="#" onclick="drilldownTo(${crumb.id}); return false;" class="breadcrumb-link">${escapeHtml(crumb.name)}</a>`;
-            }
-        });
-        html += `</span>`;
-        html += `</div>`;
-        
-        // Enable Stage button when drilled into a folder
-        selectedDestinationFolder = currentFolder.id;
-        document.getElementById('confirmStageBtn').disabled = false;
-    }
-    
-    // Folder list
-    html += `<div class="drilldown-list">`;
-    
-    // New Folder option
-    html += `<div class="drilldown-item drilldown-new" onclick="createSubfolderInDrilldown()">
-        <i data-lucide="plus" class="drilldown-icon"></i>
-        <span class="drilldown-label">New Folder</span>
+    // Toolbar with New Folder button
+    html += `<div class="folder-tree-toolbar">
+        <button class="btn btn-secondary btn-sm" onclick="createFolderInTree(null)">
+            <i data-lucide="folder-plus"></i>
+            New Folder
+        </button>
     </div>`;
     
-    if (levelFolders.length === 0 && !currentFolder) {
-        html += `<div class="drilldown-empty">No folders yet. Create one to get started.</div>`;
-    } else if (levelFolders.length === 0) {
-        html += `<div class="drilldown-empty">No subfolders.</div>`;
+    // Folder tree
+    html += `<div class="folder-tree-container">`;
+    
+    if (rootFolders.length === 0) {
+        html += `<div class="folder-tree-empty">No folders yet. Create one to get started.</div>`;
     } else {
-        levelFolders.forEach(folder => {
-            const children = visibleFolders.filter(f => f.parent_id == folder.id);
-            const hasChildren = children.length > 0;
-            const colorDot = folder.color ? 
-                `<span class="drilldown-color" style="background: ${folder.color}"></span>` : '';
-            
-            html += `<div class="drilldown-item" data-id="${folder.id}" onclick="drilldownSelect(${folder.id})">
-                ${colorDot}
-                <i data-lucide="folder" class="drilldown-icon"></i>
-                <span class="drilldown-label">${escapeHtml(folder.name)}</span>
-                <i data-lucide="chevron-right" class="drilldown-chevron"></i>
-            </div>`;
-        });
+        html += renderFolderTreeLevel(rootFolders, visibleFolders, 0);
     }
     
     html += `</div>`;
@@ -159,45 +115,76 @@ export function renderFolderSelectDrilldown() {
 }
 
 /**
- * Build breadcrumb trail for a folder.
+ * Render a level of the folder tree recursively.
  */
-function buildBreadcrumbs(folder, allFolders) {
-    const crumbs = [];
-    let current = folder;
-    while (current) {
-        crumbs.unshift({ id: current.id, name: current.name });
-        current = allFolders.find(f => f.id == current.parent_id);
-    }
-    return crumbs;
+function renderFolderTreeLevel(folders, allFolders, depth) {
+    let html = '';
+    
+    folders.forEach(folder => {
+        const children = allFolders.filter(f => f.parent_id == folder.id);
+        children.sort((a, b) => a.name.localeCompare(b.name));
+        const hasChildren = children.length > 0;
+        const isSelected = selectedDestinationFolder === folder.id;
+        const colorDot = folder.color ? 
+            `<span class="tree-color-dot" style="background: ${folder.color}"></span>` : '';
+        const indent = depth * 20;
+        
+        html += `<div class="folder-tree-item ${isSelected ? 'selected' : ''}" 
+                      data-id="${folder.id}" 
+                      style="padding-left: ${indent + 8}px"
+                      onclick="selectFolderInTree(${folder.id})">
+            ${hasChildren ? `<span class="tree-toggle" onclick="event.stopPropagation(); toggleTreeFolder(${folder.id})"><i data-lucide="chevron-right" class="tree-toggle-icon" data-folder-id="${folder.id}"></i></span>` : `<span class="tree-toggle-spacer"></span>`}
+            ${colorDot}
+            <i data-lucide="folder" class="tree-folder-icon"></i>
+            <span class="tree-folder-name">${escapeHtml(folder.name)}</span>
+            <button class="tree-add-btn" onclick="event.stopPropagation(); createFolderInTree(${folder.id})" title="Add subfolder">
+                <i data-lucide="plus"></i>
+            </button>
+        </div>`;
+        
+        if (hasChildren) {
+            html += `<div class="folder-tree-children" data-parent-id="${folder.id}" style="display: none;">`;
+            html += renderFolderTreeLevel(children, allFolders, depth + 1);
+            html += `</div>`;
+        }
+    });
+    
+    return html;
 }
 
 /**
- * Handle clicking a folder in drilldown - always drill in.
+ * Select a folder in the tree.
  */
-window.drilldownSelect = function(folderId) {
-    // Always drill into the folder
-    currentDrilldownFolder = folderId;
-    selectedDestinationFolder = null;
-    document.getElementById('confirmStageBtn').disabled = true;
-    renderFolderSelectDrilldown();
-};
-
-/**
- * Jump to a specific folder in breadcrumbs.
- */
-window.drilldownTo = function(folderId) {
-    currentDrilldownFolder = folderId || null;
-    selectedDestinationFolder = null;
-    document.getElementById('confirmStageBtn').disabled = true;
-    renderFolderSelectDrilldown();
-};
-
-/**
- * Create a subfolder at the current drilldown level.
- */
-window.createSubfolderInDrilldown = async function() {
-    const parentId = currentDrilldownFolder || null;
+window.selectFolderInTree = function(folderId) {
+    selectedDestinationFolder = folderId;
+    document.getElementById('confirmStageBtn').disabled = false;
     
+    // Update selection styling
+    document.querySelectorAll('.folder-tree-item').forEach(item => {
+        item.classList.toggle('selected', item.dataset.id == folderId);
+    });
+};
+
+/**
+ * Toggle expand/collapse of a folder's children.
+ */
+window.toggleTreeFolder = function(folderId) {
+    const children = document.querySelector(`.folder-tree-children[data-parent-id="${folderId}"]`);
+    const icon = document.querySelector(`.tree-toggle-icon[data-folder-id="${folderId}"]`);
+    
+    if (children) {
+        const isExpanded = children.style.display !== 'none';
+        children.style.display = isExpanded ? 'none' : 'block';
+        if (icon) {
+            icon.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(90deg)';
+        }
+    }
+};
+
+/**
+ * Create a new folder in the tree.
+ */
+window.createFolderInTree = async function(parentId) {
     const name = await showPrompt('New Folder Name', '', { placeholder: 'e.g., Client: Smith' });
     
     // Validate folder name
@@ -231,7 +218,7 @@ window.createSubfolderInDrilldown = async function() {
         
         const data = await response.json();
         
-        // Reload folders and refresh drilldown
+        // Reload folders and refresh tree
         const foldersResponse = await fetch('/api/folders');
         if (foldersResponse.ok) {
             const foldersData = await foldersResponse.json();
@@ -242,31 +229,24 @@ window.createSubfolderInDrilldown = async function() {
         selectedDestinationFolder = data.id;
         document.getElementById('confirmStageBtn').disabled = false;
         
-        renderFolderSelectDrilldown();
+        renderFolderSelectTree();
         
-        // Highlight the new folder
-        setTimeout(() => {
-            const newItem = document.querySelector(`.drilldown-item[data-id="${data.id}"]`);
-            if (newItem) newItem.classList.add('selected');
-        }, 50);
+        // Expand parent if created as subfolder
+        if (parentId) {
+            const children = document.querySelector(`.folder-tree-children[data-parent-id="${parentId}"]`);
+            const icon = document.querySelector(`.tree-toggle-icon[data-folder-id="${parentId}"]`);
+            if (children) {
+                children.style.display = 'block';
+                if (icon) icon.style.transform = 'rotate(90deg)';
+            }
+        }
         
     } catch (error) {
         console.error('Error creating folder:', error);
+        const { showAlert } = await import('../modals.js');
         showAlert('Error', error.message);
     }
 };
-
-/**
- * Render hierarchical folder tree in the stage modal.
- * @deprecated Use renderFolderSelectDrilldown instead
- */
-export function renderFolderSelectTree() {
-    // Reset drilldown state
-    currentDrilldownFolder = null;
-    selectedDestinationFolder = null;
-    // Render
-    renderFolderSelectDrilldown();
-}
 
 /**
  * Legacy handler for folder selection (inline onclick compatibility).
