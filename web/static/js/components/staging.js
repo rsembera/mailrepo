@@ -91,11 +91,11 @@ export function renderFolderSelectTree() {
     
     let html = '';
     
-    // Toolbar with New Folder button
-    html += `<div class="folder-tree-toolbar">
-        <button class="btn btn-secondary btn-sm" onclick="createFolderInSelected()">
-            <i data-lucide="folder-plus"></i>
-            New Folder
+    // Header with ARCHIVE label and add button
+    html += `<div class="folder-tree-header">
+        <span class="folder-tree-title">ARCHIVE</span>
+        <button class="folder-tree-add-root" onclick="createFolderInSelected()" title="New folder">
+            <i data-lucide="plus"></i>
         </button>
     </div>`;
     
