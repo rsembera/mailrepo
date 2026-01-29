@@ -13,32 +13,26 @@
 
 ### Testing
 - [ ] Test full import workflow from multiple sources (multiple accounts/imports) & post-commit server actions
-- [ ] Create comprehensive testing doc
-
-### Import/Export
-- [ ] Test Apple mbox imports thoroughly
-- [x] Add .pst import support (requires libpst-utils: apt install pst-utils)
-- [x] ZIP export for archived folders
-- [x] Progress indicator for ZIP export
-- [ ] PDF export for emails
-- [x] Export to .eml (download from viewer)
-
-### Archived Email Management
-- [x] Move/delete (archive only) - soft delete to Trash
-- [x] Batch select/move/delete for archived emails
-- [x] Load remote content (server & archive)
-- [x] View/download attachments (server & archive)
-- [x] Indexed search of all email content (FTS)
 
 ### Core Features (from EdgeCase)
 - [ ] Automatic timeout (← EdgeCase)
 - [ ] Settings → reset database (← EdgeCase)
 - [ ] Backup system (← EdgeCase) - new icon & page
 
-### Trash View
+### Completed
+- [x] Add .pst import support (requires libpst-utils: apt install pst-utils)
+- [x] ZIP export for archived folders
+- [x] Progress indicator for ZIP export
+- [x] Export to .eml (download from viewer)
+- [x] Move/delete (archive only) - soft delete to Trash
+- [x] Batch select/move/delete for archived emails
+- [x] Load remote content (server & archive)
+- [x] View/download attachments (server & archive)
+- [x] Indexed search of all email content (FTS)
 - [x] Auto-empty Trash bin (configurable in Settings)
 - [x] Sort/search in Trash
 - [x] Emails tab in Trash (restore/permanent delete)
+- [x] Change Password feature
 
 ---
 
@@ -76,6 +70,21 @@
 - [x] Importing a file no longer auto-switches view
 - [x] Import mounts in sidebar only, user clicks to view
 - [x] Eliminates navigation guard conflicts with unsaved selections
+
+### Change Password Feature
+- [x] Full password change workflow with progress indicator
+- [x] Re-encrypts all archived emails with new key
+- [x] Re-encrypts IMAP credentials
+- [x] Rekeys SQLCipher database
+- [x] Show/hide password toggles on form fields
+
+### Settings UI Cleanup
+- [x] Consistent button/select widths across sections
+- [x] Password form limited to 350px width
+- [x] Removed "master" from password references
+- [x] Simplified Security section description
+- [x] Replace all native alert/confirm with custom modals
+- [x] showAlert now returns Promise (waits for OK click)
 
 ### UI Polish
 - [x] "Review Staged" → "Staged Items" (button tooltip and context title)
