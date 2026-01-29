@@ -17,7 +17,7 @@
 
 ### Import/Export
 - [ ] Test Apple mbox imports thoroughly
-- [ ] Add .pst import support (requires libpst-utils: apt install pst-utils)
+- [x] Add .pst import support (requires libpst-utils: apt install pst-utils)
 - [x] ZIP export for archived folders
 - [x] Progress indicator for ZIP export
 - [ ] PDF export for emails
@@ -62,26 +62,55 @@
 
 ---
 
-## Completed (Session 24 - January 28, 2026)
+## Completed (Session 26 - January 29, 2026)
 
-### Archived Email File Operations
-- [x] Move archived emails to different folders
-- [x] Delete archived emails (soft delete to Trash)
-- [x] Move email modal with folder tree selection
-- [x] Batch select/move/delete for archived emails
-- [x] Select All / Clear buttons in archive view toolbar
-- [x] Selection count shown in context meta ("X of Y archived emails selected")
+### Stage Modal Folder Picker Redesign
+- [x] Replace drilldown navigation with tree view
+- [x] Click folder to select, chevron to expand/collapse
+- [x] "ARCHIVE" header with + button (matches sidebar style)
+- [x] New folder created inside selected folder (or root if none)
+- [x] Parent auto-expands when subfolder created
+- [x] Inline + button on each folder row for adding subfolders
 
-### Trash View - Emails Tab
-- [x] Tabs to switch between Folders and Emails in Trash
-- [x] Restore and permanent delete for trashed emails
-- [x] Delete Emails button (bulk permanent delete)
-- [x] Trash badge counts both folders and emails
-- [x] Badge updates immediately when trashing emails
+### Import Behavior Fix
+- [x] Importing a file no longer auto-switches view
+- [x] Import mounts in sidebar only, user clicks to view
+- [x] Eliminates navigation guard conflicts with unsaved selections
 
-### Bug Fixes
-- [x] Hide subfoldersBar on Trash and Manage Archive views
-- [x] Renamed "Empty Trash"/"Empty Emails" to "Delete Folders"/"Delete Emails"
+### UI Polish
+- [x] "Review Staged" → "Staged Items" (button tooltip and context title)
+- [x] "Destination" dropdown → "Change Destination"
+- [x] Apple Mail text simplified: "Apple Mail folder export" → "Apple Mail folder"
+- [x] Apple Mail hint: "For folders exported from Apple Mail with subfolders"
+- [x] Apple Mail mode now shows only directories (not files)
+
+### Folder Name Validation
+- [x] Placeholder text in new folder prompts ("e.g., Client: Smith")
+- [x] Reject empty names, ".", "..", and names with slashes
+
+---
+
+## Completed (Session 25 - January 29, 2026)
+
+### PST Import Support
+- [x] Backend endpoints for PST conversion via readpst
+- [x] File picker PST mode with support check
+- [x] Convert PST to mbox files, parse and mount
+- [x] Preserve PST folder structure
+- [x] Temp file cleanup on unmount
+- [x] Fix readpst flags (-r -w instead of -r -M)
+
+### Archive Search
+- [x] Full-text search infrastructure (FTS5)
+- [x] Search Archive in sidebar
+- [x] Search results view with snippets
+- [x] Highlight search terms in viewer
+
+### Email Viewer Improvements
+- [x] View Source button (shows raw email)
+- [x] Print dialog (opens browser print)
+- [x] Reorder buttons: Source, Download, Print, Load Images
+- [x] Disable (not hide) Load Images button after click
 
 ---
 
