@@ -223,18 +223,29 @@ window.showArchiveSearch = showArchiveSearch;
 function renderSearchView(results = null, query = '') {
     if (!emailList) return;
     
+    const hasQuery = query.length > 0;
+    
     let html = `
-        <div class="search-view">
-            <div class="search-input-container">
-                <i data-lucide="search" class="search-icon"></i>
-                <input type="text" 
-                       id="archiveSearchInput" 
-                       class="search-input"
-                       placeholder="Search by subject, sender, recipient, or content..." 
-                       value="${escapeHtml(query)}"
-                       onkeydown="if(event.key==='Enter') executeArchiveSearch()">
-                <button class="btn btn-primary" onclick="executeArchiveSearch()">Search</button>
-                ${query ? '<button class="btn btn-secondary" onclick="clearArchiveSearch()">Clear</button>' : ''}
+        <div class="folder-management-list">
+            <div class="email-list-toolbar">
+                <div class="email-filter">
+                    <i data-lucide="search" class="search-icon"></i>
+                    <input type="text" 
+                           id="archiveSearchInput" 
+                           placeholder="Search by subject, sender, recipient, or content..." 
+                           value="${escapeHtml(query)}"
+                           onkeydown="if(event.key==='Enter') executeArchiveSearch()">
+                </div>
+                <div class="toolbar-actions">
+                    <button class="btn btn-primary" onclick="executeArchiveSearch()">
+                        <i data-lucide="search"></i>
+                        Search
+                    </button>
+                    <button class="btn btn-secondary" onclick="clearArchiveSearch()" ${!hasQuery ? 'disabled' : ''}>
+                        <i data-lucide="x"></i>
+                        Clear
+                    </button>
+                </div>
             </div>
     `;
     
@@ -255,11 +266,6 @@ function renderSearchView(results = null, query = '') {
             </div>
         `;
     } else {
-        html += `
-            <div class="search-results-header">${results.length} result${results.length !== 1 ? 's' : ''} for "${escapeHtml(query)}"</div>
-            <div class="folder-management-list">
-        `;
-        
         results.forEach(email => {
             html += `
                 <div class="folder-management-item email-list-item search-result" 
@@ -277,8 +283,6 @@ function renderSearchView(results = null, query = '') {
                 </div>
             `;
         });
-        
-        html += `</div>`;
     }
     
     html += `</div>`;
