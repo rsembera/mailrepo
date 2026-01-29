@@ -135,7 +135,7 @@ export async function showReviewView() {
     if (sidebar) sidebar.style.display = 'none';
     if (toolbar) toolbar.style.display = 'none';
     
-    if (contextTitle) contextTitle.textContent = 'Review Staged Items';
+    if (contextTitle) contextTitle.textContent = 'Staged Items';
     if (contextMeta) contextMeta.textContent = '';
     
     if (headerActions) {
@@ -517,7 +517,7 @@ function renderDestinationDropdown(currentDestId) {
         <div class="icon-select dest-change-dropdown" data-dest-id="${currentDestId}">
             <button class="icon-select-trigger" title="Change destination folder">
                 <i data-lucide="folder-output" class="icon-select-icon"></i>
-                <span>Destination</span>
+                <span>Change Destination</span>
                 <i data-lucide="chevron-down" class="icon-select-arrow"></i>
             </button>
             <div class="icon-select-dropdown">
