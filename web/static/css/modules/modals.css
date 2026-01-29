@@ -59,29 +59,10 @@
 
 /* Folder Selection */
 .folder-select-list {
-    max-height: 300px;
-    overflow-y: auto;
-    overflow-x: auto;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     margin-top: var(--space-md);
-}
-
-/* Support for folder-tree component inside modal */
-.folder-select-list .folder-tree-item {
-    display: block;
-}
-
-.folder-select-list .folder-tree-row {
-    border-bottom: 1px solid var(--color-border-light, rgba(0,0,0,0.05));
-}
-
-.folder-select-list .folder-tree-item:last-child > .folder-tree-row {
-    border-bottom: none;
-}
-
-.folder-select-list .folder-tree-children {
-    display: block;
+    overflow: hidden;
 }
 
 .folder-select-item-wrapper {
