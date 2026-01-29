@@ -420,7 +420,8 @@ async function confirmFilePicker() {
         }
     } catch (error) {
         console.error('Failed to mount import:', error);
-        alert('Failed to import: ' + error.message);
+        const { showAlert } = await import('../modals.js');
+        showAlert('Import Failed', error.message);
     }
 }
 

@@ -422,9 +422,10 @@ async function handleChangePassword() {
                 case 'complete':
                     progressBar.style.width = '100%';
                     eventSource.close();
-                    // Success - show message and reset form after delay
-                    setTimeout(() => {
-                        alert('Password changed successfully. Please log in with your new password.');
+                    // Success - show modal and redirect on confirm
+                    setTimeout(async () => {
+                        const { showAlert } = await import('../modals.js');
+                        await showAlert('Password Changed', 'Your password has been changed. Please log in with your new password.');
                         window.location.href = '/auth/logout';
                     }, 500);
                     break;
@@ -730,12 +731,17 @@ window.showAboutModal = function() {
  * Test account connection.
  */
 window.testAccount = async function(accountId) {
+    const { showAlert } = await import('../modals.js');
     try {
         const response = await fetch(`/api/accounts/${accountId}/test`, { method: 'POST' });
         const data = await response.json();
-        alert(data.success ? 'Connection successful!' : `Connection failed: ${data.error}`);
+        if (data.success) {
+            showAlert('Connection Test', 'Connection successful!');
+        } else {
+            showAlert('Connection Test', `Connection failed: ${data.error}`);
+        }
     } catch (e) {
-        alert('Connection test failed');
+        showAlert('Error', 'Connection test failed');
     }
 };
 
@@ -743,7 +749,12 @@ window.testAccount = async function(accountId) {
  * Delete an account.
  */
 window.deleteAccount = async function(accountId) {
-    if (!confirm('Are you sure you want to remove this account?')) return;
+    const { showConfirm, showAlert } = await import('../modals.js');
+    const confirmed = await showConfirm('Delete Account', 'Are you sure you want to remove this account?', {
+        confirmText: 'Delete',
+        confirmClass: 'btn-danger'
+    });
+    if (!confirmed) return;
     
     try {
         const response = await fetch(`/api/accounts/${accountId}`, { method: 'DELETE' });
@@ -754,10 +765,10 @@ window.deleteAccount = async function(accountId) {
             window.dispatchEvent(event);
         } else {
             const data = await response.json();
-            alert(data.error || 'Failed to delete account');
+            showAlert('Error', data.error || 'Failed to delete account');
         }
     } catch (e) {
-        alert('Failed to delete account');
+        showAlert('Error', 'Failed to delete account');
     }
 };
 
@@ -773,6 +784,7 @@ document.addEventListener('DOMContentLoaded', () => {
  * Create a new account from the modal form.
  */
 async function createAccount() {
+    const { showAlert } = await import('../modals.js');
     const name = document.getElementById('accountName').value.trim();
     const email = document.getElementById('accountEmail').value.trim();
     const password = document.getElementById('accountPassword').value;
@@ -781,7 +793,7 @@ async function createAccount() {
     const ssl = document.getElementById('imapSsl').checked;
     
     if (!name || !email || !password) {
-        alert('Please fill in all required fields');
+        showAlert('Missing Fields', 'Please fill in all required fields');
         return;
     }
     
@@ -801,10 +813,10 @@ async function createAccount() {
             const event = new CustomEvent('accountsChanged');
             window.dispatchEvent(event);
         } else {
-            alert(data.error || 'Failed to create account');
+            showAlert('Error', data.error || 'Failed to create account');
         }
     } catch (e) {
-        alert('Failed to create account');
+        showAlert('Error', 'Failed to create account');
     }
 }
 
