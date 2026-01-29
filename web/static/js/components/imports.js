@@ -36,7 +36,7 @@ export function initImports(config = {}) {
     // Set up import button click
     const importBtn = document.getElementById('importRailBtn');
     if (importBtn) {
-        importBtn.addEventListener('click', showImportModal);
+        importBtn.addEventListener('click', handleImportButtonClick);
     }
     
     // Set up modal buttons
@@ -61,6 +61,14 @@ export function initImports(config = {}) {
     if (pstBtn) {
         pstBtn.addEventListener('click', handlePstImport);
     }
+}
+
+/**
+ * Handle click on Import button - check for unsaved selections first.
+ */
+async function handleImportButtonClick() {
+    if (!await confirmNavigation()) return;
+    showImportModal();
 }
 
 /**
