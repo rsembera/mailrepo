@@ -36,7 +36,7 @@ export function initImports(config = {}) {
     // Set up import button click
     const importBtn = document.getElementById('importRailBtn');
     if (importBtn) {
-        importBtn.addEventListener('click', handleImportButtonClick);
+        importBtn.addEventListener('click', showImportModal);
     }
     
     // Set up modal buttons
@@ -64,17 +64,13 @@ export function initImports(config = {}) {
 }
 
 /**
- * Handle click on Import button - check for unsaved selections first.
- */
-async function handleImportButtonClick() {
-    if (!await confirmNavigation()) return;
-    showImportModal();
-}
-
-/**
  * Show the import type selection modal.
  */
 function showImportModal() {
+    // Switch to Mail view first
+    const mailBtn = document.querySelector('.rail-btn[data-view="mail"]');
+    if (mailBtn) mailBtn.click();
+    
     const modal = document.getElementById('importModal');
     if (modal) {
         modal.classList.add('active');
