@@ -440,3 +440,44 @@
     color: var(--color-text-muted);
     margin: 0;
 }
+
+/* Password change form */
+.password-change-form {
+    display: none;
+    margin-top: var(--space-lg);
+}
+
+.password-change-form .form-group {
+    margin-bottom: var(--space-md);
+}
+
+.password-progress {
+    display: none;
+    margin-bottom: var(--space-md);
+}
+
+.progress-bar-container {
+    height: 8px;
+    background: var(--color-background-secondary);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--color-primary);
+    transition: width 0.3s;
+}
+
+.password-error {
+    display: none;
+    color: var(--color-danger);
+    margin-bottom: var(--space-md);
+    font-size: 0.875rem;
+}
+
+.password-actions {
+    display: flex;
+    gap: var(--space-sm);
+}

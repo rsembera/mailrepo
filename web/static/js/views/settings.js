@@ -212,36 +212,36 @@ function renderAccountsSection() {
  */
 function renderSecuritySection() {
     return `
-        <p style="color: var(--color-text-muted); margin-bottom: var(--space-lg);">
+        <p class="setting-hint" style="margin-bottom: var(--space-lg);">
             Your master password protects your IMAP credentials and encrypted archives.
         </p>
-        <button class="btn btn-secondary" id="changePasswordBtn">
+        <button class="btn btn-primary" id="changePasswordBtn">
             <i data-lucide="key"></i>
             Change Master Password
         </button>
         
-        <div id="changePasswordForm" style="display: none; margin-top: var(--space-lg);">
-            <div class="form-group" style="margin-bottom: var(--space-md);">
+        <div id="changePasswordForm" class="password-change-form">
+            <div class="form-group">
                 <label for="currentPassword">Current Password</label>
                 <input type="password" id="currentPassword" class="form-input" autocomplete="current-password">
             </div>
-            <div class="form-group" style="margin-bottom: var(--space-md);">
+            <div class="form-group">
                 <label for="newPassword">New Password</label>
                 <input type="password" id="newPassword" class="form-input" autocomplete="new-password">
-                <small style="color: var(--color-text-muted);">Minimum 8 characters</small>
+                <small class="setting-hint">Minimum 8 characters</small>
             </div>
-            <div class="form-group" style="margin-bottom: var(--space-md);">
+            <div class="form-group">
                 <label for="confirmPassword">Confirm New Password</label>
                 <input type="password" id="confirmPassword" class="form-input" autocomplete="new-password">
             </div>
-            <div id="passwordChangeProgress" style="display: none; margin-bottom: var(--space-md);">
-                <div class="progress-bar-container" style="height: 8px; background: var(--color-background-secondary); border-radius: 4px; overflow: hidden;">
-                    <div id="passwordProgressBar" style="height: 100%; width: 0%; background: var(--color-primary); transition: width 0.3s;"></div>
+            <div id="passwordChangeProgress" class="password-progress">
+                <div class="progress-bar-container">
+                    <div id="passwordProgressBar" class="progress-bar-fill"></div>
                 </div>
-                <p id="passwordProgressMessage" style="margin-top: var(--space-sm); font-size: 0.875rem; color: var(--color-text-muted);"></p>
+                <p id="passwordProgressMessage" class="setting-hint"></p>
             </div>
-            <div id="passwordChangeError" style="display: none; color: var(--color-danger); margin-bottom: var(--space-md);"></div>
-            <div style="display: flex; gap: var(--space-sm);">
+            <div id="passwordChangeError" class="password-error"></div>
+            <div class="password-actions">
                 <button class="btn btn-primary" id="confirmChangePasswordBtn">Change Password</button>
                 <button class="btn btn-secondary" id="cancelChangePasswordBtn">Cancel</button>
             </div>
