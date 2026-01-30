@@ -3,58 +3,69 @@
    ============================================ */
 
 .backups-view {
-    max-width: 800px;
+    max-width: 700px;
     margin: 0 auto;
     padding: var(--space-lg);
 }
 
-/* Status and Actions Row */
-.backup-top-section {
-    display: flex;
-    gap: var(--space-lg);
-    margin-bottom: var(--space-lg);
-    align-items: stretch;
-}
-
-.backup-status-box {
-    flex: 1;
-    max-width: 400px;
-    background: var(--color-background-secondary);
+/* Card styling (matches settings view) */
+.backup-card {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
-    padding: var(--space-md) var(--space-lg);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: var(--space-sm);
+    margin-bottom: var(--space-md);
+    background: var(--color-background);
 }
 
-.status-row {
+.backup-card-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 0.875rem;
+    padding: var(--space-md) var(--space-lg);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.backup-card-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-heading);
+}
+
+.backup-card-body {
+    padding: var(--space-lg);
+}
+
+/* Status header */
+.backup-status-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-lg);
+}
+
+.backup-status-info {
+    display: flex;
+    gap: var(--space-xl);
+}
+
+.status-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
 }
 
 .status-label {
+    font-size: 0.75rem;
     font-weight: 500;
     color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
 }
 
 .status-value {
+    font-size: 1rem;
     font-weight: 600;
     color: var(--color-text);
-}
-
-.backup-actions {
-    display: flex;
-    align-items: center;
-}
-
-.backup-actions .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-sm);
 }
 
 /* Spinner */
@@ -65,6 +76,8 @@
     border-top-color: currentColor;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
+    display: inline-block;
+    margin-left: var(--space-sm);
 }
 
 .btn-spinner.hidden {
@@ -79,7 +92,7 @@
 .backup-message {
     padding: var(--space-md);
     border-radius: var(--radius-md);
-    margin-bottom: var(--space-lg);
+    margin-bottom: var(--space-md);
     font-size: 0.875rem;
 }
 
@@ -111,7 +124,7 @@
     border: 1px solid #FCD34D;
     border-radius: var(--radius-md);
     padding: var(--space-md);
-    margin-bottom: var(--space-lg);
+    margin-bottom: var(--space-md);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -134,35 +147,6 @@
     height: 18px;
     color: #F59E0B;
     flex-shrink: 0;
-}
-
-/* Section styling */
-.backup-section {
-    margin-bottom: var(--space-xl);
-}
-
-.backup-section h3 {
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--color-text);
-    margin: 0 0 var(--space-md) 0;
-    padding-bottom: var(--space-sm);
-    border-bottom: 1px solid var(--color-border);
-}
-
-.backup-section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: var(--space-md);
-    padding-bottom: var(--space-sm);
-    border-bottom: 1px solid var(--color-border);
-}
-
-.backup-section-header h3 {
-    margin: 0;
-    padding: 0;
-    border: none;
 }
 
 /* Settings grid */
@@ -198,42 +182,14 @@
     align-items: center;
 }
 
-.custom-location-wrapper input[type="text"] {
+.custom-location-wrapper input[type="text"],
+.custom-location-wrapper .form-input {
     flex: 1;
     min-width: 0;
 }
 
 .custom-location-wrapper.hidden {
     display: none;
-}
-
-/* Backup input */
-.backup-input {
-    width: 100%;
-    padding: var(--space-sm) var(--space-md);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    font-size: 0.875rem;
-    font-family: monospace;
-    background: var(--color-background);
-    color: var(--color-text);
-    transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.backup-input:focus {
-    outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 2px var(--color-primary-alpha, rgba(31, 143, 116, 0.2));
-}
-
-.backup-input::placeholder {
-    color: var(--color-text-muted);
-    font-size: 0.8rem;
-}
-
-/* Full-width form group */
-.form-group-wide {
-    grid-column: 1 / -1;
 }
 
 /* Restore row */
@@ -253,11 +209,11 @@
    ============================================ */
 
 .backup-list {
-    background: var(--color-background);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-md);
     max-height: 300px;
     overflow-y: auto;
+    background: var(--color-background-secondary);
 }
 
 .backup-list-empty {
@@ -285,7 +241,7 @@
 
 /* Backup chain container */
 .backup-chain {
-    border-bottom: 1px solid var(--color-border-light, #E5E7EB);
+    border-bottom: 1px solid var(--color-border);
 }
 
 .backup-chain:last-child {
@@ -300,6 +256,7 @@
     padding: var(--space-sm) var(--space-md);
     font-size: 0.875rem;
     position: relative;
+    background: var(--color-background);
 }
 
 .backup-item-info {
@@ -350,13 +307,13 @@
 
 /* Full backup styling */
 .backup-full {
-    background-color: var(--color-background-secondary, #F8FAFC);
+    background-color: var(--color-background);
 }
 
 /* Incremental backup styling - indented with connecting line */
 .backup-incremental {
     padding-left: calc(var(--space-md) + 1.5rem);
-    background-color: var(--color-background);
+    background-color: var(--color-background-secondary);
 }
 
 /* Connecting lines for incrementals */
@@ -375,7 +332,7 @@
     top: 0;
     bottom: 50%;
     width: 2px;
-    background-color: #CBD5E1;
+    background-color: var(--color-border);
 }
 
 .backup-connector::after {
@@ -385,7 +342,7 @@
     top: 50%;
     width: 0.75rem;
     height: 2px;
-    background-color: #CBD5E1;
+    background-color: var(--color-border);
 }
 
 .connector-last::before {
@@ -567,21 +524,19 @@
    ============================================ */
 
 @media (max-width: 768px) {
-    .backup-top-section {
+    .backup-status-header {
         flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-md);
     }
     
-    .backup-status-box {
-        max-width: none;
-    }
-    
-    .backup-actions {
+    .backup-status-info {
         width: 100%;
+        justify-content: space-between;
     }
     
-    .backup-actions .btn {
+    .backup-status-header .btn {
         width: 100%;
-        justify-content: center;
     }
     
     .backup-settings-grid {

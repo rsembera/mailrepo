@@ -2,6 +2,7 @@
  * Backups View
  * 
  * Renders backup & restore functionality as a view within the main app layout.
+ * Follows the same collapsible section pattern as settings.js.
  */
 
 import { initCustomSelects } from '../components/custom-select.js';
@@ -16,6 +17,7 @@ let folderPickerCurrentPath = '';
 let folderPickerParentPath = null;
 let hasUnsavedChanges = false;
 let initialSettings = {};
+let settingsLoaded = false;
 
 /**
  * Initialize the backups view.
@@ -51,6 +53,7 @@ export function showBackupsView() {
     
     // Reset state
     hasUnsavedChanges = false;
+    settingsLoaded = false;
     
     // Render the view
     renderBackupsView();
@@ -62,25 +65,25 @@ export function showBackupsView() {
 function renderBackupsView() {
     const html = `
         <div class="backups-view">
-            <!-- Status and Actions -->
-            <div class="backup-top-section">
-                <div class="backup-status-box">
-                    <div class="status-row">
-                        <span class="status-label">Last Backup</span>
-                        <span class="status-value" id="last-backup-display">Loading...</span>
+            <!-- Status Card -->
+            <section class="backup-card">
+                <div class="backup-status-header">
+                    <div class="backup-status-info">
+                        <div class="status-item">
+                            <span class="status-label">Last Backup</span>
+                            <span class="status-value" id="last-backup-display">Loading...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Total Backups</span>
+                            <span class="status-value" id="backup-count">-</span>
+                        </div>
                     </div>
-                    <div class="status-row">
-                        <span class="status-label">Total Backups</span>
-                        <span class="status-value" id="backup-count">-</span>
-                    </div>
-                </div>
-                <div class="backup-actions">
                     <button class="btn btn-primary" id="backup-now-btn">
                         <span class="btn-text">Backup Now</span>
                         <span class="btn-spinner hidden"></span>
                     </button>
                 </div>
-            </div>
+            </section>
             
             <!-- Message area -->
             <div id="backup-message" class="backup-message hidden"></div>
@@ -95,78 +98,88 @@ function renderBackupsView() {
             </div>
             
             <!-- Settings Section -->
-            <div class="backup-section">
-                <div class="backup-section-header">
+            <section class="backup-card">
+                <div class="backup-card-header">
                     <h3>Backup Settings</h3>
-                    <button class="btn btn-primary" id="save-settings-btn" disabled>Save Settings</button>
+                    <button class="btn btn-primary btn-sm" id="save-settings-btn" disabled>Save Settings</button>
                 </div>
-                <div class="backup-settings-grid">
-                    <div class="form-group">
-                        <label class="setting-label">Automatic Backups</label>
-                        <div class="custom-select" id="backup-frequency-select" data-name="backup-frequency" data-value="daily">
-                            <div class="custom-select-option" data-value="session">Every Session</div>
-                            <div class="custom-select-option" data-value="daily">Daily</div>
-                            <div class="custom-select-option" data-value="weekly">Weekly</div>
-                            <div class="custom-select-option" data-value="manual">Manual Only</div>
+                <div class="backup-card-body">
+                    <div class="backup-settings-grid">
+                        <div class="form-group">
+                            <label class="setting-label">Automatic Backups</label>
+                            <div class="custom-select" id="backup-frequency-select" data-name="backup-frequency" data-value="daily">
+                                <div class="custom-select-option" data-value="session">Every Session</div>
+                                <div class="custom-select-option" data-value="daily">Daily</div>
+                                <div class="custom-select-option" data-value="weekly">Weekly</div>
+                                <div class="custom-select-option" data-value="manual">Manual Only</div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="setting-label">Keep Backups For</label>
+                            <div class="custom-select" id="backup-retention-select" data-name="backup-retention" data-value="forever">
+                                <div class="custom-select-option" data-value="1_month">1 Month</div>
+                                <div class="custom-select-option" data-value="6_months">6 Months</div>
+                                <div class="custom-select-option" data-value="1_year">1 Year</div>
+                                <div class="custom-select-option" data-value="forever">Forever</div>
+                            </div>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label class="setting-label">Keep Backups For</label>
-                        <div class="custom-select" id="backup-retention-select" data-name="backup-retention" data-value="forever">
-                            <div class="custom-select-option" data-value="1_month">1 Month</div>
-                            <div class="custom-select-option" data-value="6_months">6 Months</div>
-                            <div class="custom-select-option" data-value="1_year">1 Year</div>
-                            <div class="custom-select-option" data-value="forever">Forever</div>
+                    <div class="backup-settings-grid">
+                        <div class="form-group">
+                            <label class="setting-label">Backup Location</label>
+                            <div class="custom-select" id="backup-location-select" data-name="backup-location" data-value="default">
+                                <div class="custom-select-option" data-value="default">Default (app folder)</div>
+                            </div>
+                            <div id="location-path" class="location-path"></div>
                         </div>
+                        <div class="form-group"></div>
+                    </div>
+                    <div id="custom-location-wrapper" class="custom-location-wrapper hidden">
+                        <input type="text" id="custom-location-input" class="form-input" placeholder="Enter full path">
+                        <button type="button" class="btn btn-secondary btn-sm" id="browse-folder-btn">
+                            <i data-lucide="folder"></i>
+                        </button>
+                    </div>
+                    <div class="form-group">
+                        <label class="setting-label">Post-Backup Command (optional)</label>
+                        <input type="text" id="post-backup-command" class="form-input" placeholder="e.g., rsync -av ~/mailrepo/backups/ user@server:~/backups/">
+                        <p class="setting-hint">Command to run after each backup, such as an rsync script for remote sync.</p>
                     </div>
                 </div>
-                <div class="backup-settings-grid">
-                    <div class="form-group">
-                        <label class="setting-label">Backup Location</label>
-                        <div class="custom-select" id="backup-location-select" data-name="backup-location" data-value="default">
-                            <div class="custom-select-option" data-value="default">Default (app folder)</div>
-                        </div>
-                        <div id="location-path" class="location-path"></div>
-                    </div>
-                    <div class="form-group"></div>
-                </div>
-                <div id="custom-location-wrapper" class="custom-location-wrapper hidden">
-                    <input type="text" id="custom-location-input" placeholder="Enter full path">
-                    <button type="button" class="btn btn-secondary btn-sm" id="browse-folder-btn">
-                        <i data-lucide="folder"></i>
-                    </button>
-                </div>
-                <div class="form-group form-group-wide">
-                    <label class="setting-label">Post-Backup Command (optional)</label>
-                    <input type="text" id="post-backup-command" class="backup-input" placeholder="e.g., rsync -av ~/mailrepo/backups/ user@server:~/backups/">
-                    <p class="setting-hint">Command to run after each backup, such as an rsync script for remote sync.</p>
-                </div>
-            </div>
+            </section>
             
-            <!-- Backup History -->
-            <div class="backup-section">
-                <h3>Backups</h3>
-                <p class="backup-legend">
-                    <span class="legend-item"><span class="backup-type-badge badge-full">Full</span> Complete backup</span>
-                    <span class="legend-item"><span class="backup-type-badge badge-incr">Incr</span> Changes only</span>
-                    <span class="legend-item"><span class="backup-type-badge badge-safety">Safety</span> Pre-restore backup</span>
-                </p>
-                <div id="backup-list" class="backup-list">
-                    <div class="backup-list-empty">Loading backups...</div>
+            <!-- Backup History Section -->
+            <section class="backup-card">
+                <div class="backup-card-header">
+                    <h3>Backup History</h3>
                 </div>
-            </div>
+                <div class="backup-card-body">
+                    <p class="backup-legend">
+                        <span class="legend-item"><span class="backup-type-badge badge-full">Full</span> Complete backup</span>
+                        <span class="legend-item"><span class="backup-type-badge badge-incr">Incr</span> Changes only</span>
+                        <span class="legend-item"><span class="backup-type-badge badge-safety">Safety</span> Pre-restore backup</span>
+                    </p>
+                    <div id="backup-list" class="backup-list">
+                        <div class="backup-list-empty">Loading backups...</div>
+                    </div>
+                </div>
+            </section>
             
             <!-- Restore Section -->
-            <div class="backup-section">
-                <h3>Restore from Backup</h3>
-                <p class="setting-hint" style="margin-bottom: var(--space-md);">Select a backup to restore. A safety backup will be created automatically before restoring.</p>
-                <div class="restore-row">
-                    <div class="custom-select restore-select" id="restore-point-select" data-name="restore-point" data-value="">
-                        <div class="custom-select-option" data-value="">Select a backup...</div>
-                    </div>
-                    <button id="prepare-restore-btn" class="btn btn-primary" disabled>Restore</button>
+            <section class="backup-card">
+                <div class="backup-card-header">
+                    <h3>Restore from Backup</h3>
                 </div>
-            </div>
+                <div class="backup-card-body">
+                    <p class="setting-hint" style="margin-bottom: var(--space-md);">Select a backup to restore. A safety backup will be created automatically before restoring.</p>
+                    <div class="restore-row">
+                        <div class="custom-select restore-select" id="restore-point-select" data-name="restore-point" data-value="">
+                            <div class="custom-select-option" data-value="">Select a backup...</div>
+                        </div>
+                        <button id="prepare-restore-btn" class="btn btn-primary" disabled>Restore</button>
+                    </div>
+                </div>
+            </section>
         </div>
         
         <!-- Restore Confirmation Modal -->
@@ -250,19 +263,19 @@ function initBackupHandlers() {
         document.getElementById('prepare-restore-btn').disabled = !e.detail.value;
     });
     
-    // Track changes to settings
-    document.getElementById('backup-frequency-select').addEventListener('change', markSettingsChanged);
-    document.getElementById('backup-retention-select').addEventListener('change', markSettingsChanged);
+    // Track changes to settings - only after settings are loaded
+    document.getElementById('backup-frequency-select').addEventListener('change', onSettingChange);
+    document.getElementById('backup-retention-select').addEventListener('change', onSettingChange);
     document.getElementById('backup-location-select').addEventListener('change', (e) => {
         handleLocationChange(e);
-        markSettingsChanged();
+        onSettingChange();
     });
     
     // Custom location input
-    document.getElementById('custom-location-input').addEventListener('input', markSettingsChanged);
+    document.getElementById('custom-location-input').addEventListener('input', onSettingChange);
     
     // Post-backup command
-    document.getElementById('post-backup-command').addEventListener('input', markSettingsChanged);
+    document.getElementById('post-backup-command').addEventListener('input', onSettingChange);
     
     // Folder picker
     document.getElementById('browse-folder-btn').addEventListener('click', openFolderPicker);
@@ -273,11 +286,13 @@ function initBackupHandlers() {
 }
 
 /**
- * Mark that settings have been changed.
+ * Called when a setting changes - only mark as changed if settings have loaded.
  */
-function markSettingsChanged() {
-    hasUnsavedChanges = true;
-    document.getElementById('save-settings-btn').disabled = false;
+function onSettingChange() {
+    if (settingsLoaded) {
+        hasUnsavedChanges = true;
+        document.getElementById('save-settings-btn').disabled = false;
+    }
 }
 
 /**
@@ -292,7 +307,7 @@ async function loadBackupStatus() {
         document.getElementById('last-backup-display').textContent = data.last_backup_display || 'Never';
         document.getElementById('backup-count').textContent = data.backup_count || 0;
         
-        // Store initial settings for change detection
+        // Store initial settings
         initialSettings = {
             frequency: data.frequency || 'daily',
             retention: data.retention || 'forever',
@@ -300,7 +315,13 @@ async function loadBackupStatus() {
             post_backup_command: data.post_backup_command || ''
         };
         
-        // Set settings values after custom selects are initialized
+        // Set post-backup command value
+        document.getElementById('post-backup-command').value = data.post_backup_command || '';
+        
+        // Populate location dropdown with cloud folders, then set all values
+        populateLocationDropdown(data.cloud_folders || [], data.location || '');
+        
+        // Set dropdown values after a short delay to ensure custom selects are ready
         setTimeout(() => {
             const freqSelect = document.getElementById('backup-frequency-select');
             if (freqSelect && freqSelect._customSelect) {
@@ -311,14 +332,10 @@ async function loadBackupStatus() {
             if (retSelect && retSelect._customSelect) {
                 retSelect._customSelect.setValue(initialSettings.retention);
             }
-        }, 50);
-        
-        if (data.post_backup_command !== undefined) {
-            document.getElementById('post-backup-command').value = data.post_backup_command;
-        }
-        
-        // Populate location dropdown with cloud folders
-        populateLocationDropdown(data.cloud_folders || [], data.location || '');
+            
+            // Mark settings as loaded - changes after this point are user-initiated
+            settingsLoaded = true;
+        }, 100);
         
         // Check for pending restore
         if (data.restore_pending) {
@@ -329,6 +346,7 @@ async function loadBackupStatus() {
     } catch (error) {
         console.error('Error loading backup status:', error);
         document.getElementById('last-backup-display').textContent = 'Error loading';
+        settingsLoaded = true; // Allow changes even on error
     }
 }
 
@@ -888,7 +906,7 @@ function selectCurrentFolder() {
         
         document.getElementById('custom-location-wrapper').classList.remove('hidden');
         updateLocationPath();
-        markSettingsChanged();
+        onSettingChange();
     }
     
     closeFolderPicker();
