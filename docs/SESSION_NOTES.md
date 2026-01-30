@@ -1,47 +1,24 @@
 # MailRepo Session Notes
 
 **Date:** January 27, 2026  
-**Last Updated:** Session 19
+**Last Updated:** Session 20
 
 ---
 
-## Completed Today (Session 19)
+## Completed Today (Session 20)
 
-### Code Cleanup
-- Removed all debug print statements from progress.py (10 statements)
-
-### Destination Modal Polish
-- Breadcrumbs now wrap to next line instead of horizontal scrolling
-- Removed redundant back arrow button (breadcrumb links handle navigation)
-- Added "Archive" root link to breadcrumbs for returning to top level
-
-### Archive Folder Navigation Redesign
-- Full breadcrumb trail in main view (e.g., "Client A > 2024 > Q1")
-- Breadcrumbs only show when in nested folders (root folders have no trail)
-- Replaced subfolder pills with inline text links ("Subfolders: January, February, March")
-- Root folders treated as distinct entities - navigate between them via sidebar
-
-### IMAP Folder Navigation
-- Added breadcrumbs + subfolder links to IMAP folder browsing (matches archive view)
-- Fixed title to show folder name only, not full path
-- Fixed subfolder duplicate bug (was showing each twice)
-- Fixed IMAP cache lookup (string/number accountId mismatch)
-
-### Bug Fixes
-- Fixed logout triggering browser's "Changes may not be saved" warning
-
-### Verified Working
-- Multi-account staging already supported (was on TODO but already implemented)
-
-### Code Review & Refactoring Plan
-- Full codebase scan completed
-- Created docs/Refactoring_Plan_V2.md with prioritized improvements
-- Key targets: progress.py split, folder-mgmt.js split, shared utilities
-- Estimated 8-12 hours total, non-blocking for release
+### Attachment Viewing Enhancement
+- Added "Open in browser" option for viewable attachments (PDFs, images, text files)
+- Backend: Added `?view=1` query param to serve files with `inline` disposition
+- Frontend: Two-icon layout — Download icon + Open icon (for viewable types)
+- Added `isViewableInBrowser()` helper detecting PDFs, images, text, HTML, JSON, SVG
+- Non-viewable attachments (Word, Excel, etc.) show only Download icon
 
 ---
 
 ## Previous Sessions Summary
+
+**Session 19:** Code cleanup, destination modal polish, archive/IMAP folder navigation redesign with breadcrumbs and subfolder links, refactoring plan created
 
 **Session 18:** After Commit actions (archive/trash/delete on IMAP), destination modal drill-down redesign, page title fixes
 
@@ -54,7 +31,7 @@
 ## Current State
 
 - **Server:** Runs on port 5050
-- **All features working:** Email/folder staging, commit, ZIP export, folder management, after-commit actions
+- **All features working:** Email/folder staging, commit, ZIP export, folder management, after-commit actions, attachment viewing
 - **Git:** Commits pushed to origin/main
 
 ---
