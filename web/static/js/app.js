@@ -26,6 +26,7 @@ import { initFolderMgmt, showFolderManagementView, renameFolder, createSubfolder
 import { initFolderSelection, showFolderSelectionView, showImportFolderSelectionView, stageSelectedFolders } from './views/folder-selection.js';
 import { initTrashView, showTrashView, updateTrashBadge, restoreFolder, permanentlyDeleteFolder, emptyTrash } from './views/trash.js';
 import { initSettingsView, showSettingsView } from './views/settings.js';
+import { initBackupsView, showBackupsView } from './views/backups.js';
 import { initReviewView, showReviewView } from './views/review.js';
 import { initImports, getImportEmails, getMountedImports, renderImportsSection } from './components/imports.js';
 
@@ -126,6 +127,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize settings view
     initSettingsView({
+        contextTitle: elements.contextTitle,
+        contextMeta: elements.contextMeta,
+        emailList: elements.emailList,
+    });
+    
+    // Initialize backups view
+    initBackupsView({
         contextTitle: elements.contextTitle,
         contextMeta: elements.contextMeta,
         emailList: elements.emailList,
@@ -452,6 +460,9 @@ function handleImportUnmount(importId) {
                     break;
                 case 'trash':
                     showTrashView();
+                    break;
+                case 'backups':
+                    showBackupsView();
                     break;
                 case 'settings':
                     showSettingsView();

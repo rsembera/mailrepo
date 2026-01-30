@@ -131,6 +131,16 @@ class Database:
             cls._connection = None
     
     @classmethod
+    def checkpoint(cls) -> None:
+        """
+        Checkpoint the WAL file to ensure all changes are in main database.
+        
+        Important to call before backup to ensure backup includes all data.
+        """
+        conn = cls.get_connection()
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    
+    @classmethod
     def initialize(cls) -> None:
         """
         Initialize the database schema.

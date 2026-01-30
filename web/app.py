@@ -44,10 +44,12 @@ def create_app(test_config: dict = None) -> Flask:
     from .blueprints.auth import auth_bp
     from .blueprints.main import main_bp
     from .blueprints.api import api_bp
+    from .blueprints.backups import backups_bp
     
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(backups_bp)
     
     # Helper to check if request is an API call
     def is_api_request():
