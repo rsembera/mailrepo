@@ -82,67 +82,51 @@
     <script>
     (function() {
         let disconnectShown = false;
+        let heartbeatInterval = null;
         
         function showDisconnect() {
             if (!disconnectShown) {
                 disconnectShown = true;
                 document.body.classList.add('frozen');
                 document.getElementById('server-disconnected-overlay').style.display = 'flex';
+                // Stop heartbeat once disconnected
+                if (heartbeatInterval) {
+                    clearInterval(heartbeatInterval);
+                    heartbeatInterval = null;
+                }
             }
         }
         
         // Make available globally for other scripts
         window.showServerDisconnect = showDisconnect;
         
-        // Override form submission to check connectivity first
-        const originalSubmit = HTMLFormElement.prototype.submit;
-        HTMLFormElement.prototype.submit = function() {
-            const form = this;
-            
+        // Heartbeat check - ping server every 3 seconds
+        function checkHeartbeat() {
             fetch('/', { method: 'HEAD', cache: 'no-store' })
                 .then(response => {
-                    if (response.ok) {
-                        originalSubmit.call(form);
-                    } else {
+                    if (!response.ok) {
                         showDisconnect();
                     }
                 })
                 .catch(() => {
                     showDisconnect();
                 });
-        };
+        }
         
-        // Intercept link clicks
-        document.addEventListener('click', function(e) {
-            const link = e.target.closest('a');
-            if (link && link.href && link.href.startsWith(window.location.origin) && !link.target) {
-                e.preventDefault();
-                
-                fetch(link.href, { method: 'HEAD', cache: 'no-store' })
-                    .then(response => {
-                        if (response.ok) {
-                            window.location.href = link.href;
-                        } else {
-                            showDisconnect();
-                        }
-                    })
-                    .catch(() => {
-                        showDisconnect();
-                    });
-            }
-        }, true);
+        // Start heartbeat (only on authenticated pages)
+        if (!window.location.pathname.startsWith('/auth/')) {
+            heartbeatInterval = setInterval(checkHeartbeat, 3000);
+            // Initial check after 1 second
+            setTimeout(checkHeartbeat, 1000);
+        }
         
         // Also intercept fetch calls to detect disconnect on API requests
         const originalFetch = window.fetch;
         window.fetch = function(...args) {
             return originalFetch.apply(this, args)
-                .then(response => {
-                    // If we get a response, server is connected
-                    return response;
-                })
                 .catch(error => {
                     // Network error = server disconnected
-                    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                    if (error.name === 'TypeError') {
                         showDisconnect();
                     }
                     throw error;
