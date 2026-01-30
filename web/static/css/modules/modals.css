@@ -153,18 +153,6 @@
     width: 100%;
 }
 
-/* Danger button */
-.btn-danger {
-    background: var(--color-danger);
-    border-color: var(--color-danger);
-    color: white;
-}
-
-.btn-danger:hover {
-    background: #dc2626;
-    border-color: #dc2626;
-}
-
 /* Current location badge in move modal */
 .folder-select-item.current-location {
     opacity: 0.6;
