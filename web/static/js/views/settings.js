@@ -214,7 +214,7 @@ function renderAccountsSection() {
  */
 function renderSecuritySection() {
     return `
-        <div class="security-setting">
+        <div class="form-group">
             <label for="sessionTimeout">Auto-Logout After Inactivity</label>
             <select id="sessionTimeout" class="form-select">
                 <option value="15">15 minutes</option>
@@ -228,13 +228,16 @@ function renderSecuritySection() {
         
         <hr class="settings-divider">
         
-        <p class="setting-hint" style="margin-bottom: var(--space-lg);">
-            Your password protects your IMAP credentials and encrypted archives.
-        </p>
-        <button class="btn btn-primary" id="changePasswordBtn">
-            <i data-lucide="key"></i>
-            Change Password
-        </button>
+        <div class="form-group">
+            <label>Password</label>
+            <p class="setting-hint" style="margin-bottom: var(--space-md);">
+                Your password protects your IMAP credentials and encrypted archives.
+            </p>
+            <button class="btn btn-primary" id="changePasswordBtn">
+                <i data-lucide="key"></i>
+                Change Password
+            </button>
+        </div>
         
         <div id="changePasswordForm" class="password-change-form">
             <div class="form-group">
