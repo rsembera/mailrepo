@@ -47,13 +47,261 @@
         {% block content %}{% endblock %}
     {% endblock %}
     
+    <!-- Session timeout warning overlay -->
+    <div id="timeout-warning-overlay" class="session-overlay" style="display: none;">
+        <div class="session-modal">
+            <h2>Session Expiring Soon</h2>
+            <p>Your session will expire in <strong id="timeout-countdown">--</strong> seconds.</p>
+            <p class="session-modal-hint">Any unsaved work may be lost.</p>
+            <div class="session-modal-actions">
+                <button onclick="stayLoggedIn()" class="btn btn-primary">Stay Logged In</button>
+                <button onclick="window.location.href='/auth/logout'" class="btn btn-secondary">Log Out</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Session expired overlay -->
+    <div id="session-expired-overlay" class="session-overlay" style="display: none;">
+        <div class="session-modal">
+            <h2>Session Expired</h2>
+            <p>Your session has expired due to inactivity.</p>
+            <button onclick="window.location.href='/auth/login'" class="btn btn-primary" style="width: 100%;">Log In</button>
+        </div>
+    </div>
+    
+    <style>
+        body.frozen > *:not(.session-overlay) {
+            pointer-events: none;
+            opacity: 0.6;
+            user-select: none;
+        }
+        .session-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.4);
+            z-index: 10001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .session-modal {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+        .session-modal h2 {
+            color: var(--color-text);
+            margin-bottom: 0.75rem;
+            font-size: 1.375rem;
+            font-weight: 700;
+        }
+        .session-modal p {
+            color: var(--color-text-muted);
+            margin-bottom: 0.5rem;
+            font-size: 0.9375rem;
+        }
+        .session-modal-hint {
+            font-size: 0.875rem !important;
+            margin-bottom: 1.5rem !important;
+        }
+        .session-modal-actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+        .session-modal-actions .btn {
+            flex: 1;
+        }
+    </style>
+    
     <!-- Scripts -->
     <script src="{{ url_for('static', filename='js/lucide.min.js') }}"></script>
     {% block scripts %}{% endblock %}
     <script>
         // Apply theme to body as well (html already has it from head script)
-        document.body.setAttribute('data-theme', localStorage.getItem('mailrepo-theme') || 'pine');
+        document.body.setAttribute('data-theme', localStorage.getItem('mailrepo-theme') || 'graphite');
         lucide.createIcons();
+    </script>
+    
+    <!-- Session timeout warning system -->
+    <script>
+    (function() {
+        let warningShown = false;
+        let countdownInterval = null;
+        let secondsRemaining = 0;
+        
+        // Check session status periodically
+        function checkSession() {
+            fetch('/api/session-status')
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.logged_in) {
+                        // Session expired - show modal
+                        document.body.classList.add('frozen');
+                        document.getElementById('session-expired-overlay').style.display = 'flex';
+                        return;
+                    }
+                    if (data.timeout_minutes === 0) return; // "Never" timeout
+                    
+                    secondsRemaining = data.seconds_remaining;
+                    
+                    if (data.warning_needed && !warningShown) {
+                        showWarning();
+                    } else if (!data.warning_needed && warningShown) {
+                        hideWarning();
+                    }
+                    
+                    if (warningShown) {
+                        updateCountdown();
+                    }
+                })
+                .catch(() => {}); // Ignore errors
+        }
+        
+        function showWarning() {
+            warningShown = true;
+            document.getElementById('timeout-warning-overlay').style.display = 'flex';
+            updateCountdown();
+            countdownInterval = setInterval(function() {
+                secondsRemaining = Math.max(0, secondsRemaining - 1);
+                updateCountdown();
+                if (secondsRemaining <= 0) {
+                    clearInterval(countdownInterval);
+                    window.location.href = '/auth/logout';
+                }
+            }, 1000);
+            window.warningCountdownInterval = countdownInterval;
+        }
+        
+        function hideWarning() {
+            warningShown = false;
+            document.getElementById('timeout-warning-overlay').style.display = 'none';
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+        }
+        
+        function updateCountdown() {
+            document.getElementById('timeout-countdown').textContent = secondsRemaining;
+        }
+        
+        // Expose stayLoggedIn to global scope
+        window.stayLoggedIn = function() {
+            fetch('/api/keepalive', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        hideWarning();
+                    }
+                })
+                .catch(() => {});
+        };
+        
+        // Check every 30 seconds
+        setInterval(checkSession, 30000);
+        // Initial check after 5 seconds
+        setTimeout(checkSession, 5000);
+        
+        // Check when tab becomes visible
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible') {
+                checkSession();
+            }
+        });
+    })();
+    </script>
+    
+    <!-- Client-side timeout protection -->
+    <script>
+    (function() {
+        let timeoutMinutes = null;
+        let lastActivityTime = Date.now();
+        let lastKeepaliveSent = Date.now();
+        let timeoutCheckInterval = null;
+        const KEEPALIVE_INTERVAL_MS = 60000;
+        
+        fetch('/api/session-status')
+            .then(r => r.json())
+            .then(data => {
+                if (data.logged_in) {
+                    timeoutMinutes = data.timeout_minutes;
+                    if (timeoutMinutes > 0) {
+                        startTimeoutCheck();
+                        trackActivity();
+                        trackVisibilityChange();
+                    }
+                }
+            })
+            .catch(() => {});
+        
+        function trackActivity() {
+            const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
+            events.forEach(event => {
+                document.addEventListener(event, function() {
+                    lastActivityTime = Date.now();
+                    const timeSinceLastKeepalive = Date.now() - lastKeepaliveSent;
+                    if (timeSinceLastKeepalive >= KEEPALIVE_INTERVAL_MS) {
+                        sendKeepalive();
+                    }
+                }, { passive: true });
+            });
+        }
+        
+        function trackVisibilityChange() {
+            document.addEventListener('visibilitychange', function() {
+                if (document.visibilityState === 'visible') {
+                    checkTimeoutNow();
+                }
+            });
+        }
+        
+        function sendKeepalive() {
+            lastKeepaliveSent = Date.now();
+            fetch('/api/keepalive', { method: 'POST' }).catch(() => {});
+        }
+        
+        function checkTimeoutNow() {
+            const now = Date.now();
+            const elapsedMinutes = (now - lastActivityTime) / 1000 / 60;
+            
+            if (elapsedMinutes >= timeoutMinutes) {
+                if (timeoutCheckInterval) {
+                    clearInterval(timeoutCheckInterval);
+                }
+                blankScreenAndLogout();
+            }
+        }
+        
+        function startTimeoutCheck() {
+            timeoutCheckInterval = setInterval(checkTimeoutNow, 1000);
+        }
+        
+        function blankScreenAndLogout() {
+            const warningInterval = window.warningCountdownInterval;
+            if (warningInterval) {
+                clearInterval(warningInterval);
+            }
+            
+            document.body.innerHTML = '';
+            document.body.style.background = 'var(--color-background, #f9fafb)';
+            
+            const container = document.createElement('div');
+            container.className = 'session-modal';
+            container.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);';
+            container.innerHTML = `
+                <h2>Session Timed Out</h2>
+                <p>Your session has expired due to inactivity.</p>
+                <button onclick="window.location.href='/auth/login'" class="btn btn-primary" style="width: 100%;">Log In</button>
+            `;
+            document.body.appendChild(container);
+        }
+    })();
     </script>
 </body>
 </html>

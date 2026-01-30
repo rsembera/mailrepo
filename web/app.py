@@ -4,9 +4,11 @@ MailRepo - Flask application factory.
 Creates and configures the Flask application.
 """
 
-from flask import Flask, redirect, url_for, session, g
+import time
+from flask import Flask, redirect, url_for, session, g, request, jsonify
 
 from core import Config, FlaskConfig, Database, Encryption, generate_flask_secret_key
+from core.database import get_setting
 
 
 def create_app(test_config: dict = None) -> Flask:
@@ -47,12 +49,14 @@ def create_app(test_config: dict = None) -> Flask:
     app.register_blueprint(main_bp)
     app.register_blueprint(api_bp)
     
-    # Before request: check authentication
+    # Helper to check if request is an API call
+    def is_api_request():
+        return request.endpoint and request.endpoint.startswith("api.")
+    
+    # Before request: check authentication and session timeout
     @app.before_request
     def check_auth():
-        """Ensure user is authenticated before accessing protected routes."""
-        from flask import request
-        
+        """Ensure user is authenticated and session hasn't timed out."""
         # Public routes that don't require authentication
         public_endpoints = {"auth.login", "auth.setup", "static"}
         
@@ -65,19 +69,42 @@ def create_app(test_config: dict = None) -> Flask:
         
         # Check if logged in
         if not session.get("authenticated"):
-            # For API requests, return 401 JSON
-            if request.endpoint and request.endpoint.startswith("api."):
-                from flask import jsonify
-                return jsonify({"error": "Authentication required"}), 401
+            if is_api_request():
+                return jsonify({"error": "Authentication required", "code": "auth_required"}), 401
             return redirect(url_for("auth.login"))
         
         # Verify encryption is unlocked (session might be stale)
         if not Encryption.is_unlocked():
             session.clear()
-            if request.endpoint and request.endpoint.startswith("api."):
-                from flask import jsonify
-                return jsonify({"error": "Session expired"}), 401
+            if is_api_request():
+                return jsonify({"error": "Session expired", "code": "session_expired"}), 401
             return redirect(url_for("auth.login"))
+        
+        # Session timeout check
+        try:
+            timeout_minutes = int(get_setting("session_timeout", "30"))
+            if timeout_minutes == 0:  # "Never" option
+                session["last_activity"] = time.time()
+                return
+            session_timeout = timeout_minutes * 60
+        except (ValueError, TypeError):
+            session_timeout = 30 * 60
+        
+        last_activity = session.get("last_activity")
+        now = time.time()
+        
+        if last_activity:
+            elapsed = now - last_activity
+            if elapsed > session_timeout:
+                # Session expired - clear everything
+                session.clear()
+                Encryption.lock()
+                if is_api_request():
+                    return jsonify({"error": "Session timed out", "code": "session_timeout"}), 401
+                return redirect(url_for("auth.login", timeout=1))
+        
+        # Update last activity timestamp
+        session["last_activity"] = now
     
     # Context processor: make common variables available to all templates
     @app.context_processor

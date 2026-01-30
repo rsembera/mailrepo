@@ -214,6 +214,20 @@ function renderAccountsSection() {
  */
 function renderSecuritySection() {
     return `
+        <div class="security-setting">
+            <label for="sessionTimeout">Auto-Logout After Inactivity</label>
+            <select id="sessionTimeout" class="form-select">
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes (default)</option>
+                <option value="60">1 hour</option>
+                <option value="120">2 hours</option>
+                <option value="0">Never (not recommended)</option>
+            </select>
+            <small class="setting-hint">Shorter timeouts recommended for shared spaces</small>
+        </div>
+        
+        <hr class="settings-divider">
+        
         <p class="setting-hint" style="margin-bottom: var(--space-lg);">
             Your password protects your IMAP credentials and encrypted archives.
         </p>
@@ -274,6 +288,26 @@ function initSecurityHandlers() {
     const form = document.getElementById('changePasswordForm');
     const confirmBtn = document.getElementById('confirmChangePasswordBtn');
     const cancelBtn = document.getElementById('cancelChangePasswordBtn');
+    const sessionTimeoutSelect = document.getElementById('sessionTimeout');
+    
+    // Session timeout handler
+    if (sessionTimeoutSelect) {
+        sessionTimeoutSelect.addEventListener('change', async () => {
+            const value = sessionTimeoutSelect.value;
+            try {
+                const response = await fetch('/api/settings/session-timeout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ value })
+                });
+                if (!response.ok) {
+                    console.error('Failed to save session timeout setting');
+                }
+            } catch (err) {
+                console.error('Error saving session timeout:', err);
+            }
+        });
+    }
     
     if (changeBtn && form) {
         changeBtn.addEventListener('click', () => {
@@ -559,6 +593,18 @@ async function loadCurrentSettings() {
         }
     } catch (err) {
         console.error('Failed to load trash retention setting:', err);
+    }
+    
+    // Load session timeout setting from server
+    try {
+        const response = await fetch('/api/settings/session-timeout');
+        if (response.ok) {
+            const data = await response.json();
+            const select = document.getElementById('sessionTimeout');
+            if (select) select.value = data.value || '30';
+        }
+    } catch (err) {
+        console.error('Failed to load session timeout setting:', err);
     }
 }
 
