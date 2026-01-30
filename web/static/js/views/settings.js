@@ -25,11 +25,13 @@ export function showSettingsView() {
     const sidebar = document.getElementById('sidebar');
     const toolbar = document.querySelector('.content-toolbar');
     const headerActions = document.querySelector('.header-actions');
+    const subfoldersBar = document.getElementById('subfoldersBar');
     
-    // Hide sidebar and toolbar (settings uses full width)
+    // Hide sidebar, toolbar, and subfolders bar (settings uses full width)
     if (sidebar) sidebar.style.display = 'none';
     if (toolbar) toolbar.style.display = 'none';
     if (headerActions) headerActions.innerHTML = '';
+    if (subfoldersBar) subfoldersBar.style.display = 'none';
     
     if (contextTitle) contextTitle.textContent = 'Settings';
     if (contextMeta) contextMeta.textContent = '';

@@ -107,6 +107,9 @@ export async function showFolderSelectionView(accountId) {
     const toolbar = document.querySelector('.content-toolbar');
     if (toolbar) toolbar.style.display = 'none';
     
+    const subfoldersBar = document.getElementById('subfoldersBar');
+    if (subfoldersBar) subfoldersBar.style.display = 'none';
+    
     const headerActions = document.querySelector('.header-actions');
     if (headerActions) {
         headerActions.innerHTML = '';
@@ -155,6 +158,9 @@ export function showImportFolderSelectionView(importId) {
     
     const toolbar = document.querySelector('.content-toolbar');
     if (toolbar) toolbar.style.display = 'none';
+    
+    const subfoldersBar = document.getElementById('subfoldersBar');
+    if (subfoldersBar) subfoldersBar.style.display = 'none';
     
     const headerActions = document.querySelector('.header-actions');
     if (headerActions) {

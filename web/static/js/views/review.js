@@ -131,9 +131,11 @@ export async function showReviewView() {
     const sidebar = document.getElementById('sidebar');
     const toolbar = document.querySelector('.content-toolbar');
     const headerActions = document.querySelector('.header-actions');
+    const subfoldersBar = document.getElementById('subfoldersBar');
     
     if (sidebar) sidebar.style.display = 'none';
     if (toolbar) toolbar.style.display = 'none';
+    if (subfoldersBar) subfoldersBar.style.display = 'none';
     
     if (contextTitle) contextTitle.textContent = 'Staged Items';
     if (contextMeta) contextMeta.textContent = '';
