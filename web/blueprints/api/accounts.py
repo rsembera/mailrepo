@@ -343,10 +343,15 @@ def download_imap_attachment(account_id, uid, index):
             return jsonify({"error": "Attachment not found"}), 404
         
         att = attachments[index]
+        
+        # Check if user wants to view inline (for PDFs, images, etc.)
+        view_inline = request.args.get("view") == "1"
+        disposition = "inline" if view_inline else "attachment"
+        
         return Response(
             att["payload"],
             mimetype=att["content_type"],
-            headers={"Content-Disposition": f'attachment; filename="{att["filename"]}"'}
+            headers={"Content-Disposition": f'{disposition}; filename="{att["filename"]}"'}
         )
     except IMAPError as e:
         return jsonify({"error": str(e)}), 500

@@ -120,6 +120,38 @@
     font-size: 0.8125rem;
 }
 
+.attachment-name {
+    flex: 1;
+}
+
+.attachment-actions {
+    display: flex;
+    gap: var(--space-xs);
+    margin-left: var(--space-xs);
+}
+
+.attachment-action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    text-decoration: none;
+    transition: color 0.15s, background-color 0.15s;
+}
+
+.attachment-action:hover {
+    color: var(--color-primary);
+    background: var(--color-background-secondary);
+}
+
+.attachment-action i {
+    width: 14px;
+    height: 14px;
+}
+
 .attachment-link {
     text-decoration: none;
     color: inherit;

@@ -716,19 +716,25 @@ function renderEmailContent(email, context = null) {
         document.getElementById('viewerCcRow').style.display = 'flex';
     }
     
-    // Attachments with download links
+    // Attachments with download/view links
     const attachDiv = document.getElementById('viewerAttachments');
     if (email.attachments && email.attachments.length > 0) {
         let html = '<div class="attachment-list">';
         email.attachments.forEach((att, index) => {
             const downloadUrl = getAttachmentDownloadUrl(context, index);
+            const viewUrl = downloadUrl ? downloadUrl + (downloadUrl.includes('?') ? '&' : '?') + 'view=1' : null;
+            const isViewable = isViewableInBrowser(att.content_type, att.filename);
+            
             if (downloadUrl) {
                 html += `
-                    <a href="${downloadUrl}" class="attachment-item attachment-link" download>
+                    <div class="attachment-item">
                         <i data-lucide="paperclip"></i>
-                        <span>${escapeHtml(att.filename)}</span>
-                        <i data-lucide="download" class="attachment-download-icon"></i>
-                    </a>
+                        <span class="attachment-name">${escapeHtml(att.filename)}</span>
+                        <span class="attachment-actions">
+                            ${isViewable ? `<a href="${viewUrl}" target="_blank" class="attachment-action" title="Open in new tab"><i data-lucide="external-link"></i></a>` : ''}
+                            <a href="${downloadUrl}" download class="attachment-action" title="Download"><i data-lucide="download"></i></a>
+                        </span>
+                    </div>
                 `;
             } else {
                 html += `
@@ -821,6 +827,42 @@ function renderHtmlBody(container, html, allowRemote = false) {
     setTimeout(adjustHeight, 100);
     // Adjust again after images may have loaded
     setTimeout(adjustHeight, 500);
+}
+
+/**
+ * Check if a file type can be viewed inline in the browser.
+ * @param {string} contentType - MIME type
+ * @param {string} filename - Filename (for extension fallback)
+ * @returns {boolean}
+ */
+function isViewableInBrowser(contentType, filename) {
+    // Types browsers can display inline
+    const viewableTypes = [
+        'application/pdf',
+        'text/plain',
+        'text/html',
+        'text/css',
+        'text/javascript',
+        'application/json',
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+        'image/svg+xml',
+    ];
+    
+    if (contentType && viewableTypes.includes(contentType.toLowerCase())) {
+        return true;
+    }
+    
+    // Fallback: check extension
+    if (filename) {
+        const ext = filename.split('.').pop()?.toLowerCase();
+        const viewableExts = ['pdf', 'txt', 'html', 'htm', 'css', 'js', 'json', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
+        return viewableExts.includes(ext);
+    }
+    
+    return false;
 }
 
 /**
