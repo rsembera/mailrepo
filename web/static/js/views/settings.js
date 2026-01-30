@@ -215,15 +215,15 @@ function renderAccountsSection() {
 function renderSecuritySection() {
     return `
         <div class="form-group">
-            <label for="sessionTimeout">Auto-Logout After Inactivity</label>
-            <select id="sessionTimeout" class="form-select">
+            <label class="setting-label" for="sessionTimeout">Auto-Logout After Inactivity</label>
+            <select id="sessionTimeout" class="setting-select">
                 <option value="15">15 minutes</option>
                 <option value="30">30 minutes (default)</option>
                 <option value="60">1 hour</option>
                 <option value="120">2 hours</option>
                 <option value="0">Never (not recommended)</option>
             </select>
-            <small class="setting-hint">Shorter timeouts recommended for shared spaces</small>
+            <p class="setting-hint">Shorter timeouts recommended for shared spaces</p>
         </div>
         
         <hr class="settings-divider">
