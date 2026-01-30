@@ -73,11 +73,83 @@
     <div id="server-disconnected-overlay" class="session-overlay" style="display: none;">
         <div class="session-modal">
             <h2>Server Disconnected</h2>
-            <p>Unable to connect to MailRepo server.</p>
-            <p class="session-modal-hint">Check that the server is running and try again.</p>
-            <button onclick="location.reload()" class="btn btn-primary" style="width: 100%;">Retry</button>
+            <p>The server has stopped. Refresh the page to reconnect.</p>
+            <button onclick="location.reload()" class="btn btn-primary" style="width: 100%;">Refresh Page</button>
         </div>
     </div>
+    
+    <!-- Immediate server disconnect detection -->
+    <script>
+    (function() {
+        let disconnectShown = false;
+        
+        function showDisconnect() {
+            if (!disconnectShown) {
+                disconnectShown = true;
+                document.body.classList.add('frozen');
+                document.getElementById('server-disconnected-overlay').style.display = 'flex';
+            }
+        }
+        
+        // Make available globally for other scripts
+        window.showServerDisconnect = showDisconnect;
+        
+        // Override form submission to check connectivity first
+        const originalSubmit = HTMLFormElement.prototype.submit;
+        HTMLFormElement.prototype.submit = function() {
+            const form = this;
+            
+            fetch('/', { method: 'HEAD', cache: 'no-store' })
+                .then(response => {
+                    if (response.ok) {
+                        originalSubmit.call(form);
+                    } else {
+                        showDisconnect();
+                    }
+                })
+                .catch(() => {
+                    showDisconnect();
+                });
+        };
+        
+        // Intercept link clicks
+        document.addEventListener('click', function(e) {
+            const link = e.target.closest('a');
+            if (link && link.href && link.href.startsWith(window.location.origin) && !link.target) {
+                e.preventDefault();
+                
+                fetch(link.href, { method: 'HEAD', cache: 'no-store' })
+                    .then(response => {
+                        if (response.ok) {
+                            window.location.href = link.href;
+                        } else {
+                            showDisconnect();
+                        }
+                    })
+                    .catch(() => {
+                        showDisconnect();
+                    });
+            }
+        }, true);
+        
+        // Also intercept fetch calls to detect disconnect on API requests
+        const originalFetch = window.fetch;
+        window.fetch = function(...args) {
+            return originalFetch.apply(this, args)
+                .then(response => {
+                    // If we get a response, server is connected
+                    return response;
+                })
+                .catch(error => {
+                    // Network error = server disconnected
+                    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                        showDisconnect();
+                    }
+                    throw error;
+                });
+        };
+    })();
+    </script>
     
     <style>
         body.frozen > *:not(.session-overlay) {
@@ -148,8 +220,6 @@
         let secondsRemaining = 0;
         let sessionCheckInterval = null;
         let loggingOut = false;
-        let consecutiveFailures = 0;
-        const MAX_FAILURES_BEFORE_DISCONNECT = 2;
         
         // Mark that we're logging out (to suppress session expired modal)
         window.markLoggingOut = function() {
@@ -173,9 +243,6 @@
                     return r.json();
                 })
                 .then(data => {
-                    consecutiveFailures = 0; // Reset on success
-                    hideServerDisconnected();
-                    
                     if (!data.logged_in) {
                         // Session expired - show modal (only if not intentionally logging out)
                         if (!loggingOut) {
@@ -199,23 +266,8 @@
                     }
                 })
                 .catch(() => {
-                    consecutiveFailures++;
-                    if (consecutiveFailures >= MAX_FAILURES_BEFORE_DISCONNECT) {
-                        showServerDisconnected();
-                    }
+                    // Network errors are handled by the fetch interceptor
                 });
-        }
-        
-        function showServerDisconnected() {
-            document.body.classList.add('frozen');
-            document.getElementById('server-disconnected-overlay').style.display = 'flex';
-        }
-        
-        function hideServerDisconnected() {
-            document.getElementById('server-disconnected-overlay').style.display = 'none';
-            if (!warningShown && document.getElementById('session-expired-overlay').style.display === 'none') {
-                document.body.classList.remove('frozen');
-            }
         }
         
         function showWarning() {
