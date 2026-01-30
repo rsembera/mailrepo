@@ -5,6 +5,8 @@
  * following the same pattern as folder-mgmt.js and trash.js.
  */
 
+import { initCustomSelects, CustomSelect } from '../components/custom-select.js';
+
 let contextTitle = null;
 let contextMeta = null;
 let emailList = null;
@@ -117,6 +119,7 @@ function renderSettingsView() {
     if (typeof lucide !== 'undefined') lucide.createIcons();
     
     initSettingsSectionToggles();
+    initCustomSelects();
     initAppearanceHandlers();
     initSecurityHandlers();
     initTrashHandlers();
@@ -215,14 +218,14 @@ function renderAccountsSection() {
 function renderSecuritySection() {
     return `
         <div class="form-group">
-            <label class="setting-label" for="sessionTimeout">Auto-Logout After Inactivity</label>
-            <select id="sessionTimeout" class="setting-select">
-                <option value="15">15 minutes</option>
-                <option value="30">30 minutes (default)</option>
-                <option value="60">1 hour</option>
-                <option value="120">2 hours</option>
-                <option value="0">Never (not recommended)</option>
-            </select>
+            <label class="setting-label">Auto-Logout After Inactivity</label>
+            <div class="custom-select" id="sessionTimeoutSelect" data-name="sessionTimeout" data-value="30">
+                <div class="custom-select-option" data-value="15">15 minutes</div>
+                <div class="custom-select-option" data-value="30">30 minutes (default)</div>
+                <div class="custom-select-option" data-value="60">1 hour</div>
+                <div class="custom-select-option" data-value="120">2 hours</div>
+                <div class="custom-select-option" data-value="0">Never (not recommended)</div>
+            </div>
             <p class="setting-hint">Shorter timeouts recommended for shared spaces</p>
         </div>
         
@@ -291,12 +294,12 @@ function initSecurityHandlers() {
     const form = document.getElementById('changePasswordForm');
     const confirmBtn = document.getElementById('confirmChangePasswordBtn');
     const cancelBtn = document.getElementById('cancelChangePasswordBtn');
-    const sessionTimeoutSelect = document.getElementById('sessionTimeout');
+    const sessionTimeoutSelect = document.getElementById('sessionTimeoutSelect');
     
-    // Session timeout handler
+    // Session timeout handler (custom select)
     if (sessionTimeoutSelect) {
-        sessionTimeoutSelect.addEventListener('change', async () => {
-            const value = sessionTimeoutSelect.value;
+        sessionTimeoutSelect.addEventListener('change', async (e) => {
+            const value = e.detail.value;
             try {
                 const response = await fetch('/api/settings/session-timeout', {
                     method: 'POST',
@@ -493,14 +496,14 @@ async function handleChangePassword() {
 function renderTrashSection() {
     return `
         <div class="trash-setting-group">
-            <label class="setting-label" for="trashRetention">Automatically delete items in Trash after:</label>
-            <select id="trashRetention" class="setting-select">
-                <option value="0">Never</option>
-                <option value="7">7 days</option>
-                <option value="30">30 days</option>
-                <option value="90">90 days</option>
-                <option value="365">1 year</option>
-            </select>
+            <label class="setting-label">Automatically delete items in Trash after:</label>
+            <div class="custom-select" id="trashRetentionSelect" data-name="trashRetention" data-value="7">
+                <div class="custom-select-option" data-value="0">Never</div>
+                <div class="custom-select-option" data-value="7">7 days</div>
+                <div class="custom-select-option" data-value="30">30 days</div>
+                <div class="custom-select-option" data-value="90">90 days</div>
+                <div class="custom-select-option" data-value="365">1 year</div>
+            </div>
             <p class="setting-hint">Deleted folders and their emails will be permanently removed after this period.</p>
         </div>
     `;
@@ -591,8 +594,10 @@ async function loadCurrentSettings() {
         const response = await fetch('/api/settings/trash-retention');
         if (response.ok) {
             const data = await response.json();
-            const select = document.getElementById('trashRetention');
-            if (select) select.value = data.value || '0';
+            const selectEl = document.getElementById('trashRetentionSelect');
+            if (selectEl && selectEl._customSelect) {
+                selectEl._customSelect.setValue(data.value || '7');
+            }
         }
     } catch (err) {
         console.error('Failed to load trash retention setting:', err);
@@ -603,8 +608,10 @@ async function loadCurrentSettings() {
         const response = await fetch('/api/settings/session-timeout');
         if (response.ok) {
             const data = await response.json();
-            const select = document.getElementById('sessionTimeout');
-            if (select) select.value = data.value || '30';
+            const selectEl = document.getElementById('sessionTimeoutSelect');
+            if (selectEl && selectEl._customSelect) {
+                selectEl._customSelect.setValue(data.value || '30');
+            }
         }
     } catch (err) {
         console.error('Failed to load session timeout setting:', err);
@@ -615,14 +622,14 @@ async function loadCurrentSettings() {
  * Initialize trash settings handlers.
  */
 function initTrashHandlers() {
-    const select = document.getElementById('trashRetention');
+    const select = document.getElementById('trashRetentionSelect');
     if (select) {
-        select.addEventListener('change', async () => {
+        select.addEventListener('change', async (e) => {
             try {
                 await fetch('/api/settings/trash-retention', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ value: select.value }),
+                    body: JSON.stringify({ value: e.detail.value }),
                 });
             } catch (err) {
                 console.error('Failed to save trash retention setting:', err);
