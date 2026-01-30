@@ -165,6 +165,13 @@
     width: 100%;
 }
 
+/* Settings actions */
+.backup-settings-actions {
+    margin-top: var(--space-lg);
+    padding-top: var(--space-lg);
+    border-top: 1px solid var(--color-border);
+}
+
 /* Location path display */
 .location-path {
     font-size: 0.75rem;
