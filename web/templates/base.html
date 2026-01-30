@@ -116,6 +116,8 @@
         }
         .session-modal-actions .btn {
             flex: 1;
+            white-space: nowrap;
+            min-width: 120px;
         }
     </style>
     
@@ -188,7 +190,10 @@
         }
         
         function updateCountdown() {
-            document.getElementById('timeout-countdown').textContent = secondsRemaining;
+            const el = document.getElementById('timeout-countdown');
+            if (el && secondsRemaining !== undefined && secondsRemaining !== null) {
+                el.textContent = Math.round(secondsRemaining);
+            }
         }
         
         // Expose stayLoggedIn to global scope
