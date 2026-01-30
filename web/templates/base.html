@@ -69,6 +69,16 @@
         </div>
     </div>
     
+    <!-- Server disconnected overlay -->
+    <div id="server-disconnected-overlay" class="session-overlay" style="display: none;">
+        <div class="session-modal">
+            <h2>Server Disconnected</h2>
+            <p>Unable to connect to MailRepo server.</p>
+            <p class="session-modal-hint">Check that the server is running and try again.</p>
+            <button onclick="location.reload()" class="btn btn-primary" style="width: 100%;">Retry</button>
+        </div>
+    </div>
+    
     <style>
         body.frozen > *:not(.session-overlay) {
             pointer-events: none;
@@ -136,16 +146,42 @@
         let warningShown = false;
         let countdownInterval = null;
         let secondsRemaining = 0;
+        let sessionCheckInterval = null;
+        let loggingOut = false;
+        let consecutiveFailures = 0;
+        const MAX_FAILURES_BEFORE_DISCONNECT = 2;
+        
+        // Mark that we're logging out (to suppress session expired modal)
+        window.markLoggingOut = function() {
+            loggingOut = true;
+            if (sessionCheckInterval) {
+                clearInterval(sessionCheckInterval);
+                sessionCheckInterval = null;
+            }
+        };
         
         // Check session status periodically
         function checkSession() {
+            // Don't check if we're on login/setup pages or logging out
+            if (loggingOut || window.location.pathname.startsWith('/auth/')) {
+                return;
+            }
+            
             fetch('/api/session-status')
-                .then(r => r.json())
+                .then(r => {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
                 .then(data => {
+                    consecutiveFailures = 0; // Reset on success
+                    hideServerDisconnected();
+                    
                     if (!data.logged_in) {
-                        // Session expired - show modal
-                        document.body.classList.add('frozen');
-                        document.getElementById('session-expired-overlay').style.display = 'flex';
+                        // Session expired - show modal (only if not intentionally logging out)
+                        if (!loggingOut) {
+                            document.body.classList.add('frozen');
+                            document.getElementById('session-expired-overlay').style.display = 'flex';
+                        }
                         return;
                     }
                     if (data.timeout_minutes === 0) return; // "Never" timeout
@@ -162,7 +198,24 @@
                         updateCountdown();
                     }
                 })
-                .catch(() => {}); // Ignore errors
+                .catch(() => {
+                    consecutiveFailures++;
+                    if (consecutiveFailures >= MAX_FAILURES_BEFORE_DISCONNECT) {
+                        showServerDisconnected();
+                    }
+                });
+        }
+        
+        function showServerDisconnected() {
+            document.body.classList.add('frozen');
+            document.getElementById('server-disconnected-overlay').style.display = 'flex';
+        }
+        
+        function hideServerDisconnected() {
+            document.getElementById('server-disconnected-overlay').style.display = 'none';
+            if (!warningShown && document.getElementById('session-expired-overlay').style.display === 'none') {
+                document.body.classList.remove('frozen');
+            }
         }
         
         function showWarning() {
@@ -209,9 +262,11 @@
         };
         
         // Check every 30 seconds
-        setInterval(checkSession, 30000);
-        // Initial check after 5 seconds
-        setTimeout(checkSession, 5000);
+        sessionCheckInterval = setInterval(checkSession, 30000);
+        // Initial check after 5 seconds (but not on auth pages)
+        if (!window.location.pathname.startsWith('/auth/')) {
+            setTimeout(checkSession, 5000);
+        }
         
         // Check when tab becomes visible
         document.addEventListener('visibilitychange', function() {
