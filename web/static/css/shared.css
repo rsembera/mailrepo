@@ -234,12 +234,13 @@ a.btn:hover {
 }
 
 .btn-danger {
-    background: var(--color-danger);
-    color: white;
+    background: transparent;
+    border: 1px solid var(--color-danger);
+    color: var(--color-danger);
 }
 
 .btn-danger:hover:not(:disabled) {
-    background: var(--color-danger-hover);
+    background: color-mix(in srgb, var(--color-danger) 12%, transparent);
 }
 
 .btn-outline-danger {
