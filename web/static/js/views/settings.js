@@ -84,7 +84,7 @@ function renderSettingsView() {
                     <i data-lucide="shield" class="section-icon"></i>
                     <div class="section-text">
                         <h3>Security</h3>
-                        <p>Change your password</p>
+                        <p>Session timeout and password settings</p>
                     </div>
                 </div>
                 <div class="settings-section-body" id="securityBody" style="display: none;">
