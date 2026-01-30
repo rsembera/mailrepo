@@ -799,7 +799,10 @@ function renderHtmlBody(container, html, allowRemote = false) {
     doc.open();
     
     // If not allowing remote, block external resources via CSP
-    const cspMeta = allowRemote ? '' : `<meta http-equiv="Content-Security-Policy" content="img-src 'self' data: cid:; default-src 'self' 'unsafe-inline';">`;
+    // If allowing remote, explicitly permit all sources (Safari needs this)
+    const cspMeta = allowRemote 
+        ? `<meta http-equiv="Content-Security-Policy" content="img-src * data: blob:; style-src * 'unsafe-inline'; font-src * data:; default-src * 'unsafe-inline';">`
+        : `<meta http-equiv="Content-Security-Policy" content="img-src 'self' data: cid:; default-src 'self' 'unsafe-inline';">`;
     
     doc.write(`
         <!DOCTYPE html>
