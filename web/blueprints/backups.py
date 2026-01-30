@@ -2,12 +2,14 @@
 """
 MailRepo Backups Blueprint
 Handles all backup and restore functionality
+
+Note: Authentication is handled by the app's before_request hook,
+so no @login_required decorator is needed on these routes.
 """
 
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, request, jsonify
 from pathlib import Path
 
-from web.blueprints.api.auth import login_required
 from core.database import get_setting, set_setting, Database
 
 # Initialize blueprint
@@ -15,22 +17,10 @@ backups_bp = Blueprint('backups', __name__)
 
 
 # ============================================================================
-# BACKUPS PAGE
-# ============================================================================
-
-@backups_bp.route('/backups')
-@login_required
-def backups_page():
-    """Backups page."""
-    return render_template('backups.html')
-
-
-# ============================================================================
 # BACKUP STATUS & SETTINGS
 # ============================================================================
 
 @backups_bp.route('/api/backup/status')
-@login_required
 def backup_status():
     """Get current backup status."""
     from utils import backup
@@ -58,7 +48,6 @@ def backup_status():
 
 
 @backups_bp.route('/api/backup/settings', methods=['POST'])
-@login_required
 def save_backup_settings():
     """Save backup settings."""
     data = request.get_json()
@@ -94,7 +83,6 @@ def save_backup_settings():
 # ============================================================================
 
 @backups_bp.route('/api/backup/now', methods=['POST'])
-@login_required
 def backup_now():
     """Trigger immediate backup. System auto-decides full vs incremental."""
     from utils import backup
@@ -142,7 +130,6 @@ def backup_now():
 
 
 @backups_bp.route('/api/backup/list')
-@login_required
 def list_backups():
     """List all available backups."""
     from utils import backup
@@ -156,7 +143,6 @@ def list_backups():
 # ============================================================================
 
 @backups_bp.route('/api/backup/restore-points')
-@login_required
 def restore_points():
     """Get available restore points."""
     from utils import backup
@@ -166,7 +152,6 @@ def restore_points():
 
 
 @backups_bp.route('/api/backup/prepare-restore', methods=['POST'])
-@login_required
 def prepare_restore():
     """Prepare restore from a specific point."""
     from utils import backup
@@ -189,7 +174,6 @@ def prepare_restore():
 
 
 @backups_bp.route('/api/backup/cancel-restore', methods=['POST'])
-@login_required
 def cancel_restore():
     """Cancel pending restore."""
     from utils import backup
@@ -206,7 +190,6 @@ def cancel_restore():
 # ============================================================================
 
 @backups_bp.route('/api/backup/cloud-folders')
-@login_required
 def cloud_folders():
     """Detect available cloud sync folders."""
     from utils import backup
@@ -220,7 +203,6 @@ def cloud_folders():
 # ============================================================================
 
 @backups_bp.route('/api/backup/list-folders')
-@login_required
 def list_folders():
     """List folders at a given path for the folder picker modal.
     
