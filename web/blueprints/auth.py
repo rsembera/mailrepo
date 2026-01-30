@@ -129,12 +129,55 @@ def login():
 
 @auth_bp.route("/logout", methods=["GET", "POST"])
 def logout():
-    """Log out and lock encryption."""
+    """Log out, run backup check, and lock encryption."""
+    # Run automatic backup check before closing database
+    _run_auto_backup_check()
+    
     Database.close()
     Encryption.lock()
     session.clear()
     flash("You have been logged out.", "info")
     return redirect(url_for("auth.login"))
+
+
+def _run_auto_backup_check():
+    """Run automatic backup if frequency setting requires it."""
+    try:
+        from utils import backup
+        import subprocess
+        
+        # Checkpoint WAL first so backup captures all changes
+        Database.checkpoint()
+        
+        frequency = get_setting('backup_frequency', 'daily')
+        print(f"[Backup] Frequency setting: {frequency}")
+        
+        if backup.check_backup_needed(frequency):
+            print("[Backup] Backup needed, creating...")
+            location = get_setting('backup_location', '')
+            if not location:
+                location = None  # Use default
+            result = backup.create_backup(location)
+            if result:
+                print(f"[Backup] Automatic backup completed: {result['filename']}")
+                
+                # Run post-backup command if configured
+                post_cmd = get_setting('post_backup_command', '')
+                if post_cmd:
+                    try:
+                        subprocess.run(post_cmd, shell=True, timeout=300)
+                        print("[Backup] Post-backup command completed")
+                    except Exception as cmd_error:
+                        print(f"[Backup] Post-backup command error: {cmd_error}")
+            else:
+                print("[Backup] No changes to backup")
+            
+            # Record that we checked today (whether backup created or not)
+            backup.record_backup_check()
+        else:
+            print("[Backup] Backup not needed (frequency check)")
+    except Exception as e:
+        print(f"[Backup] Auto-backup failed: {e}")
 
 
 @auth_bp.route("/api/verify-password", methods=["POST"])

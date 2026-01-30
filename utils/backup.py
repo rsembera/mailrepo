@@ -912,3 +912,67 @@ def detect_cloud_folders():
         })
     
     return cloud_folders
+
+
+def check_backup_needed(frequency='daily'):
+    """
+    Check if an automatic backup should run.
+    
+    Uses CALENDAR DATE comparison against last check date, not hours:
+    - 'daily': check if last check was on a different calendar date
+    - 'weekly': check if last check was 7+ calendar days ago
+    - 'session': always run on logout
+    
+    Args:
+        frequency: 'session', 'daily', 'weekly', or 'manual'
+    
+    Returns:
+        True if backup should run, False otherwise
+    """
+    if frequency == 'manual':
+        return False
+    
+    if frequency == 'session':
+        return True  # Always backup on logout
+    
+    manifest = load_manifest()
+    backups = manifest['backups']
+    
+    if not backups:
+        return True  # No backups exist
+    
+    # Find most recent backup
+    all_backups = [b for b in backups if b['type'] in ('full', 'incremental')]
+    
+    if not all_backups:
+        return True
+    
+    now = datetime.now()
+    today = now.date()
+    
+    # Use last_backup_check if available, otherwise fall back to last backup date
+    last_check = manifest.get('last_backup_check')
+    if last_check:
+        last_date = datetime.fromisoformat(last_check).date()
+    else:
+        # Legacy: no check recorded, use last backup date
+        last_any = max(all_backups, key=lambda x: x['created_at'])
+        last_date = datetime.fromisoformat(last_any['created_at']).date()
+    
+    # Use calendar date comparison
+    if frequency == 'daily' and today > last_date:
+        return True
+    elif frequency == 'weekly' and (today - last_date).days >= 7:
+        return True
+    
+    return False
+
+
+def record_backup_check():
+    """
+    Record that we checked for backup today.
+    Called after backup attempt (whether successful or no changes).
+    """
+    manifest = load_manifest()
+    manifest['last_backup_check'] = datetime.now().isoformat()
+    save_manifest(manifest)
