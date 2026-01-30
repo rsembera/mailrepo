@@ -731,8 +731,8 @@ function renderEmailContent(email, context = null) {
                         <i data-lucide="paperclip"></i>
                         <span class="attachment-name">${escapeHtml(att.filename)}</span>
                         <span class="attachment-actions">
-                            ${isViewable ? `<a href="${viewUrl}" target="_blank" class="attachment-action" title="Open in new tab"><i data-lucide="external-link"></i></a>` : ''}
                             <a href="${downloadUrl}" download class="attachment-action" title="Download"><i data-lucide="download"></i></a>
+                            ${isViewable ? `<a href="${viewUrl}" target="_blank" class="attachment-action" title="Open in new tab"><i data-lucide="external-link"></i></a>` : ''}
                         </span>
                     </div>
                 `;
