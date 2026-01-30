@@ -407,8 +407,8 @@ def list_backups():
     
     for backup in manifest['backups']:
         # Check if file still exists
-        backup_dir = Path(backup.get('backup_dir', get_backups_dir()))
-        backup_path = backup_dir / backup['filename']
+        # Always use current backups directory (app may have moved)
+        backup_path = get_backups_dir() / backup['filename']
         
         if backup_path.exists():
             backups.append({
@@ -462,7 +462,8 @@ def get_restore_points():
         # Handle pre_restore backups (standalone, not part of a chain)
         if chain_id == 'pre_restore' and chain.get('pre_restore'):
             backup = chain['pre_restore']
-            backup_path = Path(backup.get('backup_dir', get_backups_dir())) / backup['filename']
+            # Always use current backups directory (app may have moved)
+            backup_path = get_backups_dir() / backup['filename']
             if backup_path.exists():
                 # Format date with time
                 created = datetime.fromisoformat(backup['created_at'])
@@ -492,7 +493,8 @@ def get_restore_points():
         
         # Full backup as restore point
         full_backup = chain['full']
-        backup_path = Path(full_backup.get('backup_dir', get_backups_dir())) / full_backup['filename']
+        # Always use current backups directory (app may have moved)
+        backup_path = get_backups_dir() / full_backup['filename']
         
         if backup_path.exists():
             # Format date with time
@@ -514,7 +516,8 @@ def get_restore_points():
         # Each incremental in the chain is also a restore point
         files_needed = [str(backup_path)]
         for i, incr in enumerate(chain['incrementals']):
-            incr_path = Path(incr.get('backup_dir', get_backups_dir())) / incr['filename']
+            # Always use current backups directory (app may have moved)
+            incr_path = get_backups_dir() / incr['filename']
             if incr_path.exists():
                 files_needed = files_needed + [str(incr_path)]
                 
@@ -774,14 +777,16 @@ def cleanup_old_backups(retention, custom_location=None):
         chain = chains[chain_id]
         
         for incr in chain['incrementals']:
-            incr_path = Path(incr.get('backup_dir', backup_dir)) / incr['filename']
+            # Always use current backups directory (app may have moved)
+            incr_path = backup_dir / incr['filename']
             if incr_path.exists():
                 incr_path.unlink()
             if incr in manifest['backups']:
                 manifest['backups'].remove(incr)
         
         if chain['full']:
-            full_path = Path(chain['full'].get('backup_dir', backup_dir)) / chain['full']['filename']
+            # Always use current backups directory (app may have moved)
+            full_path = backup_dir / chain['full']['filename']
             if full_path.exists():
                 full_path.unlink()
             if chain['full'] in manifest['backups']:
@@ -795,7 +800,8 @@ def cleanup_old_backups(retention, custom_location=None):
     safety_deleted = 0
     for backup in safety_backups:
         if backup['created_at'] < cutoff_date:
-            backup_path = Path(backup.get('backup_dir', backup_dir)) / backup['filename']
+            # Always use current backups directory (app may have moved)
+            backup_path = backup_dir / backup['filename']
             if backup_path.exists():
                 backup_path.unlink()
             if backup in manifest['backups']:
