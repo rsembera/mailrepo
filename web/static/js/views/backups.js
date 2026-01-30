@@ -5,6 +5,7 @@
  */
 
 import { initCustomSelects } from '../components/custom-select.js';
+import { setBackupsUnsavedChecker, setBackupsUnsavedClearer } from '../state.js';
 
 let contextTitle = null;
 let contextMeta = null;
@@ -13,6 +14,8 @@ let emailList = null;
 // State
 let folderPickerCurrentPath = '';
 let folderPickerParentPath = null;
+let hasUnsavedChanges = false;
+let initialSettings = {};
 
 /**
  * Initialize the backups view.
@@ -21,6 +24,10 @@ export function initBackupsView(config) {
     contextTitle = config.contextTitle;
     contextMeta = config.contextMeta;
     emailList = config.emailList;
+    
+    // Register with state.js for navigation guard
+    setBackupsUnsavedChecker(() => hasUnsavedChanges);
+    setBackupsUnsavedClearer(() => { hasUnsavedChanges = false; });
 }
 
 /**
@@ -41,6 +48,9 @@ export function showBackupsView() {
     // Update header
     contextTitle.textContent = 'Backup & Restore';
     contextMeta.textContent = '';
+    
+    // Reset state
+    hasUnsavedChanges = false;
     
     // Render the view
     renderBackupsView();
@@ -86,7 +96,10 @@ function renderBackupsView() {
             
             <!-- Settings Section -->
             <div class="backup-section">
-                <h3>Backup Settings</h3>
+                <div class="backup-section-header">
+                    <h3>Backup Settings</h3>
+                    <button class="btn btn-primary" id="save-settings-btn" disabled>Save Settings</button>
+                </div>
                 <div class="backup-settings-grid">
                     <div class="form-group">
                         <label class="setting-label">Automatic Backups</label>
@@ -216,8 +229,14 @@ function initBackupHandlers() {
     // Backup now button
     document.getElementById('backup-now-btn').addEventListener('click', performBackup);
     
-    // Cancel restore button
-    document.getElementById('cancel-restore-btn')?.addEventListener('click', cancelRestore);
+    // Cancel restore button (in alert)
+    const cancelRestoreBtn = document.getElementById('cancel-restore-btn');
+    if (cancelRestoreBtn) {
+        cancelRestoreBtn.addEventListener('click', cancelRestore);
+    }
+    
+    // Save settings button
+    document.getElementById('save-settings-btn').addEventListener('click', saveSettings);
     
     // Restore button
     document.getElementById('prepare-restore-btn').addEventListener('click', showRestoreModal);
@@ -231,22 +250,19 @@ function initBackupHandlers() {
         document.getElementById('prepare-restore-btn').disabled = !e.detail.value;
     });
     
-    // Settings change handlers
-    document.getElementById('backup-frequency-select').addEventListener('change', () => saveSettings('frequency'));
-    document.getElementById('backup-retention-select').addEventListener('change', () => saveSettings('retention'));
-    document.getElementById('backup-location-select').addEventListener('change', handleLocationChange);
-    
-    // Custom location input
-    document.getElementById('custom-location-input').addEventListener('blur', () => saveSettings('location'));
-    document.getElementById('custom-location-input').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            saveSettings('location');
-        }
+    // Track changes to settings
+    document.getElementById('backup-frequency-select').addEventListener('change', markSettingsChanged);
+    document.getElementById('backup-retention-select').addEventListener('change', markSettingsChanged);
+    document.getElementById('backup-location-select').addEventListener('change', (e) => {
+        handleLocationChange(e);
+        markSettingsChanged();
     });
     
+    // Custom location input
+    document.getElementById('custom-location-input').addEventListener('input', markSettingsChanged);
+    
     // Post-backup command
-    document.getElementById('post-backup-command').addEventListener('blur', () => saveSettings('post_backup_command'));
+    document.getElementById('post-backup-command').addEventListener('input', markSettingsChanged);
     
     // Folder picker
     document.getElementById('browse-folder-btn').addEventListener('click', openFolderPicker);
@@ -254,6 +270,14 @@ function initBackupHandlers() {
     document.getElementById('cancel-folder-picker-btn').addEventListener('click', closeFolderPicker);
     document.getElementById('select-folder-btn').addEventListener('click', selectCurrentFolder);
     document.getElementById('folder-up-btn').addEventListener('click', navigateToParent);
+}
+
+/**
+ * Mark that settings have been changed.
+ */
+function markSettingsChanged() {
+    hasUnsavedChanges = true;
+    document.getElementById('save-settings-btn').disabled = false;
 }
 
 /**
@@ -268,16 +292,26 @@ async function loadBackupStatus() {
         document.getElementById('last-backup-display').textContent = data.last_backup_display || 'Never';
         document.getElementById('backup-count').textContent = data.backup_count || 0;
         
-        // Set settings values
-        if (data.frequency) {
-            const freqSelect = document.getElementById('backup-frequency-select');
-            if (freqSelect._customSelect) freqSelect._customSelect.setValue(data.frequency);
-        }
+        // Store initial settings for change detection
+        initialSettings = {
+            frequency: data.frequency || 'daily',
+            retention: data.retention || 'forever',
+            location: data.location || '',
+            post_backup_command: data.post_backup_command || ''
+        };
         
-        if (data.retention) {
+        // Set settings values after custom selects are initialized
+        setTimeout(() => {
+            const freqSelect = document.getElementById('backup-frequency-select');
+            if (freqSelect && freqSelect._customSelect) {
+                freqSelect._customSelect.setValue(initialSettings.frequency);
+            }
+            
             const retSelect = document.getElementById('backup-retention-select');
-            if (retSelect._customSelect) retSelect._customSelect.setValue(data.retention);
-        }
+            if (retSelect && retSelect._customSelect) {
+                retSelect._customSelect.setValue(initialSettings.retention);
+            }
+        }, 50);
         
         if (data.post_backup_command !== undefined) {
             document.getElementById('post-backup-command').value = data.post_backup_command;
@@ -316,9 +350,8 @@ function populateLocationDropdown(cloudFolders, savedLocation) {
     
     optionsHtml += '<div class="custom-select-option" data-value="custom">Custom...</div>';
     
-    // Update the select element and reinitialize
+    // Update the select element
     selectEl.innerHTML = optionsHtml;
-    selectEl.classList.remove('initialized');
     
     // Determine initial value
     let initialValue = 'default';
@@ -327,15 +360,22 @@ function populateLocationDropdown(cloudFolders, savedLocation) {
             initialValue = 'custom';
             document.getElementById('custom-location-input').value = savedLocation;
             document.getElementById('custom-location-wrapper').classList.remove('hidden');
-        } else if (savedLocation !== 'default') {
+        } else if (savedLocation !== '' && savedLocation !== 'default') {
             initialValue = savedLocation;
         }
     }
     
     selectEl.dataset.value = initialValue;
+    selectEl.classList.remove('initialized');
     initCustomSelects(selectEl.parentElement);
     
-    updateLocationPath();
+    // Set value after initialization
+    setTimeout(() => {
+        if (selectEl._customSelect) {
+            selectEl._customSelect.setValue(initialValue);
+        }
+        updateLocationPath();
+    }, 50);
 }
 
 /**
@@ -343,15 +383,10 @@ function populateLocationDropdown(cloudFolders, savedLocation) {
  */
 function handleLocationChange(e) {
     updateLocationPath();
-    if (e.detail.value === 'custom') {
+    if (e.detail && e.detail.value === 'custom') {
         document.getElementById('custom-location-wrapper').classList.remove('hidden');
-        const customPath = document.getElementById('custom-location-input').value.trim();
-        if (customPath) {
-            saveSettings('location');
-        }
     } else {
         document.getElementById('custom-location-wrapper').classList.add('hidden');
-        saveSettings('location');
     }
 }
 
@@ -580,9 +615,9 @@ async function performBackup() {
 }
 
 /**
- * Save settings.
+ * Save all settings.
  */
-async function saveSettings(settingType) {
+async function saveSettings() {
     const freqSelect = document.getElementById('backup-frequency-select');
     const retSelect = document.getElementById('backup-retention-select');
     const locSelect = document.getElementById('backup-location-select');
@@ -595,15 +630,15 @@ async function saveSettings(settingType) {
     
     if (location === 'custom') {
         location = document.getElementById('custom-location-input').value.trim();
-        if (!location && settingType === 'location') {
+        if (!location) {
             showMessage('Please enter a custom backup path', 'error');
             return;
         }
     }
     
-    if (settingType === 'location') {
-        updateLocationPath();
-    }
+    const saveBtn = document.getElementById('save-settings-btn');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
     
     try {
         const response = await fetch('/api/backup/settings', {
@@ -620,26 +655,33 @@ async function saveSettings(settingType) {
         const data = await response.json();
         
         if (data.success) {
-            const settingNames = {
-                'frequency': 'Automatic backup setting',
-                'retention': 'Retention period',
-                'location': 'Backup location',
-                'post_backup_command': 'Post-backup command'
+            showMessage('Settings saved', 'success');
+            hasUnsavedChanges = false;
+            
+            // Update initial settings
+            initialSettings = {
+                frequency,
+                retention,
+                location: location === 'default' ? '' : location,
+                post_backup_command: postBackupCommand
             };
-            showMessage(`${settingNames[settingType] || 'Setting'} saved`, 'success');
             
             setTimeout(() => {
                 const msgEl = document.getElementById('backup-message');
                 if (msgEl && msgEl.classList.contains('success')) {
                     msgEl.classList.add('hidden');
                 }
-            }, 2000);
+            }, 3000);
         } else {
             showMessage('Failed to save: ' + (data.error || 'Unknown error'), 'error');
+            saveBtn.disabled = false;
         }
     } catch (error) {
-        console.error('Save setting error:', error);
-        showMessage('Failed to save: ' + error.message, 'error');
+        console.error('Save settings error:', error);
+        showMessage('Failed to save settings', 'error');
+        saveBtn.disabled = false;
+    } finally {
+        saveBtn.textContent = 'Save Settings';
     }
 }
 
@@ -653,7 +695,7 @@ function showRestoreModal() {
     if (!selectedValue) return;
     
     // Get selected label
-    const selectedItem = selectEl.querySelector(`.custom-select-item.selected`);
+    const selectedItem = selectEl.querySelector('.custom-select-item.selected');
     const selectedText = selectedItem ? selectedItem.textContent : 'Unknown backup';
     
     document.getElementById('modal-restore-point').textContent = selectedText;
@@ -695,7 +737,7 @@ async function confirmRestore() {
         }
     } catch (error) {
         console.error('Restore error:', error);
-        showMessage('Failed to prepare restore: ' + error.message, 'error');
+        showMessage('Failed to prepare restore', 'error');
     }
 }
 
@@ -720,7 +762,7 @@ async function cancelRestore() {
         }
     } catch (error) {
         console.error('Cancel restore error:', error);
-        showMessage('Failed to cancel restore: ' + error.message, 'error');
+        showMessage('Failed to cancel restore', 'error');
     }
 }
 
@@ -846,7 +888,7 @@ function selectCurrentFolder() {
         
         document.getElementById('custom-location-wrapper').classList.remove('hidden');
         updateLocationPath();
-        saveSettings('location');
+        markSettingsChanged();
     }
     
     closeFolderPicker();

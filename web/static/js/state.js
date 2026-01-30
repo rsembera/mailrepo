@@ -8,12 +8,24 @@ import { showConfirm } from './modals.js';
 let getSelectedFoldersCount = () => 0;
 let clearSelectedFolders = () => {};
 
+// Reference to backup unsaved changes checker (set by backups.js)
+let checkBackupsUnsaved = () => false;
+let clearBackupsUnsaved = () => {};
+
 export function setSelectedFoldersGetter(fn) {
     getSelectedFoldersCount = fn;
 }
 
 export function setSelectedFoldersClearer(fn) {
     clearSelectedFolders = fn;
+}
+
+export function setBackupsUnsavedChecker(fn) {
+    checkBackupsUnsaved = fn;
+}
+
+export function setBackupsUnsavedClearer(fn) {
+    clearBackupsUnsaved = fn;
 }
 
 /**
@@ -38,6 +50,21 @@ export const state = {
 export async function confirmNavigation() {
     const emailCount = state.selectedEmails.size;
     const folderCount = getSelectedFoldersCount();
+    const hasBackupsUnsaved = checkBackupsUnsaved();
+    
+    // Check backup settings first (separate dialog)
+    if (hasBackupsUnsaved) {
+        const confirmed = await showConfirm(
+            'Unsaved Settings',
+            'You have unsaved backup settings. Leave without saving?',
+            { confirmText: 'Leave', cancelText: 'Stay', confirmClass: 'btn-danger' }
+        );
+        
+        if (!confirmed) {
+            return false;
+        }
+        clearBackupsUnsaved();
+    }
     
     if (emailCount === 0 && folderCount === 0) {
         return true; // No selections, proceed
