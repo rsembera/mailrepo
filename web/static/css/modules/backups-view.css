@@ -2,10 +2,16 @@
    BACKUPS VIEW
    ============================================ */
 
+/* Prevent double scrollbar - email-list becomes non-scrolling container */
+.email-list:has(.backups-view) {
+    overflow: visible;
+}
+
 .backups-view {
     max-width: 700px;
     margin: 0 auto;
     padding: var(--space-lg);
+    padding-bottom: calc(var(--space-lg) * 3);
 }
 
 /* Card styling (matches settings view) */

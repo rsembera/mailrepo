@@ -10,6 +10,7 @@ Or use the installed command:
 """
 
 import sys
+import logging
 from pathlib import Path
 
 # Add project root to path for imports
@@ -19,8 +20,30 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from web import create_app
 
 
+class PollingFilter(logging.Filter):
+    """Filter out noisy polling endpoint log messages."""
+    
+    POLLING_PATHS = [
+        'GET /api/session-status',
+        'GET /api/keepalive', 
+        'HEAD / ',  # Heartbeat check
+    ]
+    
+    def filter(self, record):
+        message = record.getMessage()
+        # Filter out polling requests (only successful ones)
+        for path in self.POLLING_PATHS:
+            if path in message and '200' in message:
+                return False
+        return True
+
+
 def main():
     """Application entry point."""
+    # Suppress polling endpoint logging
+    werkzeug_logger = logging.getLogger('werkzeug')
+    werkzeug_logger.addFilter(PollingFilter())
+    
     app = create_app()
     
     # Development server settings
