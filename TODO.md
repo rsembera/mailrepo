@@ -17,9 +17,9 @@
 ### Core Features (from EdgeCase)
 - [ ] Automatic timeout (← EdgeCase)
 - [ ] Settings → reset database (← EdgeCase)
-- [ ] Backup system (← EdgeCase) - new icon & page
 
 ### Completed
+- [x] Backup system (← EdgeCase) - full/incremental backups, restore, cloud folders, retention policies
 - [x] Add .pst import support (requires libpst-utils: apt install pst-utils)
 - [x] ZIP export for archived folders
 - [x] Progress indicator for ZIP export
