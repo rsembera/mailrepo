@@ -36,10 +36,13 @@ class PollingFilter(logging.Filter):
     
     def filter(self, record):
         message = record.getMessage()
-        # Filter out polling requests (only successful ones)
+        # Filter out polling requests (any status code)
         for path in self.POLLING_PATHS:
-            if path in message and '200' in message:
+            if path in message:
                 return False
+        # Filter out static file requests (304 Not Modified)
+        if '/static/' in message and '304' in message:
+            return False
         return True
 
 
