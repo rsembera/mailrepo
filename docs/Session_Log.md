@@ -4,6 +4,54 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## January 30, 2026 — Evening Session (Session 25)
+
+**Participants:** Rick, Claude
+
+**Work Done:**
+
+### Bug Fixes
+
+1. **Backup directory portability fix** (`e8105a3`)
+   - Backups weren't being found after moving app from `/Users/rick/apps/mailrepo` to `/Users/rick/Applications/mailrepo`
+   - Root cause: manifest.json stored absolute `backup_dir` path at backup creation time
+   - Fix: Always use current `get_backups_dir()` instead of stored path from manifest
+   - Affected functions: `list_backups()`, `get_restore_points()`, `cleanup_old_backups()`
+
+2. **Double scrollbar on Backups page** (`afbe57c`, `770dfbb`)
+   - Backups view was showing two scrollbars
+   - Fix: Added CSS `:has()` rule to disable parent scroll when showing backups view
+
+3. **Sidebar folder tree broken** (`770dfbb`)
+   - Archive folders rendering with huge spacing, children appearing inline instead of below
+   - Root cause: `backups-view.css` had global `.folder-item` rule with `display: flex`
+   - Fix: Scoped all folder-item rules to `.folder-picker-container .folder-item`
+
+### Logging Improvements
+
+1. **Suppress polling log messages** (`afbe57c`, `8edf172`)
+   - Added `PollingFilter` class to filter out noisy werkzeug logs
+   - Suppresses: `/api/session-status`, `/api/keepalive`, heartbeat `HEAD /` requests
+   - Also suppresses static file 304 responses
+
+2. **Backup on shutdown with logging** (`1caa02d`)
+   - Added shutdown handlers (SIGINT, SIGTERM) like EdgeCase
+   - Checkpoints WAL before backup
+   - Checks backup frequency setting to determine if backup needed
+   - Prints "Backup completed: {filename}" to terminal
+   - Runs post-backup command if configured
+
+**Commits:**
+- `e8105a3` — Fix: Always use current backups directory, not stored path from manifest
+- `afbe57c` — Fix: Double scrollbar on Backups page, suppress polling log messages
+- `1caa02d` — Add backup on shutdown with logging (like EdgeCase)
+- `8edf172` — Suppress static file 304 responses and all polling status codes from logs
+- `770dfbb` — Fix: Scope folder-item styles to backup picker only
+
+**Status:** All backup and logging issues resolved. App is now portable (can be moved to different directory).
+
+---
+
 ## January 27, 2026 — Morning Session (Session 19)
 
 **Participants:** Rick, Claude
