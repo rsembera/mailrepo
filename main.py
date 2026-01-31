@@ -9,6 +9,8 @@ Or use the installed command:
     mailrepo
 """
 
+import atexit
+import signal
 import sys
 import logging
 from pathlib import Path
@@ -18,6 +20,9 @@ PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from web import create_app
+
+# Track if cleanup has run to avoid running twice
+_cleanup_done = False
 
 
 class PollingFilter(logging.Filter):
@@ -38,6 +43,52 @@ class PollingFilter(logging.Filter):
         return True
 
 
+def _cleanup(app):
+    """Cleanup function - backup and checkpoint database before exit."""
+    global _cleanup_done
+    if _cleanup_done:
+        return
+    _cleanup_done = True
+    
+    try:
+        import subprocess
+        from core.database import Database, get_setting
+        
+        with app.app_context():
+            # Checkpoint WAL first so backup captures all changes
+            Database.checkpoint()
+            
+            # Run backup check before shutdown
+            try:
+                from utils import backup
+                frequency = get_setting('backup_frequency', 'daily')
+                if backup.check_backup_needed(frequency):
+                    location = get_setting('backup_location', '')
+                    result = backup.create_backup(location if location else None)
+                    if result:
+                        print(f"Backup completed: {result['filename']}")
+                        # Run post-backup command if configured
+                        post_cmd = get_setting('post_backup_command', '')
+                        if post_cmd:
+                            try:
+                                subprocess.run(post_cmd, shell=True, timeout=300)
+                                print("Post-backup command completed")
+                            except Exception as cmd_error:
+                                print(f"Post-backup command error: {cmd_error}")
+                    backup.record_backup_check()
+            except Exception as e:
+                print(f"Backup warning: {e}")
+    except Exception:
+        pass  # Silent fail on exit
+
+
+def shutdown_handler(signum, frame, app):
+    """Handle Ctrl-C gracefully - backup and checkpoint database before exit."""
+    print("\n\nShutting down...")
+    _cleanup(app)
+    sys.exit(0)
+
+
 def main():
     """Application entry point."""
     # Suppress polling endpoint logging
@@ -45,6 +96,11 @@ def main():
     werkzeug_logger.addFilter(PollingFilter())
     
     app = create_app()
+    
+    # Register cleanup handlers
+    atexit.register(lambda: _cleanup(app))
+    signal.signal(signal.SIGINT, lambda s, f: shutdown_handler(s, f, app))
+    signal.signal(signal.SIGTERM, lambda s, f: shutdown_handler(s, f, app))
     
     # Development server settings
     host = "127.0.0.1"
