@@ -1,22 +1,36 @@
 # MailRepo Session Notes
 
-**Date:** January 27, 2026  
-**Last Updated:** Session 20
+**Date:** February 1, 2026  
+**Last Updated:** Session 26
 
 ---
 
-## Completed Today (Session 20)
+## Completed Today (Session 26)
 
-### Attachment Viewing Enhancement
-- Added "Open in browser" option for viewable attachments (PDFs, images, text files)
-- Backend: Added `?view=1` query param to serve files with `inline` disposition
-- Frontend: Two-icon layout — Download icon + Open icon (for viewable types)
-- Added `isViewableInBrowser()` helper detecting PDFs, images, text, HTML, JSON, SVG
-- Non-viewable attachments (Word, Excel, etc.) show only Download icon
+### Danger Zone - Reset Database Feature
+- Ported "Reset Database" functionality from EdgeCase
+- Added new Danger Zone section to Settings view with warning styling
+- Backend endpoint `/api/reset_database` handles:
+  - Password verification via Encryption.unlock()
+  - "RESET" confirmation text validation
+  - Database deletion (including WAL/SHM files)
+  - Archive directory cleanup
+  - Backups directory cleanup
+  - Salt file deletion (forces new password setup on restart)
+  - Session clearing
+- Frontend modal with password + "RESET" confirmation inputs
+- Added danger zone CSS styling (red accents, warning box)
+- Added `.text-danger` utility class and button spinner animation
+
+**Commit:** `9c534d3` — Add Danger Zone with Reset Database feature (ported from EdgeCase)
 
 ---
 
 ## Previous Sessions Summary
+
+**Session 25:** Backup directory portability fix, double scrollbar fix, sidebar folder tree fix, logging improvements, backup on shutdown
+
+**Session 20:** Attachment viewing enhancement (open in browser option)
 
 **Session 19:** Code cleanup, destination modal polish, archive/IMAP folder navigation redesign with breadcrumbs and subfolder links, refactoring plan created
 
@@ -31,17 +45,17 @@
 ## Current State
 
 - **Server:** Runs on port 5050
-- **All features working:** Email/folder staging, commit, ZIP export, folder management, after-commit actions, attachment viewing
+- **All features working:** Email/folder staging, commit, ZIP export, folder management, after-commit actions, attachment viewing, database reset
 - **Git:** Commits pushed to origin/main
 
 ---
 
 ## TODO / Next Steps
 
-1. **Next Session:** Review refactoring plan or continue with features
-2. Test Apple mbox imports thoroughly
-3. Comprehensive manual testing checklist for release
-4. Address remaining items in TODO.md
+1. Test Apple mbox imports thoroughly
+2. Comprehensive manual testing checklist for release
+3. Address remaining items in TODO.md
+4. Review refactoring plan (docs/Refactoring_Plan_V2.md)
 
 ---
 
