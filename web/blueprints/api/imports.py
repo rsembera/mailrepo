@@ -350,6 +350,8 @@ def download_import_attachment():
     from email.header import decode_header
     from .email_parser import get_raw_email_from_import, _parse_apple_mbox, _parse_eml_directory
     from flask import Response
+    from utils.log import get_logger
+    log = get_logger()
     
     data = request.get_json() or {}
     source_path = data.get("sourcePath", "").strip()
@@ -359,6 +361,9 @@ def download_import_attachment():
     email_source_path = data.get("emailSourcePath", "").strip()
     index = data.get("index", 0)
     view_inline = data.get("inline", False)
+    
+    log.debug(f"Import attachment request: type={import_type}, uid={uid}, index={index}")
+    log.debug(f"  sourcePath={source_path}, emailSourcePath={email_source_path}, folderPath={folder_path}")
     
     if not source_path and not email_source_path:
         return jsonify({"error": "Source path is required"}), 400
