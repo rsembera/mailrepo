@@ -140,6 +140,12 @@
     color: var(--color-text-muted);
     text-decoration: none;
     transition: color 0.15s, background-color 0.15s;
+    /* Reset button styles for consistency */
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font: inherit;
 }
 
 .attachment-action:hover {
