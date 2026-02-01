@@ -114,3 +114,76 @@ def keepalive():
     # Update last activity timestamp
     session["last_activity"] = time.time()
     return jsonify({"success": True})
+
+
+# ============================================================================
+# DATABASE RESET
+# ============================================================================
+
+@api_bp.route("/reset_database", methods=["POST"])
+def reset_database():
+    """
+    Reset the entire database and delete all user data.
+    Requires password confirmation and typing 'RESET' to confirm.
+    """
+    import shutil
+    from pathlib import Path
+    from core.config import Config
+    from core.encryption import Encryption
+    
+    data = request.get_json()
+    password = data.get("password", "")
+    confirmation = data.get("confirmation", "")
+    
+    # Validate confirmation text
+    if confirmation != "RESET":
+        return jsonify({"success": False, "error": "Please type RESET to confirm"}), 400
+    
+    # Validate password
+    try:
+        Encryption.unlock(password)
+    except Exception:
+        return jsonify({"success": False, "error": "Incorrect password"}), 401
+    
+    try:
+        # Close database connection
+        Database.close()
+        
+        # Delete database file
+        db_path = Config.get_database_path()
+        if db_path.exists():
+            db_path.unlink()
+        
+        # Delete WAL and SHM files if they exist
+        for ext in ["-wal", "-shm"]:
+            wal_path = db_path.parent / f"{db_path.name}{ext}"
+            if wal_path.exists():
+                wal_path.unlink()
+        
+        # Delete archive directory contents
+        archive_path = Config.get_archive_path()
+        if archive_path.exists():
+            shutil.rmtree(archive_path)
+            archive_path.mkdir(parents=True, exist_ok=True)
+        
+        # Delete backups directory contents
+        backups_path = Config.get_backup_path()
+        if backups_path.exists():
+            shutil.rmtree(backups_path)
+            backups_path.mkdir(parents=True, exist_ok=True)
+        
+        # Delete salt file (forces new password setup)
+        salt_path = Config.get_salt_path()
+        if salt_path.exists():
+            salt_path.unlink()
+        
+        # Clear session to force re-login
+        session.clear()
+        
+        return jsonify({
+            "success": True,
+            "message": "Database reset complete. You will be redirected to set up a new password."
+        })
+        
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500

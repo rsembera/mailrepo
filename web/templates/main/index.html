@@ -535,6 +535,39 @@
         </button>
     </div>
 </div>
+
+<!-- Reset Database Modal -->
+<div class="modal-overlay" id="resetDatabaseModal">
+    <div class="modal-content" style="max-width: 450px;">
+        <div class="modal-header">
+            <h2 style="color: var(--color-danger);">
+                <i data-lucide="alert-triangle" class="icon-inline"></i>
+                Reset Database
+            </h2>
+        </div>
+        <p style="margin-bottom: var(--space-md);">This will permanently delete <strong>all data</strong> and cannot be undone.</p>
+        
+        <div class="form-group">
+            <label for="resetPassword">Enter your password to confirm:</label>
+            <input type="password" id="resetPassword" class="form-input" placeholder="Your current password">
+        </div>
+        
+        <div class="form-group">
+            <label for="resetConfirmation">Type <strong>RESET</strong> to confirm:</label>
+            <input type="text" id="resetConfirmation" class="form-input" placeholder="Type RESET here" autocomplete="off">
+        </div>
+        
+        <div id="resetError" class="text-danger" style="display: none; margin-bottom: var(--space-md); font-size: 0.875rem;"></div>
+        
+        <div class="modal-actions">
+            <button onclick="closeResetDatabaseModal()" class="btn btn-secondary">Cancel</button>
+            <button onclick="executeResetDatabase()" id="resetExecuteBtn" class="btn btn-danger">
+                <i data-lucide="trash-2" class="icon-inline"></i>
+                Reset Everything
+            </button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}

@@ -107,6 +107,21 @@ function renderSettingsView() {
                 </div>
             </section>
             
+            <!-- Danger Zone Section -->
+            <section class="settings-section-inline danger-zone">
+                <div class="settings-section-header-inline" data-section="dangerzone">
+                    <i data-lucide="chevron-right" class="section-chevron"></i>
+                    <i data-lucide="alert-triangle" class="section-icon"></i>
+                    <div class="section-text">
+                        <h3>Danger Zone</h3>
+                        <p>Irreversible actions — proceed with caution</p>
+                    </div>
+                </div>
+                <div class="settings-section-body" id="dangerzoneBody" style="display: none;">
+                    ${renderDangerZoneSection()}
+                </div>
+            </section>
+            
             <!-- About Link -->
             <div class="settings-about-link">
                 <a href="javascript:void(0);" onclick="showAboutModal()">About MailRepo</a>
@@ -510,6 +525,30 @@ function renderTrashSection() {
 }
 
 /**
+ * Render danger zone section content.
+ */
+function renderDangerZoneSection() {
+    return `
+        <div class="danger-zone-box">
+            <h4><i data-lucide="alert-triangle" class="icon-inline"></i> Reset Database</h4>
+            <p>This will permanently delete all data including:</p>
+            <ul>
+                <li>All archived emails and folders</li>
+                <li>All email account configurations</li>
+                <li>All settings and preferences</li>
+                <li>All backups</li>
+            </ul>
+            <p><strong>This action cannot be undone.</strong></p>
+            
+            <button onclick="showResetDatabaseModal()" class="btn btn-danger">
+                <i data-lucide="trash-2" class="icon-inline"></i>
+                Reset Database
+            </button>
+        </div>
+    `;
+}
+
+/**
  * Initialize section toggle behavior.
  */
 function initSettingsSectionToggles() {
@@ -888,3 +927,104 @@ function closeModal(id) {
 
 // Make closeModal available globally
 window.closeModal = closeModal;
+
+// ============================================
+// RESET DATABASE
+// ============================================
+
+/**
+ * Show the reset database confirmation modal.
+ */
+window.showResetDatabaseModal = function() {
+    const modal = document.getElementById('resetDatabaseModal');
+    if (modal) {
+        document.getElementById('resetPassword').value = '';
+        document.getElementById('resetConfirmation').value = '';
+        const errorEl = document.getElementById('resetError');
+        if (errorEl) errorEl.style.display = 'none';
+        modal.classList.add('active');
+        document.getElementById('resetPassword').focus();
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+};
+
+/**
+ * Close the reset database modal.
+ */
+window.closeResetDatabaseModal = function() {
+    const modal = document.getElementById('resetDatabaseModal');
+    if (modal) modal.classList.remove('active');
+};
+
+/**
+ * Execute the database reset.
+ */
+window.executeResetDatabase = async function() {
+    const password = document.getElementById('resetPassword').value;
+    const confirmation = document.getElementById('resetConfirmation').value;
+    const errorEl = document.getElementById('resetError');
+    const btn = document.getElementById('resetExecuteBtn');
+    
+    // Client-side validation
+    if (!password) {
+        errorEl.textContent = 'Please enter your password';
+        errorEl.style.display = 'block';
+        return;
+    }
+    
+    if (confirmation !== 'RESET') {
+        errorEl.textContent = 'Please type RESET exactly to confirm';
+        errorEl.style.display = 'block';
+        return;
+    }
+    
+    // Disable button and show loading state
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader" class="icon-inline btn-spinner"></i> Resetting...';
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    errorEl.style.display = 'none';
+    
+    try {
+        const response = await fetch('/api/reset_database', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                password: password,
+                confirmation: confirmation
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Redirect to login page
+            window.location.href = '/auth/login?reset=1';
+        } else {
+            errorEl.textContent = data.error || 'Reset failed';
+            errorEl.style.display = 'block';
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="trash-2" class="icon-inline"></i> Reset Everything';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+    } catch (error) {
+        errorEl.textContent = 'Network error. Please try again.';
+        errorEl.style.display = 'block';
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="trash-2" class="icon-inline"></i> Reset Everything';
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+};
+
+// Close modal on escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeResetDatabaseModal();
+    }
+});
+
+// Close modal when clicking outside
+document.getElementById('resetDatabaseModal')?.addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeResetDatabaseModal();
+    }
+});

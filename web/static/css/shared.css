@@ -578,6 +578,10 @@ a.btn:hover {
     margin-bottom: var(--space-lg);
 }
 
+.text-danger {
+    color: var(--color-danger);
+}
+
 /* ============================================
    RESPONSIVE
    ============================================ */

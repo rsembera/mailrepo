@@ -534,3 +534,73 @@
     display: flex;
     gap: var(--space-sm);
 }
+
+/* ============================================
+   DANGER ZONE
+   ============================================ */
+
+.settings-section-inline.danger-zone {
+    border-color: var(--color-danger-light, #fecaca);
+}
+
+.settings-section-inline.danger-zone .settings-section-header-inline:hover {
+    background-color: var(--color-danger-lighter, #fef2f2);
+}
+
+.settings-section-inline.danger-zone .section-icon {
+    color: var(--color-danger);
+}
+
+.danger-zone-box {
+    background: var(--color-danger-lighter, #fef2f2);
+    border: 1px solid var(--color-danger-light, #fecaca);
+    border-radius: var(--radius-md);
+    padding: var(--space-lg);
+}
+
+.danger-zone-box h4 {
+    color: var(--color-danger);
+    margin: 0 0 var(--space-md) 0;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.danger-zone-box h4 i,
+.danger-zone-box h4 svg {
+    width: 18px;
+    height: 18px;
+}
+
+.danger-zone-box p {
+    margin: 0 0 var(--space-sm) 0;
+    color: var(--color-text);
+    font-size: 0.875rem;
+}
+
+.danger-zone-box ul {
+    margin: 0 0 var(--space-md) 0;
+    padding-left: var(--space-lg);
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+}
+
+.danger-zone-box ul li {
+    margin-bottom: var(--space-xs);
+}
+
+.danger-zone-box .btn-danger {
+    margin-top: var(--space-md);
+}
+
+/* Button spinner for loading state */
+.btn-spinner {
+    display: inline-block;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
