@@ -8,7 +8,10 @@ import time
 from flask import request, jsonify
 from core import Database
 from core import Config
+from utils.log import get_logger
 from . import api_bp
+
+log = get_logger()
 
 
 @api_bp.route("/folders", methods=["GET"])
@@ -297,7 +300,7 @@ def permanently_delete_folder(folder_id):
             if filepath.exists():
                 filepath.unlink()
         except Exception as e:
-            print(f"Warning: Could not delete file {msg['filepath']}: {e}")
+            log.warning(f"Could not delete file {msg['filepath']}: {e}")
     
     # Try to remove folder directories
     for fid in all_folder_ids:
@@ -338,7 +341,7 @@ def empty_trash():
             if filepath.exists():
                 filepath.unlink()
         except Exception as e:
-            print(f"Warning: Could not delete file {msg['filepath']}: {e}")
+            log.warning(f"Could not delete file {msg['filepath']}: {e}")
     
     Database.execute(
         f"DELETE FROM folders WHERE id IN ({placeholders})",

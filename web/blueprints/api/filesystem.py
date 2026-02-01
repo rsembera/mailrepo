@@ -8,7 +8,10 @@ to select files and folders for import.
 import os
 from pathlib import Path
 from flask import request, jsonify
+from utils.log import get_logger
 from . import api_bp
+
+log = get_logger()
 
 
 def get_home_dir():
@@ -710,15 +713,15 @@ def convert_pst_to_mbox():
             return jsonify({"error": f"PST conversion failed: {error_msg}"}), 500
         
         # Debug: log conversion output
-        print(f"[PST] readpst stdout: {result.stdout}")
-        print(f"[PST] readpst stderr: {result.stderr}")
-        print(f"[PST] temp_dir: {temp_dir}")
+        log.debug(f"PST readpst stdout: {result.stdout}")
+        log.debug(f"PST readpst stderr: {result.stderr}")
+        log.debug(f"PST temp_dir: {temp_dir}")
         
         # Find all generated mbox files
         # readpst with -r creates directory structure with mbox files (no extension)
         mbox_files = []
         for root, dirs, files in os.walk(temp_dir):
-            print(f"[PST] Scanning dir: {root}, files: {files}")
+            log.debug(f"PST scanning dir: {root}, files: {files}")
             for f in files:
                 filepath = os.path.join(root, f)
                 if os.path.isfile(filepath):
@@ -726,7 +729,7 @@ def convert_pst_to_mbox():
                     try:
                         with open(filepath, 'rb') as mf:
                             header = mf.read(5)
-                            print(f"[PST] File {filepath} header: {header}")
+                            log.debug(f"PST file {filepath} header: {header}")
                             if header == b'From ':
                                 rel_path = os.path.relpath(filepath, temp_dir)
                                 mbox_files.append({
@@ -734,9 +737,9 @@ def convert_pst_to_mbox():
                                     "name": rel_path,
                                 })
                     except Exception as e:
-                        print(f"[PST] Error reading {filepath}: {e}")
+                        log.debug(f"PST error reading {filepath}: {e}")
         
-        print(f"[PST] Found mbox_files: {mbox_files}")
+        log.debug(f"PST found mbox_files: {mbox_files}")
         
         if not mbox_files:
             shutil.rmtree(temp_dir, ignore_errors=True)

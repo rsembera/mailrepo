@@ -11,6 +11,9 @@ from flask import Blueprint, request, jsonify
 from pathlib import Path
 
 from core.database import get_setting, set_setting, Database
+from utils.log import get_logger
+
+log = get_logger()
 
 # Initialize blueprint
 backups_bp = Blueprint('backups', __name__)
@@ -117,7 +120,7 @@ def backup_now():
             success, msg = run_shell_command(post_cmd, timeout=300)
             if not success:
                 # Log but don't fail the backup
-                print(f"Post-backup command error: {msg}")
+                log.warning(f"Post-backup command error: {msg}")
         
         return jsonify({
             'success': True,

@@ -13,6 +13,9 @@ from email.utils import parseaddr, parsedate_to_datetime
 from typing import Optional
 
 from .encryption import Encryption
+from utils.log import get_logger
+
+log = get_logger()
 
 
 # Common IMAP servers (for auto-detection)
@@ -187,7 +190,7 @@ class IMAP:
                         uidvalidity = int(match.group(1))
             except Exception as e:
                 # Log but don't fail - caching just won't work
-                print(f"Warning: Could not get UIDVALIDITY: {e}")
+                log.debug(f"Could not get UIDVALIDITY: {e}")
             
             return {
                 "folder": folder,
@@ -426,7 +429,7 @@ class IMAP:
             creds_json = Encryption.decrypt_string(encrypted_creds)
             return json.loads(creds_json)
         except Exception as e:
-            print(f"Error loading credentials: {e}")
+            log.warning(f"Error loading credentials: {e}")
             return None
     
     @classmethod
@@ -526,7 +529,7 @@ class IMAP:
             
             return None
         except Exception as e:
-            print(f"Warning: Could not find {folder_type} folder: {e}")
+            log.debug(f"Could not find {folder_type} folder: {e}")
             return None
     
     def move_email(self, uid: str, destination_folder: str) -> bool:

@@ -17,6 +17,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from core.config import Config
+from utils.log import get_logger
+
+log = get_logger(__name__)
 
 
 def get_data_root():
@@ -115,7 +118,7 @@ def load_manifest():
             # Manifest corrupted - backup the bad file and start fresh
             corrupted_path = manifest_file.with_suffix('.json.corrupted')
             shutil.copy(manifest_file, corrupted_path)
-            print(f"Warning: manifest.json was corrupted, backed up to {corrupted_path.name}")
+            log.warning(f"manifest.json was corrupted, backed up to {corrupted_path.name}")
     return {
         'backups': [],
         'last_full_hashes': {},
@@ -794,7 +797,7 @@ def cleanup_old_backups(retention, custom_location=None):
     
     if chains_to_delete:
         save_manifest(manifest)
-        print(f"Retention cleanup: Deleted {len(chains_to_delete)} old backup chain(s)")
+        log.info(f"Retention cleanup: Deleted {len(chains_to_delete)} old backup chain(s)")
     
     # Clean up old safety backups
     safety_deleted = 0
@@ -810,7 +813,7 @@ def cleanup_old_backups(retention, custom_location=None):
     
     if safety_deleted:
         save_manifest(manifest)
-        print(f"Retention cleanup: Deleted {safety_deleted} old safety backup(s)")
+        log.info(f"Retention cleanup: Deleted {safety_deleted} old safety backup(s)")
 
 
 def get_backup_status():

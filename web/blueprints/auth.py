@@ -12,9 +12,56 @@ from flask import Blueprint, render_template, request, redirect, url_for, sessio
 from core import Encryption, InvalidPasswordError, EncryptionError, Database
 from core.database import get_setting
 from core.config import Config
+from utils.log import get_logger
 
+log = get_logger(__name__)
+from utils.log import get_logger
+
+log = get_logger()
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
+
+
+# Simple rate limiting for login attempts
+_login_attempts = {}  # IP -> list of attempt timestamps
+_MAX_ATTEMPTS = 5
+_LOCKOUT_SECONDS = 60
+
+
+def _check_rate_limit(ip: str) -> tuple[bool, int]:
+    """
+    Check if IP is rate limited.
+    
+    Returns:
+        (allowed: bool, seconds_remaining: int)
+    """
+    now = time.time()
+    
+    if ip not in _login_attempts:
+        _login_attempts[ip] = []
+    
+    # Clean old attempts (older than lockout period)
+    _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < _LOCKOUT_SECONDS]
+    
+    if len(_login_attempts[ip]) >= _MAX_ATTEMPTS:
+        oldest = min(_login_attempts[ip])
+        seconds_remaining = int(_LOCKOUT_SECONDS - (now - oldest))
+        return False, max(0, seconds_remaining)
+    
+    return True, 0
+
+
+def _record_failed_attempt(ip: str):
+    """Record a failed login attempt."""
+    if ip not in _login_attempts:
+        _login_attempts[ip] = []
+    _login_attempts[ip].append(time.time())
+
+
+def _clear_attempts(ip: str):
+    """Clear login attempts after successful login."""
+    if ip in _login_attempts:
+        del _login_attempts[ip]
 
 
 def init_database():
@@ -48,9 +95,9 @@ def cleanup_expired_trash():
             for folder in expired_folders:
                 Database.execute("DELETE FROM folders WHERE id = ?", (folder["id"],))
             Database.commit()
-            print(f"Trash cleanup: permanently deleted {len(expired_folders)} expired folder(s)")
+            log.info(f"Trash cleanup: permanently deleted {len(expired_folders)} expired folder(s)")
     except Exception as e:
-        print(f"Trash cleanup error: {e}")
+        log.warning(f"Trash cleanup error: {e}")
 
 
 @auth_bp.route("/setup", methods=["GET", "POST"])
@@ -100,6 +147,7 @@ def login():
     Login with master password.
     
     Redirects to setup if not initialized.
+    Rate limited to prevent brute-force attacks.
     """
     # Redirect if setup needed
     if not Encryption.is_initialized():
@@ -109,17 +157,29 @@ def login():
     if session.get("authenticated") and Encryption.is_unlocked():
         return redirect(url_for("main.index"))
     
+    # Check rate limit
+    client_ip = request.remote_addr or "unknown"
+    allowed, seconds_remaining = _check_rate_limit(client_ip)
+    
+    if not allowed:
+        return render_template(
+            "auth/login.html", 
+            error=f"Too many failed attempts. Please wait {seconds_remaining} seconds."
+        )
+    
     if request.method == "POST":
         password = request.form.get("password", "")
         
         try:
             Encryption.unlock(password)
+            _clear_attempts(client_ip)  # Success - clear attempts
             init_database()
             cleanup_expired_trash()
             session["authenticated"] = True
             session.permanent = True
             return redirect(url_for("main.index"))
         except InvalidPasswordError:
+            _record_failed_attempt(client_ip)
             return render_template("auth/login.html", error="Invalid password.")
         except EncryptionError as e:
             return render_template("auth/login.html", error=str(e))
@@ -149,16 +209,16 @@ def _run_auto_backup_check():
         Database.checkpoint()
         
         frequency = get_setting('backup_frequency', 'daily')
-        print(f"[Backup] Frequency setting: {frequency}")
+        log.debug(f"Backup frequency setting: {frequency}")
         
         if backup.check_backup_needed(frequency):
-            print("[Backup] Backup needed, creating...")
+            log.info("Backup needed, creating...")
             location = get_setting('backup_location', '')
             if not location:
                 location = None  # Use default
             result = backup.create_backup(location)
             if result:
-                print(f"[Backup] Automatic backup completed: {result['filename']}")
+                log.info(f"Automatic backup completed: {result['filename']}")
                 
                 # Run post-backup command if configured
                 post_cmd = get_setting('post_backup_command', '')
@@ -166,18 +226,18 @@ def _run_auto_backup_check():
                     from utils import run_shell_command
                     success, msg = run_shell_command(post_cmd, timeout=300)
                     if success:
-                        print("[Backup] Post-backup command completed")
+                        log.info("Post-backup command completed")
                     else:
-                        print(f"[Backup] Post-backup command error: {msg}")
+                        log.warning(f"Post-backup command error: {msg}")
             else:
-                print("[Backup] No changes to backup")
+                log.debug("No changes to backup")
             
             # Record that we checked today (whether backup created or not)
             backup.record_backup_check()
         else:
-            print("[Backup] Backup not needed (frequency check)")
+            log.debug("Backup not needed (frequency check)")
     except Exception as e:
-        print(f"[Backup] Auto-backup failed: {e}")
+        log.error(f"Auto-backup failed: {e}")
 
 
 @auth_bp.route("/api/verify-password", methods=["POST"])

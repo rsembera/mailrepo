@@ -12,7 +12,10 @@ from flask import request, jsonify, Response
 from core import Database
 from core import Config
 from core import Encryption
+from utils.log import get_logger
 from . import api_bp
+
+log = get_logger()
 
 
 @api_bp.route("/search", methods=["GET"])
@@ -253,7 +256,7 @@ def permanently_delete_message(message_id):
         if filepath.exists():
             filepath.unlink()
     except Exception as e:
-        print(f"Warning: Could not delete file {message['filepath']}: {e}")
+        log.warning(f"Could not delete file {message['filepath']}: {e}")
     
     Database.execute("DELETE FROM messages WHERE id = ?", (message_id,))
     Database.commit()

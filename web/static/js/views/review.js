@@ -33,6 +33,9 @@ let dropdownClickListenerAdded = false;
 /** @type {Set<string>} Track expanded source groups */
 let expandedSourceGroups = new Set();
 
+// AbortController for cleaning up event listeners
+let headerActionsController = null;
+
 // === Helper Functions ===
 
 /**
@@ -141,6 +144,13 @@ export async function showReviewView() {
     if (contextMeta) contextMeta.textContent = '';
     
     if (headerActions) {
+        // Clean up previous event listeners
+        if (headerActionsController) {
+            headerActionsController.abort();
+        }
+        headerActionsController = new AbortController();
+        const signal = headerActionsController.signal;
+        
         headerActions.innerHTML = `
             <button class="btn btn-secondary" id="unstageAllBtn" title="Unstage all items">
                 <i data-lucide="x-circle"></i>
@@ -162,9 +172,9 @@ export async function showReviewView() {
             if (confirmed) {
                 unstageAll();
             }
-        });
+        }, { signal });
         
-        document.getElementById('commitBtn')?.addEventListener('click', commitAll);
+        document.getElementById('commitBtn')?.addEventListener('click', commitAll, { signal });
     }
     
     await loadAccounts();

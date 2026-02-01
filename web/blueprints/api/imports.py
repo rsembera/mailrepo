@@ -10,7 +10,10 @@ from pathlib import Path
 from flask import request, jsonify, send_file
 from core import Database, Config, Encryption
 from core import scan_mbox_file, import_mbox_file, import_eml_file
+from utils.log import get_logger
 from . import api_bp
+
+log = get_logger()
 
 
 @api_bp.route("/import/mbox/scan", methods=["POST"])
@@ -427,7 +430,7 @@ def export_folder(folder_id):
                 # Add to ZIP
                 zf.writestr(zip_path, decrypted_bytes)
             except Exception as e:
-                print(f"Error exporting message {msg['id']}: {e}")
+                log.warning(f"Error exporting message {msg['id']}: {e}")
                 continue
     
     zip_buffer.seek(0)

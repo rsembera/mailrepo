@@ -21,6 +21,9 @@ PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from web import create_app
+from utils.log import get_logger
+
+log = get_logger()
 
 # Track if cleanup has run to avoid running twice
 _cleanup_done = False
@@ -69,26 +72,26 @@ def _cleanup(app):
                     location = get_setting('backup_location', '')
                     result = backup.create_backup(location if location else None)
                     if result:
-                        print(f"Backup completed: {result['filename']}")
+                        log.info(f"Backup completed: {result['filename']}")
                         # Run post-backup command if configured
                         post_cmd = get_setting('post_backup_command', '')
                         if post_cmd:
                             from utils import run_shell_command
                             success, msg = run_shell_command(post_cmd, timeout=300)
                             if success:
-                                print("Post-backup command completed")
+                                log.info("Post-backup command completed")
                             else:
-                                print(f"Post-backup command error: {msg}")
+                                log.warning(f"Post-backup command error: {msg}")
                     backup.record_backup_check()
             except Exception as e:
-                print(f"Backup warning: {e}")
+                log.warning(f"Backup warning: {e}")
     except Exception:
         pass  # Silent fail on exit
 
 
 def shutdown_handler(signum, frame, app):
     """Handle Ctrl-C gracefully - backup and checkpoint database before exit."""
-    print("\n\nShutting down...")
+    log.info("Shutting down...")
     _cleanup(app)
     sys.exit(0)
 
