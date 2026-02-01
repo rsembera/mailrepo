@@ -279,6 +279,13 @@ def get_import_email():
                                             break
                                     except:
                                         pass
+            elif import_type == 'pst':
+                # PST converted to mbox - use emailSourcePath which points to specific mbox file
+                if email_source_path:
+                    raw_email = get_raw_email_from_import(email_source_path, uid)
+                else:
+                    # Fallback to source_path (shouldn't normally happen)
+                    raw_email = get_raw_email_from_import(str(source_path), uid)
             else:
                 # Standard mbox
                 raw_email = get_raw_email_from_import(str(source_path), uid)
