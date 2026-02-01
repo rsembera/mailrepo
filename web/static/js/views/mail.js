@@ -938,8 +938,16 @@ window.downloadImportAttachment = async function(index, viewInline = false) {
         });
         
         if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.error || 'Failed to download attachment');
+            // Try to get error message, but handle non-JSON responses
+            let errorMsg = 'Failed to download attachment';
+            const contentType = response.headers.get('Content-Type') || '';
+            if (contentType.includes('application/json')) {
+                const data = await response.json();
+                errorMsg = data.error || errorMsg;
+            } else {
+                errorMsg = `Server error (${response.status})`;
+            }
+            throw new Error(errorMsg);
         }
         
         // Get filename from Content-Disposition header
