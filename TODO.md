@@ -15,8 +15,8 @@
 - [ ] Test full import workflow from multiple sources (multiple accounts/imports) & post-commit server actions
 
 ### Core Features (from EdgeCase)
-- [ ] Automatic timeout (← EdgeCase)
-- [ ] Settings → reset database (← EdgeCase)
+- [x] Automatic timeout (← EdgeCase)
+- [x] Settings → reset database (← EdgeCase)
 
 ### Completed
 - [x] Backup system (← EdgeCase) - full/incremental backups, restore, cloud folders, retention policies
@@ -56,7 +56,17 @@
 
 ---
 
-## Completed (Session 26 - January 29, 2026)
+## Completed (Session 26 - February 1, 2026)
+
+### Core Features (ported from EdgeCase)
+- [x] Settings → Danger Zone → Reset Database
+  - Password verification + "RESET" confirmation required
+  - Deletes database, archive, backups, and salt file
+  - Forces fresh password setup on next launch
+
+---
+
+## Completed (Session 24 - January 29, 2026)
 
 ### Stage Modal Folder Picker Redesign
 - [x] Replace drilldown navigation with tree view
