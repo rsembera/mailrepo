@@ -10,6 +10,7 @@ Or use the installed command:
 """
 
 import atexit
+import os
 import signal
 import sys
 import logging
@@ -54,7 +55,6 @@ def _cleanup(app):
     _cleanup_done = True
     
     try:
-        import subprocess
         from core.database import Database, get_setting
         
         with app.app_context():
@@ -73,11 +73,12 @@ def _cleanup(app):
                         # Run post-backup command if configured
                         post_cmd = get_setting('post_backup_command', '')
                         if post_cmd:
-                            try:
-                                subprocess.run(post_cmd, shell=True, timeout=300)
+                            from utils import run_shell_command
+                            success, msg = run_shell_command(post_cmd, timeout=300)
+                            if success:
                                 print("Post-backup command completed")
-                            except Exception as cmd_error:
-                                print(f"Post-backup command error: {cmd_error}")
+                            else:
+                                print(f"Post-backup command error: {msg}")
                     backup.record_backup_check()
             except Exception as e:
                 print(f"Backup warning: {e}")
@@ -108,7 +109,7 @@ def main():
     # Development server settings
     host = "127.0.0.1"
     port = 5050  # Different from EdgeCase's 5000
-    debug = True  # Development mode
+    debug = os.environ.get('MAILREPO_DEBUG', '').lower() in ('1', 'true', 'yes')
     
     print(f"\n{'=' * 50}")
     print(f"  MailRepo v{app.config.get('app_version', '0.1.0')}")

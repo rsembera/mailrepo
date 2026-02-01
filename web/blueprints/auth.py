@@ -71,8 +71,8 @@ def setup():
         # Validation
         errors = []
         
-        if len(password) < 8:
-            errors.append("Password must be at least 8 characters.")
+        if len(password) < 12:
+            errors.append("Password must be at least 12 characters.")
         
         if password != confirm:
             errors.append("Passwords do not match.")
@@ -144,7 +144,6 @@ def _run_auto_backup_check():
     """Run automatic backup if frequency setting requires it."""
     try:
         from utils import backup
-        import subprocess
         
         # Checkpoint WAL first so backup captures all changes
         Database.checkpoint()
@@ -164,11 +163,12 @@ def _run_auto_backup_check():
                 # Run post-backup command if configured
                 post_cmd = get_setting('post_backup_command', '')
                 if post_cmd:
-                    try:
-                        subprocess.run(post_cmd, shell=True, timeout=300)
+                    from utils import run_shell_command
+                    success, msg = run_shell_command(post_cmd, timeout=300)
+                    if success:
                         print("[Backup] Post-backup command completed")
-                    except Exception as cmd_error:
-                        print(f"[Backup] Post-backup command error: {cmd_error}")
+                    else:
+                        print(f"[Backup] Post-backup command error: {msg}")
             else:
                 print("[Backup] No changes to backup")
             
@@ -211,8 +211,8 @@ def change_password_start():
     new_password = data.get("new_password", "")
     
     # Validate
-    if len(new_password) < 8:
-        return {"error": "New password must be at least 8 characters"}, 400
+    if len(new_password) < 12:
+        return {"error": "New password must be at least 12 characters"}, 400
     
     # Verify current password
     try:

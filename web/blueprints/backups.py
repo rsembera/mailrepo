@@ -86,7 +86,6 @@ def save_backup_settings():
 def backup_now():
     """Trigger immediate backup. System auto-decides full vs incremental."""
     from utils import backup
-    import subprocess
     
     # Checkpoint WAL to ensure all changes are in main database file
     Database.checkpoint()
@@ -114,11 +113,11 @@ def backup_now():
         # Run post-backup command if configured
         post_cmd = get_setting('post_backup_command', '')
         if post_cmd:
-            try:
-                subprocess.run(post_cmd, shell=True, timeout=300)
-            except Exception as cmd_error:
+            from utils import run_shell_command
+            success, msg = run_shell_command(post_cmd, timeout=300)
+            if not success:
                 # Log but don't fail the backup
-                print(f"Post-backup command error: {cmd_error}")
+                print(f"Post-backup command error: {msg}")
         
         return jsonify({
             'success': True,

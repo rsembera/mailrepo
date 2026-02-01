@@ -275,7 +275,7 @@ function renderSecuritySection() {
                         <i data-lucide="eye"></i>
                     </button>
                 </div>
-                <small class="setting-hint">Minimum 8 characters</small>
+                <small class="setting-hint">Minimum 12 characters</small>
             </div>
             <div class="form-group">
                 <label for="confirmPassword">Confirm New Password</label>
