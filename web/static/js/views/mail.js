@@ -673,7 +673,14 @@ export async function openEmailViewer(emailId) {
             if (!imp) {
                 throw new Error('Import not found');
             }
-            context = { type: 'import' };  // Imports don't support download yet
+            context = { 
+                type: 'import',
+                sourcePath: imp.path,
+                uid: email.uid || email.id,
+                importType: imp.type,
+                folderPath: state.currentView.folder || '',
+                emailSourcePath: email.sourcePath || '',
+            };
             data = await fetchWithRetry('/api/import/email', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -682,7 +689,7 @@ export async function openEmailViewer(emailId) {
                     uid: email.uid || email.id,
                     importType: imp.type,
                     folderPath: state.currentView.folder || '',
-                    emailSourcePath: email.sourcePath || '',  // Direct path for EML files
+                    emailSourcePath: email.sourcePath || '',
                 }),
             });
         } else {
@@ -722,10 +729,22 @@ function renderEmailContent(email, context = null) {
         let html = '<div class="attachment-list">';
         email.attachments.forEach((att, index) => {
             const downloadUrl = getAttachmentDownloadUrl(context, index);
-            const viewUrl = downloadUrl ? downloadUrl + (downloadUrl.includes('?') ? '&' : '?') + 'view=1' : null;
             const isViewable = isViewableInBrowser(att.content_type, att.filename);
             
-            if (downloadUrl) {
+            if (downloadUrl && downloadUrl.startsWith('import-attachment:')) {
+                // Import attachments need special handling with POST request
+                html += `
+                    <div class="attachment-item">
+                        <i data-lucide="paperclip"></i>
+                        <span class="attachment-name">${escapeHtml(att.filename)}</span>
+                        <span class="attachment-actions">
+                            <button class="attachment-action" onclick="downloadImportAttachment(${index}, false)" title="Download"><i data-lucide="download"></i></button>
+                            ${isViewable ? `<button class="attachment-action" onclick="downloadImportAttachment(${index}, true)" title="Open in new tab"><i data-lucide="external-link"></i></button>` : ''}
+                        </span>
+                    </div>
+                `;
+            } else if (downloadUrl) {
+                const viewUrl = downloadUrl + (downloadUrl.includes('?') ? '&' : '?') + 'view=1';
                 html += `
                     <div class="attachment-item">
                         <i data-lucide="paperclip"></i>
@@ -878,6 +897,9 @@ function getAttachmentDownloadUrl(context, index) {
         return `/api/accounts/${context.accountId}/emails/${context.uid}/attachments/${index}?folder=${encodeURIComponent(context.folder)}`;
     } else if (context.type === 'folder') {
         return `/api/folders/${context.folderId}/emails/${context.messageId}/attachments/${index}`;
+    } else if (context.type === 'import') {
+        // Import attachments need POST request - return a marker that renderEmailContent will handle
+        return `import-attachment:${index}`;
     }
     return null;
 }
@@ -889,6 +911,64 @@ export function closeEmailViewer() {
     document.getElementById('emailViewerOverlay').classList.remove('active');
     currentViewerContext = null;
 }
+
+/**
+ * Download attachment from an import source.
+ * Uses POST request since imports require body parameters.
+ */
+window.downloadImportAttachment = async function(index, viewInline = false) {
+    if (!currentViewerContext || currentViewerContext.type !== 'import') {
+        console.error('No import context available');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/import/attachment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sourcePath: currentViewerContext.sourcePath,
+                uid: currentViewerContext.uid,
+                importType: currentViewerContext.importType,
+                folderPath: currentViewerContext.folderPath,
+                emailSourcePath: currentViewerContext.emailSourcePath,
+                index: index,
+                inline: viewInline,
+            }),
+        });
+        
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error || 'Failed to download attachment');
+        }
+        
+        // Get filename from Content-Disposition header
+        const contentDisposition = response.headers.get('Content-Disposition') || '';
+        const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+        const filename = filenameMatch ? filenameMatch[1] : 'attachment';
+        
+        const blob = await response.blob();
+        
+        if (viewInline) {
+            // Open in new tab
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+        } else {
+            // Trigger download
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    } catch (error) {
+        console.error('Error downloading attachment:', error);
+        alert('Failed to download attachment: ' + error.message);
+    }
+};
 
 /**
  * Print the current email (browser print dialog).

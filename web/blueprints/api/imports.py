@@ -329,6 +329,170 @@ def get_import_email():
         return jsonify({"error": f"Failed to read email: {str(e)}"}), 500
 
 
+@api_bp.route("/import/attachment", methods=["POST"])
+def download_import_attachment():
+    """
+    Download an attachment from an import source email.
+    
+    Request body:
+        sourcePath: Path to mbox file or directory
+        uid: Email UID
+        importType: 'mbox', 'apple-mbox', 'pst', or 'eml'
+        folderPath: (optional) For apple-mbox, path to specific .mbox folder
+        emailSourcePath: (optional) Direct path to email file
+        index: Attachment index (0-based)
+        inline: (optional) If true, display inline instead of download
+    
+    Returns:
+        Attachment file data
+    """
+    import email as email_lib
+    from email.header import decode_header
+    from .email_parser import get_raw_email_from_import, _parse_apple_mbox, _parse_eml_directory
+    from flask import Response
+    
+    data = request.get_json() or {}
+    source_path = data.get("sourcePath", "").strip()
+    uid = data.get("uid", "").strip()
+    import_type = data.get("importType", "mbox")
+    folder_path = data.get("folderPath", "")
+    email_source_path = data.get("emailSourcePath", "").strip()
+    index = data.get("index", 0)
+    view_inline = data.get("inline", False)
+    
+    if not source_path and not email_source_path:
+        return jsonify({"error": "Source path is required"}), 400
+    if not uid:
+        return jsonify({"error": "UID is required"}), 400
+    
+    source_path = Path(source_path).expanduser() if source_path else None
+    if source_path and not source_path.exists():
+        return jsonify({"error": "Source not found"}), 404
+    
+    def decode_header_value(header):
+        if not header:
+            return ""
+        try:
+            parts = decode_header(header)
+            decoded = []
+            for content, charset in parts:
+                if isinstance(content, bytes):
+                    decoded.append(content.decode(charset or "utf-8", errors="replace"))
+                else:
+                    decoded.append(content)
+            return " ".join(decoded)
+        except:
+            return str(header)
+    
+    try:
+        # Get raw email - same logic as get_import_email
+        raw_email = None
+        
+        if email_source_path:
+            email_path = Path(email_source_path).expanduser()
+            if email_path.exists() and email_path.is_file():
+                suffix = email_path.suffix.lower()
+                if suffix == '.emlx':
+                    with open(email_path, 'rb') as f:
+                        content = f.read()
+                    first_newline = content.find(b'\n')
+                    if first_newline > 0:
+                        email_content = content[first_newline + 1:]
+                        plist_marker = email_content.rfind(b'<?xml version=')
+                        if plist_marker > 0:
+                            email_content = email_content[:plist_marker]
+                        raw_email = email_content
+                elif suffix == '.eml':
+                    with open(email_path, 'rb') as f:
+                        raw_email = f.read()
+        
+        if not raw_email:
+            if import_type == 'pst':
+                if email_source_path:
+                    raw_email = get_raw_email_from_import(email_source_path, uid)
+                else:
+                    raw_email = get_raw_email_from_import(str(source_path), uid)
+            elif import_type == 'eml':
+                if uid.startswith('eml-'):
+                    results = _parse_eml_directory(str(source_path))
+                    for r_uid, r_bytes in results:
+                        if r_uid == uid:
+                            raw_email = r_bytes
+                            break
+            elif import_type == 'apple-mbox':
+                import mailbox
+                import os
+                mbox_dir = folder_path if folder_path else str(source_path)
+                mbox_file = os.path.join(mbox_dir, "mbox")
+                if os.path.isfile(mbox_file):
+                    try:
+                        mbox = mailbox.mbox(mbox_file)
+                        for i, message in enumerate(mbox):
+                            expected_uid = f"apple-{os.path.basename(mbox_file)}-{i}"
+                            if expected_uid == uid:
+                                raw_email = message.as_bytes()
+                                break
+                    except Exception:
+                        pass
+                if not raw_email:
+                    messages_dir = os.path.join(mbox_dir, "Messages")
+                    if os.path.isdir(messages_dir):
+                        for entry in os.scandir(messages_dir):
+                            if entry.name.endswith('.emlx') and entry.is_file():
+                                expected_uid = f"emlx-{entry.name}"
+                                if expected_uid == uid:
+                                    try:
+                                        with open(entry.path, 'rb') as f:
+                                            content = f.read()
+                                        first_newline = content.find(b'\n')
+                                        if first_newline > 0:
+                                            email_content = content[first_newline + 1:]
+                                            plist_marker = email_content.rfind(b'<?xml version=')
+                                            if plist_marker > 0:
+                                                email_content = email_content[:plist_marker]
+                                            raw_email = email_content
+                                            break
+                                    except:
+                                        pass
+            else:
+                raw_email = get_raw_email_from_import(str(source_path), uid)
+        
+        if not raw_email:
+            return jsonify({"error": "Email not found in import source"}), 404
+        
+        # Parse the email and find attachments
+        msg = email_lib.message_from_bytes(raw_email)
+        
+        attachments = []
+        if msg.is_multipart():
+            for part in msg.walk():
+                content_disposition = str(part.get("Content-Disposition", ""))
+                if "attachment" in content_disposition:
+                    filename = part.get_filename()
+                    if filename:
+                        attachments.append({
+                            "filename": decode_header_value(filename),
+                            "content_type": part.get_content_type(),
+                            "data": part.get_payload(decode=True),
+                        })
+        
+        if index < 0 or index >= len(attachments):
+            return jsonify({"error": "Attachment not found"}), 404
+        
+        att = attachments[index]
+        content_type = att["content_type"] or "application/octet-stream"
+        disposition = "inline" if view_inline else "attachment"
+        
+        return Response(
+            att["data"],
+            mimetype=content_type,
+            headers={"Content-Disposition": f'{disposition}; filename="{att["filename"]}"'}
+        )
+        
+    except Exception as e:
+        return jsonify({"error": f"Failed to download attachment: {str(e)}"}), 500
+
+
 @api_bp.route("/folders/<int:folder_id>/export", methods=["POST"])
 def export_folder(folder_id):
     """Export a folder and its contents as an unencrypted ZIP file."""
