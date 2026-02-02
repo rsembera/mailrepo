@@ -59,6 +59,8 @@ def create_archive_folder_from_path(archive_path: str, parent_folder_id: int) ->
                 (part, current_parent_id)
             )
             current_parent_id = cursor.lastrowid
+            # Commit immediately so subsequent lookups can find this folder
+            Database.commit()
     
     return current_parent_id
 
