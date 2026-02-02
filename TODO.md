@@ -16,8 +16,9 @@
 - [ ] Test Apple Mail import hierarchy thoroughly
 
 ### Refactoring
-- [ ] Consolidate folder tree rendering (4 implementations → 1 component)
+- [x] Consolidate folder tree rendering (staging modal now uses unified component)
 - [ ] Extract staging state to eliminate circular dependencies
+- [ ] Migrate sidebar to unified folder-tree component (optional - different behavior)
 
 ---
 
@@ -35,6 +36,18 @@
 
 ### UI/UX
 - [ ] Responsive design (?)
+
+---
+
+## Completed (Session 28 - February 2, 2026)
+
+### Folder Tree Refactor
+- [x] Created unified renderFolderTree() in folder-tree.js
+- [x] Updated staging.js to use unified component
+- [x] Consolidated CSS into folder-tree.css
+- [x] Removed duplicate styles from modals.css
+- [x] Fixed CSS conflict (display: flex → display: block for containers)
+- [x] ~140 lines of code removed
 
 ---
 

@@ -1,11 +1,25 @@
 # MailRepo Session Notes
 
-**Date:** February 1, 2026  
-**Last Updated:** Session 27
+**Date:** February 2, 2026  
+**Last Updated:** Session 28
 
 ---
 
-## Completed Today (Session 27)
+## Completed Today (Session 28)
+
+### Folder Tree Refactor
+- Created unified `renderFolderTree()` component in folder-tree.js
+- Configurable options: selectable, showChevrons, showColorDots, showAddButtons, callbacks
+- Updated staging.js to use unified component for destination picker
+- Consolidated folder tree CSS into folder-tree.css
+- Removed duplicate/conflicting styles from modals.css
+- Proper nested structure: `.folder-tree-item` (block) > `.folder-tree-row` (flex) + `.folder-tree-children`
+- Fixed the CSS conflict that caused horizontal instead of vertical child stacking
+- Net reduction of ~140 lines of code
+
+---
+
+## Completed Yesterday (Session 27)
 
 ### Security Audit Fixes
 - Fixed command injection vulnerability (shlex.split in utils/run_shell_command)
@@ -74,17 +88,16 @@
 
 ## Known Technical Debt
 
-- **Folder tree rendering:** 4 different implementations (staging.js, folder-tree.js, sidebar.js, folder-mgmt.js) - candidate for consolidation
+- **Sidebar folder tree:** Still has its own implementation (different behavior: navigation + IMAP integration)
 - **Staging state:** Circular dependencies between staging.js and folder-selection.js
 
 ---
 
 ## TODO / Next Steps
 
-1. Refactor folder tree rendering into single component (see Cowork prompt)
-2. Comprehensive manual testing using docs/TESTING_CHECKLIST.md
-3. Apple Mail import hierarchy testing
-4. Address remaining items in TODO.md
+1. Comprehensive manual testing using docs/TESTING_CHECKLIST.md
+2. Apple Mail import hierarchy testing
+3. Address remaining items in TODO.md
 
 ---
 
