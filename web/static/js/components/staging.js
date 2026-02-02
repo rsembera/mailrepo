@@ -12,12 +12,19 @@ import { state } from '../state.js';
 import { closeModal, showAlert, showPrompt } from '../modals.js';
 import { renderFolderTree } from '../components/folder-tree.js';
 import { renderEmailList } from '../components/email-list.js';
-import { getPendingFolderStaging, clearPendingFolderStaging, refreshFolderSelectionView } from '../views/folder-selection.js';
+import { getPendingFolderStaging, clearPendingFolderStaging, refreshFolderSelectionView, clearAllSelected } from '../views/folder-selection.js';
 import { getMountedImports } from '../components/imports.js';
 import { escapeHtml } from '../utils.js';
 
 // Module state
 let selectedDestinationFolder = null;
+
+/**
+ * Reset the destination folder selection (call before opening modal).
+ */
+export function resetDestinationSelection() {
+    selectedDestinationFolder = null;
+}
 
 // DOM references
 let stageModal = null;
@@ -420,6 +427,7 @@ export function confirmStage() {
         });
         
         clearPendingFolderStaging();
+        clearAllSelected();  // Clear the selected folders now that staging is confirmed
         modal.dataset.stagingMode = '';
         closeModal('stageModal');
         updateStagedBadge();

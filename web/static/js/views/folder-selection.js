@@ -646,7 +646,8 @@ export function stageSelectedFoldersFromSelection() {
         return;
     }
     
-    selectedFoldersForStaging.clear();
+    // Don't clear selectedFoldersForStaging here - wait until confirm
+    // so user can cancel and try again
     openStageFoldersModal();
 }
 window.stageSelectedFoldersFromSelection = stageSelectedFoldersFromSelection;
@@ -805,6 +806,7 @@ function openStageFoldersModal() {
     
     // Import renderFolderSelectTree dynamically to avoid circular dependency
     import('../components/staging.js').then(staging => {
+        staging.resetDestinationSelection();  // Clear any previous selection
         staging.renderFolderSelectTree();
     });
     
