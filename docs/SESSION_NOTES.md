@@ -1,32 +1,53 @@
 # MailRepo Session Notes
 
 **Date:** February 1, 2026  
-**Last Updated:** Session 26
+**Last Updated:** Session 27
 
 ---
 
-## Completed Today (Session 26)
+## Completed Today (Session 27)
 
-### Danger Zone - Reset Database Feature
-- Ported "Reset Database" functionality from EdgeCase
-- Added new Danger Zone section to Settings view with warning styling
-- Backend endpoint `/api/reset_database` handles:
-  - Password verification via Encryption.unlock()
-  - "RESET" confirmation text validation
-  - Database deletion (including WAL/SHM files)
-  - Archive directory cleanup
-  - Backups directory cleanup
-  - Salt file deletion (forces new password setup on restart)
-  - Session clearing
-- Frontend modal with password + "RESET" confirmation inputs
-- Added danger zone CSS styling (red accents, warning box)
-- Added `.text-danger` utility class and button spinner animation
+### Security Audit Fixes
+- Fixed command injection vulnerability (shlex.split in utils/run_shell_command)
+- Debug mode now controlled by MAILREPO_DEBUG env var (defaults to False)
+- Increased minimum password length from 8 to 12 characters
+- Added login rate limiting (5 attempts, 60 second lockout)
+- Replaced debug print() statements with proper logging throughout
+- Fixed frontend memory leak in review.js (AbortController for event listeners)
 
-**Commit:** `9c534d3` — Add Danger Zone with Reset Database feature (ported from EdgeCase)
+### Commit Resume Feature
+- Added `pending_commit` database table to track commit progress
+- All staged items saved to DB before commit starts
+- Status tracking: pending → committed → post_action_done
+- On app load, detects interrupted commits and prompts to resume or discard
+- Session timeout bypassed for SSE streaming endpoints (commits can run long)
+- New endpoints: `/api/commit/pending`, `/api/commit/discard`
+
+### Import Attachment Downloads
+- Added `/api/import/attachment` endpoint for mounted imports
+- Supports all import types: mbox, apple-mbox, pst, eml
+- Fixed button styling to match link-based attachment display
+
+### Folder Sorting & Hierarchy Fixes
+- Fixed alphabetical sorting in sidebar and Manage Folders (Parent before PST)
+- Fixed Apple Mail folder hierarchy detection (Parent.mbox → Parent/ relationship)
+- Fixed folder creation during commit (immediate commit for parent lookup)
+- Added color dot spacer in destination picker for alignment
+
+### Destination Folder Picker Fixes
+- Fixed stale highlight on modal reopen (reset selection state)
+- Fixed modal not reopening after cancel (don't clear selections until confirm)
+
+### Testing Infrastructure
+- Created comprehensive testing checklist (docs/TESTING_CHECKLIST.md)
+
+**Commits:** Multiple commits from `1d0b98a` through `c12086b`
 
 ---
 
 ## Previous Sessions Summary
+
+**Session 26:** Danger Zone - Reset Database feature ported from EdgeCase
 
 **Session 25:** Backup directory portability fix, double scrollbar fix, sidebar folder tree fix, logging improvements, backup on shutdown
 
@@ -45,17 +66,25 @@
 ## Current State
 
 - **Server:** Runs on port 5050
-- **All features working:** Email/folder staging, commit, ZIP export, folder management, after-commit actions, attachment viewing, database reset
+- **All features working:** Email/folder staging, commit with resume, ZIP export, folder management, after-commit actions, attachment viewing (including imports), database reset
+- **Security:** Audit items addressed
 - **Git:** Commits pushed to origin/main
+
+---
+
+## Known Technical Debt
+
+- **Folder tree rendering:** 4 different implementations (staging.js, folder-tree.js, sidebar.js, folder-mgmt.js) - candidate for consolidation
+- **Staging state:** Circular dependencies between staging.js and folder-selection.js
 
 ---
 
 ## TODO / Next Steps
 
-1. Test Apple mbox imports thoroughly
-2. Comprehensive manual testing checklist for release
-3. Address remaining items in TODO.md
-4. Review refactoring plan (docs/Refactoring_Plan_V2.md)
+1. Refactor folder tree rendering into single component (see Cowork prompt)
+2. Comprehensive manual testing using docs/TESTING_CHECKLIST.md
+3. Apple Mail import hierarchy testing
+4. Address remaining items in TODO.md
 
 ---
 
