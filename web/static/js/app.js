@@ -168,6 +168,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     updateStagedBadge();
     
+    // Check for interrupted commits that can be resumed
+    checkPendingCommit();
+    
     // Load labels for each account
     document.querySelectorAll('.account-item').forEach(item => {
         const accountId = item.dataset.accountId;
@@ -538,4 +541,103 @@ function restoreStagedFromSession() {
             console.error('Failed to restore staged folders:', e);
         }
     }
+}
+
+/**
+ * Check for interrupted commits that can be resumed.
+ * Shows a modal prompt if a pending commit is found.
+ */
+async function checkPendingCommit() {
+    try {
+        const response = await fetch('/api/commit/pending');
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        if (!data.hasPending) return;
+        
+        // Format the timestamp
+        const createdDate = new Date(data.createdAt * 1000);
+        const timeAgo = formatTimeAgo(createdDate);
+        
+        // Show resume prompt
+        const { showConfirm } = await import('./modals.js');
+        const resume = await showConfirm(
+            'Resume Interrupted Commit',
+            `A commit was interrupted ${timeAgo}. ` +
+            `${data.committed} of ${data.total} items were committed before the interruption.\n\n` +
+            `Would you like to resume and commit the remaining ${data.pending} items?`,
+            {
+                confirmText: 'Resume',
+                cancelText: 'Discard',
+                confirmClass: 'btn-primary',
+            }
+        );
+        
+        if (resume) {
+            // Open review page and trigger resume
+            const { showReviewView } = await import('./views/review.js');
+            await showReviewView();
+            resumeCommit(data.commitId);
+        } else {
+            // Discard the pending commit
+            await fetch('/api/commit/discard', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ commitId: data.commitId }),
+            });
+        }
+    } catch (e) {
+        console.error('Failed to check for pending commit:', e);
+    }
+}
+
+/**
+ * Resume an interrupted commit.
+ */
+async function resumeCommit(commitId) {
+    const modal = document.getElementById('commitProgressModal');
+    const progressContainer = document.getElementById('commitProgressContent');
+    modal.classList.add('active');
+    
+    const { createProgress } = await import('./components/progress.js');
+    const progress = createProgress(progressContainer);
+    
+    try {
+        await progress.startPostStream('/api/commit/stream', {
+            resumeCommitId: commitId,
+        }, {
+            onComplete: async (data) => {
+                modal.classList.remove('active');
+                const { showAlert } = await import('./modals.js');
+                showAlert('Commit Complete', data.message || 'Commit resumed and completed.');
+            },
+            onError: async (err) => {
+                modal.classList.remove('active');
+                const { showAlert } = await import('./modals.js');
+                showAlert('Commit Failed', err.error || 'An error occurred during commit.');
+            },
+        });
+    } catch (e) {
+        console.error('Resume commit error:', e);
+        modal.classList.remove('active');
+    }
+}
+
+/**
+ * Format a date as relative time (e.g., "5 minutes ago", "2 hours ago").
+ */
+function formatTimeAgo(date) {
+    const seconds = Math.floor((new Date() - date) / 1000);
+    
+    if (seconds < 60) return 'just now';
+    if (seconds < 3600) {
+        const mins = Math.floor(seconds / 60);
+        return `${mins} minute${mins !== 1 ? 's' : ''} ago`;
+    }
+    if (seconds < 86400) {
+        const hours = Math.floor(seconds / 3600);
+        return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+    }
+    const days = Math.floor(seconds / 86400);
+    return `${days} day${days !== 1 ? 's' : ''} ago`;
 }

@@ -82,7 +82,16 @@ def create_app(test_config: dict = None) -> Flask:
                 return jsonify({"error": "Session expired", "code": "session_expired"}), 401
             return redirect(url_for("auth.login"))
         
-        # Session timeout check
+        # Session timeout check - skip for SSE streaming endpoints
+        streaming_endpoints = {
+            "api.stream_account_emails",
+            "api.stream_commit",
+        }
+        if request.endpoint in streaming_endpoints:
+            # Extend session for streaming - these can take a long time
+            session["last_activity"] = time.time()
+            return
+        
         try:
             timeout_minutes = int(get_setting("session_timeout", "30"))
             if timeout_minutes == 0:  # "Never" option

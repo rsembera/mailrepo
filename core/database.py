@@ -350,6 +350,22 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+-- Pending commit tracking for resume after interruption
+CREATE TABLE IF NOT EXISTS pending_commit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    commit_id TEXT NOT NULL,
+    item_type TEXT NOT NULL,              -- 'email' or 'folder'
+    item_data TEXT NOT NULL,              -- JSON blob with all item details
+    destination_folder_id INTEGER NOT NULL,
+    source_action TEXT,                   -- 'leave', 'archive', 'trash', 'delete'
+    status TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'committed', 'post_action_done'
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    FOREIGN KEY (destination_folder_id) REFERENCES folders(id)
+);
+CREATE INDEX IF NOT EXISTS idx_pending_commit_id ON pending_commit(commit_id);
+CREATE INDEX IF NOT EXISTS idx_pending_commit_status ON pending_commit(status);
 """
 
 
