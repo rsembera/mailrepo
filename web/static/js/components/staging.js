@@ -126,7 +126,8 @@ function renderFolderTreeLevel(folders, allFolders, depth) {
         const hasChildren = children.length > 0;
         const isSelected = selectedDestinationFolder === folder.id;
         const colorDot = folder.color ? 
-            `<span class="tree-color-dot" style="background: ${folder.color}"></span>` : '';
+            `<span class="tree-color-dot" style="background: ${folder.color}"></span>` : 
+            `<span class="tree-color-dot-spacer"></span>`;
         const indent = depth * 20;
         
         html += `<div class="folder-tree-item ${isSelected ? 'selected' : ''}" 

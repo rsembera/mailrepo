@@ -629,6 +629,11 @@
     flex-shrink: 0;
 }
 
+.tree-color-dot-spacer {
+    width: 8px;
+    flex-shrink: 0;
+}
+
 .tree-folder-icon {
     width: 16px;
     height: 16px;

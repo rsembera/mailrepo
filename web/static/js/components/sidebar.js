@@ -266,6 +266,7 @@ export function refreshSidebarFolders() {
     
     const visibleFolders = state.folders.filter(f => !f.deleted_at);
     const topLevel = visibleFolders.filter(f => !f.parent_id);
+    topLevel.sort((a, b) => a.name.localeCompare(b.name));
     const addBtn = archiveSection.querySelector('.add-folder-btn');
     
     if (topLevel.length === 0) {
@@ -280,6 +281,7 @@ export function refreshSidebarFolders() {
     } else {
         topLevel.forEach(folder => {
             const children = visibleFolders.filter(f => f.parent_id == folder.id);
+            children.sort((a, b) => a.name.localeCompare(b.name));
             const folderEl = createFolderTreeItem(folder, children, 0);
             if (addBtn) {
                 archiveSection.insertBefore(folderEl, addBtn);
@@ -330,6 +332,7 @@ function createFolderTreeItem(folder, children, depth) {
         
         children.forEach(child => {
             const grandchildren = state.folders.filter(f => f.parent_id == child.id && !f.deleted_at);
+            grandchildren.sort((a, b) => a.name.localeCompare(b.name));
             const childEl = createFolderTreeItem(child, grandchildren, depth + 1);
             childrenContainer.appendChild(childEl);
         });

@@ -118,6 +118,7 @@ function renderFolderManagementList() {
     const filteredFolders = filterFolders(state.folders, archiveFilter);
     const filteredCount = filteredFolders.length;
     const topLevelFolders = filteredFolders.filter(f => !f.parent_id);
+    topLevelFolders.sort((a, b) => a.name.localeCompare(b.name));
     
     // Update context meta
     if (contextMeta) {
