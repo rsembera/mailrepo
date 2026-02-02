@@ -84,135 +84,59 @@ export function openStageModal() {
     modal.classList.add('active');
 }
 
+// Track the folder tree controller for the stage modal
+let folderTreeController = null;
+
 /**
  * Render tree-style folder selector in the stage modal.
- * Click folder to select, use button to add subfolder.
+ * Uses the unified folder-tree component.
  */
 export function renderFolderSelectTree() {
     const list = document.getElementById('folderSelectList');
     if (!list) return;
     
-    const visibleFolders = state.folders.filter(f => !f.deleted_at);
-    const rootFolders = visibleFolders.filter(f => !f.parent_id);
-    rootFolders.sort((a, b) => a.name.localeCompare(b.name));
-    
-    let html = '';
-    
-    // Header with ARCHIVE label and add button
-    html += `<div class="folder-tree-header">
+    // Build header with ARCHIVE label and add button
+    let html = `<div class="folder-tree-header">
         <span class="folder-tree-title">ARCHIVE</span>
-        <button class="folder-tree-add-root" onclick="createFolderInSelected()" title="New folder">
+        <button class="folder-tree-add-root" id="addRootFolderBtn" title="New folder">
             <i data-lucide="plus"></i>
         </button>
     </div>`;
-    
-    // Folder tree
-    html += `<div class="folder-tree-container">`;
-    
-    if (rootFolders.length === 0) {
-        html += `<div class="folder-tree-empty">No folders yet. Create one to get started.</div>`;
-    } else {
-        html += renderFolderTreeLevel(rootFolders, visibleFolders, 0);
-    }
-    
-    html += `</div>`;
+    html += `<div class="folder-tree-container" id="stagingTreeContainer"></div>`;
     
     list.innerHTML = html;
+    
+    // Attach header button listener
+    document.getElementById('addRootFolderBtn')?.addEventListener('click', () => {
+        createFolderInTree(null);
+    });
+    
+    // Render the folder tree into the container
+    const container = document.getElementById('stagingTreeContainer');
+    if (!container) return;
+    
+    folderTreeController = renderFolderTree(container, {
+        selectable: true,
+        selectedId: selectedDestinationFolder,
+        showChevrons: true,
+        showColorDots: true,
+        showAddButtons: true,
+        onSelect: (folderId) => {
+            selectedDestinationFolder = folderId;
+            document.getElementById('confirmStageBtn').disabled = false;
+        },
+        onAddFolder: (parentId) => {
+            createFolderInTree(parentId);
+        }
+    });
+    
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 /**
- * Render a level of the folder tree recursively.
- */
-function renderFolderTreeLevel(folders, allFolders, depth) {
-    let html = '';
-    
-    folders.forEach(folder => {
-        const children = allFolders.filter(f => f.parent_id == folder.id);
-        children.sort((a, b) => a.name.localeCompare(b.name));
-        const hasChildren = children.length > 0;
-        const isSelected = selectedDestinationFolder === folder.id;
-        const colorDot = folder.color ? 
-            `<span class="tree-color-dot" style="background: ${folder.color}"></span>` : 
-            `<span class="tree-color-dot-spacer"></span>`;
-        const indent = depth * 20;
-        
-        html += `<div class="folder-tree-item ${isSelected ? 'selected' : ''}" 
-                      data-id="${folder.id}" 
-                      style="padding-left: ${indent + 8}px"
-                      onclick="selectFolderInTree(${folder.id})">
-            ${hasChildren ? `<span class="tree-toggle" onclick="event.stopPropagation(); toggleTreeFolder(${folder.id})"><i data-lucide="chevron-right" class="tree-toggle-icon" data-folder-id="${folder.id}"></i></span>` : `<span class="tree-toggle-spacer"></span>`}
-            ${colorDot}
-            <i data-lucide="folder" class="tree-folder-icon"></i>
-            <span class="tree-folder-name">${escapeHtml(folder.name)}</span>
-            <button class="tree-add-btn" onclick="event.stopPropagation(); createFolderInTree(${folder.id})" title="Add subfolder">
-                <i data-lucide="plus"></i>
-            </button>
-        </div>`;
-        
-        if (hasChildren) {
-            html += `<div class="folder-tree-children" data-parent-id="${folder.id}" style="display: none;">`;
-            html += renderFolderTreeLevel(children, allFolders, depth + 1);
-            html += `</div>`;
-        }
-    });
-    
-    return html;
-}
-
-/**
- * Select a folder in the tree.
- */
-window.selectFolderInTree = function(folderId) {
-    selectedDestinationFolder = folderId;
-    document.getElementById('confirmStageBtn').disabled = false;
-    
-    // Update selection styling
-    document.querySelectorAll('.folder-tree-item').forEach(item => {
-        item.classList.toggle('selected', item.dataset.id == folderId);
-    });
-};
-
-/**
- * Toggle expand/collapse of a folder's children.
- */
-window.toggleTreeFolder = function(folderId) {
-    const children = document.querySelector(`.folder-tree-children[data-parent-id="${folderId}"]`);
-    const icon = document.querySelector(`.tree-toggle-icon[data-folder-id="${folderId}"]`);
-    
-    if (children) {
-        const isExpanded = children.style.display !== 'none';
-        children.style.display = isExpanded ? 'none' : 'block';
-        if (icon) {
-            icon.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(90deg)';
-        }
-    }
-};
-
-/**
- * Expand a folder to show its children.
- */
-function expandTreeFolder(folderId) {
-    const children = document.querySelector(`.folder-tree-children[data-parent-id="${folderId}"]`);
-    const icon = document.querySelector(`.tree-toggle-icon[data-folder-id="${folderId}"]`);
-    
-    if (children) {
-        children.style.display = 'block';
-        if (icon) icon.style.transform = 'rotate(90deg)';
-    }
-}
-
-/**
- * Create folder inside currently selected folder (or root if none selected).
- */
-window.createFolderInSelected = function() {
-    createFolderInTree(selectedDestinationFolder);
-};
-
-/**
  * Create a new folder in the tree.
  */
-window.createFolderInTree = async function(parentId) {
+async function createFolderInTree(parentId) {
     const name = await showPrompt('New Folder Name', '', { placeholder: 'e.g., Client: Smith' });
     
     // Validate folder name
@@ -220,14 +144,12 @@ window.createFolderInTree = async function(parentId) {
     
     const trimmedName = name.trim();
     if (!trimmedName) {
-        const { showAlert } = await import('../modals.js');
         showAlert('Invalid Name', 'Folder name cannot be empty.');
         return;
     }
     
     // Check for invalid characters/names
     if (/^[.\s]+$/.test(trimmedName) || /[\/\\]/.test(trimmedName)) {
-        const { showAlert } = await import('../modals.js');
         showAlert('Invalid Name', 'Folder name contains invalid characters.');
         return;
     }
@@ -260,16 +182,15 @@ window.createFolderInTree = async function(parentId) {
         renderFolderSelectTree();
         
         // Expand parent if created as subfolder
-        if (parentId) {
-            expandTreeFolder(parentId);
+        if (parentId && folderTreeController) {
+            folderTreeController.expand(parentId);
         }
         
     } catch (error) {
         console.error('Error creating folder:', error);
-        const { showAlert } = await import('../modals.js');
         showAlert('Error', error.message);
     }
-};
+}
 
 /**
  * Legacy handler for folder selection (inline onclick compatibility).

@@ -1,257 +1,255 @@
 /**
- * MailRepo - Reusable Folder Tree Component
+ * MailRepo - Unified Folder Tree Component
  * 
- * Renders hierarchical folder trees with configurable behavior:
- * - Sidebar archive folders (selectable, expandable)
- * - Folder selection view (checkboxes for bulk staging)
- * - Destination folder modal (selectable for staging target)
+ * Renders folder trees for:
+ * - Sidebar archive folders
+ * - Stage modal destination picker
+ * - Folder management view
+ * 
+ * All use the same nested structure:
+ *   .folder-tree-item (block container)
+ *     .folder-tree-row (flex row with content)
+ *     .folder-tree-children (block container for nested items)
  */
 
 import { escapeHtml } from '../utils.js';
 import { state } from '../state.js';
 
 /**
- * Configuration options for folder tree rendering.
- * @typedef {Object} FolderTreeConfig
- * @property {boolean} checkboxes - Show checkboxes for multi-select
- * @property {boolean} selectable - Allow single-selection (click to select)
- * @property {boolean} expandable - Show expand/collapse chevrons
- * @property {boolean} startExpanded - Start with children expanded
- * @property {boolean} showNewFolder - Show "New Folder" option at top
- * @property {Function} onSelect - Callback when folder is selected (id)
- * @property {Function} onCheck - Callback when checkbox changes (id, checked)
- * @property {Function} filter - Filter function for folders
- * @property {string} itemClass - Additional CSS class for items
+ * Render a folder tree into a container.
+ * 
+ * @param {HTMLElement} container - Container to render into
+ * @param {Object} options - Configuration options
+ * @param {Function} options.filter - Filter function for folders (default: non-deleted)
+ * @param {boolean} options.showChevrons - Show expand/collapse chevrons (default: true)
+ * @param {boolean} options.showColorDots - Show color dots (default: true)
+ * @param {boolean} options.showAddButtons - Show "add subfolder" buttons (default: false)
+ * @param {boolean} options.selectable - Enable click-to-select mode (default: false)
+ * @param {number} options.selectedId - Currently selected folder ID
+ * @param {string} options.rowClass - Additional class for rows
+ * @param {string} options.itemDataAttr - Data attribute name for item (default: 'id')
+ * @param {Function} options.onSelect - Callback when folder selected: (folderId) => void
+ * @param {Function} options.onToggle - Callback when folder toggled: (folderId, isExpanded) => void
+ * @param {Function} options.onAddFolder - Callback when add clicked: (parentId) => void
+ * @param {Function} options.onClick - Callback for row click: (folderId, event) => void
+ * @param {Function} options.renderActions - Custom action renderer: (folder) => HTML string
+ * @returns {Object} Controller with refresh(), setSelected(), expand(), collapse()
  */
-
-const defaultConfig = {
-    checkboxes: false,
-    selectable: true,
-    expandable: true,
-    startExpanded: false,
-    showNewFolder: false,
-    onSelect: null,
-    onCheck: null,
-    filter: (f) => !f.deleted_at,
-    itemClass: '',
-};
-
-/**
- * Render a folder tree into a container element.
- * @param {HTMLElement} container - Container element to render into
- * @param {Object} config - Configuration options
- * @returns {Object} Controller with methods to interact with the tree
- */
-export function renderFolderTree(container, config = {}) {
-    const cfg = { ...defaultConfig, ...config };
+export function renderFolderTree(container, options = {}) {
+    const opts = {
+        filter: f => !f.deleted_at,
+        showChevrons: true,
+        showColorDots: true,
+        showAddButtons: false,
+        selectable: false,
+        selectedId: null,
+        rowClass: '',
+        itemDataAttr: 'id',
+        onSelect: null,
+        onToggle: null,
+        onAddFolder: null,
+        onClick: null,
+        renderActions: null,
+        ...options
+    };
     
-    // Get and filter folders
-    const visibleFolders = state.folders.filter(cfg.filter);
-    const topLevel = visibleFolders.filter(f => !f.parent_id);
+    // Get visible folders
+    const visibleFolders = state.folders.filter(opts.filter);
+    const rootFolders = visibleFolders.filter(f => !f.parent_id);
+    rootFolders.sort((a, b) => a.name.localeCompare(b.name));
     
-    // Sort alphabetically
-    topLevel.sort((a, b) => a.name.localeCompare(b.name));
+    // Track expanded state
+    const expandedIds = new Set();
+    let selectedId = opts.selectedId;
     
-    // Track state
-    let selectedId = null;
-    const checkedIds = new Set();
-    
-    // Build HTML
-    let html = '';
-    
-    if (cfg.showNewFolder) {
-        html += `
-            <div class="folder-tree-item folder-tree-new" data-action="new">
-                <div class="folder-tree-row">
-                    <span class="folder-tree-spacer"></span>
-                    <i data-lucide="plus"></i>
-                    <span class="folder-tree-label">New Folder</span>
-                </div>
-            </div>
-        `;
+    // Render the tree
+    function render() {
+        if (rootFolders.length === 0) {
+            container.innerHTML = '<div class="folder-tree-empty">No folders</div>';
+            return;
+        }
+        
+        let html = '';
+        rootFolders.forEach(folder => {
+            html += renderItem(folder, visibleFolders, 0);
+        });
+        container.innerHTML = html;
+        
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        attachEventListeners();
     }
     
-    topLevel.forEach(folder => {
-        html += renderTreeItem(folder, visibleFolders, 0, cfg);
-    });
-    
-    container.innerHTML = html;
-    
-    // Render Lucide icons
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+    // Render a single item with children
+    function renderItem(folder, allFolders, depth) {
+        const children = allFolders.filter(f => f.parent_id == folder.id);
+        children.sort((a, b) => a.name.localeCompare(b.name));
+        const hasChildren = children.length > 0;
+        const isExpanded = expandedIds.has(folder.id);
+        const isSelected = selectedId === folder.id;
+        const indent = depth * 20;
+        
+        let html = `<div class="folder-tree-item" data-${opts.itemDataAttr}="${folder.id}">`;
+        
+        // Row
+        const rowClasses = ['folder-tree-row', opts.rowClass, isSelected ? 'selected' : ''].filter(Boolean).join(' ');
+        html += `<div class="${rowClasses}" style="padding-left: ${12 + indent}px">`;
+        
+        // Chevron
+        if (opts.showChevrons) {
+            if (hasChildren) {
+                const rotation = isExpanded ? 'style="transform: rotate(90deg)"' : '';
+                html += `<span class="folder-tree-toggle"><i data-lucide="chevron-right" class="folder-tree-chevron" data-folder-id="${folder.id}" ${rotation}></i></span>`;
+            } else {
+                html += `<span class="folder-tree-toggle-spacer"></span>`;
+            }
+        }
+        
+        // Color dot
+        if (opts.showColorDots) {
+            if (folder.color) {
+                html += `<span class="folder-tree-color" style="background: ${folder.color}"></span>`;
+            } else {
+                html += `<span class="folder-tree-color folder-tree-color-empty"></span>`;
+            }
+        }
+        
+        // Icon and label
+        html += `<i data-lucide="folder" class="folder-tree-icon"></i>`;
+        html += `<span class="folder-tree-label">${escapeHtml(folder.name)}</span>`;
+        
+        // Add button
+        if (opts.showAddButtons) {
+            html += `<button class="folder-tree-add-btn" data-parent-id="${folder.id}" title="Add subfolder"><i data-lucide="plus"></i></button>`;
+        }
+        
+        // Custom actions
+        if (opts.renderActions) {
+            html += opts.renderActions(folder);
+        }
+        
+        html += `</div>`; // Close row
+        
+        // Children
+        if (hasChildren) {
+            const display = isExpanded ? 'block' : 'none';
+            html += `<div class="folder-tree-children" data-parent-id="${folder.id}" style="display: ${display}">`;
+            children.forEach(child => {
+                html += renderItem(child, allFolders, depth + 1);
+            });
+            html += `</div>`;
+        }
+        
+        html += `</div>`; // Close item
+        return html;
+    }
     
     // Attach event listeners
-    attachTreeListeners(container, cfg, { selectedId, checkedIds });
+    function attachEventListeners() {
+        // Row clicks
+        container.querySelectorAll('.folder-tree-row').forEach(row => {
+            row.addEventListener('click', (e) => {
+                const item = row.closest('.folder-tree-item');
+                const folderId = parseInt(item.dataset[opts.itemDataAttr]);
+                
+                // Chevron click - toggle only
+                if (e.target.closest('.folder-tree-toggle')) {
+                    e.stopPropagation();
+                    toggleFolder(folderId);
+                    return;
+                }
+                
+                // Add button click
+                if (e.target.closest('.folder-tree-add-btn')) {
+                    e.stopPropagation();
+                    if (opts.onAddFolder) opts.onAddFolder(folderId);
+                    return;
+                }
+                
+                // Selection
+                if (opts.selectable) {
+                    selectedId = folderId;
+                    container.querySelectorAll('.folder-tree-row').forEach(r => r.classList.remove('selected'));
+                    row.classList.add('selected');
+                    if (opts.onSelect) opts.onSelect(folderId);
+                }
+                
+                // General click callback
+                if (opts.onClick) opts.onClick(folderId, e);
+            });
+        });
+    }
+    
+    // Toggle folder expansion
+    function toggleFolder(folderId) {
+        const children = container.querySelector(`.folder-tree-children[data-parent-id="${folderId}"]`);
+        const chevron = container.querySelector(`.folder-tree-chevron[data-folder-id="${folderId}"]`);
+        
+        if (!children) return;
+        
+        const isExpanded = expandedIds.has(folderId);
+        
+        if (isExpanded) {
+            expandedIds.delete(folderId);
+            children.style.display = 'none';
+            if (chevron) chevron.style.transform = 'rotate(0deg)';
+            
+            // Collapse all descendants
+            collapseDescendants(folderId);
+        } else {
+            expandedIds.add(folderId);
+            children.style.display = 'block';
+            if (chevron) chevron.style.transform = 'rotate(90deg)';
+        }
+        
+        if (opts.onToggle) opts.onToggle(folderId, !isExpanded);
+    }
+    
+    // Collapse all descendants
+    function collapseDescendants(parentId) {
+        const childContainers = container.querySelectorAll(`.folder-tree-children[data-parent-id="${parentId}"] .folder-tree-children`);
+        childContainers.forEach(child => {
+            child.style.display = 'none';
+            const childId = parseInt(child.dataset.parentId);
+            expandedIds.delete(childId);
+            const chevron = container.querySelector(`.folder-tree-chevron[data-folder-id="${childId}"]`);
+            if (chevron) chevron.style.transform = 'rotate(0deg)';
+        });
+    }
+    
+    // Initial render
+    render();
     
     // Return controller
     return {
+        refresh: () => render(),
         getSelected: () => selectedId,
-        getChecked: () => Array.from(checkedIds),
         setSelected: (id) => {
             selectedId = id;
             container.querySelectorAll('.folder-tree-row').forEach(row => {
-                row.classList.toggle('selected', row.closest('.folder-tree-item')?.dataset.id === String(id));
+                const item = row.closest('.folder-tree-item');
+                row.classList.toggle('selected', parseInt(item.dataset[opts.itemDataAttr]) === id);
             });
         },
-        refresh: () => renderFolderTree(container, config),
+        expand: (folderId) => {
+            if (!expandedIds.has(folderId)) toggleFolder(folderId);
+        },
+        collapse: (folderId) => {
+            if (expandedIds.has(folderId)) toggleFolder(folderId);
+        },
+        isExpanded: (folderId) => expandedIds.has(folderId)
     };
 }
 
 /**
- * Render a single tree item with children.
- */
-function renderTreeItem(folder, allFolders, depth, cfg) {
-    const children = allFolders.filter(f => f.parent_id == folder.id);
-    const hasChildren = children.length > 0;
-    const indent = depth * 20;
-    
-    // Sort children
-    children.sort((a, b) => a.name.localeCompare(b.name));
-    
-    const colorDot = folder.color ? 
-        `<span class="folder-tree-color" style="background: ${folder.color}"></span>` : '';
-    
-    let html = `<div class="folder-tree-item ${cfg.itemClass}" data-id="${folder.id}">`;
-    html += `<div class="folder-tree-row" style="padding-left: ${12 + indent}px">`;
-    
-    // Chevron or spacer
-    if (cfg.expandable && hasChildren) {
-        const rotated = cfg.startExpanded ? 'style="transform: rotate(90deg)"' : '';
-        html += `<i data-lucide="chevron-right" class="folder-tree-chevron" ${rotated}></i>`;
-    } else {
-        html += `<span class="folder-tree-spacer"></span>`;
-    }
-    
-    // Checkbox (if enabled)
-    if (cfg.checkboxes) {
-        html += `<label class="folder-tree-checkbox"><input type="checkbox" data-id="${folder.id}"></label>`;
-    }
-    
-    // Color dot, icon, label
-    html += colorDot;
-    html += `<i data-lucide="folder" class="folder-tree-icon"></i>`;
-    html += `<span class="folder-tree-label">${escapeHtml(folder.name)}</span>`;
-    
-    html += `</div>`;
-    
-    // Children container
-    if (hasChildren) {
-        const display = cfg.startExpanded ? 'block' : 'none';
-        html += `<div class="folder-tree-children" style="display: ${display}">`;
-        children.forEach(child => {
-            html += renderTreeItem(child, allFolders, depth + 1, cfg);
-        });
-        html += `</div>`;
-    }
-    
-    html += `</div>`;
-    return html;
-}
-
-/**
- * Attach event listeners to tree items.
- */
-function attachTreeListeners(container, cfg, trackingState) {
-    // Handle row clicks
-    container.querySelectorAll('.folder-tree-row').forEach(row => {
-        row.addEventListener('click', (e) => {
-            const item = row.closest('.folder-tree-item');
-            
-            // Handle "New Folder" action
-            if (item?.dataset.action === 'new') {
-                if (cfg.onNewFolder) cfg.onNewFolder();
-                return;
-            }
-            
-            // Handle chevron click (expand/collapse only)
-            if (e.target.closest('.folder-tree-chevron')) {
-                e.stopPropagation();
-                toggleExpand(row);
-                return;
-            }
-            
-            // Handle checkbox click
-            if (e.target.closest('.folder-tree-checkbox')) {
-                return; // Let the checkbox handler deal with it
-            }
-            
-            // Handle selection
-            if (cfg.selectable && item?.dataset.id) {
-                const id = item.dataset.id;
-                trackingState.selectedId = id;
-                
-                container.querySelectorAll('.folder-tree-row').forEach(r => {
-                    r.classList.remove('selected');
-                });
-                row.classList.add('selected');
-                
-                if (cfg.onSelect) cfg.onSelect(id);
-            }
-        });
-    });
-    
-    // Handle checkbox changes
-    if (cfg.checkboxes) {
-        container.querySelectorAll('.folder-tree-checkbox input').forEach(checkbox => {
-            checkbox.addEventListener('change', (e) => {
-                const id = checkbox.dataset.id;
-                const checked = checkbox.checked;
-                
-                if (checked) {
-                    trackingState.checkedIds.add(id);
-                } else {
-                    trackingState.checkedIds.delete(id);
-                }
-                
-                // Cascade to children
-                const item = checkbox.closest('.folder-tree-item');
-                const childCheckboxes = item.querySelectorAll('.folder-tree-children input[type="checkbox"]');
-                childCheckboxes.forEach(child => {
-                    child.checked = checked;
-                    if (checked) {
-                        trackingState.checkedIds.add(child.dataset.id);
-                    } else {
-                        trackingState.checkedIds.delete(child.dataset.id);
-                    }
-                });
-                
-                if (cfg.onCheck) cfg.onCheck(id, checked, trackingState.checkedIds);
-            });
-        });
-    }
-}
-
-/**
- * Toggle expand/collapse of a tree item.
- */
-function toggleExpand(row) {
-    const chevron = row.querySelector('.folder-tree-chevron');
-    const item = row.closest('.folder-tree-item');
-    const children = item?.querySelector('.folder-tree-children');
-    
-    if (!children) return;
-    
-    const isExpanded = children.style.display !== 'none';
-    children.style.display = isExpanded ? 'none' : 'block';
-    
-    if (chevron) {
-        chevron.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(90deg)';
-    }
-}
-
-/**
- * Get folder icon based on name.
- * @param {string} name - Folder name
- * @returns {string} Lucide icon name
+ * Get folder icon name based on folder name.
  */
 export function getFolderIcon(name) {
-    const upper = name.toUpperCase();
+    const upper = (name || '').toUpperCase();
     if (upper === 'INBOX') return 'inbox';
     if (upper.includes('SENT')) return 'send';
     if (upper.includes('DRAFT')) return 'file-edit';
     if (upper.includes('SPAM') || upper.includes('JUNK')) return 'alert-triangle';
     if (upper.includes('TRASH') || upper.includes('DELETED')) return 'trash-2';
     if (upper.includes('ARCHIVE')) return 'archive';
-    if (upper.includes('STAR') || upper.includes('FLAG')) return 'star';
     return 'folder';
 }
