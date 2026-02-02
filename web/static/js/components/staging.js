@@ -326,11 +326,23 @@ function computeArchivePaths(folderPaths, sourceType, importId) {
         // Find if any ancestor path is also being staged
         let ancestorPath = null;
         for (const otherPath of sorted) {
-            if (otherPath !== path && path.startsWith(otherPath + '/')) {
-                // otherPath is an ancestor of path
-                // Use the longest matching ancestor (most immediate parent)
+            if (otherPath === path) continue;
+            
+            // Standard check: path is under otherPath directory
+            if (path.startsWith(otherPath + '/')) {
                 if (!ancestorPath || otherPath.length > ancestorPath.length) {
                     ancestorPath = otherPath;
+                }
+            }
+            
+            // Apple Mail special case: Parent.mbox corresponds to Parent/ directory
+            // So if otherPath is "Foo.mbox" and path is "Foo/Bar.mbox", they're parent/child
+            if (otherPath.endsWith('.mbox')) {
+                const parentDir = otherPath.slice(0, -5); // Remove .mbox
+                if (path.startsWith(parentDir + '/')) {
+                    if (!ancestorPath || otherPath.length > ancestorPath.length) {
+                        ancestorPath = otherPath;
+                    }
                 }
             }
         }
