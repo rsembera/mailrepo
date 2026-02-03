@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>{% block title %}{{ app_name }}{% endblock %}</title>
     
     <!-- Favicons -->
@@ -121,9 +122,28 @@
         }
         
         // Also intercept fetch calls to detect disconnect on API requests
+        // and inject CSRF token on state-changing requests
         const originalFetch = window.fetch;
-        window.fetch = function(...args) {
-            return originalFetch.apply(this, args)
+        window.fetch = function(resource, init) {
+            init = init || {};
+            const method = (init.method || 'GET').toUpperCase();
+            if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+                const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                if (csrfMeta) {
+                    init.headers = init.headers || {};
+                    // Handle both Headers objects and plain objects
+                    if (init.headers instanceof Headers) {
+                        if (!init.headers.has('X-CSRF-Token')) {
+                            init.headers.set('X-CSRF-Token', csrfMeta.content);
+                        }
+                    } else {
+                        if (!init.headers['X-CSRF-Token']) {
+                            init.headers['X-CSRF-Token'] = csrfMeta.content;
+                        }
+                    }
+                }
+            }
+            return originalFetch.call(this, resource, init)
                 .catch(error => {
                     // Network error = server disconnected
                     if (error.name === 'TypeError') {

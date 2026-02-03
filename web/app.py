@@ -4,6 +4,7 @@ MailRepo - Flask application factory.
 Creates and configures the Flask application.
 """
 
+import secrets
 import time
 from flask import Flask, redirect, url_for, session, g, request, jsonify
 
@@ -82,6 +83,13 @@ def create_app(test_config: dict = None) -> Flask:
                 return jsonify({"error": "Session expired", "code": "session_expired"}), 401
             return redirect(url_for("auth.login"))
         
+        # CSRF protection for state-changing API requests
+        if is_api_request() and request.method in ("POST", "PUT", "DELETE", "PATCH"):
+            token = request.headers.get("X-CSRF-Token", "")
+            expected = session.get("csrf_token", "")
+            if not expected or not secrets.compare_digest(token, expected):
+                return jsonify({"error": "Invalid CSRF token"}), 403
+        
         # Session timeout check - skip for SSE streaming endpoints
         streaming_endpoints = {
             "api.stream_account_emails",
@@ -121,9 +129,15 @@ def create_app(test_config: dict = None) -> Flask:
     @app.context_processor
     def inject_globals():
         """Inject global variables into all templates."""
+        # Generate CSRF token if authenticated and not already set
+        csrf_token = session.get("csrf_token", "")
+        if session.get("authenticated") and not csrf_token:
+            csrf_token = secrets.token_hex(32)
+            session["csrf_token"] = csrf_token
         return {
             "app_name": Config.APP_NAME,
             "app_version": Config.VERSION,
+            "csrf_token": csrf_token,
         }
     
     # Teardown: ensure clean state
