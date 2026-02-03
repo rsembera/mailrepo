@@ -142,7 +142,7 @@ function renderBackupsView() {
                     <div class="form-group">
                         <label class="setting-label">Post-Backup Command (optional)</label>
                         <input type="text" id="post-backup-command" class="form-input" placeholder="e.g., rsync -av ~/mailrepo/backups/ user@server:~/backups/">
-                        <p class="setting-hint">Command to run after each backup, such as an rsync script for remote sync.</p>
+                        <p class="setting-hint">Command to run after each backup, such as an rsync script for remote sync. Runs with your system user privileges.</p>
                     </div>
                     <div class="backup-settings-actions">
                         <button class="btn btn-primary" id="save-settings-btn" disabled>Save Settings</button>
