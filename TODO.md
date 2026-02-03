@@ -39,6 +39,16 @@
 
 ---
 
+## Completed (Session 29 - February 3, 2026)
+
+### Security Review
+- [x] CSRF protection for all state-changing API endpoints
+- [x] Global fetch interceptor auto-injects token (zero refactoring)
+- [x] Reviewed email rendering security (iframe sandbox, CSP — already solid)
+- [x] Reviewed HTML sanitization (not needed — sandbox approach matches email clients)
+
+---
+
 ## Completed (Session 28 - February 2, 2026)
 
 ### Folder Tree Refactor

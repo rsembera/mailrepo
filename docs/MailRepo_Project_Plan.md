@@ -270,6 +270,15 @@ CREATE TABLE settings (
 - Runs on localhost only (by default)
 - Optional: Tailscale for remote access
 - No multi-user support (solo practitioner tool)
+- CSRF tokens on all state-changing API requests
+- Session timeout with configurable duration
+- Login rate limiting (5 attempts, 60s lockout)
+
+### Email Rendering
+
+- HTML emails rendered in sandboxed iframe (no script execution)
+- CSP blocks remote content (images, fonts) by default
+- "Load Remote Content" button for explicit user opt-in
 
 ---
 

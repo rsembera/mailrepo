@@ -4,6 +4,38 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## February 3, 2026 — Afternoon Session (Session 29)
+
+**Participants:** Rick, Claude
+
+**Work Done:**
+
+### Security Review
+
+1. **CSRF protection for API endpoints** (`461bf6b`)
+   - Added CSRF token generation at login, stored in Flask session
+   - Token embedded in `<meta name="csrf-token">` tag on every page
+   - Extended existing fetch interceptor in base.html to auto-inject `X-CSRF-Token` header on all POST/PUT/DELETE/PATCH requests
+   - Server validates token on all state-changing `/api/*` requests, returns 403 if missing or invalid
+   - Uses `secrets.compare_digest` for timing-safe comparison
+   - Zero changes to existing fetch calls (47 call sites covered automatically)
+
+2. **Security review findings:**
+   - **Email rendering (no action needed):** HTML emails rendered in sandboxed iframe with `allow-same-origin allow-modals` (no `allow-scripts`). CSP blocks remote content by default. "Load Remote Content" button allows images when user explicitly requests. This matches standard email client behavior.
+   - **HTML sanitization (not added):** Considered server-side sanitization (bleach/nh3) but decided against it. The iframe sandbox already prevents JS execution, and sanitization could break legitimate email rendering. Desktop email clients (Thunderbird, Apple Mail) use the same sandbox approach.
+   - **Flask secret key:** Already persisted to disk with 0o600 permissions ✓
+   - **Session timeout:** Already implemented with configurable duration ✓
+   - **Localhost binding:** Already bound to 127.0.0.1 only ✓
+
+**Files Changed:**
+- `web/app.py` — CSRF token generation and validation
+- `web/templates/base.html` — Meta tag + fetch interceptor extension
+
+**Commits:**
+- `461bf6b` — Add CSRF protection for all state-changing API requests
+
+---
+
 ## January 30, 2026 — Evening Session (Session 25)
 
 **Participants:** Rick, Claude
