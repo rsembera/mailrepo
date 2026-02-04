@@ -4,6 +4,46 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## February 4, 2026 — Afternoon Session (Session 31)
+
+**Participants:** Rick, Claude (Opus 4.5)
+
+**Work Done:**
+
+### Manual Testing Begins (TESTING_CHECKLIST.md)
+
+Nuked database and archive for fresh start. Began working through the testing checklist from the top.
+
+**Sections tested:**
+- First Run / Setup — ✅ all pass
+- Accounts (IMAP) — ✅ added two accounts (NCF Mail, Personal Gmail), both connected
+
+### Bug Fixes
+
+1. **Modal z-index stacking** — Error modal appeared behind Add Account modal (both at z-index 1000). Fixed by setting alert/confirm/prompt modals to z-index 1100 in modals.css.
+
+2. **CSS syntax error (critical)** — First z-index fix accidentally broke `.modal-overlay` base rule, removing `opacity: 0; visibility: hidden; transition`. All modals became visible on page load. Root cause: stray CSS line broke the parser, preventing `.modal-overlay.active` from ever taking effect. Fixed by restoring the complete rule.
+
+3. **Dynamic sidebar account refresh** — Adding a second account in Settings didn't update the sidebar (server-rendered at page load, never refreshed). Added `refreshSidebarAccounts()` to sidebar.js that fetches from `GET /api/accounts` and rebuilds the accounts section. Wired up the existing `accountsChanged` custom event (already dispatched by settings.js, but nobody was listening).
+
+### UX Improvements
+
+- **Advanced settings collapse on modal open** — IMAP server settings `<details>` now collapses each time Add Account modal opens, instead of staying expanded from previous use.
+- **Default font size changed to Small** — Updated both base.html and settings.js defaults from Medium to Small.
+- **IMAP folder indentation** — Top-level IMAP folders now indent 12px under their account name in the sidebar, making the hierarchy clearer.
+
+### Files Changed
+
+- `web/static/css/modules/modals.css` — z-index stacking fix, CSS syntax repair
+- `web/static/js/views/settings.js` — Collapse advanced settings, default font size
+- `web/templates/base.html` — Default font size
+- `web/static/js/components/sidebar.js` — `refreshSidebarAccounts()`, IMAP folder indent
+- `web/static/js/app.js` — Import and wire up `accountsChanged` listener
+
+**Status:** Testing in progress. First Run and Accounts sections complete. Next: Authentication, Email Browsing, Imports.
+
+---
+
 ## February 4, 2026 — Morning Session (Session 30)
 
 **Participants:** Rick, Claude (Opus 4.5)

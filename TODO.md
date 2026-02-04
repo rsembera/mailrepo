@@ -39,6 +39,25 @@
 
 ---
 
+## Completed (Session 31 - February 4, 2026)
+
+### Testing & Bug Fixes
+- [x] Modal z-index stacking (error modals behind Add Account modal)
+- [x] CSS syntax error breaking all modal visibility
+- [x] Dynamic sidebar account refresh on add/remove
+- [x] Advanced settings collapse on modal open
+- [x] Default font size changed to Small
+- [x] IMAP folder indentation in sidebar
+
+### Testing Progress
+- [x] First Run / Setup — all pass
+- [x] Accounts (IMAP) — two accounts added and working
+- [ ] Authentication — next
+- [ ] Email Browsing — next
+- [ ] Remaining checklist sections
+
+---
+
 ## Completed (Session 29 - February 3, 2026)
 
 ### Security Review

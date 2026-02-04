@@ -1,10 +1,35 @@
 # MailRepo - Session Notes
 
-## Session 15 (January 25, 2026)
+## Session 31 (February 4, 2026 — Afternoon)
 
 ### Completed
 
-**Commit Progress Streaming:**
+**Testing (TESTING_CHECKLIST.md):**
+- ✅ First Run / Setup — all items pass
+- ✅ Accounts (IMAP) — NCF Mail and Personal Gmail connected
+
+**Bug Fixes:**
+- ✅ Modal z-index stacking — alert/confirm/prompt modals now z-index 1100 (above 1000 base)
+- ✅ CSS syntax error — broken `.modal-overlay` rule caused all modals visible on load
+- ✅ Dynamic sidebar account refresh — new `refreshSidebarAccounts()` + `accountsChanged` event listener
+
+**UX Improvements:**
+- ✅ Advanced settings collapse on Add Account modal open
+- ✅ Default font size changed to Small
+- ✅ IMAP folders indented under account names in sidebar
+
+### Next
+- Continue testing: Authentication, Email Browsing, Imports, Staging, etc.
+
+---
+
+## Session 30 (February 4, 2026 — Morning)
+
+See docs/Session_Log.md and docs/Security_Audit.md for full details.
+
+---
+
+## Session 15 (January 25, 2026)
 - ✅ Phase 1/2 indicators for emails vs folders
 - ✅ Per-email progress with subjects during folder commits
 - ✅ Periodic DB commits every 10 emails for durability on interruption
