@@ -1,103 +1,61 @@
 # MailRepo Session Notes
 
-**Date:** February 2, 2026  
-**Last Updated:** Session 28
+**Date:** February 4, 2026  
+**Last Updated:** Session 30
 
 ---
 
-## Completed Today (Session 28)
+## Completed Today (Session 30)
 
-### Folder Tree Refactor
-- Created unified `renderFolderTree()` component in folder-tree.js
-- Configurable options: selectable, showChevrons, showColorDots, showAddButtons, callbacks
-- Updated staging.js to use unified component for destination picker
-- Consolidated folder tree CSS into folder-tree.css
-- Removed duplicate/conflicting styles from modals.css
-- Proper nested structure: `.folder-tree-item` (block) > `.folder-tree-row` (flex) + `.folder-tree-children`
-- Fixed the CSS conflict that caused horizontal instead of vertical child stacking
-- Net reduction of ~140 lines of code
+### Pre-Release Security Audit
+- Full review of all security-critical code (encryption, auth, DB, API, IMAP, file handling, XSS)
+- No critical issues found — see `docs/Security_Audit.md` for full results
+- Minor observations documented (all acceptable for localhost single-user app)
+- Circular dependency (staging.js ↔ folder-selection.js) left as-is: works, no bugs, not worth refactoring risk
 
----
-
-## Completed Yesterday (Session 27)
-
-### Security Audit Fixes
-- Fixed command injection vulnerability (shlex.split in utils/run_shell_command)
-- Debug mode now controlled by MAILREPO_DEBUG env var (defaults to False)
-- Increased minimum password length from 8 to 12 characters
-- Added login rate limiting (5 attempts, 60 second lockout)
-- Replaced debug print() statements with proper logging throughout
-- Fixed frontend memory leak in review.js (AbortController for event listeners)
-
-### Commit Resume Feature
-- Added `pending_commit` database table to track commit progress
-- All staged items saved to DB before commit starts
-- Status tracking: pending → committed → post_action_done
-- On app load, detects interrupted commits and prompts to resume or discard
-- Session timeout bypassed for SSE streaming endpoints (commits can run long)
-- New endpoints: `/api/commit/pending`, `/api/commit/discard`
-
-### Import Attachment Downloads
-- Added `/api/import/attachment` endpoint for mounted imports
-- Supports all import types: mbox, apple-mbox, pst, eml
-- Fixed button styling to match link-based attachment display
-
-### Folder Sorting & Hierarchy Fixes
-- Fixed alphabetical sorting in sidebar and Manage Folders (Parent before PST)
-- Fixed Apple Mail folder hierarchy detection (Parent.mbox → Parent/ relationship)
-- Fixed folder creation during commit (immediate commit for parent lookup)
-- Added color dot spacer in destination picker for alignment
-
-### Destination Folder Picker Fixes
-- Fixed stale highlight on modal reopen (reset selection state)
-- Fixed modal not reopening after cancel (don't clear selections until confirm)
-
-### Testing Infrastructure
-- Created comprehensive testing checklist (docs/TESTING_CHECKLIST.md)
-
-**Commits:** Multiple commits from `1d0b98a` through `c12086b`
+### Documentation Update
+- Created `docs/Security_Audit.md` — complete audit results
+- Rewrote `docs/Navigation_Map.md` — now reflects actual codebase (~20,100 lines of code per cloc)
+- Updated `docs/Session_Log.md` with Session 30
 
 ---
 
 ## Previous Sessions Summary
 
-**Session 26:** Danger Zone - Reset Database feature ported from EdgeCase
+**Session 29:** CSRF protection added for all API endpoints
 
-**Session 25:** Backup directory portability fix, double scrollbar fix, sidebar folder tree fix, logging improvements, backup on shutdown
+**Session 28:** Unified folder tree component, ~140 lines net reduction
 
-**Session 20:** Attachment viewing enhancement (open in browser option)
+**Session 27:** Security fixes (command injection, rate limiting, password length), commit resume feature, import attachment downloads, folder sorting/hierarchy fixes
 
-**Session 19:** Code cleanup, destination modal polish, archive/IMAP folder navigation redesign with breadcrumbs and subfolder links, refactoring plan created
+**Session 26:** Danger Zone - Reset Database feature
 
-**Session 18:** After Commit actions (archive/trash/delete on IMAP), destination modal drill-down redesign, page title fixes
-
-**Session 17:** Review page redesign with destination-first grouping, navigation guards, rail button tooltip updates
-
-**Session 16:** Grey out staged folders, ZIP export, parent-selects-children, folder/email selection UI redesign
+**Session 25:** Backup portability fix, logging improvements, backup on shutdown
 
 ---
 
 ## Current State
 
 - **Server:** Runs on port 5050
-- **All features working:** Email/folder staging, commit with resume, ZIP export, folder management, after-commit actions, attachment viewing (including imports), database reset
-- **Security:** Audit items addressed
-- **Git:** Commits pushed to origin/main
+- **All features working:** Email/folder staging, commit with resume, ZIP export, folder management, after-commit actions, attachment viewing, database reset, backup/restore
+- **Security:** Audit passed, no critical issues
+- **Git:** All changes committed
 
 ---
 
 ## Known Technical Debt
 
-- **Sidebar folder tree:** Still has its own implementation (different behavior: navigation + IMAP integration)
-- **Staging state:** Circular dependencies between staging.js and folder-selection.js
+- **Circular dependency:** staging.js ↔ folder-selection.js (works, deferred)
+- **Mixed event handling:** Inline onclick + addEventListener patterns coexist
+- **SESSION_COOKIE_SECURE:** False (localhost doesn't support HTTPS)
 
 ---
 
 ## TODO / Next Steps
 
-1. Comprehensive manual testing using docs/TESTING_CHECKLIST.md
-2. Apple Mail import hierarchy testing
-3. Address remaining items in TODO.md
+1. Manual testing using `docs/TESTING_CHECKLIST.md`
+2. Fix any issues found during testing
+3. Final polish for public release
 
 ---
 
@@ -107,5 +65,4 @@
 cd /home/rick/Applications/mailrepo
 ./venv/bin/python main.py
 # Open http://localhost:5050
-# Master password: Alkahest131!
 ```
