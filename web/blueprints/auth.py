@@ -15,9 +15,6 @@ from core.config import Config
 from utils.log import get_logger
 
 log = get_logger(__name__)
-from utils.log import get_logger
-
-log = get_logger()
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
