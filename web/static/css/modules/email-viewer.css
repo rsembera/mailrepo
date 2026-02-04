@@ -74,10 +74,6 @@
 /* Clickable email addresses in viewer header */
 .email-viewer-details a[href^="mailto:"] {
     color: var(--color-primary);
-    text-decoration: none;
-}
-
-.email-viewer-details a[href^="mailto:"]:hover {
     text-decoration: underline;
 }
 
