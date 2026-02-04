@@ -996,6 +996,45 @@ function printEmail() {
 window.printEmail = printEmail;
 
 /**
+ * Reply to the current email using the default mail client via mailto: link.
+ * Pre-fills recipient, subject (with Re: prefix), and quoted body text.
+ */
+function replyToEmail() {
+    if (!currentViewerContext?.emailData) return;
+    
+    const email = currentViewerContext.emailData;
+    
+    // Extract raw email address from "Name <email>" format
+    const fromStr = email.from || '';
+    const emailMatch = fromStr.match(/<([^>]+)>/);
+    const replyTo = emailMatch ? emailMatch[1] : fromStr.trim();
+    
+    if (!replyTo) return;
+    
+    // Build subject with Re: prefix (avoid doubling)
+    const subject = email.subject || '';
+    const replySubject = subject.match(/^re:/i) ? subject : `Re: ${subject}`;
+    
+    // Build quoted body from plain text (prefer over HTML)
+    let body = '';
+    const textBody = email.text_body || '';
+    if (textBody) {
+        const date = email.date || '';
+        const quotedLines = textBody.split('\n').map(line => `> ${line}`).join('\n');
+        body = `\n\nOn ${date}, ${fromStr} wrote:\n${quotedLines}`;
+    }
+    
+    // Build mailto: URL — let the OS/mail client handle any length limits
+    const params = new URLSearchParams();
+    params.set('subject', replySubject);
+    if (body) params.set('body', body);
+    
+    const mailto = `mailto:${encodeURIComponent(replyTo)}?${params.toString()}`;
+    window.location.href = mailto;
+}
+window.replyToEmail = replyToEmail;
+
+/**
  * Download the current email as .eml file.
  */
 function downloadEmail() {
