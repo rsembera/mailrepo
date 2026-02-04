@@ -708,18 +708,33 @@ export async function openEmailViewer(emailId) {
 }
 
 /**
+ * Convert email addresses in a header string to clickable mailto: links.
+ * Handles formats like "Name <email@example.com>" and bare "email@example.com".
+ * @param {string} headerText - Raw header text (From, To, Cc)
+ * @returns {string} HTML with email addresses as mailto: links
+ */
+function linkifyEmailAddresses(headerText) {
+    if (!headerText) return '';
+    // Match email addresses (bare or inside angle brackets)
+    return escapeHtml(headerText).replace(
+        /([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/g,
+        '<a href="mailto:$1" title="Send email to $1">$1</a>'
+    );
+}
+
+/**
  * Render email content in the viewer.
  * @param {Object} email - Email data
  * @param {Object} context - Viewer context for building download URLs
  */
 function renderEmailContent(email, context = null) {
     document.getElementById('viewerSubject').textContent = email.subject || '(no subject)';
-    document.getElementById('viewerFrom').textContent = email.from || '';
-    document.getElementById('viewerTo').textContent = email.to || '';
+    document.getElementById('viewerFrom').innerHTML = linkifyEmailAddresses(email.from || '');
+    document.getElementById('viewerTo').innerHTML = linkifyEmailAddresses(email.to || '');
     document.getElementById('viewerDate').textContent = email.date || '';
     
     if (email.cc) {
-        document.getElementById('viewerCc').textContent = email.cc;
+        document.getElementById('viewerCc').innerHTML = linkifyEmailAddresses(email.cc);
         document.getElementById('viewerCcRow').style.display = 'flex';
     }
     
@@ -996,43 +1011,47 @@ function printEmail() {
 window.printEmail = printEmail;
 
 /**
- * Reply to the current email using the default mail client via mailto: link.
- * Pre-fills recipient, subject (with Re: prefix), and quoted body text.
+ * Copy the current email formatted as a reply to the clipboard.
+ * Adds quote indentation and "On [date], [sender] wrote:" header.
  */
-function replyToEmail() {
+async function copyAsReply() {
     if (!currentViewerContext?.emailData) return;
     
     const email = currentViewerContext.emailData;
-    
-    // Extract raw email address from "Name <email>" format
     const fromStr = email.from || '';
-    const emailMatch = fromStr.match(/<([^>]+)>/);
-    const replyTo = emailMatch ? emailMatch[1] : fromStr.trim();
-    
-    if (!replyTo) return;
-    
-    // Build subject with Re: prefix (avoid doubling)
-    const subject = email.subject || '';
-    const replySubject = subject.match(/^re:/i) ? subject : `Re: ${subject}`;
-    
-    // Build quoted body from plain text (prefer over HTML)
-    let body = '';
+    const date = email.date || '';
     const textBody = email.text_body || '';
-    if (textBody) {
-        const date = email.date || '';
-        const quotedLines = textBody.split('\n').map(line => `> ${line}`).join('\n');
-        body = `\n\nOn ${date}, ${fromStr} wrote:\n${quotedLines}`;
+    
+    if (!textBody) {
+        const { showAlert } = await import('../modals.js');
+        showAlert('Copy as Reply', 'No plain text body available to quote.');
+        return;
     }
     
-    // Build mailto: URL — let the OS/mail client handle any length limits
-    const params = new URLSearchParams();
-    params.set('subject', replySubject);
-    if (body) params.set('body', body);
+    // Add one level of quoting — preserves existing > prefixes
+    const quotedLines = textBody.split('\n').map(line => `> ${line}`).join('\n');
+    const replyText = `On ${date}, ${fromStr} wrote:\n${quotedLines}`;
     
-    const mailto = `mailto:${encodeURIComponent(replyTo)}?${params.toString()}`;
-    window.location.href = mailto;
+    try {
+        await navigator.clipboard.writeText(replyText);
+        
+        // Brief visual feedback on the button
+        const btn = document.querySelector('[onclick="copyAsReply()"]');
+        if (btn) {
+            const originalTitle = btn.title;
+            btn.title = 'Copied!';
+            btn.classList.add('btn-success-flash');
+            setTimeout(() => {
+                btn.title = originalTitle;
+                btn.classList.remove('btn-success-flash');
+            }, 1500);
+        }
+    } catch (error) {
+        const { showAlert } = await import('../modals.js');
+        showAlert('Copy Failed', 'Could not copy to clipboard: ' + error.message);
+    }
 }
-window.replyToEmail = replyToEmail;
+window.copyAsReply = copyAsReply;
 
 /**
  * Download the current email as .eml file.
