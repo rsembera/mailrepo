@@ -19,6 +19,13 @@
     transition: opacity 0.2s, visibility 0.2s;
 }
 
+/* System modals (alert/confirm/prompt) stack above all other modals */
+#alertModal,
+#confirmModal,
+#promptModal {
+    z-index: 1100;
+}
+
 .modal-overlay.active {
     opacity: 1;
     visibility: visible;

@@ -38,7 +38,7 @@
             document.documentElement.style.setProperty('--font-body', fontFamilies[font] || fontFamilies['lexend']);
             
             // Font size (class on html element)
-            const size = localStorage.getItem('mailrepo-font-size') || 'm';
+            const size = localStorage.getItem('mailrepo-font-size') || 's';
             document.documentElement.classList.add('font-size-' + size);
         })();
     </script>

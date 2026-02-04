@@ -624,7 +624,7 @@ async function loadCurrentSettings() {
     if (fontBtn) fontBtn.classList.add('active');
     
     // Get current font size
-    const currentSize = localStorage.getItem('mailrepo-font-size') || 'm';
+    const currentSize = localStorage.getItem('mailrepo-font-size') || 's';
     const sizeBtn = document.querySelector(`.size-btn[data-size="${currentSize}"]`);
     if (sizeBtn) sizeBtn.classList.add('active');
     
@@ -801,6 +801,10 @@ window.openAddAccountModal = function() {
         document.getElementById('imapHost').value = '';
         document.getElementById('imapPort').value = '993';
         document.getElementById('imapSsl').checked = true;
+        
+        // Collapse advanced settings
+        const details = modal.querySelector('.advanced-settings');
+        if (details) details.removeAttribute('open');
         
         modal.classList.add('active');
         document.getElementById('accountName').focus();
