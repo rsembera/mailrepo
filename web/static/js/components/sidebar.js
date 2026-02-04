@@ -255,6 +255,72 @@ export function updateSidebarFolders(newFolder) {
 }
 
 /**
+ * Refresh the sidebar accounts section from API.
+ * Called when accounts are added or removed.
+ */
+export async function refreshSidebarAccounts() {
+    const section = document.getElementById('accountsSection');
+    if (!section) return;
+    
+    try {
+        const response = await fetch('/api/accounts');
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        const accounts = data.accounts || [];
+        
+        // Update count badge
+        const countEl = document.getElementById('accountCount');
+        if (countEl) countEl.textContent = accounts.length;
+        
+        // Clear existing account items
+        section.querySelectorAll('.account-item').forEach(el => el.remove());
+        section.querySelector('.sidebar-empty')?.remove();
+        
+        if (accounts.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'sidebar-empty';
+            empty.innerHTML = `
+                <p>No accounts connected</p>
+                <button class="btn btn-sm btn-primary" onclick="document.querySelector('.rail-btn[data-view=settings]').click()">Add Account</button>
+            `;
+            section.appendChild(empty);
+        } else {
+            accounts.forEach(account => {
+                const item = document.createElement('div');
+                item.className = 'tree-item account-item';
+                item.dataset.accountId = account.id;
+                
+                item.innerHTML = `
+                    <div class="tree-item-row" data-type="account" data-id="${account.id}">
+                        <i data-lucide="chevron-right" class="chevron"></i>
+                        <i data-lucide="mail" class="tree-icon"></i>
+                        <span class="tree-label">${escapeHtml(account.name || account.email)}</span>
+                    </div>
+                    <div class="tree-children" id="labels-${account.id}">
+                        <div class="tree-loading">Loading...</div>
+                    </div>
+                `;
+                
+                section.appendChild(item);
+                
+                // Attach click handler to the row
+                const row = item.querySelector('.tree-item-row');
+                row.addEventListener('click', (e) => handleTreeItemClick(e, row));
+                
+                // Load IMAP folders for this account
+                loadAccountLabels(account.id);
+            });
+        }
+        
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        
+    } catch (error) {
+        console.error('Error refreshing sidebar accounts:', error);
+    }
+}
+
+/**
  * Refresh the entire sidebar folder list from state.
  */
 export function refreshSidebarFolders() {
@@ -483,7 +549,7 @@ function renderImapFolderTree(nodes, accountId, depth) {
     
     nodes.forEach(node => {
         const hasChildren = node.children && node.children.length > 0;
-        const indent = depth * 16;
+        const indent = 12 + depth * 16;
         
         html += `<div class="imap-tree-item">`;
         html += `<div class="tree-item-row" data-type="imap-folder" data-account-id="${accountId}" data-folder="${escapeHtml(node.fullPath)}" style="padding-left: ${indent}px">`;
