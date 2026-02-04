@@ -1012,7 +1012,8 @@ window.printEmail = printEmail;
 
 /**
  * Copy the current email formatted as a reply to the clipboard.
- * Adds quote indentation and "On [date], [sender] wrote:" header.
+ * Copies both HTML (with blockquote) and plain text (with > prefixes)
+ * so it pastes correctly in both HTML and plain text compose modes.
  */
 async function copyAsReply() {
     if (!currentViewerContext?.emailData) return;
@@ -1028,12 +1029,22 @@ async function copyAsReply() {
         return;
     }
     
-    // Add one level of quoting — preserves existing > prefixes
+    // Plain text version with > quoting
     const quotedLines = textBody.split('\n').map(line => `> ${line}`).join('\n');
-    const replyText = `On ${date}, ${fromStr} wrote:\n${quotedLines}`;
+    const plainText = `On ${date}, ${fromStr} wrote:\n${quotedLines}`;
+    
+    // HTML version with blockquote (for HTML compose mode)
+    const quotedHtml = escapeHtml(textBody).replace(/\n/g, '<br>');
+    const htmlText = `<p>On ${escapeHtml(date)}, ${escapeHtml(fromStr)} wrote:</p>` +
+        `<blockquote style="border-left: 2px solid #ccc; margin: 0 0 0 0.5em; padding: 0 0 0 0.5em; color: #555;">${quotedHtml}</blockquote>`;
     
     try {
-        await navigator.clipboard.writeText(replyText);
+        // Write both formats — mail client picks the one it prefers
+        const clipboardItem = new ClipboardItem({
+            'text/html': new Blob([htmlText], { type: 'text/html' }),
+            'text/plain': new Blob([plainText], { type: 'text/plain' })
+        });
+        await navigator.clipboard.write([clipboardItem]);
         
         // Brief visual feedback on the button
         const btn = document.querySelector('[onclick="copyAsReply()"]');
