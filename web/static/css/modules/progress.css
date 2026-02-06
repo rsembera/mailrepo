@@ -76,9 +76,7 @@
 .progress-count {
     font-size: 0.8rem;
     color: var(--color-text-muted);
-    white-space: nowrap;
-    min-width: 70px;
-    text-align: right;
+    text-align: center;
 }
 
 /* Current item detail */

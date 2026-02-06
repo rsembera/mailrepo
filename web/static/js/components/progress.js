@@ -45,8 +45,8 @@ export function createProgress(container) {
                         <div class="progress-bar">
                             <div class="progress-fill" style="width: ${percent}%"></div>
                         </div>
-                        <span class="progress-count">${current} of ${total}</span>
                     </div>
+                    <div class="progress-count">${current} of ${total}</div>
                 ` : ''}
                 ${subject ? `
                     <div class="progress-detail">
