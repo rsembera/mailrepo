@@ -16,7 +16,7 @@
         </div>
         
         {% if error %}
-        <div class="error-box">
+        <div class="error-box" id="errorBox">
             {{ error }}
         </div>
         {% endif %}
@@ -54,4 +54,31 @@
         </div>
     </div>
 </div>
+
+{% if lockout_seconds is defined and lockout_seconds %}
+<script>
+(function() {
+    let remaining = {{ lockout_seconds }};
+    const errorBox = document.getElementById('errorBox');
+    const submitBtn = document.querySelector('.btn-full');
+    const passwordInput = document.getElementById('password');
+    
+    submitBtn.disabled = true;
+    passwordInput.disabled = true;
+    
+    const timer = setInterval(() => {
+        remaining--;
+        if (remaining <= 0) {
+            clearInterval(timer);
+            errorBox.textContent = 'You can try again now.';
+            submitBtn.disabled = false;
+            passwordInput.disabled = false;
+            passwordInput.focus();
+        } else {
+            errorBox.textContent = 'Too many failed attempts. Please wait ' + remaining + ' seconds.';
+        }
+    }, 1000);
+})();
+</script>
+{% endif %}
 {% endblock %}

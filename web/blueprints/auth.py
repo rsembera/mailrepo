@@ -172,7 +172,8 @@ def login():
     if not allowed:
         return render_template(
             "auth/login.html", 
-            error=f"Too many failed attempts. Please wait {seconds_remaining} seconds."
+            error=f"Too many failed attempts. Please wait {seconds_remaining} seconds.",
+            lockout_seconds=seconds_remaining
         )
     
     if request.method == "POST":
