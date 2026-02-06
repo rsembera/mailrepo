@@ -149,6 +149,11 @@
     color: var(--color-primary-dark);
 }
 
+.tree-item-row.noselect {
+    opacity: 0.65;
+    cursor: default;
+}
+
 .tree-item-row .chevron {
     width: 14px;
     height: 14px;

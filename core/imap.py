@@ -140,12 +140,16 @@ class IMAP:
                     continue
                 # Parse folder line: (\\Flags) "delimiter" "FolderName"
                 # Example: (\HasNoChildren) "/" "INBOX/Subfolder"
-                # Example: (\HasNoChildren) "." "INBOX.Subfolder"
+                # Example: (\Noselect \HasChildren) "/" "[Gmail]"
                 decoded = item.decode() if isinstance(item, bytes) else item
                 
-                # Extract delimiter - it's between the flags and folder name
-                # Format: (flags) "delimiter" "name" or (flags) "delimiter" name
+                # Extract flags
                 import re
+                flags_match = re.match(r'\(([^)]*)\)', decoded)
+                flags = flags_match.group(1).split() if flags_match else []
+                noselect = any(f.lower() == '\\noselect' for f in flags)
+                
+                # Extract delimiter - it's between the flags and folder name
                 match = re.match(r'\([^)]*\)\s+"(.)"|\s+NIL\s+', decoded)
                 delimiter = match.group(1) if match and match.group(1) else "/"
                 
@@ -153,7 +157,12 @@ class IMAP:
                 parts = decoded.rsplit('" ', 1)
                 if len(parts) == 2:
                     name = parts[1].strip('"')
-                    folders.append({"name": name, "delimiter": delimiter, "raw": decoded})
+                    folders.append({
+                        "name": name,
+                        "delimiter": delimiter,
+                        "noselect": noselect,
+                        "raw": decoded,
+                    })
             
             return folders
         except Exception as e:

@@ -24,6 +24,11 @@
     background: color-mix(in srgb, var(--color-primary) 10%, transparent) !important;
 }
 
+.folder-selection-item.noselect {
+    opacity: 0.5;
+    cursor: default;
+}
+
 /* Selected checkmark button */
 .btn-selected {
     color: var(--color-primary);

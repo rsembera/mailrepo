@@ -259,11 +259,15 @@ function renderImportFolderSelectionTree(nodes, importId, depth, ancestry = []) 
         let rowClass = 'folder-management-item folder-selection-item';
         if (isStaged) rowClass += ' staged';
         if (isSelected) rowClass += ' selected';
+        if (node.noselect) rowClass += ' noselect';
         
         const escapedPath = escapeForOnclick(folderPath);
         let actionsHtml = '';
         
-        if (isStaged) {
+        if (node.noselect) {
+            // Non-selectable container folders (e.g. [Gmail]) get no actions
+            actionsHtml = '';
+        } else if (isStaged) {
             actionsHtml = `
                 <button class="btn btn-sm btn-icon" disabled title="Already staged">
                     <i data-lucide="circle"></i>

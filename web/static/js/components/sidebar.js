@@ -111,7 +111,11 @@ export async function handleTreeItemClick(e, row) {
     if (type === 'label' || type === 'imap-folder') {
         // Check if chevron was clicked - if so, toggle expansion only
         const clickedChevron = e.target.closest('.imap-folder-chevron');
-        if (clickedChevron) {
+        
+        // Noselect folders (e.g. [Gmail]) can only be expanded, not selected
+        const isNoselect = row.dataset.noselect === 'true';
+        
+        if (clickedChevron || isNoselect) {
             const treeItem = row.closest('.imap-tree-item');
             const children = treeItem?.querySelector('.imap-tree-children');
             if (children) {
@@ -518,8 +522,13 @@ export function buildImapFolderTree(folders) {
                 current.children[part] = {
                     name: part,
                     fullPath: delimiter ? parts.slice(0, idx + 1).join(delimiter) : folder.name,
+                    noselect: false,
                     children: {}
                 };
+            }
+            // Set noselect on the final node (the actual folder entry)
+            if (idx === parts.length - 1 && folder.noselect) {
+                current.children[part].noselect = true;
             }
             current = current.children[part];
         });
@@ -527,7 +536,7 @@ export function buildImapFolderTree(folders) {
     
     function toArray(node) {
         return Object.values(node.children)
-            .map(child => ({ ...child, children: toArray(child) }))
+            .map(child => ({ ...child, noselect: child.noselect || false, children: toArray(child) }))
             .sort((a, b) => {
                 const aIdx = priorityFolders.findIndex(p => a.name.toUpperCase().includes(p.toUpperCase()));
                 const bIdx = priorityFolders.findIndex(p => b.name.toUpperCase().includes(p.toUpperCase()));
@@ -552,7 +561,7 @@ function renderImapFolderTree(nodes, accountId, depth) {
         const indent = 12 + depth * 16;
         
         html += `<div class="imap-tree-item">`;
-        html += `<div class="tree-item-row" data-type="imap-folder" data-account-id="${accountId}" data-folder="${escapeHtml(node.fullPath)}" style="padding-left: ${indent}px">`;
+        html += `<div class="tree-item-row${node.noselect ? ' noselect' : ''}" data-type="imap-folder" data-account-id="${accountId}" data-folder="${escapeHtml(node.fullPath)}"${node.noselect ? ' data-noselect="true"' : ''} style="padding-left: ${indent}px">`;
         
         if (hasChildren) {
             html += `<i data-lucide="chevron-right" class="imap-folder-chevron"></i>`;
