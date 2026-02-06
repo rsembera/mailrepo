@@ -6,49 +6,49 @@ Pre-release manual testing checklist. Run through before any public release.
 
 ## First Run / Setup
 
-- [ ] Fresh start (delete `data/` folder) shows password setup screen
-- [ ] Password under 12 characters is rejected
-- [ ] Password mismatch is rejected
-- [ ] Valid password creates database and shows "Create Archive" prompt
-- [ ] Can create first archive folder (encrypted)
+- [x] Fresh start (delete `data/` folder) shows password setup screen
+- [x] Password under 12 characters is rejected
+- [x] Password mismatch is rejected
+- [x] Valid password creates database and shows "Create Archive" prompt
+- [x] Can create first archive folder (encrypted)
 
 ---
 
 ## Authentication
 
-- [ ] Closing browser and reopening requires login
-- [ ] Wrong password shows error
-- [ ] 5 wrong passwords triggers rate limiting (60 second lockout)
-- [ ] Correct password after lockout expires works
-- [ ] Logout button works, returns to login screen
-- [ ] Password change works (Settings → Security)
-- [ ] Old password rejected after change
-- [ ] New password works after change
+- [x] Closing browser and reopening requires login
+- [x] Wrong password shows error
+- [x] 5 wrong passwords triggers rate limiting (60 second lockout)
+- [x] Correct password after lockout expires works
+- [x] Logout button works, returns to login screen
+- [x] Password change works (Settings → Security)
+- [x] Old password rejected after change
+- [x] New password works after change
 
 ---
 
 ## Accounts (IMAP)
 
-- [ ] Add Gmail account (OAuth or app password)
-- [ ] Add non-Gmail IMAP account (Fastmail, iCloud, etc.)
-- [ ] Auto-detect server settings works for common providers
-- [ ] Manual server entry works
-- [ ] Account appears in sidebar after adding
-- [ ] Can remove account
-- [ ] Credentials persist after restart
+- [x] Add Gmail account (OAuth or app password)
+- [x] Add non-Gmail IMAP account (Fastmail, iCloud, etc.)
+- [x] Auto-detect server settings works for common providers
+- [x] Manual server entry works
+- [x] Account appears in sidebar after adding
+- [x] Can remove account
+- [x] Credentials persist after restart
 
 ---
 
 ## Email Browsing (IMAP)
 
-- [ ] Selecting account loads folder list
-- [ ] Selecting folder loads email list
-- [ ] Email list shows sender, subject, date
-- [ ] Clicking email shows full content in viewer
-- [ ] HTML emails render correctly
-- [ ] Plain text emails display correctly
-- [ ] Attachments are listed
-- [ ] Can download attachments
+- [x] Selecting account loads folder list
+- [x] Selecting folder loads email list
+- [x] Email list shows sender, subject, date
+- [x] Clicking email shows full content in viewer
+- [x] HTML emails render correctly
+- [x] Plain text emails display correctly
+- [x] Attachments are listed
+- [x] Can download attachments
 - [ ] Pagination works for large folders (if implemented)
 
 ---
@@ -222,12 +222,17 @@ Pre-release manual testing checklist. Run through before any public release.
 
 ## Notes
 
-Test date: _______________
+Test date: February 6, 2026
 
-Tested by: _______________
+Tested by: Richard Sembera
 
-Version: _______________
+Version: 0.1.0
+
+Tested on: MacBook Air M4 (macOS), Safari/Chrome
 
 Issues found:
+- Rate limit lockout had no countdown timer (fixed: a65acc4)
+- Progress bar count text clipped (fixed: fa2687a)
 
+Next: Imports section (requires Mercury for test files)
 
