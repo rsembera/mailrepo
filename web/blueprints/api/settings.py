@@ -177,6 +177,14 @@ def reset_database():
         if salt_path.exists():
             salt_path.unlink()
         
+        # Delete secret key file (Flask session key)
+        secret_key_path = Config.get_secret_key_path()
+        if secret_key_path.exists():
+            secret_key_path.unlink()
+        
+        # Lock encryption to clear in-memory key material
+        Encryption.lock()
+        
         # Clear session to force re-login
         session.clear()
         
