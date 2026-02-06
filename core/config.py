@@ -103,6 +103,7 @@ class FlaskConfig:
     """Flask-specific configuration."""
     
     SECRET_KEY: Optional[str] = None  # Set at runtime from file
+    SESSION_COOKIE_NAME = "mailrepo_session"
     SESSION_COOKIE_SECURE = False  # Set True in production with HTTPS
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"

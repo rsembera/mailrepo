@@ -6,8 +6,9 @@ Handles master password setup, login, logout, and password change.
 
 import json
 import os
+import secrets
 import time
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, Response, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, Response, current_app, make_response
 
 from core import Encryption, InvalidPasswordError, EncryptionError, Database
 from core.database import get_setting
@@ -131,10 +132,17 @@ def setup():
         try:
             Encryption.initialize(password)
             init_database()
+            
+            # Clear any stale session data before setting new values
+            session.clear()
             session["authenticated"] = True
+            session["last_activity"] = time.time()
+            session["csrf_token"] = secrets.token_hex(32)
             session.permanent = True
+            
             flash("Master password created successfully.", "success")
-            return redirect(url_for("main.create_archive"))
+            response = make_response(redirect(url_for("main.create_archive")))
+            return response
         except EncryptionError as e:
             return render_template("auth/setup.html", errors=[str(e)])
     
@@ -175,9 +183,17 @@ def login():
             _clear_attempts(client_ip)  # Success - clear attempts
             init_database()
             cleanup_expired_trash()
+            
+            # Clear any stale session data before setting new values
+            session.clear()
             session["authenticated"] = True
+            session["last_activity"] = time.time()
+            session["csrf_token"] = secrets.token_hex(32)
             session.permanent = True
-            return redirect(url_for("main.index"))
+            
+            # Use make_response for explicit cookie handling (Safari/Firefox)
+            response = make_response(redirect(url_for("main.index")))
+            return response
         except InvalidPasswordError:
             _record_failed_attempt(client_ip)
             return render_template("auth/login.html", error="Invalid password.")
