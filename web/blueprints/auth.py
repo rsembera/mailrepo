@@ -20,6 +20,9 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
 
 # Simple rate limiting for login attempts
+# In-memory rate limiting — intentionally resets on restart.
+# Acceptable for single-user localhost app; an attacker would need
+# local access already, making persistent tracking unnecessary.
 _login_attempts = {}  # IP -> list of attempt timestamps
 _MAX_ATTEMPTS = 5
 _LOCKOUT_SECONDS = 60

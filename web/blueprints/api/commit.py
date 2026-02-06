@@ -65,6 +65,56 @@ def create_archive_folder_from_path(archive_path: str, parent_folder_id: int) ->
     return current_parent_id
 
 
+def _check_duplicate(folder_id: int, message_id: str) -> bool:
+    """Check if an email with this message_id already exists in the folder."""
+    if not message_id:
+        return False
+    existing = Database.fetchone(
+        "SELECT id FROM messages WHERE folder_id = ? AND message_id = ?",
+        (folder_id, message_id)
+    )
+    return existing is not None
+
+
+def _save_email_to_archive(raw_email: bytes, folder_id: int, account_id: int | None,
+                           uid_prefix: str) -> None:
+    """
+    Encrypt and save a raw email to the archive, inserting a DB row.
+    
+    Args:
+        raw_email: Raw RFC 2822 email bytes.
+        folder_id: Destination archive folder ID.
+        account_id: Source IMAP account ID (None for imports).
+        uid_prefix: Safe filename prefix (e.g. "import_mbox-3" or "2_145").
+    """
+    metadata = parse_email_metadata(raw_email)
+    body_text = extract_body_text(raw_email)
+
+    archive_path = Config.get_archive_path() / str(folder_id)
+    archive_path.mkdir(parents=True, exist_ok=True)
+
+    encrypted_data = Encryption.encrypt(raw_email)
+    filepath = archive_path / f"{uid_prefix}.eml.enc"
+    filepath.write_bytes(encrypted_data)
+
+    Database.execute(
+        """INSERT INTO messages
+           (folder_id, source_account_id, message_id, subject, sender, recipients, date, filepath, body_text)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            folder_id,
+            account_id,
+            metadata.get("message_id", ""),
+            metadata.get("subject", ""),
+            metadata.get("sender", ""),
+            metadata.get("recipients", ""),
+            metadata.get("date"),
+            str(filepath.relative_to(Config.get_base_path())),
+            body_text,
+        )
+    )
+
+
 def commit_import_email(item: dict, results: dict) -> dict:
     """
     Commit a single email from an import source.
@@ -91,18 +141,9 @@ def commit_import_email(item: dict, results: dict) -> dict:
         
         # Check for duplicate
         message_id = email_data.get("message_id", "")
-        if message_id:
-            existing = Database.fetchone(
-                "SELECT id FROM messages WHERE folder_id = ? AND message_id = ?",
-                (folder_id, message_id)
-            )
-            if existing:
-                results["skipped"].append({
-                    "uid": uid,
-                    "reason": "duplicate",
-                    "subject": subject,
-                })
-                return {"status": "skipped", "subject": subject, "uid": uid}
+        if _check_duplicate(folder_id, message_id):
+            results["skipped"].append({"uid": uid, "reason": "duplicate", "subject": subject})
+            return {"status": "skipped", "subject": subject, "uid": uid}
 
         # Get raw email from source file
         source_path = email_data.get("sourcePath")
@@ -113,36 +154,8 @@ def commit_import_email(item: dict, results: dict) -> dict:
         if not raw_email:
             raise ValueError("Could not retrieve email content")
         
-        # Extract all metadata from raw email
-        metadata = parse_email_metadata(raw_email)
-        body_text = extract_body_text(raw_email)
-        
-        archive_path = Config.get_archive_path() / str(folder_id)
-        archive_path.mkdir(parents=True, exist_ok=True)
-        
         safe_id = f"import_{uid.replace('/', '_').replace(':', '_')}"
-        encrypted_data = Encryption.encrypt(raw_email)
-        filepath = archive_path / f"{safe_id}.eml.enc"
-        filepath.write_bytes(encrypted_data)
-        
-        Database.execute(
-            """
-            INSERT INTO messages 
-            (folder_id, source_account_id, message_id, subject, sender, recipients, date, filepath, body_text)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                folder_id,
-                None,  # No source account for imports
-                metadata.get("message_id", ""),
-                metadata.get("subject", ""),
-                metadata.get("sender", ""),
-                metadata.get("recipients", ""),
-                metadata.get("date"),
-                str(filepath.relative_to(Config.get_base_path())),
-                body_text,
-            )
-        )
+        _save_email_to_archive(raw_email, folder_id, None, safe_id)
         
         results["success"].append(uid)
         return {"status": "success", "subject": subject, "uid": uid}
@@ -182,52 +195,14 @@ def commit_imap_email(client, account_id: int, email_data: dict, folder_id: int,
         
         # Check for duplicate
         message_id = email_data.get("message_id", "")
-        if message_id:
-            existing = Database.fetchone(
-                "SELECT id FROM messages WHERE folder_id = ? AND message_id = ?",
-                (folder_id, message_id)
-            )
-            if existing:
-                results["skipped"].append({
-                    "uid": uid,
-                    "reason": "duplicate",
-                    "subject": subject,
-                })
-                return {"status": "skipped", "subject": subject, "uid": uid}
+        if _check_duplicate(folder_id, message_id):
+            results["skipped"].append({"uid": uid, "reason": "duplicate", "subject": subject})
+            return {"status": "skipped", "subject": subject, "uid": uid}
         
         # Fetch and save email
         raw_email = client.fetch_raw(uid)
-        
-        # Extract all metadata from raw email
-        metadata = parse_email_metadata(raw_email)
-        body_text = extract_body_text(raw_email)
-        
-        archive_path = Config.get_archive_path() / str(folder_id)
-        archive_path.mkdir(parents=True, exist_ok=True)
-        
         safe_id = f"{account_id}_{uid}"
-        encrypted_data = Encryption.encrypt(raw_email)
-        filepath = archive_path / f"{safe_id}.eml.enc"
-        filepath.write_bytes(encrypted_data)
-
-        Database.execute(
-            """
-            INSERT INTO messages 
-            (folder_id, source_account_id, message_id, subject, sender, recipients, date, filepath, body_text)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                folder_id,
-                account_id,
-                metadata.get("message_id", ""),
-                metadata.get("subject", ""),
-                metadata.get("sender", ""),
-                metadata.get("recipients", ""),
-                metadata.get("date"),
-                str(filepath.relative_to(Config.get_base_path())),
-                body_text,
-            )
-        )
+        _save_email_to_archive(raw_email, folder_id, account_id, safe_id)
         
         results["success"].append(uid)
         
@@ -272,26 +247,9 @@ def commit_import_folder(folder_item: dict, target_folder_id: int, folder_idx: i
     
     for i, (uid, raw_email) in enumerate(emails):
         try:
-            metadata = parse_email_metadata(raw_email)
-            subject = metadata["subject"]
-            body_text = extract_body_text(raw_email)
-            
-            file_path = Config.get_archive_path() / str(target_folder_id)
-            file_path.mkdir(parents=True, exist_ok=True)
-            
+            subject = parse_email_metadata(raw_email).get("subject", "(no subject)")[:50]
             safe_id = f"import_{uid.replace('/', '_').replace(':', '_')}"
-            encrypted_data = Encryption.encrypt(raw_email)
-            filepath = file_path / f"{safe_id}.eml.enc"
-            filepath.write_bytes(encrypted_data)
-            
-            Database.execute(
-                """INSERT INTO messages 
-                   (folder_id, source_account_id, message_id, subject, sender, recipients, date, filepath, body_text)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (target_folder_id, None, metadata["message_id"], metadata["subject"], 
-                 metadata["sender"], metadata.get("recipients", ""), metadata["date"],
-                 str(filepath.relative_to(Config.get_base_path())), body_text)
-            )
+            _save_email_to_archive(raw_email, target_folder_id, None, safe_id)
             results["success"].append(uid)
             
             # Commit every 10 emails for durability
@@ -365,9 +323,7 @@ def commit_imap_folder(folder_item: dict, target_folder_id: int, folder_idx: int
 
         for i, uid in enumerate(uids):
             try:
-                email_data = client.fetch_full(uid)
                 raw_email = client.fetch_raw(uid)
-                subject = (email_data.get("subject", "") or "(no subject)")[:50]
                 
                 if not raw_email:
                     results["failed"].append({"uid": uid, "error": "Empty"})
@@ -377,6 +333,26 @@ def commit_imap_folder(folder_item: dict, target_folder_id: int, folder_idx: int
                         "total": folder_email_count,
                         "percent": int((i + 1) / folder_email_count * 100),
                         "status": "failed",
+                        "subject": "(empty)",
+                        "folder": folder_name,
+                        "folderIndex": folder_idx + 1,
+                        "folderCount": folder_count,
+                        "commitPhase": "folders",
+                    }
+                    continue
+                
+                metadata = parse_email_metadata(raw_email)
+                subject = (metadata.get("subject", "") or "(no subject)")[:50]
+                message_id = metadata.get("message_id", "")
+                
+                if _check_duplicate(target_folder_id, message_id):
+                    results["skipped"].append({"uid": uid})
+                    yield {
+                        "type": "progress",
+                        "current": i + 1,
+                        "total": folder_email_count,
+                        "percent": int((i + 1) / folder_email_count * 100),
+                        "status": "skipped",
                         "subject": subject,
                         "folder": folder_name,
                         "folderIndex": folder_idx + 1,
@@ -385,48 +361,8 @@ def commit_imap_folder(folder_item: dict, target_folder_id: int, folder_idx: int
                     }
                     continue
                 
-                message_id = email_data.get("message_id", "")
-                if message_id:
-                    existing = Database.fetchone(
-                        "SELECT id FROM messages WHERE folder_id = ? AND message_id = ?",
-                        (target_folder_id, message_id)
-                    )
-                    if existing:
-                        results["skipped"].append({"uid": uid})
-                        yield {
-                            "type": "progress",
-                            "current": i + 1,
-                            "total": folder_email_count,
-                            "percent": int((i + 1) / folder_email_count * 100),
-                            "status": "skipped",
-                            "subject": subject,
-                            "folder": folder_name,
-                            "folderIndex": folder_idx + 1,
-                            "folderCount": folder_count,
-                            "commitPhase": "folders",
-                        }
-                        continue
-                
-                # Extract all metadata from raw email
-                metadata = parse_email_metadata(raw_email)
-                body_text = extract_body_text(raw_email)
-                file_path = Config.get_archive_path() / str(target_folder_id)
-                file_path.mkdir(parents=True, exist_ok=True)
-
                 safe_id = f"{account_id}_{uid}"
-                encrypted_data = Encryption.encrypt(raw_email)
-                filepath = file_path / f"{safe_id}.eml.enc"
-                filepath.write_bytes(encrypted_data)
-                
-                Database.execute(
-                    """INSERT INTO messages 
-                       (folder_id, source_account_id, message_id, subject, sender, recipients, date, filepath, body_text)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (target_folder_id, account_id, metadata.get("message_id", ""),
-                     metadata.get("subject", ""), metadata.get("sender", ""),
-                     metadata.get("recipients", ""), metadata.get("date"),
-                     str(filepath.relative_to(Config.get_base_path())), body_text)
-                )
+                _save_email_to_archive(raw_email, target_folder_id, account_id, safe_id)
                 results["success"].append(uid)
                 
                 # Commit every 10 emails for durability
@@ -548,9 +484,11 @@ def _find_action_for_source(source_actions: dict, account_id: int, source_folder
         if len(parts) == 3:
             # "account:1:5" format - applies to all folders for this dest
             return action
-        elif len(parts) >= 4 and parts[2] == source_folder:
-            # "account:1:INBOX:5" format
-            return action
+        elif len(parts) >= 4:
+            # "account:1:INBOX:5" format (folder name may contain colons)
+            folder_part = ':'.join(parts[2:-1])
+            if folder_part == source_folder:
+                return action
     
     return None
 

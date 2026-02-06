@@ -7,12 +7,12 @@ Handles search and archived email retrieval endpoints.
 import base64
 import time
 import email as email_lib
-from email.header import decode_header
 from flask import request, jsonify, Response
 from core import Database
 from core import Config
 from core import Encryption
 from utils.log import get_logger
+from .email_parser import decode_email_header
 from . import api_bp
 
 log = get_logger()
@@ -57,16 +57,20 @@ def search_emails():
             (fts_query, limit)
         )
 
-    # Build folder paths for display
-    def get_folder_path(folder_id):
-        """Build full folder path from folder_id."""
+    # Build folder path map from a single query (avoids N+1 per result)
+    all_folders = Database.fetchall(
+        "SELECT id, name, parent_id FROM folders WHERE deleted_at IS NULL"
+    )
+    folder_map = {f["id"]: f for f in all_folders}
+
+    def get_folder_path(fid):
+        """Build full folder path from folder_id using in-memory map."""
         path_parts = []
-        current_id = folder_id
-        while current_id:
-            folder = Database.fetchone(
-                "SELECT id, name, parent_id FROM folders WHERE id = ?",
-                (current_id,)
-            )
+        current_id = fid
+        seen = set()
+        while current_id and current_id not in seen:
+            seen.add(current_id)
+            folder = folder_map.get(current_id)
             if not folder:
                 break
             path_parts.insert(0, folder["name"])
@@ -112,21 +116,9 @@ def get_folder_emails(folder_id):
     return jsonify({"emails": emails})
 
 
-def _decode_header_value(header):
-    """Decode an email header value."""
-    if not header:
-        return ""
-    try:
-        parts = decode_header(header)
-        decoded = []
-        for content, charset in parts:
-            if isinstance(content, bytes):
-                decoded.append(content.decode(charset or "utf-8", errors="replace"))
-            else:
-                decoded.append(content)
-        return " ".join(decoded)
-    except:
-        return header
+def _decode_header(header):
+    """Decode an email header value. Delegates to email_parser."""
+    return decode_email_header(header)
 
 
 @api_bp.route("/folders/<int:folder_id>/emails/<int:message_id>", methods=["GET"])
@@ -153,10 +145,10 @@ def get_archived_email(folder_id, message_id):
         
         result = {
             "id": message["id"],
-            "subject": _decode_header_value(msg.get("Subject", "")),
-            "from": _decode_header_value(msg.get("From", "")),
-            "to": _decode_header_value(msg.get("To", "")),
-            "cc": _decode_header_value(msg.get("Cc", "")),
+            "subject": _decode_header(msg.get("Subject", "")),
+            "from": _decode_header(msg.get("From", "")),
+            "to": _decode_header(msg.get("To", "")),
+            "cc": _decode_header(msg.get("Cc", "")),
             "date": msg.get("Date", ""),
             "text_body": None,
             "html_body": None,
@@ -172,7 +164,7 @@ def get_archived_email(folder_id, message_id):
                     filename = part.get_filename()
                     if filename:
                         result["attachments"].append({
-                            "filename": _decode_header_value(filename),
+                            "filename": _decode_header(filename),
                             "content_type": content_type,
                             "size": len(part.get_payload(decode=True) or b""),
                         })
@@ -387,7 +379,7 @@ def download_archived_attachment(folder_id, message_id, index):
                     filename = part.get_filename()
                     if filename:
                         attachments.append({
-                            "filename": _decode_header_value(filename),
+                            "filename": _decode_header(filename),
                             "content_type": part.get_content_type(),
                             "payload": part.get_payload(decode=True),
                         })

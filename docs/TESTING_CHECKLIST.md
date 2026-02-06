@@ -74,6 +74,7 @@ Pre-release manual testing checklist. Run through before any public release.
 - [ ] Converted folders appear
 - [ ] Emails are viewable
 - [ ] Temp files cleaned up on unmount
+- [ ] Password-protected .pst file imports without issue (password is UI-level only, not encryption)
 
 ### EML Directory
 - [ ] Can select directory of .eml files

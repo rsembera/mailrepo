@@ -6,9 +6,13 @@ to select files and folders for import.
 """
 
 import os
+import mailbox
+from email import message_from_bytes, message_from_binary_file
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from flask import request, jsonify
 from utils.log import get_logger
+from .email_parser import decode_email_header
 from . import api_bp
 
 log = get_logger()
@@ -252,10 +256,6 @@ def parse_mbox_file():
         emails: List of {uid, subject, from, to, date, message_id}
         count: Number of emails
     """
-    import mailbox
-    from email.header import decode_header
-    from email.utils import parsedate_to_datetime
-    
     data = request.get_json() or {}
     path = data.get("path", "").strip()
     
@@ -270,22 +270,6 @@ def parse_mbox_file():
     
     if not os.path.isfile(path):
         return jsonify({"error": "Not a file"}), 400
-    
-    def decode_header_value(header):
-        """Decode RFC 2047 encoded header."""
-        if not header:
-            return ""
-        try:
-            parts = decode_header(header)
-            decoded = []
-            for content, charset in parts:
-                if isinstance(content, bytes):
-                    decoded.append(content.decode(charset or "utf-8", errors="replace"))
-                else:
-                    decoded.append(content)
-            return " ".join(decoded)
-        except:
-            return str(header)
     
     try:
         mbox = mailbox.mbox(path)
@@ -306,13 +290,13 @@ def parse_mbox_file():
                 # Check for folder indicator (X-Folder, X-Gmail-Labels, etc.)
                 folder = message.get("X-Folder") or message.get("X-Gmail-Labels") or ""
                 if folder:
-                    folder = decode_header_value(folder)
+                    folder = decode_email_header(folder)
                 
                 emails.append({
                     "uid": f"mbox-{i}",
-                    "subject": decode_header_value(message.get("Subject", "(no subject)")),
-                    "from": decode_header_value(message.get("From", "")),
-                    "to": decode_header_value(message.get("To", "")),
+                    "subject": decode_email_header(message.get("Subject", "(no subject)")),
+                    "from": decode_email_header(message.get("From", "")),
+                    "to": decode_email_header(message.get("To", "")),
                     "date": date_ts or date_str,
                     "message_id": message.get("Message-ID", ""),
                     "folder": folder,
@@ -368,10 +352,6 @@ def parse_eml_file():
     Returns:
         email: {uid, subject, from, to, date, message_id}
     """
-    from email import message_from_binary_file
-    from email.header import decode_header
-    from email.utils import parsedate_to_datetime
-    
     data = request.get_json() or {}
     path = data.get("path", "").strip()
     
@@ -386,22 +366,6 @@ def parse_eml_file():
     
     if not os.path.isfile(path):
         return jsonify({"error": "Not a file"}), 400
-    
-    def decode_header_value(header):
-        """Decode RFC 2047 encoded header."""
-        if not header:
-            return ""
-        try:
-            parts = decode_header(header)
-            decoded = []
-            for content, charset in parts:
-                if isinstance(content, bytes):
-                    decoded.append(content.decode(charset or "utf-8", errors="replace"))
-                else:
-                    decoded.append(content)
-            return " ".join(decoded)
-        except:
-            return str(header)
     
     try:
         with open(path, 'rb') as f:
@@ -421,9 +385,9 @@ def parse_eml_file():
             "path": path,
             "email": {
                 "uid": f"eml-{os.path.basename(path)}",
-                "subject": decode_header_value(message.get("Subject", "(no subject)")),
-                "from": decode_header_value(message.get("From", "")),
-                "to": decode_header_value(message.get("To", "")),
+                "subject": decode_email_header(message.get("Subject", "(no subject)")),
+                "from": decode_email_header(message.get("From", "")),
+                "to": decode_email_header(message.get("To", "")),
                 "date": date_ts or date_str,
                 "message_id": message.get("Message-ID", ""),
                 "filename": os.path.basename(path),
@@ -450,10 +414,6 @@ def scan_apple_mbox_folder():
     Returns:
         tree: Nested structure of folders with email counts
     """
-    import mailbox
-    from email.header import decode_header
-    from email.utils import parsedate_to_datetime
-    
     data = request.get_json() or {}
     path = data.get("path", "").strip()
     
@@ -468,21 +428,6 @@ def scan_apple_mbox_folder():
     
     if not os.path.isdir(path):
         return jsonify({"error": "Not a directory"}), 400
-    
-    def decode_header_value(header):
-        if not header:
-            return ""
-        try:
-            parts = decode_header(header)
-            decoded = []
-            for content, charset in parts:
-                if isinstance(content, bytes):
-                    decoded.append(content.decode(charset or "utf-8", errors="replace"))
-                else:
-                    decoded.append(content)
-            return " ".join(decoded)
-        except:
-            return str(header)
     
     def parse_mbox_file(mbox_path):
         """Parse a traditional mbox file and return emails."""
@@ -502,9 +447,9 @@ def scan_apple_mbox_folder():
                     
                     emails.append({
                         "uid": f"apple-{os.path.basename(mbox_path)}-{i}",
-                        "subject": decode_header_value(message.get("Subject", "(no subject)")),
-                        "from": decode_header_value(message.get("From", "")),
-                        "to": decode_header_value(message.get("To", "")),
+                        "subject": decode_email_header(message.get("Subject", "(no subject)")),
+                        "from": decode_email_header(message.get("From", "")),
+                        "to": decode_email_header(message.get("To", "")),
                         "date": date_ts or date_str,
                         "message_id": message.get("Message-ID", ""),
                         "sourcePath": mbox_path,
@@ -543,7 +488,6 @@ def scan_apple_mbox_folder():
                             if plist_marker > 0:
                                 email_content = email_content[:plist_marker]
                             
-                            from email import message_from_bytes
                             message = message_from_bytes(email_content)
                             
                             date_str = message.get("Date", "")
@@ -557,9 +501,9 @@ def scan_apple_mbox_folder():
                             
                             emails.append({
                                 "uid": f"emlx-{entry.name}",
-                                "subject": decode_header_value(message.get("Subject", "(no subject)")),
-                                "from": decode_header_value(message.get("From", "")),
-                                "to": decode_header_value(message.get("To", "")),
+                                "subject": decode_email_header(message.get("Subject", "(no subject)")),
+                                "from": decode_email_header(message.get("From", "")),
+                                "to": decode_email_header(message.get("To", "")),
                                 "date": date_ts or date_str,
                                 "message_id": message.get("Message-ID", ""),
                                 "sourcePath": entry.path,
