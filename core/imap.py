@@ -224,7 +224,13 @@ class IMAP:
             raise IMAPError("Not connected")
         
         try:
-            status, data = self.connection.uid("SEARCH", None, criteria)
+            # Filter out messages flagged for deletion — these are ghost
+            # messages that the server hasn't expunged yet (common with Gmail)
+            effective_criteria = criteria
+            if criteria == "ALL":
+                effective_criteria = "NOT DELETED"
+            
+            status, data = self.connection.uid("SEARCH", None, effective_criteria)
             if status != "OK":
                 raise IMAPError("Search failed")
             
