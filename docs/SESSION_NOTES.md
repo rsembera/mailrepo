@@ -1,38 +1,33 @@
 # MailRepo Session Notes
 
-**Date:** February 5, 2026  
-**Last Updated:** Session 31
+**Date:** February 6, 2026  
+**Last Updated:** Session 32
 
 ---
 
-## Completed Today (Session 31)
+## Completed Today (Session 32)
 
-### Code Quality Cleanup (-122 lines)
-- **DRY: decode_header_value** — Removed 3 inline copies from filesystem.py and emails.py; all now use `decode_email_header` from email_parser.py
-- **DRY: commit.py** — Extracted `_save_email_to_archive()` and `_check_duplicate()` helpers, reducing duplication across IMAP and import commit paths (~65 lines)
-- **Performance: double fetch** — `commit_imap_folder` no longer calls `fetch_full()` + `fetch_raw()`; uses only `fetch_raw()` + `parse_email_metadata()`
-- **Performance: N+1 queries** — Search now builds folder path map from single query instead of per-result parent chain walking
-- **Edge case: colon in folder names** — Fixed `_find_action_for_source()` to rejoin middle parts of colon-delimited keys
-- **Documentation: rate limiting** — Added explanatory comment for intentional in-memory design
+### UI Fix
+- **Progress bar text clipping** — Count text ("61 of 62") was clipped by flex container height. Moved count to its own line below the bar instead of inline beside it.
 
-### IMAP Fixes
-- **\Noselect folders** — Parse `\Noselect` flag from IMAP LIST response; `[Gmail]` virtual container now expands children instead of erroring. Sidebar and folder-selection views both handle noselect (dimmed, no action buttons)
-- **Ghost deleted emails** — Changed default IMAP search from `ALL` to `NOT DELETED` to filter messages flagged for deletion but not yet expunged
-- **Cache invalidation** — Folder cache auto-invalidates when missing `noselect` field (one-time migration)
+### Session Security Fix (from Synesius cross-project audit)
+- **Safari/Firefox double-login race condition** — Login didn't set `last_activity`, allowing `before_request` to misfire on strict cookie-timing browsers
+- **Fix:** `session.clear()` before setting new values, set `last_activity` and CSRF token during login, use `make_response()` for explicit cookie handling, unique `SESSION_COOKIE_NAME = 'mailrepo_session'`
+- Applied to both login and first-run setup flows
 
-### Database Reset Fixes
-- **Missing .secret_key cleanup** — Reset now deletes Flask session key file
-- **Segfault fix** — Removed `Encryption.lock()` call during reset request; clearing SQLCipher keys mid-response caused segfault in C extension. Keys are replaced on next password setup.
-- **Stale data diagnosis** — Identified root cause of "file is not a database" error: new salt + old database = mismatched encryption key
-
-### Deferred (not worth risk pre-release)
-- filesystem.py `os.path` → `pathlib` (cosmetic)
-- filesystem.py module split (already 741 lines, manageable)
-- Database class-level state (testability, no functional impact)
+### Cross-Project Security Audit Results
+Checked MailRepo against 5 bugs found in Synesius:
+1. ✅ `verify_password` — Properly verifies via Fernet-encrypted verification token
+2. ✅ `change_password` — Does full rekey: re-encrypts files, credentials, `PRAGMA rekey`, updates verification token
+3. ⚠️ Session race condition — **Fixed** (see above)
+4. ✅ Hardcoded secret key — Auto-generates and persists to `.secret_key` with 0o600 permissions
+5. ✅ Copy-paste artifacts — Clean, no references to other projects
 
 ---
 
 ## Previous Sessions Summary
+
+**Session 31:** Code quality cleanup (-122 lines), IMAP \Noselect fix, ghost email filter, database reset fixes (segfault, missing .secret_key cleanup)
 
 **Session 30:** Pre-release security audit — no critical issues found. Documentation update.
 
@@ -48,7 +43,7 @@
 
 - **Server:** Runs on port 5050
 - **All features working:** Email/folder staging, commit with resume, ZIP export, folder management, after-commit actions, attachment viewing, database reset, backup/restore
-- **Security:** Audit passed, no critical issues
+- **Security:** Audit passed, session race condition fixed
 - **Git:** All changes committed and pushed
 
 ---

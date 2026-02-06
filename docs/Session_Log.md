@@ -799,3 +799,32 @@ All major design decisions have been resolved. Ready to continue building.
 ### Commits
 - `5d37375` — Fix database reset: delete .secret_key and lock encryption
 - `bb20719` — Fix segfault on database reset: don't lock encryption mid-request
+
+
+---
+
+## Session 32 — February 6, 2026
+
+**Focus:** UI fix, cross-project security audit
+
+### UI Fix
+- Progress bar count text ("61 of 62") was clipped top/bottom when displayed inline beside the bar. Moved count to its own line below the bar. Single source: progress.js component handles all progress bars with counts.
+
+### Cross-Project Security Audit
+Checked MailRepo against 5 bugs found in Synesius:
+1. ✅ `verify_password` — Uses Fernet-encrypted verification token, not just SQLCipher open test
+2. ✅ `change_password` — Full rekey: re-encrypts .eml.enc files, IMAP credentials, PRAGMA rekey, updates verification token
+3. ⚠️ **Session race condition — FIXED.** Login didn't set `last_activity` or clear stale session. Safari/Firefox could redirect back to login after successful auth.
+4. ✅ Hardcoded secret key — Auto-generates to `.secret_key` with 0o600 permissions
+5. ✅ Copy-paste artifacts — Clean
+
+### Session Race Condition Fix
+- `session.clear()` before setting new session values on login
+- Set `last_activity` and CSRF token during login (not just in before_request)
+- `make_response()` for explicit cookie handling on redirect
+- `SESSION_COOKIE_NAME = 'mailrepo_session'` to prevent localhost collision
+- Applied to both login and first-run setup flows
+
+### Commits
+- `fa2687a` — Fix clipped text in progress bar count
+- `20ae895` — Fix session race condition on login (Safari/Firefox double-login bug)
