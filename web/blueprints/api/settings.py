@@ -182,8 +182,10 @@ def reset_database():
         if secret_key_path.exists():
             secret_key_path.unlink()
         
-        # Lock encryption to clear in-memory key material
-        Encryption.lock()
+        # Note: Don't call Encryption.lock() here — clearing the in-memory
+        # keys while Flask is still processing the response can cause a
+        # segfault in SQLCipher. The keys will be replaced when the user
+        # sets up a new password via the first-run flow.
         
         # Clear session to force re-login
         session.clear()
