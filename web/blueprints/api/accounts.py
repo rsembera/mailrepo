@@ -205,8 +205,12 @@ def get_account_folders(account_id):
         if cache_age < cache_max_age:
             try:
                 folders = json.loads(account["cached_folders"])
-                return jsonify({"folders": folders, "cached": True})
-            except json.JSONDecodeError:
+                # Invalidate cache if missing noselect field (schema upgrade)
+                if folders and "noselect" not in folders[0]:
+                    pass  # Fall through to live fetch
+                else:
+                    return jsonify({"folders": folders, "cached": True})
+            except (json.JSONDecodeError, IndexError, TypeError):
                 pass
     
     client = None
