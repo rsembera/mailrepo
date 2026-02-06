@@ -753,3 +753,33 @@ All major design decisions have been resolved. Ready to continue building.
 - AI categorization
 - EdgeCase integration (link folders to client files)
 - Encrypted backup export (keep .eml.enc intact)
+
+---
+
+## Session 31 — February 5, 2026
+
+**Focus:** Code quality cleanup and IMAP bug fixes
+
+### Code Quality (-122 lines net)
+- Deduplicated `decode_header_value` — 3 inline copies in filesystem.py removed, all use `decode_email_header` from email_parser.py
+- Extracted `_save_email_to_archive()` and `_check_duplicate()` in commit.py — shared across all 4 commit functions (IMAP email, import email, IMAP folder, import folder)
+- Removed double fetch in `commit_imap_folder()` — was calling both `fetch_full()` and `fetch_raw()`, now uses only `fetch_raw()` + `parse_email_metadata()`
+- Fixed N+1 query pattern in `search_emails()` — builds folder path map from single query instead of per-result parent chain walking
+- Fixed colon-in-folder-name edge case in `_find_action_for_source()`
+- Added explanatory comment for in-memory rate limiting design choice in auth.py
+
+### IMAP Bug Fixes
+- **\Noselect folder support** — Parse `\Noselect` flag from IMAP LIST response. Virtual containers like `[Gmail]` now expand children instead of throwing "Failed to select folder" error. Handled in sidebar and folder-selection views (dimmed appearance, no action buttons).
+- **Ghost deleted emails** — Changed default IMAP search from `ALL` to `NOT DELETED` to filter messages flagged for deletion but not yet expunged. (Gmail ghost email turned out to be a server-side sync issue unrelated to this flag.)
+- **Folder cache invalidation** — Cache auto-invalidates when cached data is missing the new `noselect` field, ensuring one-time migration.
+
+### Deferred
+- filesystem.py os.path → pathlib conversion (cosmetic, low risk-reward)
+- filesystem.py module split (741 lines, manageable as-is)
+- Database class-level state refactor (testability only, no functional impact)
+
+### Commits
+- `2af76f6` — Code quality cleanup: DRY violations, N+1 queries, edge cases
+- `622ae83` — Handle IMAP \Noselect folders (e.g. [Gmail] container)
+- `f37923b` — Filter out deleted ghost messages from IMAP search results
+- `b5bd662` — Invalidate folder cache when missing noselect field
