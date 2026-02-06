@@ -20,6 +20,11 @@
 - **Ghost deleted emails** — Changed default IMAP search from `ALL` to `NOT DELETED` to filter messages flagged for deletion but not yet expunged
 - **Cache invalidation** — Folder cache auto-invalidates when missing `noselect` field (one-time migration)
 
+### Database Reset Fixes
+- **Missing .secret_key cleanup** — Reset now deletes Flask session key file
+- **Segfault fix** — Removed `Encryption.lock()` call during reset request; clearing SQLCipher keys mid-response caused segfault in C extension. Keys are replaced on next password setup.
+- **Stale data diagnosis** — Identified root cause of "file is not a database" error: new salt + old database = mismatched encryption key
+
 ### Deferred (not worth risk pre-release)
 - filesystem.py `os.path` → `pathlib` (cosmetic)
 - filesystem.py module split (already 741 lines, manageable)
@@ -68,7 +73,8 @@
 ## Quick Start
 
 ```bash
-cd /home/rick/Applications/mailrepo
+cd /Users/rick/Applications/mailrepo  # MacBook Air M4
+cd /home/rick/Applications/mailrepo   # Mercury (Linux)
 ./venv/bin/python main.py
 # Open http://localhost:5050
 ```

@@ -783,3 +783,19 @@ All major design decisions have been resolved. Ready to continue building.
 - `622ae83` — Handle IMAP \Noselect folders (e.g. [Gmail] container)
 - `f37923b` — Filter out deleted ghost messages from IMAP search results
 - `b5bd662` — Invalidate folder cache when missing noselect field
+
+
+---
+
+## Session 31 (continued) — February 5, 2026
+
+**Focus:** Database reset bug fixes (MacBook Air M4)
+
+### Database Reset Fixes
+- **Missing .secret_key cleanup** — `reset_database()` now deletes Flask session key file in addition to salt, database, archives, and backups
+- **Segfault on reset** — Removed `Encryption.lock()` call from reset handler; clearing SQLCipher's in-memory key during response processing caused segfault in the C extension. Keys are naturally replaced on next password setup.
+- **Stale data diagnosis** — "file is not a database" error was caused by new `.salt` (from aborted first-run) paired with old `mailrepo.db` (encrypted with different salt). Fix: delete mismatched database file.
+
+### Commits
+- `5d37375` — Fix database reset: delete .secret_key and lock encryption
+- `bb20719` — Fix segfault on database reset: don't lock encryption mid-request
