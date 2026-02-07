@@ -134,6 +134,7 @@ Pre-release manual testing checklist. Run through before any public release.
 
 - [ ] Can view archived email
 - [ ] Can download archived email as .eml
+- [ ] Can export folder as ZIP (decrypted .eml files)
 - [ ] Can print archived email
 - [ ] Can move email to different archive folder
 - [ ] Can delete email (moves to Trash)
