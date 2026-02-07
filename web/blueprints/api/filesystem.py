@@ -108,12 +108,20 @@ def browse_filesystem():
                         continue
                 
                 stat = entry.stat()
-                items.append({
+                item = {
                     "name": entry.name,
                     "path": entry.path,
                     "type": "dir" if is_dir else "file",
                     "size": stat.st_size if not is_dir else None,
-                })
+                }
+                
+                # Mark mbox files for the file picker
+                if not is_dir and file_filter == 'mbox':
+                    item["is_mbox"] = True
+                elif not is_dir and is_mbox_file(entry.path, entry.name):
+                    item["is_mbox"] = True
+                
+                items.append(item)
             except (PermissionError, OSError):
                 # Skip files we can't access
                 continue
