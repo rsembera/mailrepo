@@ -56,39 +56,39 @@ Pre-release manual testing checklist. Run through before any public release.
 ## Imports
 
 ### mbox
-- [ ] Can browse to and select .mbox file
-- [ ] Import mounts and shows in sidebar
-- [ ] Emails are browsable
-- [ ] Can view individual emails
-- [ ] Unmount removes from sidebar
+- [x] Can browse to and select .mbox file
+- [x] Import mounts and shows in sidebar
+- [x] Emails are browsable
+- [x] Can view individual emails
+- [x] Unmount removes from sidebar
 
 ### Apple Mail Export (.mbox directory)
-- [ ] Can select .mbox directory
-- [ ] Nested folders appear correctly
-- [ ] Emails load from both `mbox` file and `Messages/*.emlx` formats
-- [ ] Unmount works
+- [x] Can select .mbox directory
+- [x] Nested folders appear correctly
+- [x] Emails load from both `mbox` file and `Messages/*.emlx` formats
+- [x] Unmount works
 
 ### PST (if libpst installed)
-- [ ] PST support check shows correct status
-- [ ] Can select and convert .pst file
-- [ ] Converted folders appear
-- [ ] Emails are viewable
-- [ ] Temp files cleaned up on unmount
-- [ ] Password-protected .pst file imports without issue (password is UI-level only, not encryption)
+- [x] PST support check shows correct status
+- [x] Can select and convert .pst file
+- [x] Converted folders appear
+- [x] Emails are viewable
+- [x] Temp files cleaned up on unmount
+- [x] Password-protected .pst file imports without issue (password is UI-level only, not encryption)
 
 ### EML Directory
-- [ ] Can select directory of .eml files
-- [ ] Individual emails load correctly
+- [x] Can select directory of .eml files
+- [x] Individual emails load correctly
 
 ---
 
 ## Archive Folders
 
-- [ ] Can create new folder at root level
-- [ ] Can create nested subfolder
-- [ ] Can rename folder
-- [ ] Can move folder (drag or menu)
-- [ ] Can delete folder (moves to Trash)
+- [x] Can create new folder at root level
+- [x] Can create nested subfolder
+- [x] Can rename folder
+- [x] Can move folder (drag or menu)
+- [x] Can delete folder (moves to Trash)
 - [ ] Folder with emails can be deleted
 - [ ] Folder with subfolders can be deleted
 
@@ -235,4 +235,12 @@ Issues found:
 - Progress bar count text clipped (fixed: fa2687a)
 
 Next: Imports section (requires Mercury for test files)
+
+Session 2 (Feb 6, Mercury):
+- Imports: All formats tested (mbox, Apple Mail, PST, EML)
+- Archive Folders: Create, subfolder, rename, color, move, delete all pass
+- Fixed: mbox file selection in import picker (is_mbox flag missing)
+- Fixed: File picker Apple Mail option text alignment
+- Fixed: New folder sidebar alignment (switched to full tree rebuild)
+- Next: Staging & Commit
 
