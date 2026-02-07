@@ -133,7 +133,7 @@ function renderBackupsView() {
                         </div>
                         <div class="form-group"></div>
                     </div>
-                    <div id="custom-location-wrapper" class="custom-location-wrapper hidden">
+                    <div id="custom-location-wrapper" class="custom-location-wrapper form-group hidden">
                         <input type="text" id="custom-location-input" class="form-input" placeholder="Enter full path">
                         <button type="button" class="btn btn-secondary btn-sm" id="browse-folder-btn">
                             <i data-lucide="folder"></i>
