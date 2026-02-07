@@ -476,7 +476,7 @@
 }
 
 /* Folder picker items - scoped to backup location picker only */
-.folder-picker-container .folder-item {
+.folder-list .folder-item {
     display: flex;
     align-items: center;
     gap: var(--space-sm);
@@ -486,33 +486,35 @@
     transition: background-color 0.15s;
     font-size: 0.875rem;
     color: var(--color-text);
+    border-radius: var(--radius-sm);
+    margin: 2px 4px;
 }
 
-.folder-picker-container .folder-item:last-child {
+.folder-list .folder-item:last-child {
     border-bottom: none;
 }
 
-.folder-picker-container .folder-item:hover {
-    background-color: var(--color-background-secondary);
+.folder-list .folder-item:hover {
+    background-color: var(--color-primary-lighter, #E0F2FE);
 }
 
-.folder-picker-container .folder-item.inaccessible {
+.folder-list .folder-item.inaccessible {
     opacity: 0.5;
     cursor: not-allowed;
 }
 
-.folder-picker-container .folder-item.inaccessible:hover {
+.folder-list .folder-item.inaccessible:hover {
     background-color: transparent;
 }
 
-.folder-picker-container .folder-item-icon {
-    color: #F59E0B;
+.folder-list .folder-item-icon {
+    color: var(--color-text-muted);
     flex-shrink: 0;
     width: 18px;
     height: 18px;
 }
 
-.folder-picker-container .folder-item-name {
+.folder-list .folder-item-name {
     flex: 1;
     min-width: 0;
     overflow: hidden;
@@ -520,7 +522,7 @@
     white-space: nowrap;
 }
 
-.folder-picker-container .folder-item-locked {
+.folder-list .folder-item-locked {
     color: var(--color-text-muted);
     flex-shrink: 0;
     width: 14px;
