@@ -245,3 +245,11 @@ Session 2 (Feb 6, Mercury):
 - Fixed: New folder sidebar alignment (switched to full tree rebuild)
 - Next: Staging & Commit
 
+Session 3 (Feb 7, Mercury):
+- Fixed: Dropbox backup path moved to Apps subfolder (consistency with other projects)
+- Fixed: Custom backup location input styling (missing form-group wrapper)
+- Fixed: Backup folder picker modal not appearing (hidden vs active class)
+- Fixed: Backup folder picker CSS selectors not matching (wrong parent class)
+- Fixed: Backup folder picker icon color and alignment
+- Next: Continue testing from Staging & Commit
+
