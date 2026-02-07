@@ -95,10 +95,13 @@
                 </div>
                 {% if folders %}
                     {% for folder in folders if not folder.parent_id and not folder.deleted_at %}
-                    <div class="tree-item folder-item">
+                    <div class="tree-item folder-item" data-folder-id="{{ folder.id }}">
                         <div class="tree-item-row" data-type="folder" data-id="{{ folder.id }}" data-color="{{ folder.color or '' }}">
+                            <span class="chevron-placeholder"></span>
                             {% if folder.color %}
                             <span class="color-dot" style="background: {{ folder.color }}"></span>
+                            {% else %}
+                            <span class="color-dot color-dot-empty"></span>
                             {% endif %}
                             <i data-lucide="folder" class="tree-icon"></i>
                             <span class="tree-label">{{ folder.name }}</span>
