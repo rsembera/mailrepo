@@ -292,8 +292,8 @@
 
 .file-picker-options {
     display: flex;
-    align-items: center;
-    gap: var(--space-md);
+    flex-direction: column;
+    gap: var(--space-xs);
     padding: var(--space-sm) 0;
     margin-bottom: var(--space-sm);
 }
@@ -301,6 +301,7 @@
 .file-picker-option-hint {
     font-size: 0.8rem;
     color: var(--color-text-muted);
+    padding-left: 26px;
 }
 
 .file-picker-list {
