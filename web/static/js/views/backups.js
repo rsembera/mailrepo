@@ -202,7 +202,7 @@ function renderBackupsView() {
         </div>
         
         <!-- Folder Picker Modal -->
-        <div id="folder-picker-modal" class="modal-overlay hidden">
+        <div id="folder-picker-modal" class="modal-overlay">
             <div class="modal-content folder-picker-modal">
                 <div class="folder-picker-header">
                     <h3>Select Backup Folder</h3>
@@ -810,7 +810,7 @@ function showMessage(text, type) {
  * Open folder picker modal.
  */
 function openFolderPicker() {
-    document.getElementById('folder-picker-modal').classList.remove('hidden');
+    document.getElementById('folder-picker-modal').classList.add('active');
     
     const customInput = document.getElementById('custom-location-input');
     const startPath = customInput.value.trim() || '';
@@ -824,7 +824,7 @@ function openFolderPicker() {
  * Close folder picker modal.
  */
 function closeFolderPicker() {
-    document.getElementById('folder-picker-modal').classList.add('hidden');
+    document.getElementById('folder-picker-modal').classList.remove('active');
 }
 
 /**
