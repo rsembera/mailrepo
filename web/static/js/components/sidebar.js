@@ -231,10 +231,12 @@ export function updateSidebarFolders(newFolder) {
     folderItem.className = 'tree-item folder-item';
     
     const colorDot = newFolder.color ? 
-        `<span class="color-dot" style="background: ${newFolder.color}"></span>` : '';
+        `<span class="color-dot" style="background: ${newFolder.color}"></span>` :
+        `<span class="color-dot color-dot-empty"></span>`;
     
     folderItem.innerHTML = `
         <div class="tree-item-row" data-type="folder" data-id="${newFolder.id}" data-color="${newFolder.color || ''}">
+            <span class="chevron-placeholder"></span>
             ${colorDot}
             <i data-lucide="folder" class="tree-icon"></i>
             <span class="tree-label">${escapeHtml(newFolder.name)}</span>
