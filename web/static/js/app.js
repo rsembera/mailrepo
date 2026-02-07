@@ -264,7 +264,7 @@ async function createFolder(returnToStage) {
         closeModal('newFolderModal');
         
         // Update sidebar archive section
-        updateSidebarFolders(data.folder);
+        refreshSidebarFolders();
         
         if (fromStage) {
             // Re-render the hierarchical folder tree and select the new folder
