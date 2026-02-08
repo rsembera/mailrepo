@@ -850,6 +850,10 @@ function renderHtmlBody(container, html, allowRemote = false) {
                        overflow: hidden; }
                 img { max-width: 100%; height: auto; }
                 a { color: #1a73e8; }
+                @media print {
+                    html, body { overflow: visible; height: auto; }
+                    * { page-break-inside: auto; }
+                }
             </style>
         </head>
         <body>${html}</body>
@@ -998,16 +1002,85 @@ window.downloadImportAttachment = async function(index, viewInline = false) {
  * Print the current email (browser print dialog).
  */
 function printEmail() {
-    const viewerBody = document.getElementById('viewerBody');
-    const iframe = viewerBody.querySelector('iframe');
+    if (!currentViewerContext?.emailData) return;
     
-    if (iframe) {
-        // Print the iframe content
-        iframe.contentWindow.print();
-    } else {
-        // Fallback: print the whole viewer
-        window.print();
+    const email = currentViewerContext.emailData;
+    const attachments = email.attachments || [];
+    
+    // Build a standalone print document
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    
+    let attachmentHtml = '';
+    if (attachments.length > 0) {
+        const items = attachments.map(att => {
+            let sizeStr = '';
+            if (att.size) {
+                const kb = att.size / 1024;
+                sizeStr = kb >= 1024 ? ` (${(kb / 1024).toFixed(1)} MB)` : ` (${Math.round(kb)} KB)`;
+            }
+            return `${escapeHtml(att.filename || 'unnamed')}${sizeStr}`;
+        }).join(', ');
+        attachmentHtml = `<hr style="border: none; border-top: 1px solid #ccc; margin: 1.5em 0 0.5em 0;"><p style="font-size: 13px; color: #555; margin: 0;"><strong style="color: #333;">Attachments (${attachments.length}):</strong> ${items}</p>`;
     }
+    
+    const body = email.html_body 
+        ? email.html_body
+            .replace(/<html[^>]*>/gi, '').replace(/<\/html>/gi, '')
+            .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '')
+            .replace(/<body[^>]*>/gi, '').replace(/<\/body>/gi, '')
+            .replace(/<meta[^>]*>/gi, '')
+            .replace(/<!DOCTYPE[^>]*>/gi, '')
+            // Strip MS Word @page rules and page: properties that force page breaks
+            .replace(/@page\s+\w+\s*\{[^}]*\}/gi, '')
+            .replace(/page:\s*\w+\s*;?/gi, '')
+        : `<pre style="white-space: pre-wrap; font-family: inherit;">${escapeHtml(email.text_body || '')}</pre>`;
+    
+    printWindow.document.write(`<!DOCTYPE html>
+<html>
+<head>
+    <title>Print: ${escapeHtml(email.subject || '(No subject)')}</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+               font-size: 14px; line-height: 1.5; color: #333; margin: 1em; padding: 0; }
+        img { max-width: 100%; height: auto; }
+        a { color: #1a73e8; }
+        .print-header { margin-bottom: 1.5em; padding-bottom: 1em; border-bottom: 2px solid #333; }
+        .print-header h2 { margin: 0 0 0.5em 0; font-size: 16px; }
+        .print-header p { margin: 0.2em 0; font-size: 13px; color: #555; }
+        .print-header strong { color: #333; }
+        @media print {
+            body { margin: 0; }
+            .print-header { page-break-after: avoid; }
+        }
+    </style>
+</head>
+<body>
+    <div class="print-header">
+        <h2>${escapeHtml(email.subject || '(No subject)')}</h2>
+        <p><strong>From:</strong> ${escapeHtml(email.from || '')}</p>
+        <p><strong>To:</strong> ${escapeHtml(email.to || '')}</p>
+        ${email.cc ? `<p><strong>Cc:</strong> ${escapeHtml(email.cc)}</p>` : ''}
+        <p><strong>Date:</strong> ${escapeHtml(email.date || '')}</p>
+    </div>
+    ${body}
+    ${attachmentHtml}
+</body>
+</html>`);
+    printWindow.document.close();
+    
+    // Wait for content to render, then print and close
+    printWindow.onload = () => {
+        printWindow.print();
+        printWindow.close();
+    };
+    // Fallback if onload doesn't fire (some browsers)
+    setTimeout(() => {
+        if (!printWindow.closed) {
+            printWindow.print();
+            printWindow.close();
+        }
+    }, 500);
 }
 window.printEmail = printEmail;
 
