@@ -177,7 +177,7 @@
 
 .source-action-label {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     gap: var(--space-xs);
     font-size: 0.8rem;
     color: var(--color-text-muted);
@@ -188,7 +188,7 @@
 }
 
 .source-action-dropdown {
-    min-width: 80px;
+    width: 120px;
 }
 
 .source-action-dropdown .icon-select-trigger {
@@ -221,6 +221,7 @@
     font-size: 0.8rem;
     text-align: left;
     font-family: var(--font-ui);
+    color: var(--color-text);
 }
 
 .icon-select-trigger:hover {
@@ -269,6 +270,7 @@
     cursor: pointer;
     font-size: 0.8rem;
     white-space: nowrap;
+    color: var(--color-text);
 }
 
 .icon-select-option:hover {

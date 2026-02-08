@@ -819,8 +819,13 @@ function initIconSelects() {
         });
         
         dropdown?.querySelectorAll('.icon-select-option').forEach(option => {
-            option.addEventListener('click', () => {
+            option.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
                 const value = option.dataset.value;
+                
+                // Close dropdown immediately
+                dropdown.classList.remove('open');
                 
                 if (select.classList.contains('dest-change-dropdown')) {
                     // Change destination dropdown
@@ -838,8 +843,6 @@ function initIconSelects() {
                     option.classList.add('selected');
                     sourceActions[sourceKey] = value;
                 }
-                
-                dropdown.classList.remove('open');
             });
         });
     });
