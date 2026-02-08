@@ -196,12 +196,7 @@ function renderFoldersTab(allTrashedFolders) {
                                oninput="handleTrashSearch(this.value)">
                         ${searchQuery ? '<button class="search-clear" onclick="clearTrashSearch()"><i data-lucide="x"></i></button>' : ''}
                     </div>
-                    <select id="trashSort" class="trash-sort" onchange="handleTrashSort(this.value)">
-                        <option value="date-desc" ${currentSort === 'date-desc' ? 'selected' : ''}>Newest first</option>
-                        <option value="date-asc" ${currentSort === 'date-asc' ? 'selected' : ''}>Oldest first</option>
-                        <option value="name-asc" ${currentSort === 'name-asc' ? 'selected' : ''}>Name A-Z</option>
-                        <option value="name-desc" ${currentSort === 'name-desc' ? 'selected' : ''}>Name Z-A</option>
-                    </select>
+                    ${renderTrashSortButton(['date-desc', 'Newest first'], ['date-asc', 'Oldest first'], ['name-asc', 'Name A–Z'], ['name-desc', 'Name Z–A'])}
                 </div>
                 <button class="btn btn-danger" onclick="emptyTrash()">
                     <i data-lucide="trash-2"></i>
@@ -315,12 +310,7 @@ function renderEmailsTab() {
                                oninput="handleTrashSearch(this.value)">
                         ${searchQuery ? '<button class="search-clear" onclick="clearTrashSearch()"><i data-lucide="x"></i></button>' : ''}
                     </div>
-                    <select id="trashSort" class="trash-sort" onchange="handleTrashSort(this.value)">
-                        <option value="date-desc" ${currentSort === 'date-desc' ? 'selected' : ''}>Newest first</option>
-                        <option value="date-asc" ${currentSort === 'date-asc' ? 'selected' : ''}>Oldest first</option>
-                        <option value="name-asc" ${currentSort === 'name-asc' ? 'selected' : ''}>Subject A-Z</option>
-                        <option value="name-desc" ${currentSort === 'name-desc' ? 'selected' : ''}>Subject Z-A</option>
-                    </select>
+                    ${renderTrashSortButton(['date-desc', 'Newest first'], ['date-asc', 'Oldest first'], ['sender-asc', 'Sender A–Z'], ['sender-desc', 'Sender Z–A'], ['name-asc', 'Subject A–Z'], ['name-desc', 'Subject Z–A'])}
                 </div>
                 <button class="btn btn-danger" onclick="emptyTrashEmails()">
                     <i data-lucide="trash-2"></i>
@@ -370,6 +360,10 @@ function sortEmails(emails) {
                 return b.deleted_at - a.deleted_at;
             case 'date-asc':
                 return a.deleted_at - b.deleted_at;
+            case 'sender-asc':
+                return (a.sender || '').localeCompare(b.sender || '');
+            case 'sender-desc':
+                return (b.sender || '').localeCompare(a.sender || '');
             case 'name-asc':
                 return (a.subject || '').localeCompare(b.subject || '');
             case 'name-desc':
@@ -379,6 +373,52 @@ function sortEmails(emails) {
         }
     });
 }
+
+/**
+ * Render sort icon button with dropdown for trash views.
+ */
+function renderTrashSortButton(...options) {
+    const labels = Object.fromEntries(options);
+    const currentLabel = labels[currentSort] || 'Sort';
+    const optionsHtml = options.map(([value, label]) =>
+        `<div class="sort-option ${currentSort === value ? 'selected' : ''}" data-value="${value}">${label}</div>`
+    ).join('');
+    return `
+        <div class="sort-dropdown-wrapper">
+            <button class="btn btn-icon sort-btn" onclick="toggleTrashSortDropdown(event)" title="Sort: ${currentLabel}">
+                <i data-lucide="arrow-up-down"></i>
+            </button>
+            <div class="sort-dropdown" id="trashSortDropdown">
+                ${optionsHtml}
+            </div>
+        </div>
+    `;
+}
+
+function toggleTrashSortDropdown(e) {
+    e.stopPropagation();
+    const dropdown = document.getElementById('trashSortDropdown');
+    if (!dropdown) return;
+    dropdown.classList.toggle('open');
+    
+    if (dropdown.classList.contains('open')) {
+        const close = (ev) => {
+            dropdown.classList.remove('open');
+            document.removeEventListener('click', close);
+        };
+        setTimeout(() => document.addEventListener('click', close), 0);
+        
+        dropdown.querySelectorAll('.sort-option').forEach(opt => {
+            opt.onclick = (ev) => {
+                ev.stopPropagation();
+                handleTrashSort(opt.dataset.value);
+                dropdown.classList.remove('open');
+                document.removeEventListener('click', close);
+            };
+        });
+    }
+}
+window.toggleTrashSortDropdown = toggleTrashSortDropdown;
 
 /**
  * Render a single trashed email item.
