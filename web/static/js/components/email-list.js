@@ -15,6 +15,9 @@ let onFilterChange = null;
 // Filter state
 let emailFilter = '';
 
+// Sort state
+let currentSort = 'date-desc';  // date-desc, date-asc, sender-asc, sender-desc, subject-asc, subject-desc
+
 // Archive selection state (separate from staging selection)
 let selectedArchivedEmails = new Set();
 
@@ -42,15 +45,114 @@ export function clearEmailFilter() {
  * Get filtered emails based on current filter.
  */
 function getFilteredEmails() {
-    if (!emailFilter) return state.emails;
+    let emails = state.emails;
     
-    const query = emailFilter.toLowerCase();
-    return state.emails.filter(email => {
-        const sender = (email.from || email.sender || '').toLowerCase();
-        const subject = (email.subject || '').toLowerCase();
-        return sender.includes(query) || subject.includes(query);
-    });
+    if (emailFilter) {
+        const query = emailFilter.toLowerCase();
+        emails = emails.filter(email => {
+            const sender = (email.from || email.sender || '').toLowerCase();
+            const subject = (email.subject || '').toLowerCase();
+            return sender.includes(query) || subject.includes(query);
+        });
+    }
+    
+    return sortEmails(emails);
 }
+
+/**
+ * Sort emails based on current sort setting.
+ */
+function sortEmails(emails) {
+    const sorted = [...emails];
+    const [field, direction] = currentSort.split('-');
+    const mul = direction === 'asc' ? 1 : -1;
+    
+    sorted.sort((a, b) => {
+        let valA, valB;
+        if (field === 'date') {
+            valA = a.date || a.internal_date || '';
+            valB = b.date || b.internal_date || '';
+        } else if (field === 'sender') {
+            valA = (a.from || a.sender || '').toLowerCase();
+            valB = (b.from || b.sender || '').toLowerCase();
+        } else if (field === 'subject') {
+            valA = (a.subject || '').toLowerCase();
+            valB = (b.subject || '').toLowerCase();
+        }
+        if (valA < valB) return -1 * mul;
+        if (valA > valB) return 1 * mul;
+        return 0;
+    });
+    
+    return sorted;
+}
+
+/**
+ * Render the sort select dropdown.
+ */
+function renderSortSelect() {
+    const labels = {
+        'date-desc': 'Newest first',
+        'date-asc': 'Oldest first',
+        'sender-asc': 'Sender A–Z',
+        'sender-desc': 'Sender Z–A',
+        'subject-asc': 'Subject A–Z',
+        'subject-desc': 'Subject Z–A',
+    };
+    const options = Object.entries(labels);
+    const currentLabel = labels[currentSort] || 'Sort';
+    
+    const optionsHtml = options.map(([value, label]) => 
+        `<div class="sort-option ${currentSort === value ? 'selected' : ''}" data-value="${value}">${label}</div>`
+    ).join('');
+    
+    return `
+        <div class="sort-dropdown-wrapper">
+            <button class="btn btn-icon sort-btn" onclick="toggleSortDropdown(event)" title="Sort: ${currentLabel}">
+                <i data-lucide="arrow-up-down"></i>
+            </button>
+            <div class="sort-dropdown" id="sortDropdown">
+                ${optionsHtml}
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Change sort order and re-render.
+ */
+function changeEmailSort(value) {
+    currentSort = value;
+    renderEmailList();
+}
+window.changeEmailSort = changeEmailSort;
+
+function toggleSortDropdown(e) {
+    e.stopPropagation();
+    const dropdown = document.getElementById('sortDropdown');
+    if (!dropdown) return;
+    dropdown.classList.toggle('open');
+    
+    // Close on outside click
+    if (dropdown.classList.contains('open')) {
+        const close = (ev) => {
+            dropdown.classList.remove('open');
+            document.removeEventListener('click', close);
+        };
+        setTimeout(() => document.addEventListener('click', close), 0);
+        
+        // Attach option click handlers
+        dropdown.querySelectorAll('.sort-option').forEach(opt => {
+            opt.onclick = (ev) => {
+                ev.stopPropagation();
+                changeEmailSort(opt.dataset.value);
+                dropdown.classList.remove('open');
+                document.removeEventListener('click', close);
+            };
+        });
+    }
+}
+window.toggleSortDropdown = toggleSortDropdown;
 
 /**
  * Render the email list.
@@ -99,6 +201,7 @@ export function renderEmailList() {
                            oninput="handleEmailFilter(this.value)">
                     ${emailFilter ? '<button class="search-clear" onclick="clearEmailFilterInput()"><i data-lucide="x"></i></button>' : ''}
                 </div>
+                ${renderSortSelect()}
                 <div class="toolbar-actions">
                     <button class="btn btn-secondary" onclick="selectAllArchivedEmails()">
                         <i data-lucide="check-square"></i>
@@ -136,6 +239,7 @@ export function renderEmailList() {
                            oninput="handleEmailFilter(this.value)">
                     ${emailFilter ? '<button class="search-clear" onclick="clearEmailFilterInput()"><i data-lucide="x"></i></button>' : ''}
                 </div>
+                ${renderSortSelect()}
                 <div class="toolbar-actions">
                     <button class="btn btn-secondary" onclick="selectAllEmails()">
                         <i data-lucide="check-square"></i>
