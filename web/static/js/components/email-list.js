@@ -192,20 +192,22 @@ export function renderEmailList() {
         const archiveSelectedCount = selectedArchivedEmails.size;
         html += `
             <div class="email-list-toolbar">
-                <div class="email-filter">
-                    <i data-lucide="search" class="search-icon"></i>
-                    <input type="text" 
-                           id="emailFilterInput" 
-                           placeholder="Filter by sender or subject..." 
-                           value="${escapeHtml(emailFilter)}"
-                           oninput="handleEmailFilter(this.value)">
-                    ${emailFilter ? '<button class="search-clear" onclick="clearEmailFilterInput()"><i data-lucide="x"></i></button>' : ''}
+                <div class="toolbar-left">
+                    <div class="email-filter">
+                        <i data-lucide="search" class="search-icon"></i>
+                        <input type="text" 
+                               id="emailFilterInput" 
+                               placeholder="Filter by sender or subject..." 
+                               value="${escapeHtml(emailFilter)}"
+                               oninput="handleEmailFilter(this.value)">
+                        ${emailFilter ? '<button class="search-clear" onclick="clearEmailFilterInput()"><i data-lucide="x"></i></button>' : ''}
+                    </div>
+                    ${renderSortSelect()}
                 </div>
-                ${renderSortSelect()}
                 <div class="toolbar-actions">
                     <button class="btn btn-secondary" onclick="selectAllArchivedEmails()">
                         <i data-lucide="check-square"></i>
-                        Select All
+                        All
                     </button>
                     <button class="btn btn-secondary" onclick="clearSelectedArchivedEmails()" ${archiveSelectedCount === 0 ? 'disabled' : ''}>
                         <i data-lucide="x"></i>
@@ -230,20 +232,22 @@ export function renderEmailList() {
         // IMAP/Import view - staging toolbar
         html += `
             <div class="email-list-toolbar">
-                <div class="email-filter">
-                    <i data-lucide="search" class="search-icon"></i>
-                    <input type="text" 
-                           id="emailFilterInput" 
-                           placeholder="Filter by sender or subject..." 
-                           value="${escapeHtml(emailFilter)}"
-                           oninput="handleEmailFilter(this.value)">
-                    ${emailFilter ? '<button class="search-clear" onclick="clearEmailFilterInput()"><i data-lucide="x"></i></button>' : ''}
+                <div class="toolbar-left">
+                    <div class="email-filter">
+                        <i data-lucide="search" class="search-icon"></i>
+                        <input type="text" 
+                               id="emailFilterInput" 
+                               placeholder="Filter by sender or subject..." 
+                               value="${escapeHtml(emailFilter)}"
+                               oninput="handleEmailFilter(this.value)">
+                        ${emailFilter ? '<button class="search-clear" onclick="clearEmailFilterInput()"><i data-lucide="x"></i></button>' : ''}
+                    </div>
+                    ${renderSortSelect()}
                 </div>
-                ${renderSortSelect()}
                 <div class="toolbar-actions">
                     <button class="btn btn-secondary" onclick="selectAllEmails()">
                         <i data-lucide="check-square"></i>
-                        Select All
+                        All
                     </button>
                     <button class="btn btn-secondary" onclick="clearSelectedEmails()" ${selectedCount === 0 ? 'disabled' : ''}>
                         <i data-lucide="x"></i>

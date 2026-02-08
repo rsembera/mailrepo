@@ -435,6 +435,12 @@
     border-radius: var(--radius-md);
 }
 
+.toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
 .email-filter {
     position: relative;
     display: flex;
