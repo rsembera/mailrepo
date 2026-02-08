@@ -795,6 +795,7 @@ function renderEmailContent(email, context = null) {
     );
     if (loadRemoteBtn) {
         loadRemoteBtn.style.display = hasExternalContent ? '' : 'none';
+        loadRemoteBtn.disabled = false;
     }
     
     // Body
