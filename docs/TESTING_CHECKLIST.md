@@ -89,55 +89,55 @@ Pre-release manual testing checklist. Run through before any public release.
 - [x] Can rename folder
 - [x] Can move folder (drag or menu)
 - [x] Can delete folder (moves to Trash)
-- [ ] Folder with emails can be deleted
-- [ ] Folder with subfolders can be deleted
+- [x] Folder with emails can be deleted
+- [x] Folder with subfolders can be deleted
 
 ---
 
 ## Staging & Commit
 
 ### Staging Emails
-- [ ] Can select individual emails (checkbox)
+- [x] Can select individual emails (checkbox)
 - [ ] Can select all emails in folder
-- [ ] "Stage" button opens destination picker
-- [ ] Can select destination folder
+- [x] "Stage" button opens destination picker
+- [x] Can select destination folder
 - [ ] Can create new folder from picker
-- [ ] Staged badge shows count
+- [x] Staged badge shows count
 - [ ] Staged emails appear grayed out
 
 ### Staging Folders (Import)
-- [ ] Can stage entire folder from import
+- [x] Can stage entire folder from import
 - [ ] Subfolder staging options work (with/without children)
 - [ ] Folder appears in Review with email count
 
 ### Review
-- [ ] Review button shows all staged items
-- [ ] Items grouped by destination
-- [ ] Can change destination for group
-- [ ] Can unstage individual items
+- [x] Review button shows all staged items
+- [x] Items grouped by destination
+- [x] Can change destination for group
+- [x] Can unstage individual items
 - [ ] Can unstage entire destination group
-- [ ] Source action dropdown works (Leave/Archive/Trash/Delete)
+- [x] Source action dropdown works (Leave/Archive/Trash/Delete)
 - [ ] "Unstage All" clears everything
 
 ### Commit
-- [ ] Commit button starts process
+- [x] Commit button starts process
 - [ ] Progress modal shows status
-- [ ] Emails are copied to archive
+- [x] Emails are copied to archive
 - [ ] Source actions execute (if not "Leave")
 - [ ] Success message shows count
-- [ ] Archived emails appear in destination folder
+- [x] Archived emails appear in destination folder
 - [ ] Staged items cleared after commit
 
 ---
 
 ## Archived Email Operations
 
-- [ ] Can view archived email
-- [ ] Can download archived email as .eml
-- [ ] Can export folder as ZIP (decrypted .eml files)
-- [ ] Can print archived email
-- [ ] Can move email to different archive folder
-- [ ] Can delete email (moves to Trash)
+- [x] Can view archived email
+- [x] Can download archived email as .eml
+- [x] Can export folder as ZIP (decrypted .eml files)
+- [x] Can print archived email
+- [x] Can move email to different archive folder
+- [x] Can delete email (moves to Trash)
 - [ ] Batch select works
 - [ ] Batch move works
 - [ ] Batch delete works
@@ -157,9 +157,9 @@ Pre-release manual testing checklist. Run through before any public release.
 
 ## Trash
 
-- [ ] Deleted folders appear in Trash
-- [ ] Deleted emails appear in Trash (if viewing deleted folder)
-- [ ] Can restore folder from Trash
+- [x] Deleted folders appear in Trash
+- [x] Deleted emails appear in Trash
+- [x] Can restore folder from Trash
 - [ ] Can permanently delete from Trash
 - [ ] "Empty Trash" works
 - [ ] Trash auto-purge after 30 days (check on restart)
@@ -251,5 +251,18 @@ Session 3 (Feb 7, Mercury):
 - Fixed: Backup folder picker modal not appearing (hidden vs active class)
 - Fixed: Backup folder picker CSS selectors not matching (wrong parent class)
 - Fixed: Backup folder picker icon color and alignment
-- Next: Continue testing from Staging & Commit
+
+Session 4 (Feb 7, Mercury):
+- Staging & Commit: Core flow tested (stage, review, commit, source actions)
+- Archive Folders: Folder/subfolder deletion tested
+- Archived Email Ops: View, download, ZIP export, print, move, delete all pass
+- Fixed: Source action dropdown auto-close and font color (muted inherited from label)
+- Fixed: "After:" label vertical alignment with dropdown (baseline instead of center)
+- Fixed: Folder restore not showing children in sidebar (switched to refreshSidebarFolders)
+- Fixed: Load Remote Content button staying disabled between emails
+- Fixed: Print email now uses standalone print document with attachment list
+- Fixed: MS Word @page rules causing page breaks in printed emails
+- Fixed: Sender/subject order reversed in Trash emails tab
+- Removed: Unused updateSidebarFolders function (all callers use refreshSidebarFolders)
+- Next: Search, remaining Staging items, Batch operations, Backup/Restore
 
