@@ -12,7 +12,7 @@ from core import Database
 from core import Config
 from core import Encryption
 from utils.log import get_logger
-from .email_parser import decode_email_header
+from .email_parser import decode_email_header, extract_body_text
 from . import api_bp
 
 log = get_logger()
@@ -432,3 +432,45 @@ def get_archived_email_source(folder_id, message_id):
         return jsonify({"source": source})
     except Exception as e:
         return jsonify({"error": f"Failed to read email source: {e}"}), 500
+
+
+@api_bp.route("/search/reindex", methods=["POST"])
+def reindex_search():
+    """Rebuild FTS index by re-extracting body text from archived .eml files."""
+    try:
+        messages = Database.fetchall(
+            "SELECT id, filepath FROM messages WHERE deleted_at IS NULL",
+            ()
+        )
+        
+        updated = 0
+        errors = 0
+        
+        for msg in messages:
+            try:
+                filepath = Config.get_base_path() / msg["filepath"]
+                if not filepath.exists():
+                    errors += 1
+                    continue
+                raw_email = filepath.read_bytes()
+                raw_email = Encryption.decrypt(raw_email)
+                body_text = extract_body_text(raw_email)
+                Database.execute(
+                    "UPDATE messages SET body_text = ? WHERE id = ?",
+                    (body_text, msg["id"])
+                )
+                updated += 1
+            except Exception as e:
+                log.warning(f"Failed to reindex message {msg['id']}: {e}")
+                errors += 1
+        
+        # Rebuild FTS index
+        Database.execute("INSERT INTO messages_fts(messages_fts) VALUES('rebuild')", ())
+        
+        return jsonify({
+            "message": f"Reindexed {updated} emails ({errors} errors)",
+            "updated": updated,
+            "errors": errors
+        })
+    except Exception as e:
+        return jsonify({"error": f"Reindex failed: {e}"}), 500

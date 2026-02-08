@@ -222,13 +222,35 @@ def extract_body_text(raw_email: bytes) -> str:
                     return payload.decode('utf-8', errors='replace')
             return ""
         
+        def strip_html(html):
+            """Strip HTML tags and entities, adding spaces for proper tokenization."""
+            import re
+            text = re.sub(r'<style[^>]*>[\s\S]*?</style>', '', html, flags=re.IGNORECASE)
+            text = re.sub(r'<script[^>]*>[\s\S]*?</script>', '', text, flags=re.IGNORECASE)
+            text = re.sub(r'<[^>]+>', ' ', text)
+            text = re.sub(r'&nbsp;', ' ', text)
+            text = re.sub(r'&[a-zA-Z]+;', ' ', text)
+            text = re.sub(r'\s+', ' ', text).strip()
+            return text
+        
+        plain_parts = []
+        html_parts = []
+        
         if msg.is_multipart():
             for part in msg.walk():
                 if part.get_content_type() == 'text/plain':
-                    text_parts.append(decode_part(part))
+                    plain_parts.append(decode_part(part))
+                elif part.get_content_type() == 'text/html':
+                    html_parts.append(strip_html(decode_part(part)))
         else:
             if msg.get_content_type() == 'text/plain':
-                text_parts.append(decode_part(msg))
+                plain_parts.append(decode_part(msg))
+            elif msg.get_content_type() == 'text/html':
+                html_parts.append(strip_html(decode_part(msg)))
+        
+        # Prefer HTML-derived text (better tokenization from tag boundaries)
+        # Fall back to plain text if no HTML
+        text_parts = html_parts if html_parts else plain_parts
         
         return "\n".join(text_parts)[:10000]
     except:
