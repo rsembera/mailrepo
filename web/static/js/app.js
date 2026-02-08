@@ -19,7 +19,7 @@ import { state, loadFolders, confirmNavigation } from './state.js';
 import { closeModal, showPrompt, showConfirm, showAlert, initModalListeners } from './modals.js';
 import { renderFolderTree } from './components/folder-tree.js';
 import { initEmailList, renderEmailList, toggleEmailSelection, updateSelectAllState } from './components/email-list.js';
-import { initSidebar, toggleSection, handleTreeItemClick, updateSidebarFolders, refreshSidebarFolders, refreshSidebarAccounts, loadAccountLabels, buildImapFolderTree, getFolderIcon } from './components/sidebar.js';
+import { initSidebar, toggleSection, handleTreeItemClick, refreshSidebarFolders, refreshSidebarAccounts, loadAccountLabels, buildImapFolderTree, getFolderIcon } from './components/sidebar.js';
 import { initMailView, selectView, loadAccountEmails, loadFolderEmails, openEmailViewer, closeEmailViewer, showLoading, showError, restoreDefaultHeaderActions } from './views/mail.js';
 import { initStaging, openStageModal, renderFolderSelectTree, handleFolderSelect, confirmStage, updateStagedBadge, updateButtonStates, goToReview, setSelectedDestinationFolder } from './components/staging.js';
 import { initFolderMgmt, showFolderManagementView, renameFolder, createSubfolder, openMoveFolder, confirmMoveFolder, deleteFolder, openColorPicker } from './views/folder-mgmt.js';
