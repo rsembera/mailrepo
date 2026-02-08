@@ -391,8 +391,8 @@ function renderTrashEmailItem(email) {
             <div class="trash-management-name">
                 <i data-lucide="mail" class="folder-icon"></i>
                 <div class="trash-email-info">
-                    <span class="email-subject">${escapeHtml(email.subject || '(no subject)')}</span>
                     <span class="email-sender">${escapeHtml(extractName(email.sender || ''))}</span>
+                    <span class="email-subject">${escapeHtml(email.subject || '(no subject)')}</span>
                 </div>
             </div>
             <div class="trash-management-date">
