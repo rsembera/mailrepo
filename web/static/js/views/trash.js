@@ -13,7 +13,7 @@
 import { escapeHtml, formatDate, extractName } from '../utils.js';
 import { state, loadFolders } from '../state.js';
 import { showConfirm, showAlert } from '../modals.js';
-import { updateSidebarFolders } from '../components/sidebar.js';
+import { refreshSidebarFolders } from '../components/sidebar.js';
 
 // DOM references
 let contextTitle = null;
@@ -440,7 +440,7 @@ export async function restoreFolder(folderId) {
         }
         
         showTrashView();
-        if (folder) updateSidebarFolders(folder);
+        refreshSidebarFolders();
         
         if (data.folder && data.folder.renamed) {
             showAlert('Folder Restored', `Folder restored as "${data.folder.name}" to avoid a naming conflict.`);
