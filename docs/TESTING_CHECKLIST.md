@@ -98,35 +98,35 @@ Pre-release manual testing checklist. Run through before any public release.
 
 ### Staging Emails
 - [x] Can select individual emails (checkbox)
-- [ ] Can select all emails in folder
+- [ ] Can select all emails in folder ← **test next**
 - [x] "Stage" button opens destination picker
 - [x] Can select destination folder
-- [ ] Can create new folder from picker
+- [ ] Can create new folder from picker ← **test next**
 - [x] Staged badge shows count
-- [ ] Staged emails appear grayed out
+- [ ] Staged emails appear grayed out ← **test next**
 
 ### Staging Folders (Import)
 - [x] Can stage entire folder from import
-- [ ] Subfolder staging options work (with/without children)
-- [ ] Folder appears in Review with email count
+- [ ] Subfolder staging options work (with/without children) ← **test next**
+- [ ] Folder appears in Review with email count ← **test next**
 
 ### Review
 - [x] Review button shows all staged items
 - [x] Items grouped by destination
 - [x] Can change destination for group
 - [x] Can unstage individual items
-- [ ] Can unstage entire destination group
+- [ ] Can unstage entire destination group ← **test next**
 - [x] Source action dropdown works (Leave/Archive/Trash/Delete)
-- [ ] "Unstage All" clears everything
+- [ ] "Unstage All" clears everything ← **test next**
 
 ### Commit
 - [x] Commit button starts process
-- [ ] Progress modal shows status
+- [ ] Progress modal shows status ← **test next**
 - [x] Emails are copied to archive
-- [ ] Source actions execute (if not "Leave")
-- [ ] Success message shows count
+- [ ] Source actions execute (if not "Leave") ← **test next**
+- [ ] Success message shows count ← **test next**
 - [x] Archived emails appear in destination folder
-- [ ] Staged items cleared after commit
+- [ ] Staged items cleared after commit ← **test next**
 
 ---
 
