@@ -118,6 +118,17 @@ export class CustomSelect {
         this.container.classList.add('open');
         this.trigger.setAttribute('aria-expanded', 'true');
         
+        // Flip dropdown direction if not enough space below
+        const triggerRect = this.trigger.getBoundingClientRect();
+        const dropdownHeight = Math.min(this.dropdown.scrollHeight, 240);
+        const spaceBelow = window.innerHeight - triggerRect.bottom;
+        
+        if (spaceBelow < dropdownHeight + 8 && triggerRect.top > dropdownHeight + 8) {
+            this.container.classList.add('drop-up');
+        } else {
+            this.container.classList.remove('drop-up');
+        }
+        
         // Scroll selected item into view
         const selectedItem = this.dropdown.querySelector('.custom-select-item.selected');
         if (selectedItem) {

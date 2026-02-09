@@ -84,6 +84,19 @@
     transform: translateY(0);
 }
 
+/* Drop upward when not enough space below */
+.custom-select.drop-up .custom-select-dropdown {
+    top: auto;
+    bottom: 100%;
+    margin-top: 0;
+    margin-bottom: 4px;
+    transform: translateY(8px);
+}
+
+.custom-select.drop-up.open .custom-select-dropdown {
+    transform: translateY(0);
+}
+
 .custom-select-item {
     padding: var(--space-sm) var(--space-md);
     font-family: var(--font-ui);
