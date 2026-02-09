@@ -619,6 +619,7 @@ async function performBackup() {
             } else {
                 showMessage('No changes since last backup', 'info');
             }
+            settingsLoaded = false;
             loadBackupStatus();
             loadRestorePoints();
         } else {
@@ -755,6 +756,7 @@ async function confirmRestore() {
         
         if (data.success) {
             showMessage('Restore prepared. Please restart MailRepo to complete the restore.', 'info');
+            settingsLoaded = false;
             loadBackupStatus();
         } else {
             showMessage('Failed to prepare restore: ' + (data.error || 'Unknown error'), 'error');
@@ -780,7 +782,8 @@ async function cancelRestore() {
         if (data.success) {
             showMessage('Restore cancelled.', 'info');
             document.getElementById('restore-pending-alert').classList.add('hidden');
-            loadBackupStatus();
+            settingsLoaded = false;
+            await loadBackupStatus();
         } else {
             showMessage('Failed to cancel restore: ' + (data.error || 'Unknown error'), 'error');
         }
