@@ -94,7 +94,7 @@ function renderBackupsView() {
                     <i data-lucide="alert-triangle" class="alert-icon"></i>
                     <span>Restore pending: <strong id="pending-restore-point"></strong> will be restored on next restart.</span>
                 </div>
-                <button class="btn btn-secondary btn-sm" id="cancel-restore-btn">Cancel Restore</button>
+                <button class="btn btn-secondary btn-sm" id="cancel-restore-btn">Cancel</button>
             </div>
             
             <!-- Settings Section -->
@@ -719,7 +719,9 @@ function showRestoreModal() {
     const selectedText = selectedItem ? selectedItem.textContent : 'Unknown backup';
     
     document.getElementById('modal-restore-point').textContent = selectedText;
-    document.getElementById('restore-modal').classList.remove('hidden');
+    const modal = document.getElementById('restore-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('active');
     
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
@@ -728,7 +730,9 @@ function showRestoreModal() {
  * Hide restore confirmation modal.
  */
 function hideRestoreModal() {
-    document.getElementById('restore-modal').classList.add('hidden');
+    const modal = document.getElementById('restore-modal');
+    modal.classList.remove('active');
+    modal.classList.add('hidden');
 }
 
 /**
