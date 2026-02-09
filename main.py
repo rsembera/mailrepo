@@ -102,6 +102,15 @@ def main():
     werkzeug_logger = logging.getLogger('werkzeug')
     werkzeug_logger.addFilter(PollingFilter())
     
+    # Check for pending restore before opening database
+    try:
+        from utils import backup
+        result = backup.complete_restore()
+        if result:
+            log.info(f"Restore completed from: {result.get('restore_point', 'unknown')}")
+    except Exception as e:
+        log.error(f"Restore failed: {e}")
+    
     app = create_app()
     
     # Register cleanup handlers
