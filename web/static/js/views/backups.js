@@ -194,7 +194,7 @@ function renderBackupsView() {
                     <i data-lucide="alert-triangle" class="warning-icon"></i>
                     <span>Your current data will be replaced with the backup data. A safety backup will be created first.</span>
                 </div>
-                <div class="modal-buttons">
+                <div class="modal-actions">
                     <button class="btn btn-secondary" id="cancel-restore-modal-btn">Cancel</button>
                     <button class="btn btn-primary" id="confirm-restore-btn">Restore</button>
                 </div>
