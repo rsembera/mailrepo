@@ -138,20 +138,20 @@ Pre-release manual testing checklist. Run through before any public release.
 - [x] Can print archived email
 - [x] Can move email to different archive folder
 - [x] Can delete email (moves to Trash)
-- [ ] Batch select works
-- [ ] Batch move works
-- [ ] Batch delete works
+- [x] Batch select works
+- [x] Batch move works
+- [x] Batch delete works
 
 ---
 
 ## Search
 
-- [ ] Search box appears in archive view
-- [ ] Search finds emails by subject
-- [ ] Search finds emails by sender
-- [ ] Search finds emails by body text
-- [ ] Search results are clickable
-- [ ] Clear search returns to folder view
+- [x] Search box appears in archive view
+- [x] Search finds emails by subject
+- [x] Search finds emails by sender
+- [x] Search finds emails by body text
+- [x] Search results are clickable
+- [x] Clear search returns to folder view
 
 ---
 
@@ -160,8 +160,8 @@ Pre-release manual testing checklist. Run through before any public release.
 - [x] Deleted folders appear in Trash
 - [x] Deleted emails appear in Trash
 - [x] Can restore folder from Trash
-- [ ] Can permanently delete from Trash
-- [ ] "Empty Trash" works
+- [x] Can permanently delete from Trash
+- [x] "Empty Trash" works
 - [ ] Trash auto-purge after 30 days (check on restart)
 
 ---
@@ -169,9 +169,9 @@ Pre-release manual testing checklist. Run through before any public release.
 ## Backup & Restore
 
 ### Backup
-- [ ] Backup Now creates backup
-- [ ] Backup appears in restore points list
-- [ ] Full vs incremental decided automatically
+- [x] Backup Now creates backup
+- [x] Backup appears in restore points list
+- [x] Full vs incremental decided automatically
 - [ ] Backup location setting works
 - [ ] Cloud folder detection works (iCloud, Dropbox, etc.)
 - [ ] Post-backup command executes (if configured)
@@ -179,12 +179,12 @@ Pre-release manual testing checklist. Run through before any public release.
 - [ ] Backup on shutdown works
 
 ### Restore
-- [ ] Can select restore point
-- [ ] Restore confirmation shows details
-- [ ] Pre-restore safety backup created
-- [ ] Restore completes successfully
+- [x] Can select restore point
+- [x] Restore confirmation shows details
+- [x] Pre-restore safety backup created
+- [x] Restore completes successfully
 - [ ] Data matches backup state
-- [ ] Can cancel pending restore
+- [x] Can cancel pending restore
 
 ### Retention
 - [ ] Retention setting can be changed
@@ -194,10 +194,10 @@ Pre-release manual testing checklist. Run through before any public release.
 
 ## Settings
 
-- [ ] Theme switching works
-- [ ] Font settings work
-- [ ] Backup settings persist
-- [ ] All settings survive restart
+- [x] Theme switching works
+- [x] Font settings work
+- [x] Backup settings persist
+- [x] All settings survive restart
 
 ---
 
@@ -265,4 +265,24 @@ Session 4 (Feb 7, Mercury):
 - Fixed: Sender/subject order reversed in Trash emails tab
 - Removed: Unused updateSidebarFolders function (all callers use refreshSidebarFolders)
 - Next: Search, remaining Staging items, Batch operations, Backup/Restore
+
+Session 5 (Feb 8, Mercury):
+- Search: Fixed body text not indexed for HTML-only emails (HTML-first extraction)
+- Search: Added /api/search/reindex endpoint to rebuild FTS index
+- Search: All search tests pass (subject, sender, body text, clickable results, clear)
+- Batch Ops: Select All, batch Move, batch Delete all work
+- Trash: Permanent delete (email and folder), Empty Trash all work
+- Backup: Backup Now works, restore modal fixed (hidden vs active class)
+- Backup: Wired up complete_restore() on server startup (was never called)
+- Backup: Restore confirmed working after server restart
+- Added: Sort options for email lists (date, sender, subject) - icon button dropdown
+- Added: Sort options for Trash view (folders and emails tabs)
+- Fixed: Trash folders empty state showing search message with no query
+- Fixed: Custom select dropdown auto-flip when near screen edge
+- Fixed: Restore dropdown going off-screen (now uses auto-flip)
+- Fixed: Cancel Restore triggering unsaved settings warning
+- Fixed: Restore modal button alignment (modal-buttons -> modal-actions)
+- Fixed: Shortened "Select All" to "All" for toolbar space
+- Settings: Theme, font, backup settings, password change all previously tested
+- Remaining: Edge Cases, Browser Compatibility, some Backup sub-items, Staging edge cases
 

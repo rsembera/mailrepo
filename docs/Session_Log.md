@@ -828,3 +828,41 @@ Checked MailRepo against 5 bugs found in Synesius:
 ### Commits
 - `fa2687a` — Fix clipped text in progress bar count
 - `20ae895` — Fix session race condition on login (Safari/Firefox double-login bug)
+
+
+---
+
+## Session 34 — February 8, 2026 (Mercury)
+
+### Testing: Search, Batch Ops, Trash, Backup/Restore
+
+**Search fixes:**
+- Body text not indexed for HTML-only emails — refactored extract_body_text to prefer HTML-derived text
+- Added /api/search/reindex endpoint to rebuild FTS for existing emails
+- All search tests pass
+
+**Sort options added:**
+- Icon button dropdown for email lists (date, sender, subject)
+- Applied to archive folders, IMAP folders, and Trash views
+- Replaced native select in Trash with consistent icon dropdown
+
+**Bugs fixed:**
+- Trash folders empty state showing "No folders match ''" with no search query
+- Custom select dropdown going off-screen — auto-flip based on viewport space
+- Restore modal not appearing (toggling `hidden` class instead of `active`)
+- `complete_restore()` never called on startup — wired into main.py
+- Cancel Restore triggering unsaved settings warning
+- Restore modal button alignment (wrong CSS class)
+- Shortened "Select All" to "All" for toolbar space
+
+### Commits
+- `bb85ac7` — Fix search not finding email body text (HTML preference, reindex endpoint)
+- `9035e95` — Add sort options to email list (date, sender, subject)
+- `71d4e67` — Shorten Select All button label to All
+- `b863783` — Replace native sort select with icon dropdown in Trash view
+- `47e950f` — Fix Trash folders empty state showing search message with no query
+- `742ee86` — Auto-flip custom select dropdown when near screen edge
+- `754d6c8` — Fix restore modal not appearing (wrong class toggle)
+- `4d58e41` — Wire up restore execution on server startup
+- `683e0bd` — Fix cancel restore triggering unsaved settings warning
+- `3300a4c` — Fix restore modal button alignment (modal-buttons -> modal-actions)
