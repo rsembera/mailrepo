@@ -206,11 +206,19 @@ function renderFoldersTab(allTrashedFolders) {
     `;
     
     if (trashedFolders.length === 0) {
-        html += `
-            <div class="empty-state" style="padding: var(--space-xl);">
-                <p>No folders match "${escapeHtml(searchQuery)}"</p>
-            </div>
-        `;
+        if (searchQuery) {
+            html += `
+                <div class="empty-state" style="padding: var(--space-xl);">
+                    <p>No folders match "${escapeHtml(searchQuery)}"</p>
+                </div>
+            `;
+        } else {
+            html += `
+                <div class="empty-state" style="padding: var(--space-xl);">
+                    <p>No deleted folders</p>
+                </div>
+            `;
+        }
     } else {
         html += `
             <div class="trash-management-header">
