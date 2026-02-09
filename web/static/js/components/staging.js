@@ -14,6 +14,7 @@ import { renderFolderTree } from '../components/folder-tree.js';
 import { renderEmailList } from '../components/email-list.js';
 import { getPendingFolderStaging, clearPendingFolderStaging, refreshFolderSelectionView, clearAllSelected } from '../views/folder-selection.js';
 import { getMountedImports } from '../components/imports.js';
+import { refreshSidebarFolders } from '../components/sidebar.js';
 import { escapeHtml } from '../utils.js';
 
 // Module state
@@ -180,6 +181,7 @@ async function createFolderInTree(parentId) {
         document.getElementById('confirmStageBtn').disabled = false;
         
         renderFolderSelectTree();
+        refreshSidebarFolders();
         
         // Expand parent if created as subfolder
         if (parentId && folderTreeController) {
