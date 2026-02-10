@@ -313,7 +313,7 @@ function renderImportFolderSelectionTree(nodes, importId, depth, ancestry = []) 
             <div class="${rowClass}" data-folder="${escapeHtml(folderPath)}">
                 <div class="folder-management-name">
                     ${treePrefix}
-                    <i data-lucide="folder" class="folder-icon"></i>
+                    <i data-lucide="${getFolderIcon(node.name)}" class="folder-icon"></i>
                     <span class="folder-label">${escapeHtml(node.name)}</span>
                 </div>
                 <div class="folder-management-actions">
@@ -410,11 +410,15 @@ function renderFolderSelectionTree(nodes, accountId, depth, ancestry = []) {
         let rowClass = 'folder-management-item folder-selection-item';
         if (isStaged) rowClass += ' staged';
         if (isSelected) rowClass += ' selected';
+        if (node.noselect) rowClass += ' noselect';
         
         let actionsHtml = '';
         const escapedPath = escapeForOnclick(folderPath);
         
-        if (isStaged) {
+        if (node.noselect) {
+            // Non-selectable container folders (e.g. [Gmail]) get no actions
+            actionsHtml = '';
+        } else if (isStaged) {
             actionsHtml = `
                 <button class="btn btn-sm btn-icon" disabled title="Already staged">
                     <i data-lucide="circle"></i>
@@ -495,32 +499,48 @@ export function refreshFolderSelectionView() {
 }
 
 /**
- * Find all descendant folder paths from a tree.
+ * Find all descendant folder paths from a tree by traversing the tree structure.
  */
 function findAllDescendants(tree, folderPath) {
     let descendants = [];
     
-    function traverse(nodes) {
+    function findNodeAndCollectChildren(nodes) {
         for (const node of nodes) {
-            if (node.fullPath && node.fullPath.startsWith(folderPath + '/')) {
+            if (node.fullPath === folderPath) {
+                // Found the target node - collect all its children recursively
+                collectChildren(node.children || []);
+                return true;
+            }
+            if (node.children && node.children.length > 0) {
+                if (findNodeAndCollectChildren(node.children)) return true;
+            }
+        }
+        return false;
+    }
+    
+    function collectChildren(nodes) {
+        for (const node of nodes) {
+            if (node.fullPath && !node.noselect) {
                 descendants.push(node.fullPath);
             }
             if (node.children && node.children.length > 0) {
-                traverse(node.children);
+                collectChildren(node.children);
             }
         }
     }
     
-    traverse(tree);
+    findNodeAndCollectChildren(tree);
     return descendants;
 }
 
 /**
- * Collect all folder paths from a tree structure.
+ * Collect all selectable folder paths from a tree structure.
  */
 function collectAllFolderPaths(nodes, paths = []) {
     nodes.forEach(node => {
-        paths.push(node.fullPath);
+        if (!node.noselect) {
+            paths.push(node.fullPath);
+        }
         if (node.children && node.children.length > 0) {
             collectAllFolderPaths(node.children, paths);
         }
