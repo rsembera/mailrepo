@@ -74,6 +74,9 @@ export async function handleTreeItemClick(e, row) {
                         chevron.style.transform = 'rotate(0deg)';
                     });
                 } else {
+                    // When expanding, live-fetch IMAP folders
+                    await loadAccountLabels(id, true);
+                    
                     // When expanding, auto-load INBOX
                     if (!await confirmNavigation()) {
                         // User cancelled - collapse back
@@ -399,13 +402,17 @@ function createFolderTreeItem(folder, children, depth) {
 /**
  * Load IMAP folders for an account.
  * @param {string} accountId - Account ID
+ * @param {boolean} forceRefresh - Force live fetch from server
  */
-export async function loadAccountLabels(accountId) {
+export async function loadAccountLabels(accountId, forceRefresh = false) {
     const container = document.getElementById(`labels-${accountId}`);
     if (!container) return;
     
     try {
-        const response = await fetch(`/api/accounts/${accountId}/folders`);
+        const url = forceRefresh
+            ? `/api/accounts/${accountId}/folders?refresh=1`
+            : `/api/accounts/${accountId}/folders`;
+        const response = await fetch(url);
         
         if (!response.ok) {
             const data = await response.json();
