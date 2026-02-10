@@ -12,6 +12,36 @@ import { initFilePicker, openFilePicker } from './file-picker.js';
 // Mounted imports stored in memory (session-only)
 const mountedImports = new Map();
 
+/**
+ * Check if a path is already mounted.
+ * Returns the import entry if found, null otherwise.
+ */
+function findMountedByPath(path) {
+    for (const [id, data] of mountedImports.entries()) {
+        if (data.path === path) return { id, ...data };
+    }
+    return null;
+}
+
+/**
+ * Generate a display name for an import.
+ * If the filename alone is generic (e.g. "mbox"), includes the parent directory.
+ */
+function getImportDisplayName(path, name) {
+    const genericNames = ['mbox', 'archive', 'inbox', 'mail', 'export'];
+    const baseName = name.replace(/\.(mbox|pst|eml)$/i, '');
+    
+    if (genericNames.includes(baseName.toLowerCase())) {
+        // Use parent directory to disambiguate
+        const parts = path.replace(/\/+$/, '').split('/');
+        if (parts.length >= 2) {
+            const parent = parts[parts.length - 2];
+            return `${parent}/${name}`;
+        }
+    }
+    return name;
+}
+
 // Callbacks
 let onImportSelect = null;
 let onImportFolderSelect = null;
@@ -93,6 +123,16 @@ window.closeModal = closeModal;
  * Uses server-side parsing for proper encoding support.
  */
 async function mountMboxFromPath(path, name) {
+    // Check for duplicate mount
+    const existing = findMountedByPath(path);
+    if (existing) {
+        const { showAlert } = await import('../modals.js');
+        showAlert('Already Mounted', `This file is already mounted as "${existing.name}".`);
+        return existing.id;
+    }
+    
+    const displayName = getImportDisplayName(path, name);
+    
     const response = await fetch('/api/filesystem/parse-mbox', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -120,7 +160,7 @@ async function mountMboxFromPath(path, name) {
     const importId = `mbox-${Date.now()}`;
     mountedImports.set(importId, {
         type: 'mbox',
-        name: name,
+        name: displayName,
         path: path,
         folders: folders,
         emails: emails,
@@ -137,6 +177,15 @@ async function mountMboxFromPath(path, name) {
  * The tree structure comes from the server scan.
  */
 async function mountAppleMboxFolder(path, name, tree) {
+    // Check for duplicate mount
+    const existing = findMountedByPath(path);
+    if (existing) {
+        const { showAlert } = await import('../modals.js');
+        showAlert('Already Mounted', `This folder is already mounted as "${existing.name}".`);
+        return existing.id;
+    }
+    
+    const displayName = getImportDisplayName(path, name.replace(/\.mbox$/, ''));
     // Convert tree to our folder structure
     function convertTree(node, depth = 0) {
         const result = {
@@ -178,7 +227,7 @@ async function mountAppleMboxFolder(path, name, tree) {
     const importId = `apple-${Date.now()}`;
     mountedImports.set(importId, {
         type: 'apple-mbox',
-        name: name.replace(/\.mbox$/, ''),
+        name: displayName,
         path: path,
         folders: folders.length > 0 ? folders : null,
         emails: allEmails,
@@ -195,6 +244,15 @@ async function mountAppleMboxFolder(path, name, tree) {
  * Uses server-side parsing for proper encoding support.
  */
 async function mountEmlFolderFromPath(path, name) {
+    // Check for duplicate mount
+    const existing = findMountedByPath(path);
+    if (existing) {
+        const { showAlert } = await import('../modals.js');
+        showAlert('Already Mounted', `This folder is already mounted as "${existing.name}".`);
+        return existing.id;
+    }
+    
+    const displayName = getImportDisplayName(path, name);
     // Scan folder for .eml files
     const scanResponse = await fetch('/api/filesystem/scan-eml', {
         method: 'POST',
@@ -235,7 +293,7 @@ async function mountEmlFolderFromPath(path, name) {
     const importId = `eml-${Date.now()}`;
     mountedImports.set(importId, {
         type: 'eml',
-        name: name,
+        name: displayName,
         path: path,
         emails: emails,
         mountedAt: Date.now(),
@@ -277,6 +335,15 @@ async function handlePstImport() {
  * Mount a PST file - converts to mbox first.
  */
 async function mountPstFromPath(path, name) {
+    // Check for duplicate mount
+    const existing = findMountedByPath(path);
+    if (existing) {
+        const { showAlert } = await import('../modals.js');
+        showAlert('Already Mounted', `This file is already mounted as "${existing.name}".`);
+        return existing.id;
+    }
+    
+    const displayName = getImportDisplayName(path, name.replace(/\.pst$/i, ''));
     const { showAlert } = await import('../modals.js');
     
     // Show converting status in header
@@ -347,7 +414,7 @@ async function mountPstFromPath(path, name) {
         const importId = `pst-${Date.now()}`;
         mountedImports.set(importId, {
             type: 'pst',
-            name: name.replace(/\.pst$/i, ''),
+            name: displayName,
             path: path,
             tempDir: convertData.temp_dir,  // Keep track for cleanup
             folders: folders.length > 0 ? folders : null,
