@@ -201,14 +201,22 @@ def discard_pending_commit(commit_id: str) -> None:
 
 
 def _build_source_key(item: dict) -> str:
-    """Build source key for an email item to look up its action."""
+    """Build source key for an email item to look up its action.
+    
+    Format: 'account:{accountId}:{destinationFolderId}' or 'import:{importId}:{destinationFolderId}'.
+    Must match the frontend key format (sourceKey + ':' + destId).
+    """
     if item.get('sourceType') == 'import':
-        return f"import:{item.get('sourceImportId')}"
+        return f"import:{item.get('sourceImportId')}:{item.get('destinationFolderId')}"
     return f"account:{item.get('sourceAccountId')}:{item.get('destinationFolderId')}"
 
 
 def _build_source_key_folder(item: dict) -> str:
-    """Build source key for a folder item to look up its action."""
+    """Build source key for a folder item to look up its action.
+    
+    Format: 'account:{accountId}:{destinationFolderId}' or 'import:{importId}:{destinationFolderId}'.
+    Must match the frontend key format (sourceKey + ':' + destId).
+    """
     if item.get('sourceType') == 'import':
-        return f"import:{item.get('importId')}"
+        return f"import:{item.get('importId')}:{item.get('destinationFolderId')}"
     return f"account:{item.get('accountId')}:{item.get('destinationFolderId')}"

@@ -494,8 +494,8 @@ function renderSourceGroup(source, sourceKey, destId, type) {
                 </div>
                 <div class="review-source-header-right" onclick="event.stopPropagation()">
                     ${isImap ? `
-                        <label class="source-action-label">
-                            <span>After:</span>
+                        <label class="source-action-label" title="Action to apply to emails on the server after committing">
+                            <span>Emails after:</span>
                             ${renderSourceActionDropdown(`${sourceKey}:${destId}`)}
                         </label>
                     ` : `
@@ -602,10 +602,10 @@ function renderDestinationDropdown(currentDestId) {
 
 function renderSourceActionDropdown(sourceKey, selectedValue = 'leave') {
     const options = [
-        { value: 'leave', label: 'Leave' },
-        { value: 'archive', label: 'Archive' },
-        { value: 'trash', label: 'Trash' },
-        { value: 'delete', label: 'Delete' },
+        { value: 'leave', label: 'Leave in place' },
+        { value: 'archive', label: 'Archive emails' },
+        { value: 'trash', label: 'Trash emails' },
+        { value: 'delete', label: 'Delete emails' },
     ];
     
     const selected = options.find(o => o.value === selectedValue) || options[0];

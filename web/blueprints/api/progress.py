@@ -11,9 +11,12 @@ This module serves as the coordinator, delegating to:
 """
 
 import json
+import logging
 from flask import request, Response, stream_with_context
 from core import Database
 from core import IMAP, IMAPError
+
+logger = logging.getLogger(__name__)
 from core.pending_commit import (
     create_commit_session,
     get_pending_items,
@@ -511,6 +514,11 @@ def stream_commit():
                 else:
                     for event in commit_imap_folder(folder_item, target_folder_id, folder_idx, folder_count, results):
                         yield sse_message(event["type"], {k: v for k, v in event.items() if k != "type"})
+                    
+                    # Apply post-action for IMAP folder if set
+                    folder_action = pending_item.get('source_action', 'leave')
+                    if folder_action and folder_action != 'leave':
+                        yield from _apply_folder_post_action(folder_item, folder_action, results)
                 
                 results["folders_success"] += 1
                 mark_item_done(pending_item['id'])
@@ -622,3 +630,57 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
                     client.disconnect()
                 except:
                     pass
+
+
+def _apply_folder_post_action(folder_item: dict, action: str, results: dict):
+    """Apply post-commit action to all emails in a committed IMAP folder.
+    
+    Args:
+        folder_item: The folder item data (accountId, folder name, etc.)
+        action: The action to apply ('archive', 'trash', 'delete')
+        results: Results dict with post_actions counters
+    
+    Yields SSE status messages.
+    """
+    account_id = folder_item.get("accountId")
+    imap_folder = folder_item.get("folder")
+    folder_name = imap_folder.split('/')[-1] if imap_folder else "folder"
+    
+    account = Database.fetchone(
+        "SELECT credentials_encrypted FROM accounts WHERE id = ?", (account_id,)
+    )
+    if not account or not account["credentials_encrypted"]:
+        results["post_actions"]["failed"] += 1
+        return
+    
+    yield sse_message("status", {
+        "phase": "post_actions",
+        "message": f"Applying '{action}' to source folder: {folder_name}...",
+    })
+    
+    client = None
+    try:
+        client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+        client.select_folder(imap_folder)
+        uids = client.search(criteria="ALL", limit=0)
+        
+        for uid in uids:
+            try:
+                if action == 'archive':
+                    client.archive_email(uid)
+                elif action == 'trash':
+                    client.trash_email(uid)
+                elif action == 'delete':
+                    client.delete_email(uid)
+                results["post_actions"]["success"] += 1
+            except IMAPError:
+                results["post_actions"]["failed"] += 1
+                
+    except Exception:
+        results["post_actions"]["failed"] += 1
+    finally:
+        if client:
+            try:
+                client.disconnect()
+            except:
+                pass
