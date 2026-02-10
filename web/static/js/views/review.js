@@ -800,17 +800,41 @@ window.unstageFolderByIndex = async function(index) {
     const sf = stagedFolders[index];
     if (!sf) return;
     
-    const folderName = sf.archivePath || sf.folder.split('/').pop() || 'this folder';
+    const folderPath = sf.archivePath || sf.folder.split('/').pop() || '';
+    const folderName = folderPath.split('/').pop() || 'this folder';
+    
+    // Find children (items whose archivePath starts with this folder's path + /)
+    const childIndices = [];
+    if (folderPath) {
+        const prefix = folderPath + '/';
+        stagedFolders.forEach((item, i) => {
+            if (i !== index) {
+                const itemPath = item.archivePath || item.folder.split('/').pop() || '';
+                if (itemPath.startsWith(prefix)) {
+                    childIndices.push(i);
+                }
+            }
+        });
+    }
+    
+    const totalCount = 1 + childIndices.length;
+    const message = totalCount > 1
+        ? `Unstage "${folderName}" and its ${childIndices.length} subfolder${childIndices.length !== 1 ? 's' : ''}?`
+        : `Unstage "${folderName}"?`;
     
     const confirmed = await showConfirm(
         'Unstage Folder',
-        `Unstage "${folderName}"?`,
+        message,
         { confirmText: 'Unstage', confirmClass: 'btn-danger' }
     );
     
     if (!confirmed) return;
     
-    stagedFolders.splice(index, 1);
+    // Remove in reverse index order so splicing doesn't shift indices
+    const toRemove = [index, ...childIndices].sort((a, b) => b - a);
+    for (const i of toRemove) {
+        stagedFolders.splice(i, 1);
+    }
     sessionStorage.setItem('stagedFolders', JSON.stringify(stagedFolders));
     
     updateStagedBadge();
