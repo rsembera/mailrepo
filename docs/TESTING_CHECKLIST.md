@@ -98,17 +98,17 @@ Pre-release manual testing checklist. Run through before any public release.
 
 ### Staging Emails
 - [x] Can select individual emails (checkbox)
-- [ ] Can select all emails in folder ← **test next**
+- [x] Can select all emails in folder
 - [x] "Stage" button opens destination picker
 - [x] Can select destination folder
-- [ ] Can create new folder from picker ← **test next**
+- [x] Can create new folder from picker
 - [x] Staged badge shows count
-- [ ] Staged emails appear grayed out ← **test next**
+- [x] Staged emails appear grayed out
 
 ### Staging Folders (Import)
 - [x] Can stage entire folder from import
-- [ ] Subfolder staging options work (with/without children) ← **test next**
-- [ ] Folder appears in Review with email count ← **test next**
+- [x] Subfolder staging options work (with/without children)
+- [x] Folder appears in Review with email count
 
 ### Review
 - [x] Review button shows all staged items
@@ -285,4 +285,18 @@ Session 5 (Feb 8, Mercury):
 - Fixed: Shortened "Select All" to "All" for toolbar space
 - Settings: Theme, font, backup settings, password change all previously tested
 - Remaining: Edge Cases, Browser Compatibility, some Backup sub-items, Staging edge cases
+
+Session 6 (Feb 9, Mercury):
+- Staging: Select all, create folder from picker, grayed out, subfolder staging all pass
+- Review: Folder tree rendering improved (tree with branch lines instead of flat paths)
+- Review: Unstage individual items works; unstaging parent now unstages children too
+- Review: Source action dropdown works
+- Fixed: Review button now uses SPA navigation (preserves in-memory staged state)
+- Fixed: Email date sorting uses parsed timestamps instead of string comparison
+- Fixed: Stored dates converted from ISO strings to Unix timestamps (DB migration v4→v5)
+- Fixed: JS date display/sort handles Unix timestamps, ISO, and RFC 2822 formats
+- Fixed: IMAP folder tree now live-fetches on expand (new server folders appear immediately)
+- Added: Dynamic import naming (disambiguates only on collision, e.g. "Mail/mbox" vs "Backups/mbox")
+- Staged IMAP items persist across refresh (sessionStorage); import items don't (expected)
+- Remaining: Unstage entire group, Unstage All, Commit progress/source actions/cleanup
 
