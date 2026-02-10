@@ -315,9 +315,9 @@ def parse_email_metadata(raw_email: bytes) -> dict:
         recipients = "\n".join(recipients_parts)
         
         try:
-            date_ts = parsedate_to_datetime(date_str).isoformat() if date_str else None
+            date_ts = int(parsedate_to_datetime(date_str).timestamp()) if date_str else None
         except:
-            date_ts = date_str
+            date_ts = None
         
         return {
             "subject": subject,

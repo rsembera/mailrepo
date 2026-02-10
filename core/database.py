@@ -19,7 +19,7 @@ from .config import Config
 
 
 # Current schema version (increment when schema changes)
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 class Database:
@@ -244,6 +244,35 @@ class Database:
             
             # Note: We're keeping the 'encrypted' columns for now to avoid data loss
             # They'll be ignored going forward (everything is encrypted)
+        
+        # Migration from version 4 to 5: convert date strings to Unix timestamps
+        if from_version < 5:
+            from email.utils import parsedate_to_datetime
+            rows = conn.execute("SELECT id, date FROM messages WHERE date IS NOT NULL").fetchall()
+            for row in rows:
+                date_val = row[1]
+                if date_val is None:
+                    continue
+                # Skip if already a Unix timestamp (integer)
+                try:
+                    int_val = int(date_val)
+                    if 946684800 < int_val < 32503680000:
+                        continue  # Already a Unix timestamp
+                except (ValueError, TypeError):
+                    pass
+                # Try to parse as ISO or RFC 2822
+                try:
+                    dt = parsedate_to_datetime(date_val)
+                    ts = int(dt.timestamp())
+                    conn.execute("UPDATE messages SET date = ? WHERE id = ?", (ts, row[0]))
+                except Exception:
+                    try:
+                        from datetime import datetime
+                        dt = datetime.fromisoformat(date_val)
+                        ts = int(dt.timestamp())
+                        conn.execute("UPDATE messages SET date = ? WHERE id = ?", (ts, row[0]))
+                    except Exception:
+                        pass  # Leave unparseable dates as-is
 
 
 # SQL schema definition

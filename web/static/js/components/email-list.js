@@ -9,6 +9,20 @@ import { state } from '../state.js';
 
 // Reference to DOM elements (set via init)
 let emailListEl = null;
+
+/**
+ * Parse a date value to milliseconds since epoch.
+ * Handles RFC 2822 strings, ISO 8601 strings, and Unix timestamps (seconds).
+ */
+function parseDateToMs(val) {
+    if (!val) return 0;
+    const num = Number(val);
+    // Unix timestamp in seconds (year 2000-3000 range)
+    if (!isNaN(num) && num > 946684800 && num < 32503680000) {
+        return num * 1000;
+    }
+    return new Date(val).getTime() || 0;
+}
 let onSelectionChange = null;
 let onFilterChange = null;
 
@@ -71,10 +85,9 @@ function sortEmails(emails) {
         let valA, valB;
         if (field === 'date') {
             // Parse date strings to timestamps for proper chronological sorting
-            const dateA = a.date || a.internal_date || '';
-            const dateB = b.date || b.internal_date || '';
-            valA = new Date(dateA).getTime() || 0;
-            valB = new Date(dateB).getTime() || 0;
+            // Handles RFC 2822, ISO 8601, and Unix timestamps (seconds)
+            valA = parseDateToMs(a.date || a.internal_date || '');
+            valB = parseDateToMs(b.date || b.internal_date || '');
         } else if (field === 'sender') {
             valA = (a.from || a.sender || '').toLowerCase();
             valB = (b.from || b.sender || '').toLowerCase();

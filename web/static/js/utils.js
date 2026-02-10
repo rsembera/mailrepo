@@ -45,7 +45,15 @@ export function formatDate(dateStr) {
     if (!dateStr) return '';
     
     try {
-        const date = new Date(dateStr);
+        // Handle Unix timestamps (integers or numeric strings)
+        let date;
+        const numVal = Number(dateStr);
+        if (!isNaN(numVal) && numVal > 946684800 && numVal < 32503680000) {
+            // Looks like a Unix timestamp in seconds (year 2000-3000 range)
+            date = new Date(numVal * 1000);
+        } else {
+            date = new Date(dateStr);
+        }
         const now = new Date();
         
         if (isNaN(date.getTime())) return dateStr;
