@@ -144,6 +144,7 @@ export async function showReviewView() {
     if (contextMeta) contextMeta.textContent = '';
     
     if (headerActions) {
+        headerActions.style.display = '';  // Restore visibility (other views may hide it)
         // Clean up previous event listeners
         if (headerActionsController) {
             headerActionsController.abort();
