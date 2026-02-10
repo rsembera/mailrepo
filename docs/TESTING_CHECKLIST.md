@@ -300,3 +300,17 @@ Session 6 (Feb 9, Mercury):
 - Staged IMAP items persist across refresh (sessionStorage); import items don't (expected)
 - Remaining: Unstage entire group, Unstage All, Commit progress/source actions/cleanup
 
+Session 7 (Feb 10, MacBook):
+- Unstage entire destination group: Pass
+- Unstage All clears everything: Pass
+- Commit progress modal shows status: Pass
+- Post-commit source actions (trash/archive/delete): Fixed and working
+  - Root cause: source key mismatch between frontend (account:id:destId) and backend (account:id)
+  - Fixed key format in pending_commit.py to include destinationFolderId
+  - Folder post-actions apply to emails inside folder; empty IMAP folder is left on server
+  - Updated labels: "Emails after:" with tooltip, options say "Leave in place", "Trash emails", etc.
+- Fixed: Commit button disappearing after visiting Trash/Backups/Folders views
+  - Root cause: those views set headerActions.style.display='none', Review never restored it
+- TODO: Re-test full post-commit action flow end-to-end (trash, archive, delete for both emails and folders)
+- Remaining: Success message shows count, staged items cleared after commit (verify)
+
