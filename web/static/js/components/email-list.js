@@ -70,8 +70,11 @@ function sortEmails(emails) {
     sorted.sort((a, b) => {
         let valA, valB;
         if (field === 'date') {
-            valA = a.date || a.internal_date || '';
-            valB = b.date || b.internal_date || '';
+            // Parse date strings to timestamps for proper chronological sorting
+            const dateA = a.date || a.internal_date || '';
+            const dateB = b.date || b.internal_date || '';
+            valA = new Date(dateA).getTime() || 0;
+            valB = new Date(dateB).getTime() || 0;
         } else if (field === 'sender') {
             valA = (a.from || a.sender || '').toLowerCase();
             valB = (b.from || b.sender || '').toLowerCase();
