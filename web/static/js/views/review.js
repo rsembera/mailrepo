@@ -372,6 +372,89 @@ function renderReviewView() {
     updateButtons();
 }
 
+// === Folder Tree Rendering for Review ===
+
+/**
+ * Build a tree structure from flat archivePath items.
+ * E.g. ["Fan Mail", "Fan Mail/Peter O'Connor", "Home", "Home/Comfort King"]
+ * becomes a nested tree with proper parent-child relationships.
+ */
+function buildFolderTree(items) {
+    const root = [];
+    const nodeMap = new Map();
+    
+    // Sort by archivePath so parents come before children
+    const sorted = [...items].sort((a, b) => {
+        const pathA = a.archivePath || a.folder.split('/').pop() || '';
+        const pathB = b.archivePath || b.folder.split('/').pop() || '';
+        return pathA.localeCompare(pathB);
+    });
+    
+    for (const item of sorted) {
+        const archivePath = item.archivePath || item.folder.split('/').pop() || '(folder)';
+        const parts = archivePath.split('/');
+        const name = parts[parts.length - 1];
+        const parentPath = parts.slice(0, -1).join('/');
+        
+        const node = { name, archivePath, item, children: [] };
+        nodeMap.set(archivePath, node);
+        
+        if (parentPath && nodeMap.has(parentPath)) {
+            nodeMap.get(parentPath).children.push(node);
+        } else {
+            root.push(node);
+        }
+    }
+    
+    return root;
+}
+
+/**
+ * Render folder tree items with branch lines.
+ */
+function renderFolderTreeItems(nodes, depth, ancestry) {
+    let html = '';
+    
+    nodes.forEach((node, index) => {
+        const isLast = index === nodes.length - 1;
+        const originalIndex = node.item.originalIndex;
+        
+        // Build tree prefix with branch lines
+        let treePrefix = '';
+        if (depth > 0) {
+            for (let i = 0; i < ancestry.length; i++) {
+                treePrefix += ancestry[i]
+                    ? '<span class="tree-spacer"></span>'
+                    : '<span class="tree-line-vertical"></span>';
+            }
+            treePrefix += isLast
+                ? '<span class="tree-line-last"></span>'
+                : '<span class="tree-line-branch"></span>';
+        }
+        
+        html += `
+            <div class="review-source-item">
+                <div class="review-source-item-left">
+                    ${treePrefix}
+                    <i data-lucide="folder" class="review-item-icon"></i>
+                    <span class="review-item-name">${escapeHtml(node.name)}</span>
+                </div>
+                <div class="review-source-item-right">
+                    <button class="btn btn-sm btn-icon" onclick="unstageFolderByIndex(${originalIndex})" title="Unstage">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        if (node.children.length > 0) {
+            html += renderFolderTreeItems(node.children, depth + 1, [...ancestry, isLast]);
+        }
+    });
+    
+    return html;
+}
+
 // === Source Group Rendering ===
 
 /**
@@ -450,31 +533,9 @@ function renderSourceGroup(source, sourceKey, destId, type) {
                 `;
             });
         } else {
-            // Sort folders alphabetically
-            const sortedItems = [...source.items].sort((a, b) => {
-                const nameA = a.archivePath || a.folder.split('/').pop() || '';
-                const nameB = b.archivePath || b.folder.split('/').pop() || '';
-                return nameA.localeCompare(nameB);
-            });
-            
-            sortedItems.forEach((sf) => {
-                const folderDisplayName = sf.archivePath || sf.folder.split('/').pop() || '(folder)';
-                const index = sf.originalIndex;
-                
-                html += `
-                    <div class="review-source-item">
-                        <div class="review-source-item-left">
-                            <i data-lucide="folder" class="review-item-icon"></i>
-                            <span class="review-item-name">${escapeHtml(folderDisplayName)}</span>
-                        </div>
-                        <div class="review-source-item-right">
-                            <button class="btn btn-sm btn-icon" onclick="unstageFolderByIndex(${index})" title="Unstage">
-                                <i data-lucide="x"></i>
-                            </button>
-                        </div>
-                    </div>
-                `;
-            });
+            // Build tree from archivePaths and render with branch lines
+            const tree = buildFolderTree(source.items);
+            html += renderFolderTreeItems(tree, 0, []);
         }
         
         html += `</div>`;
