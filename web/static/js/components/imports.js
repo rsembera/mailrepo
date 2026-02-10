@@ -24,22 +24,37 @@ function findMountedByPath(path) {
 }
 
 /**
- * Generate a display name for an import.
- * If the filename alone is generic (e.g. "mbox"), includes the parent directory.
+ * Update display names to disambiguate duplicates.
+ * When multiple mounts share the same base name, appends parent directory.
+ * Called after every mount/unmount.
  */
-function getImportDisplayName(path, name) {
-    const genericNames = ['mbox', 'archive', 'inbox', 'mail', 'export'];
-    const baseName = name.replace(/\.(mbox|pst|eml)$/i, '');
+function updateDisplayNames() {
+    const entries = Array.from(mountedImports.entries());
     
-    if (genericNames.includes(baseName.toLowerCase())) {
-        // Use parent directory to disambiguate
-        const parts = path.replace(/\/+$/, '').split('/');
-        if (parts.length >= 2) {
-            const parent = parts[parts.length - 2];
-            return `${parent}/${name}`;
+    // Group by baseName
+    const groups = {};
+    for (const [id, data] of entries) {
+        if (!groups[data.baseName]) groups[data.baseName] = [];
+        groups[data.baseName].push({ id, data });
+    }
+    
+    for (const [baseName, members] of Object.entries(groups)) {
+        if (members.length === 1) {
+            // Unique name - use baseName as-is
+            members[0].data.name = baseName;
+        } else {
+            // Collision - disambiguate with parent directory
+            for (const member of members) {
+                const parts = member.data.path.replace(/\/+$/, '').split('/');
+                if (parts.length >= 2) {
+                    const parent = parts[parts.length - 2];
+                    member.data.name = `${parent}/${baseName}`;
+                } else {
+                    member.data.name = baseName;
+                }
+            }
         }
     }
-    return name;
 }
 
 // Callbacks
@@ -131,8 +146,6 @@ async function mountMboxFromPath(path, name) {
         return existing.id;
     }
     
-    const displayName = getImportDisplayName(path, name);
-    
     const response = await fetch('/api/filesystem/parse-mbox', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -160,13 +173,15 @@ async function mountMboxFromPath(path, name) {
     const importId = `mbox-${Date.now()}`;
     mountedImports.set(importId, {
         type: 'mbox',
-        name: displayName,
+        baseName: name,
+        name: name,
         path: path,
         folders: folders,
         emails: emails,
         mountedAt: Date.now(),
     });
     
+    updateDisplayNames();
     renderImportsSection();
     
     return importId;
@@ -185,7 +200,7 @@ async function mountAppleMboxFolder(path, name, tree) {
         return existing.id;
     }
     
-    const displayName = getImportDisplayName(path, name.replace(/\.mbox$/, ''));
+    const baseName = name.replace(/\.mbox$/, '');
     // Convert tree to our folder structure
     function convertTree(node, depth = 0) {
         const result = {
@@ -227,13 +242,15 @@ async function mountAppleMboxFolder(path, name, tree) {
     const importId = `apple-${Date.now()}`;
     mountedImports.set(importId, {
         type: 'apple-mbox',
-        name: displayName,
+        baseName: baseName,
+        name: baseName,
         path: path,
         folders: folders.length > 0 ? folders : null,
         emails: allEmails,
         mountedAt: Date.now(),
     });
     
+    updateDisplayNames();
     renderImportsSection();
     
     return importId;
@@ -251,8 +268,6 @@ async function mountEmlFolderFromPath(path, name) {
         showAlert('Already Mounted', `This folder is already mounted as "${existing.name}".`);
         return existing.id;
     }
-    
-    const displayName = getImportDisplayName(path, name);
     // Scan folder for .eml files
     const scanResponse = await fetch('/api/filesystem/scan-eml', {
         method: 'POST',
@@ -293,12 +308,14 @@ async function mountEmlFolderFromPath(path, name) {
     const importId = `eml-${Date.now()}`;
     mountedImports.set(importId, {
         type: 'eml',
-        name: displayName,
+        baseName: name,
+        name: name,
         path: path,
         emails: emails,
         mountedAt: Date.now(),
     });
     
+    updateDisplayNames();
     renderImportsSection();
     
     return importId;
@@ -343,7 +360,7 @@ async function mountPstFromPath(path, name) {
         return existing.id;
     }
     
-    const displayName = getImportDisplayName(path, name.replace(/\.pst$/i, ''));
+    const baseName = name.replace(/\.pst$/i, '');
     const { showAlert } = await import('../modals.js');
     
     // Show converting status in header
@@ -414,7 +431,8 @@ async function mountPstFromPath(path, name) {
         const importId = `pst-${Date.now()}`;
         mountedImports.set(importId, {
             type: 'pst',
-            name: displayName,
+            baseName: baseName,
+            name: baseName,
             path: path,
             tempDir: convertData.temp_dir,  // Keep track for cleanup
             folders: folders.length > 0 ? folders : null,
@@ -422,6 +440,7 @@ async function mountPstFromPath(path, name) {
             mountedAt: Date.now(),
         });
         
+        updateDisplayNames();
         renderImportsSection();
         
         return importId;
@@ -461,6 +480,7 @@ export async function unmountImport(importId) {
     }
     
     mountedImports.delete(importId);
+    updateDisplayNames();
     renderImportsSection();
     
     // Notify app to clear main pane if needed
