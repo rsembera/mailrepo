@@ -517,12 +517,14 @@ function renderSourceGroup(source, sourceKey, destId, type) {
                 const lineKey = `${sourceKey}:${folderName}`;
                 const escapedLineKey = escapeForOnclick(lineKey);
                 const escapedDestId = escapeForOnclick(String(destId));
+                // Show just the leaf folder name (full path is implied by account context)
+                const leafName = folderName.includes('/') ? folderName.split('/').pop() : folderName;
                 
                 html += `
                     <div class="review-source-item">
                         <div class="review-source-item-left">
                             <i data-lucide="folder" class="review-item-icon"></i>
-                            <span class="review-item-name">${escapeHtml(folderName)}</span>
+                            <span class="review-item-name">${escapeHtml(leafName)}</span>
                             <span class="review-item-count">(${items.length})</span>
                         </div>
                         <div class="review-source-item-right">
