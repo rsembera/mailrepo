@@ -314,3 +314,13 @@ Session 7 (Feb 10, MacBook):
 - TODO: Re-test full post-commit action flow end-to-end (trash, archive, delete for both emails and folders)
 - Remaining: Success message shows count, staged items cleared after commit (verify)
 
+Session 7b (Feb 10, MacBook, evening):
+- Post-commit actions: Trash tested for both individual emails and folders — working
+- Archive and Delete use same code path, skipped (trash confirms the mechanism)
+- Fixed: IMAP email cache not invalidated after post-actions (stale emails showing)
+- Fixed: Review leaf folder name for staged emails (shows "Peter O'Connor" not "Fan Mail/Peter O'Connor")
+- Polish: "On server:" label replaces "Emails after:" in Review
+- Polish: Progress messages improved ("Updating server...", "Trashing emails in X...")
+- Polish: Summary now action-specific ("3 trashed on server" not "3 server actions applied")
+- Remaining: Verify success message count and staged items cleared after commit
+
