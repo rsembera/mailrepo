@@ -594,6 +594,7 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
                 by_folder[src_folder].append(item)
             
             for source_folder, folder_items in by_folder.items():
+                actions_applied = False
                 try:
                     client.select_folder(source_folder)
                     
@@ -616,9 +617,13 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
                             
                             results["post_actions"]["success"] += 1
                             mark_item_done(item['id'])
+                            actions_applied = True
                         except IMAPError:
                             results["post_actions"]["failed"] += 1
-                            
+                    
+                    # Invalidate email cache so UI reflects changes
+                    if actions_applied:
+                        clear_folder_cache(int(account_id), source_folder)
                 except IMAPError:
                     results["post_actions"]["failed"] += len(folder_items)
                     
@@ -675,6 +680,9 @@ def _apply_folder_post_action(folder_item: dict, action: str, results: dict):
                 results["post_actions"]["success"] += 1
             except IMAPError:
                 results["post_actions"]["failed"] += 1
+        
+        # Invalidate email cache for this folder so UI reflects changes
+        clear_folder_cache(int(account_id), imap_folder)
                 
     except Exception:
         results["post_actions"]["failed"] += 1
