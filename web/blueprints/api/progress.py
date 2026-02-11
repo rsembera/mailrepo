@@ -284,7 +284,7 @@ def stream_commit():
             "skipped": [], 
             "folders_success": 0, 
             "folders_failed": 0, 
-            "post_actions": {"success": 0, "failed": 0}
+            "post_actions": {"success": 0, "failed": 0, "by_action": {"archive": 0, "trash": 0, "delete": 0}}
         }
         
         # Either resume existing commit or create new one
@@ -306,7 +306,7 @@ def stream_commit():
             # Check if we just need post-actions
             items_needing_post = get_committed_items_needing_post_action(commit_id)
             if items_needing_post:
-                yield sse_message("status", {"phase": "post_actions", "message": "Applying server actions..."})
+                yield sse_message("status", {"phase": "post_actions", "message": "Updating server..."})
                 yield from _apply_post_actions_from_pending(commit_id, items_needing_post, results)
             
             clear_commit_session(commit_id)
@@ -559,7 +559,7 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
     """Apply post-commit actions using pending_commit tracking."""
     yield sse_message("status", {
         "phase": "post_actions",
-        "message": "Applying post-commit actions on server...",
+        "message": "Updating server...",
     })
     
     # Group by account
@@ -616,6 +616,7 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
                                 client.delete_email(uid)
                             
                             results["post_actions"]["success"] += 1
+                            results["post_actions"]["by_action"][action] = results["post_actions"]["by_action"].get(action, 0) + 1
                             mark_item_done(item['id'])
                             actions_applied = True
                         except IMAPError:
@@ -658,9 +659,10 @@ def _apply_folder_post_action(folder_item: dict, action: str, results: dict):
         results["post_actions"]["failed"] += 1
         return
     
+    action_verb = {"archive": "Archiving", "trash": "Trashing", "delete": "Deleting"}.get(action, "Processing")
     yield sse_message("status", {
         "phase": "post_actions",
-        "message": f"Applying '{action}' to source folder: {folder_name}...",
+        "message": f"{action_verb} emails in {folder_name}...",
     })
     
     client = None
@@ -678,6 +680,7 @@ def _apply_folder_post_action(folder_item: dict, action: str, results: dict):
                 elif action == 'delete':
                     client.delete_email(uid)
                 results["post_actions"]["success"] += 1
+                results["post_actions"]["by_action"][action] = results["post_actions"]["by_action"].get(action, 0) + 1
             except IMAPError:
                 results["post_actions"]["failed"] += 1
         

@@ -496,7 +496,7 @@ function renderSourceGroup(source, sourceKey, destId, type) {
                 <div class="review-source-header-right" onclick="event.stopPropagation()">
                     ${isImap ? `
                         <label class="source-action-label" title="Action to apply to emails on the server after committing">
-                            <span>Emails after:</span>
+                            <span>On server:</span>
                             ${renderSourceActionDropdown(`${sourceKey}:${destId}`)}
                         </label>
                     ` : `

@@ -509,10 +509,19 @@ def build_commit_summary(results: dict) -> str:
         fail_count = len(results["failed"]) + results["folders_failed"]
         msg_parts.append(f"{fail_count} failed")
     if results["post_actions"]["success"]:
-        count = results["post_actions"]["success"]
-        msg_parts.append(f"{count} server action{'s' if count != 1 else ''} applied")
+        by_action = results["post_actions"].get("by_action", {})
+        action_parts = []
+        for act, cnt in by_action.items():
+            if cnt > 0:
+                verb = {"archive": "archived", "trash": "trashed", "delete": "deleted"}.get(act, act)
+                action_parts.append(f"{cnt} {verb}")
+        if action_parts:
+            msg_parts.append(", ".join(action_parts) + " on server")
+        else:
+            count = results["post_actions"]["success"]
+            msg_parts.append(f"{count} updated on server")
     if results["post_actions"]["failed"]:
         count = results["post_actions"]["failed"]
-        msg_parts.append(f"{count} server action{'s' if count != 1 else ''} failed")
+        msg_parts.append(f"{count} server update{'s' if count != 1 else ''} failed")
     
     return ". ".join(msg_parts) + "." if msg_parts else "Nothing committed."
