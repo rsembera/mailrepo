@@ -18,7 +18,6 @@ import { formatDate, daysUntil } from '../components/date-picker.js';
 let vaultFolders = [];
 let vaultFilter = '';
 let vaultSort = 'date-asc'; // 'date-asc', 'date-desc', 'name-asc', 'name-desc'
-let selectedVaultFolders = new Set();
 let restoreFolderId = null;
 let restoreDestinationId = null;
 
@@ -59,7 +58,6 @@ async function loadVaultFolders() {
  */
 export async function showVaultView() {
     vaultFilter = '';
-    selectedVaultFolders.clear();
     
     const sidebar = document.getElementById('sidebar');
     const toolbar = document.querySelector('.content-toolbar');
@@ -128,7 +126,6 @@ function renderVaultList() {
             contextMeta.textContent = `${vaultFolders.length} folder${vaultFolders.length !== 1 ? 's' : ''}${overdueText}`;
         }
     }
-
     
     if (vaultFolders.length === 0) {
         emailList.innerHTML = `
@@ -142,41 +139,32 @@ function renderVaultList() {
         return;
     }
     
-    // Check if any overdue folders are selected
-    const selectedOverdue = [...selectedVaultFolders].filter(id => {
-        const folder = vaultFolders.find(f => f.id === id);
-        return folder && folder.is_overdue;
-    });
+    // Count overdue folders
+    const overdueCount = vaultFolders.filter(f => f.is_overdue).length;
     
     let html = `
-        <div class="vault-list">
-            <div class="vault-toolbar">
-                <div class="vault-filter">
-                    <i data-lucide="search" class="search-icon"></i>
-                    <input type="text" 
-                           id="vaultFilterInput" 
-                           placeholder="Filter folders..." 
-                           value="${escapeHtml(vaultFilter)}"
-                           oninput="handleVaultFilter(this.value)">
-                    ${vaultFilter ? '<button class="search-clear" onclick="clearVaultFilter()"><i data-lucide="x"></i></button>' : ''}
+        <div class="vault-management-list">
+            <div class="vault-management-toolbar">
+                <div class="vault-toolbar-left">
+                    <div class="vault-search">
+                        <i data-lucide="search" class="search-icon"></i>
+                        <input type="text" 
+                               id="vaultFilterInput" 
+                               placeholder="Search folders..." 
+                               value="${escapeHtml(vaultFilter)}"
+                               oninput="handleVaultFilter(this.value)">
+                        ${vaultFilter ? '<button class="search-clear" onclick="clearVaultFilter()"><i data-lucide="x"></i></button>' : ''}
+                    </div>
+                    ${renderVaultSortButton()}
                 </div>
-                <div class="vault-sort">
-                    <select id="vaultSortSelect" onchange="handleVaultSort(this.value)">
-                        <option value="date-asc" ${vaultSort === 'date-asc' ? 'selected' : ''}>Date (Soonest)</option>
-                        <option value="date-desc" ${vaultSort === 'date-desc' ? 'selected' : ''}>Date (Latest)</option>
-                        <option value="name-asc" ${vaultSort === 'name-asc' ? 'selected' : ''}>Name (A-Z)</option>
-                        <option value="name-desc" ${vaultSort === 'name-desc' ? 'selected' : ''}>Name (Z-A)</option>
-                    </select>
-                </div>
-                ${selectedOverdue.length > 0 ? `
-                    <button class="btn btn-danger" onclick="batchPermadelete()">
+                ${overdueCount > 0 ? `
+                    <button class="btn btn-danger" onclick="deleteAllOverdue()">
                         <i data-lucide="trash-2"></i>
-                        Delete Selected (${selectedOverdue.length})
+                        Delete Overdue (${overdueCount})
                     </button>
-                ` : ''}
+                ` : '<div></div>'}
             </div>
     `;
-
     
     if (filtered.length === 0 && vaultFilter) {
         html += `
@@ -185,64 +173,17 @@ function renderVaultList() {
             </div>
         `;
     } else {
-        html += `<div class="vault-folder-list">`;
+        html += `
+            <div class="vault-management-header">
+                <span>Folder</span>
+                <span>Delete By</span>
+                <span>Actions</span>
+            </div>
+        `;
         
         for (const folder of filtered) {
-            const days = daysUntil(folder.retention_date);
-            const isOverdue = folder.is_overdue;
-            const isSelected = selectedVaultFolders.has(folder.id);
-            
-            let daysText;
-            if (isOverdue) {
-                daysText = `<span class="vault-overdue-badge">OVERDUE</span> ${Math.abs(days)} days ago`;
-            } else if (days === 0) {
-                daysText = 'Today';
-            } else if (days === 1) {
-                daysText = 'Tomorrow';
-            } else {
-                daysText = `${days} days`;
-            }
-            
-            const colorDot = folder.color ? 
-                `<span class="color-dot" style="background: ${folder.color}"></span>` : '';
-            
-            html += `
-                <div class="vault-folder-item ${isOverdue ? 'overdue' : ''} ${isSelected ? 'selected' : ''}" data-id="${folder.id}">
-                    <div class="vault-folder-select">
-                        ${isOverdue ? `
-                            <input type="checkbox" 
-                                   ${isSelected ? 'checked' : ''} 
-                                   onchange="toggleVaultSelect(${folder.id}, this.checked)">
-                        ` : '<span class="vault-select-placeholder"></span>'}
-                    </div>
-                    <div class="vault-folder-info">
-                        <div class="vault-folder-name">
-                            ${colorDot}
-                            <i data-lucide="folder" class="folder-icon"></i>
-                            <span>${escapeHtml(folder.name)}</span>
-                            <span class="vault-email-count">(${folder.email_count} emails)</span>
-                        </div>
-                        <div class="vault-folder-date">
-                            Delete by: ${formatDate(folder.retention_date)} &middot; ${daysText}
-                        </div>
-                    </div>
-                    <div class="vault-folder-actions">
-                        <button class="btn btn-sm btn-secondary" onclick="openRestoreFolder(${folder.id})" title="Restore to Archive">
-                            <i data-lucide="archive-restore"></i>
-                            Restore
-                        </button>
-                        ${isOverdue ? `
-                            <button class="btn btn-sm btn-danger" onclick="permadeleteFolder(${folder.id})" title="Permanently Delete">
-                                <i data-lucide="trash-2"></i>
-                                Delete
-                            </button>
-                        ` : ''}
-                    </div>
-                </div>
-            `;
+            html += renderVaultItem(folder);
         }
-        
-        html += `</div>`;
     }
     
     html += `</div>`;
@@ -250,6 +191,104 @@ function renderVaultList() {
     emailList.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
+
+/**
+ * Render a single vault folder item.
+ */
+function renderVaultItem(folder) {
+    const days = daysUntil(folder.retention_date);
+    const isOverdue = folder.is_overdue;
+    
+    let dateText;
+    if (isOverdue) {
+        dateText = `<span class="vault-overdue-badge">OVERDUE</span>`;
+    } else {
+        dateText = formatDate(folder.retention_date);
+    }
+    
+    const colorDot = folder.color ? 
+        `<span class="color-dot" style="background: ${folder.color}"></span>` : '';
+    
+    return `
+        <div class="vault-management-item ${isOverdue ? 'overdue' : ''}">
+            <div class="vault-management-name">
+                ${colorDot}
+                <i data-lucide="folder" class="folder-icon"></i>
+                <span class="folder-label">${escapeHtml(folder.name)}</span>
+                <span class="email-count">(${folder.email_count})</span>
+            </div>
+            <div class="vault-management-date ${isOverdue ? 'overdue' : ''}">
+                ${dateText}
+            </div>
+            <div class="vault-management-actions">
+                <button class="btn btn-sm btn-icon" onclick="openRestoreFolder(${folder.id})" title="Restore to Archive">
+                    <i data-lucide="archive-restore"></i>
+                </button>
+                ${isOverdue ? `
+                    <button class="btn btn-sm btn-icon btn-danger-icon" onclick="permadeleteFolder(${folder.id})" title="Permanently Delete">
+                        <i data-lucide="trash-2"></i>
+                    </button>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Render sort icon button with dropdown.
+ */
+function renderVaultSortButton() {
+    const sortLabels = {
+        'date-asc': 'Soonest first',
+        'date-desc': 'Latest first',
+        'name-asc': 'Name A–Z',
+        'name-desc': 'Name Z–A'
+    };
+    const options = [
+        ['date-asc', 'Soonest first'],
+        ['date-desc', 'Latest first'],
+        ['name-asc', 'Name A–Z'],
+        ['name-desc', 'Name Z–A']
+    ];
+    const currentLabel = sortLabels[vaultSort] || 'Sort';
+    const optionsHtml = options.map(([value, label]) =>
+        `<div class="sort-option ${vaultSort === value ? 'selected' : ''}" data-value="${value}">${label}</div>`
+    ).join('');
+    return `
+        <div class="sort-dropdown-wrapper">
+            <button class="btn btn-icon sort-btn" onclick="toggleVaultSortDropdown(event)" title="Sort: ${currentLabel}">
+                <i data-lucide="arrow-up-down"></i>
+            </button>
+            <div class="sort-dropdown" id="vaultSortDropdown">
+                ${optionsHtml}
+            </div>
+        </div>
+    `;
+}
+
+function toggleVaultSortDropdown(e) {
+    e.stopPropagation();
+    const dropdown = document.getElementById('vaultSortDropdown');
+    if (!dropdown) return;
+    dropdown.classList.toggle('open');
+    
+    if (dropdown.classList.contains('open')) {
+        const close = (ev) => {
+            dropdown.classList.remove('open');
+            document.removeEventListener('click', close);
+        };
+        setTimeout(() => document.addEventListener('click', close), 0);
+        
+        dropdown.querySelectorAll('.sort-option').forEach(opt => {
+            opt.onclick = (ev) => {
+                ev.stopPropagation();
+                handleVaultSort(opt.dataset.value);
+                dropdown.classList.remove('open');
+            };
+        });
+    }
+}
+window.toggleVaultSortDropdown = toggleVaultSortDropdown;
 
 
 /**
@@ -286,19 +325,6 @@ function handleVaultSort(value) {
     renderVaultList();
 }
 window.handleVaultSort = handleVaultSort;
-
-/**
- * Toggle vault folder selection.
- */
-function toggleVaultSelect(folderId, checked) {
-    if (checked) {
-        selectedVaultFolders.add(folderId);
-    } else {
-        selectedVaultFolders.delete(folderId);
-    }
-    renderVaultList();
-}
-window.toggleVaultSelect = toggleVaultSelect;
 
 
 /**
@@ -457,24 +483,18 @@ window.permadeleteFolder = permadeleteFolder;
 
 
 /**
- * Batch permanently delete selected folders.
+ * Delete all overdue folders.
  */
-async function batchPermadelete() {
-    const selectedOverdue = [...selectedVaultFolders].filter(id => {
-        const folder = vaultFolders.find(f => f.id === id);
-        return folder && folder.is_overdue;
-    });
+async function deleteAllOverdue() {
+    const overdueFolders = vaultFolders.filter(f => f.is_overdue);
     
-    if (selectedOverdue.length === 0) return;
+    if (overdueFolders.length === 0) return;
     
-    const totalEmails = selectedOverdue.reduce((sum, id) => {
-        const folder = vaultFolders.find(f => f.id === id);
-        return sum + (folder?.email_count || 0);
-    }, 0);
+    const totalEmails = overdueFolders.reduce((sum, f) => sum + (f.email_count || 0), 0);
     
     const confirmed = await showConfirm(
         'Permanently Delete?',
-        `Delete ${selectedOverdue.length} folders containing ${totalEmails} emails? This cannot be undone.`,
+        `Delete ${overdueFolders.length} overdue folder${overdueFolders.length !== 1 ? 's' : ''} containing ${totalEmails} emails? This cannot be undone.`,
         { okText: 'Delete Forever', danger: true }
     );
     
@@ -484,7 +504,7 @@ async function batchPermadelete() {
         const response = await fetch('/api/folders/batch-permadelete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ folder_ids: selectedOverdue }),
+            body: JSON.stringify({ folder_ids: overdueFolders.map(f => f.id) }),
         });
         
         if (!response.ok) {
@@ -492,8 +512,6 @@ async function batchPermadelete() {
             showAlert('Error', data.error || 'Failed to delete folders');
             return;
         }
-        
-        selectedVaultFolders.clear();
         
         // Refresh
         await loadVaultFolders();
@@ -507,7 +525,7 @@ async function batchPermadelete() {
         showAlert('Error', 'Failed to delete folders');
     }
 }
-window.batchPermadelete = batchPermadelete;
+window.deleteAllOverdue = deleteAllOverdue;
 
 
 /**
