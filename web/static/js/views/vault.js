@@ -139,9 +139,6 @@ function renderVaultList() {
         return;
     }
     
-    // Count overdue folders
-    const overdueCount = vaultFolders.filter(f => f.is_overdue).length;
-    
     let html = `
         <div class="vault-management-list">
             <div class="vault-management-toolbar">
