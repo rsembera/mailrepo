@@ -1,48 +1,45 @@
 # MailRepo Session Notes
 
-**Date:** February 6, 2026  
-**Last Updated:** Session 32
+**Date:** February 11, 2026  
+**Last Updated:** Session 35
 
 ---
 
-## Completed Today (Session 32)
+## Completed Today (Session 35)
 
-### UI Fix
-- **Progress bar text clipping** — Count text ("61 of 62") was clipped by flex container height. Moved count to its own line below the bar instead of inline beside it.
+### Feature: Retention Vault
 
-### Session Security Fix (from Synesius cross-project audit)
-- **Safari/Firefox double-login race condition** — Login didn't set `last_activity`, allowing `before_request` to misfire on strict cookie-timing browsers
-- **Fix:** `session.clear()` before setting new values, set `last_activity` and CSRF token during login, use `make_response()` for explicit cookie handling, unique `SESSION_COOKIE_NAME = 'mailrepo_session'`
-- Applied to both login and first-run setup flows
+Implemented folder-level retention system for compliance workflows — similar to EdgeCase's retention feature but simpler (no audit log, as that belongs in broader practice management).
 
-### Cross-Project Security Audit Results
-Checked MailRepo against 5 bugs found in Synesius:
-1. ✅ `verify_password` — Properly verifies via Fernet-encrypted verification token
-2. ✅ `change_password` — Does full rekey: re-encrypts files, credentials, `PRAGMA rekey`, updates verification token
-3. ⚠️ Session race condition — **Fixed** (see above)
-4. ✅ Hardcoded secret key — Auto-generates and persists to `.secret_key` with 0o600 permissions
-5. ✅ Copy-paste artifacts — Clean, no references to other projects
+**Key components:**
+- Database: `retention_date` column on folders table
+- Backend: 6 API endpoints for vault operations
+- Frontend: Date picker, vault view, move/restore modals, overdue alert
+
+**Design decisions:**
+- Folder-level only (not individual emails) for simplicity
+- Entire subfolder trees move together with same retention date
+- No auto-delete — always requires manual review for compliance
+- Alert banner only on mail view to avoid noise
 
 ---
 
 ## Previous Sessions Summary
 
-**Session 31:** Code quality cleanup (-122 lines), IMAP \Noselect fix, ghost email filter, database reset fixes (segfault, missing .secret_key cleanup)
+**Session 34:** Search fixes (HTML body text indexing), sort dropdowns, Trash polish, backup/restore fixes
 
-**Session 30:** Pre-release security audit — no critical issues found. Documentation update.
+**Session 33:** Post-commit source actions (trash/archive/delete), commit flow polish, IMAP cache invalidation
 
-**Session 29:** CSRF protection added for all API endpoints
+**Session 32:** Progress bar fix, session security fix (Safari/Firefox double-login race condition)
 
-**Session 28:** Unified folder tree component, ~140 lines net reduction
-
-**Session 27:** Security fixes (command injection, rate limiting, password length), commit resume feature, import attachment downloads, folder sorting/hierarchy fixes
+**Session 31:** Code quality cleanup, IMAP \Noselect fix, ghost email filter, database reset fixes
 
 ---
 
 ## Current State
 
 - **Server:** Runs on port 5050
-- **All features working:** Email/folder staging, commit with resume, ZIP export, folder management, after-commit actions, attachment viewing, database reset, backup/restore
+- **All features working:** Email/folder staging, commit with resume, ZIP export, folder management, after-commit actions, attachment viewing, database reset, backup/restore, **retention vault**
 - **Security:** Audit passed, session race condition fixed
 - **Git:** All changes committed and pushed
 
@@ -59,8 +56,8 @@ Checked MailRepo against 5 bugs found in Synesius:
 
 ## TODO / Next Steps
 
-1. Continue manual testing using `docs/TESTING_CHECKLIST.md`
-2. Fix any issues found during testing
+1. Test Retention Vault feature (see TESTING_CHECKLIST.md)
+2. Continue manual testing of remaining items
 3. Final polish for public release
 
 ---

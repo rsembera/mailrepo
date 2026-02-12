@@ -866,3 +866,44 @@ Checked MailRepo against 5 bugs found in Synesius:
 - `4d58e41` — Wire up restore execution on server startup
 - `683e0bd` — Fix cancel restore triggering unsaved settings warning
 - `3300a4c` — Fix restore modal button alignment (modal-buttons -> modal-actions)
+
+
+
+---
+
+## Session 35 — February 11, 2026 (Mercury)
+
+### Feature: Retention Vault
+
+Implemented folder-level retention system for compliance workflows. Folders can be moved to a "vault" with a future deletion date, then permanently deleted after review when overdue.
+
+**Database:**
+- Added `retention_date` column to folders table (Unix timestamp, NULL = normal archive)
+- Added index `idx_folders_retention` for vault queries
+
+**Backend API (6 endpoints):**
+- `GET /api/folders/vault` — List vault folders with email counts and overdue status
+- `GET /api/folders/vault/overdue-count` — Badge count for left rail
+- `POST /api/folders/{id}/vault` — Move folder tree to vault with retention date
+- `POST /api/folders/{id}/vault/restore` — Restore folder tree from vault
+- `DELETE /api/folders/{id}/permadelete` — Permanently delete overdue folder
+- `POST /api/folders/batch-permadelete` — Batch delete overdue folders
+
+**Frontend:**
+- Date picker component (ported from EdgeCase) with year/month/day grid navigation
+- "Move to Vault" modal with date picker and preset buttons (1/3/5/7/10 years)
+- Vault view with grid layout matching Trash view styling
+- Restore modal with folder destination picker
+- Overdue alert banner (mail view only)
+- Vault badge in left rail showing overdue count
+
+**UI Polish:**
+- Vault icon positioned before Trash in left rail (logical flow: archive → vault → trash)
+- Alert banner only shows on mail view, not Settings/Trash/etc.
+- Modal width increased to prevent calendar clipping
+
+### Commits
+- `8c7f2dc` — Add Retention Vault feature (database, API, frontend, UI)
+- `0a92a23` — Align Vault view styling with Trash view
+- `38f96a7` — Fix duplicate overdueCount declaration in vault.js
+- `91fd117` — Move Vault icon before Trash in left rail

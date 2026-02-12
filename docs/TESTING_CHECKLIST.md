@@ -155,6 +155,47 @@ Pre-release manual testing checklist. Run through before any public release.
 
 ---
 
+## Retention Vault
+
+### Move to Vault
+- [ ] "Move to Vault" button appears in Manage Archive view
+- [ ] Modal opens with date picker
+- [ ] Date picker allows year/month/day selection
+- [ ] Quick preset buttons work (1, 3, 5, 7, 10 years)
+- [ ] Confirm button disabled until date selected
+- [ ] Folder disappears from archive after move
+- [ ] Folder appears in Retention Vault view
+
+### Vault View
+- [ ] Vault icon in left rail shows overdue badge count
+- [ ] Clicking vault icon opens Retention Vault view
+- [ ] Folders listed with name, email count, delete-by date
+- [ ] Overdue folders marked with red badge
+- [ ] Search/filter works
+- [ ] Sort dropdown works (soonest, latest, name A-Z, Z-A)
+
+### Restore from Vault
+- [ ] Restore button opens destination picker
+- [ ] Can select archive root as destination
+- [ ] Can select existing folder as destination
+- [ ] Folder returns to archive after restore
+- [ ] Folder removed from vault after restore
+
+### Permanent Deletion
+- [ ] Delete button only appears for overdue folders
+- [ ] Confirmation dialog shows folder name and email count
+- [ ] Folder and all emails permanently deleted after confirm
+- [ ] "Delete Overdue" button deletes all overdue folders
+
+### Overdue Alert
+- [ ] Alert banner appears on mail view when overdue folders exist
+- [ ] Alert shows count of overdue folders
+- [ ] "View Vault" link navigates to vault
+- [ ] Dismiss button hides alert
+- [ ] Alert hidden on non-mail views (Settings, Trash, etc.)
+
+---
+
 ## Trash
 
 - [x] Deleted folders appear in Trash
