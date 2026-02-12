@@ -223,6 +223,7 @@ CREATE TABLE IF NOT EXISTS folders (
     name TEXT NOT NULL,
     parent_id INTEGER,
     retention_days INTEGER,
+    retention_date INTEGER,
     color TEXT,
     deleted_at INTEGER,
     created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
@@ -281,6 +282,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_date ON messages(date);
 CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender);
 CREATE INDEX IF NOT EXISTS idx_messages_message_id ON messages(message_id);
 CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_id);
+CREATE INDEX IF NOT EXISTS idx_folders_retention ON folders(retention_date);
 
 -- Email header cache (for IMAP folder browsing)
 CREATE TABLE IF NOT EXISTS email_cache (

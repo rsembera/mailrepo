@@ -15,11 +15,14 @@ import { refreshSidebarFolders, buildImapFolderTree, getFolderIcon } from '../co
 import { updateStagedBadge } from '../components/staging.js';
 import { getMountedImports } from '../components/imports.js';
 import { updateTrashBadge } from './trash.js';
+import { DatePicker } from '../components/date-picker.js';
 
 // Module state
 let movingFolderId = null;
 let moveDestinationId = null;
 let archiveFilter = '';
+let vaultFolderId = null;
+let vaultDatePicker = null;
 
 // DOM references
 let contextTitle = null;
@@ -50,16 +53,20 @@ export function initFolderMgmt(config) {
 
 /**
  * Filter folders by name (keeps parent chain visible).
+ * Excludes deleted folders and folders in the retention vault.
  */
 function filterFolders(folders, query) {
-    if (!query) return folders.filter(f => !f.deleted_at);
+    // Helper to check if folder is available (not deleted, not in vault)
+    const isAvailable = f => !f.deleted_at && !f.retention_date;
+    
+    if (!query) return folders.filter(isAvailable);
     
     const lowerQuery = query.toLowerCase();
     const matchingIds = new Set();
     
     // Find all folders that match
     folders.forEach(f => {
-        if (!f.deleted_at && f.name.toLowerCase().includes(lowerQuery)) {
+        if (isAvailable(f) && f.name.toLowerCase().includes(lowerQuery)) {
             matchingIds.add(f.id);
             // Also include all ancestors
             let parentId = f.parent_id;
@@ -71,7 +78,7 @@ function filterFolders(folders, query) {
         }
     });
     
-    return folders.filter(f => !f.deleted_at && matchingIds.has(f.id));
+    return folders.filter(f => isAvailable(f) && matchingIds.has(f.id));
 }
 
 /**
@@ -230,6 +237,9 @@ function renderFolderManagementItem(folder, depth = 0, ancestry = [], isLast = f
                 </button>
                 <button class="btn btn-sm btn-icon" onclick="createSubfolder(${folder.id})" title="Add subfolder">
                     <i data-lucide="folder-plus"></i>
+                </button>
+                <button class="btn btn-sm btn-icon" onclick="openMoveToVault(${folder.id})" title="Move to Retention Vault">
+                    <i data-lucide="archive"></i>
                 </button>
                 <button class="btn btn-sm btn-icon" onclick="exportFolder(${folder.id})" title="Export as ZIP">
                     <i data-lucide="download"></i>
@@ -653,3 +663,88 @@ function clearArchiveFilter() {
     if (input) input.focus();
 }
 window.clearArchiveFilter = clearArchiveFilter;
+
+// ============================================================
+// RETENTION VAULT FUNCTIONS
+// ============================================================
+
+/**
+ * Open the Move to Vault modal for a folder.
+ */
+function openMoveToVault(folderId) {
+    vaultFolderId = folderId;
+    
+    // Initialize date picker if not already done
+    const container = document.getElementById('vaultDatePicker');
+    container.innerHTML = ''; // Clear any previous picker
+    
+    vaultDatePicker = new DatePicker(container, {
+        initialDate: null,
+        onSelect: (date) => {
+            updateVaultConfirmButton();
+        }
+    });
+    
+    // Set up preset buttons
+    document.querySelectorAll('.date-preset-btn').forEach(btn => {
+        btn.onclick = () => {
+            const years = parseInt(btn.dataset.years);
+            const date = new Date();
+            date.setFullYear(date.getFullYear() + years);
+            vaultDatePicker.setDate(date);
+            updateVaultConfirmButton();
+        };
+    });
+    
+    // Set up confirm button
+    const confirmBtn = document.getElementById('vaultConfirmBtn');
+    confirmBtn.disabled = true;
+    confirmBtn.onclick = confirmMoveToVault;
+    
+    document.getElementById('vaultModal').classList.add('active');
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+window.openMoveToVault = openMoveToVault;
+
+/**
+ * Update the vault confirm button state.
+ */
+function updateVaultConfirmButton() {
+    const confirmBtn = document.getElementById('vaultConfirmBtn');
+    confirmBtn.disabled = !vaultDatePicker.getDate();
+}
+
+/**
+ * Confirm moving folder to vault.
+ */
+async function confirmMoveToVault() {
+    const date = vaultDatePicker.getDate();
+    if (!date || !vaultFolderId) return;
+    
+    const timestamp = Math.floor(date.getTime() / 1000);
+    
+    try {
+        const response = await fetch(`/api/folders/${vaultFolderId}/vault`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ retention_date: timestamp }),
+        });
+        
+        if (!response.ok) {
+            const data = await response.json();
+            showAlert('Error', data.error || 'Failed to move folder to vault');
+            return;
+        }
+        
+        closeModal('vaultModal');
+        
+        // Refresh the folder list
+        await loadFolders();
+        showFolderManagementView();
+        refreshSidebarFolders();
+        
+    } catch (error) {
+        console.error('Error moving folder to vault:', error);
+        showAlert('Error', 'Failed to move folder to vault');
+    }
+}

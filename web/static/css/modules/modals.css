@@ -145,7 +145,12 @@
     max-width: 400px;
 }
 
-.modal-sm .form-group {
+.modal-vault {
+    max-width: 380px;
+    overflow: visible;
+}
+
+.modal-vault .form-group {
     margin-bottom: var(--space-md);
 }
 

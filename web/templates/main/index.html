@@ -26,6 +26,10 @@
                 <i data-lucide="trash-2"></i>
                 <span class="rail-badge hidden" id="trashBadge">0</span>
             </button>
+            <button class="rail-btn" data-view="vault" title="Retention Vault" id="vaultRailBtn">
+                <i data-lucide="archive"></i>
+                <span class="vault-badge" id="vaultBadge">0</span>
+            </button>
         </div>
         <div class="rail-bottom">
             <div class="rail-divider"></div>
@@ -147,6 +151,16 @@
                 <!-- Populated dynamically by JavaScript when content loads -->
             </div>
         </header>
+        
+        <!-- Overdue Vault Alert -->
+        <div class="overdue-alert" id="overdueAlert">
+            <i data-lucide="alert-triangle"></i>
+            <span class="overdue-alert-text">
+                <strong><span id="overdueCount">0</span> folders</strong> in Retention Vault are ready for deletion review.
+                <a href="#" onclick="document.querySelector('.rail-btn[data-view=vault]').click(); return false;">View Vault</a>
+            </span>
+            <button class="overdue-alert-dismiss" onclick="dismissOverdueAlert()">Dismiss</button>
+        </div>
         
         <!-- Subfolders Bar (shown when viewing archive folder with subfolders) -->
         <div class="subfolders-bar" id="subfoldersBar" style="display: none;">
@@ -500,6 +514,66 @@
         </div>
         <div class="modal-actions">
             <button class="btn btn-primary" onclick="closeModal('appPasswordModal')" style="width: 100%;">Got it</button>
+        </div>
+    </div>
+</div>
+
+<!-- Move to Vault Modal -->
+<div class="modal-overlay" id="vaultModal">
+    <div class="modal-content modal-vault">
+        <div class="modal-header">
+            <h2>Move to Retention Vault</h2>
+        </div>
+        <p style="color: var(--color-text-muted); font-size: 0.9rem; margin-bottom: var(--space-lg);">
+            This folder will be held until the selected date, then flagged for permanent deletion.
+        </p>
+        
+        <div class="form-group">
+            <label>Delete After</label>
+            <div id="vaultDatePicker"></div>
+        </div>
+        
+        <div class="form-group">
+            <label style="color: var(--color-text-muted); font-size: 0.85rem;">Quick select:</label>
+            <div class="date-presets">
+                <button type="button" class="date-preset-btn" data-years="1">1 Year</button>
+                <button type="button" class="date-preset-btn" data-years="3">3 Years</button>
+                <button type="button" class="date-preset-btn" data-years="5">5 Years</button>
+                <button type="button" class="date-preset-btn" data-years="7">7 Years</button>
+                <button type="button" class="date-preset-btn" data-years="10">10 Years</button>
+            </div>
+        </div>
+        
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeModal('vaultModal')">Cancel</button>
+            <button class="btn btn-primary" id="vaultConfirmBtn" disabled>
+                <i data-lucide="archive"></i>
+                Move to Vault
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Restore from Vault Modal -->
+<div class="modal-overlay" id="restoreFolderModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="restoreModalTitle">Restore Folder</h2>
+        </div>
+        <p style="color: var(--color-text-muted); font-size: 0.9rem; margin-bottom: var(--space-md);">
+            Select where to restore this folder in your archive:
+        </p>
+        
+        <div class="folder-select-list" id="restoreDestinationList" style="max-height: 300px; overflow-y: auto;">
+            <!-- Populated by JavaScript -->
+        </div>
+        
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeModal('restoreFolderModal')">Cancel</button>
+            <button class="btn btn-primary" onclick="confirmRestoreFolder()">
+                <i data-lucide="archive-restore"></i>
+                Restore
+            </button>
         </div>
     </div>
 </div>

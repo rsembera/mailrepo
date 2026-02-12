@@ -18,7 +18,7 @@ log = get_logger()
 def list_folders():
     """Get all archive folders."""
     folders = Database.fetchall(
-        "SELECT id, name, parent_id, color, deleted_at, created_at FROM folders ORDER BY name"
+        "SELECT id, name, parent_id, color, retention_date, deleted_at, created_at FROM folders ORDER BY name"
     )
     return jsonify({"folders": [dict(f) for f in folders]})
 
@@ -350,3 +350,343 @@ def empty_trash():
     Database.commit()
     
     return jsonify({"success": True, "deleted": len(trashed)})
+
+
+# ============================================================
+# RETENTION VAULT ENDPOINTS
+# ============================================================
+
+
+@api_bp.route("/folders/vault", methods=["GET"])
+def list_vault_folders():
+    """Get all folders in the Retention Vault (have retention_date set)."""
+    now = int(time.time())
+    
+    # Get top-level vault folders (those with retention_date set, not deleted)
+    # We need to return the full tree for each, so get all folders first
+    all_folders = Database.fetchall(
+        """SELECT id, name, parent_id, color, retention_date, deleted_at 
+           FROM folders 
+           WHERE deleted_at IS NULL"""
+    )
+    
+    # Build a map for quick lookups
+    folder_map = {f["id"]: dict(f) for f in all_folders}
+    
+    # Find top-level vault folders (have retention_date, and parent doesn't have retention_date)
+    vault_folders = []
+    for f in all_folders:
+        if f["retention_date"] is not None:
+            # Check if this is a top-level vault folder (parent not in vault)
+            parent = folder_map.get(f["parent_id"])
+            if parent is None or parent["retention_date"] is None:
+                # This is a top-level vault folder
+                # Count emails in this folder and all descendants
+                def count_tree_emails(folder_id):
+                    count = Database.fetchone(
+                        "SELECT COUNT(*) as cnt FROM messages WHERE folder_id = ? AND deleted_at IS NULL",
+                        (folder_id,)
+                    )["cnt"]
+                    children = [fid for fid, data in folder_map.items() 
+                               if data["parent_id"] == folder_id]
+                    for child_id in children:
+                        count += count_tree_emails(child_id)
+                    return count
+                
+                email_count = count_tree_emails(f["id"])
+                
+                vault_folders.append({
+                    "id": f["id"],
+                    "name": f["name"],
+                    "color": f["color"],
+                    "retention_date": f["retention_date"],
+                    "email_count": email_count,
+                    "is_overdue": f["retention_date"] < now
+                })
+    
+    overdue_count = sum(1 for f in vault_folders if f["is_overdue"])
+    
+    return jsonify({
+        "folders": vault_folders,
+        "overdue_count": overdue_count
+    })
+
+
+@api_bp.route("/folders/vault/overdue-count", methods=["GET"])
+def vault_overdue_count():
+    """Get count of overdue folders in vault (for login alert badge)."""
+    now = int(time.time())
+    
+    # Count top-level vault folders that are overdue
+    all_folders = Database.fetchall(
+        """SELECT id, parent_id, retention_date 
+           FROM folders 
+           WHERE retention_date IS NOT NULL AND deleted_at IS NULL"""
+    )
+    
+    folder_map = {f["id"]: dict(f) for f in all_folders}
+    
+    count = 0
+    for f in all_folders:
+        if f["retention_date"] < now:
+            # Check if top-level vault folder
+            parent = folder_map.get(f["parent_id"])
+            if parent is None or parent.get("retention_date") is None:
+                count += 1
+    
+    return jsonify({"count": count})
+
+
+@api_bp.route("/folders/<int:folder_id>/vault", methods=["POST"])
+def move_to_vault(folder_id):
+    """Move a folder to the Retention Vault with a deletion date."""
+    folder = Database.fetchone(
+        "SELECT id, deleted_at, retention_date FROM folders WHERE id = ?",
+        (folder_id,)
+    )
+    if not folder:
+        return jsonify({"error": "Folder not found"}), 404
+    if folder["deleted_at"]:
+        return jsonify({"error": "Cannot move trashed folder to vault"}), 400
+    if folder["retention_date"]:
+        return jsonify({"error": "Folder is already in vault"}), 400
+    
+    data = request.get_json()
+    retention_date = data.get("retention_date")
+    
+    if not retention_date:
+        return jsonify({"error": "Retention date is required"}), 400
+    
+    try:
+        retention_date = int(retention_date)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid retention date"}), 400
+    
+    # Set retention_date on this folder and all descendants
+    def set_retention_recursive(parent_id):
+        Database.execute(
+            "UPDATE folders SET retention_date = ? WHERE id = ?",
+            (retention_date, parent_id)
+        )
+        children = Database.fetchall(
+            "SELECT id FROM folders WHERE parent_id = ? AND deleted_at IS NULL",
+            (parent_id,)
+        )
+        for child in children:
+            set_retention_recursive(child["id"])
+    
+    set_retention_recursive(folder_id)
+    Database.commit()
+    
+    return jsonify({"success": True})
+
+
+@api_bp.route("/folders/<int:folder_id>/vault/restore", methods=["POST"])
+def restore_from_vault(folder_id):
+    """Restore a folder from the Retention Vault back to the archive."""
+    folder = Database.fetchone(
+        "SELECT id, parent_id, deleted_at, retention_date FROM folders WHERE id = ?",
+        (folder_id,)
+    )
+    if not folder:
+        return jsonify({"error": "Folder not found"}), 404
+    if folder["deleted_at"]:
+        return jsonify({"error": "Folder is in trash, not vault"}), 400
+    if not folder["retention_date"]:
+        return jsonify({"error": "Folder is not in vault"}), 400
+    
+    data = request.get_json() or {}
+    destination_id = data.get("destination_id")  # None means root
+    
+    # Validate destination if provided
+    if destination_id is not None:
+        dest = Database.fetchone(
+            "SELECT id, deleted_at, retention_date FROM folders WHERE id = ?",
+            (destination_id,)
+        )
+        if not dest:
+            return jsonify({"error": "Destination folder not found"}), 404
+        if dest["deleted_at"]:
+            return jsonify({"error": "Cannot restore to trashed folder"}), 400
+        if dest["retention_date"]:
+            return jsonify({"error": "Cannot restore to a folder in vault"}), 400
+    
+    # Clear retention_date on this folder and all descendants
+    def clear_retention_recursive(parent_id):
+        Database.execute(
+            "UPDATE folders SET retention_date = NULL WHERE id = ?",
+            (parent_id,)
+        )
+        children = Database.fetchall(
+            "SELECT id FROM folders WHERE parent_id = ?",
+            (parent_id,)
+        )
+        for child in children:
+            clear_retention_recursive(child["id"])
+    
+    clear_retention_recursive(folder_id)
+    
+    # Move to new parent if specified
+    if destination_id != folder["parent_id"]:
+        Database.execute(
+            "UPDATE folders SET parent_id = ? WHERE id = ?",
+            (destination_id, folder_id)
+        )
+    
+    Database.commit()
+    
+    return jsonify({"success": True})
+
+
+@api_bp.route("/folders/<int:folder_id>/permadelete", methods=["DELETE"])
+def permadelete_vault_folder(folder_id):
+    """Permanently delete a folder from the Retention Vault (must be overdue)."""
+    now = int(time.time())
+    
+    folder = Database.fetchone(
+        "SELECT id, deleted_at, retention_date FROM folders WHERE id = ?",
+        (folder_id,)
+    )
+    if not folder:
+        return jsonify({"error": "Folder not found"}), 404
+    if folder["deleted_at"]:
+        return jsonify({"error": "Folder is in trash, use permanent delete from trash"}), 400
+    if not folder["retention_date"]:
+        return jsonify({"error": "Folder is not in vault"}), 400
+    if folder["retention_date"] > now:
+        return jsonify({"error": "Folder is not yet overdue"}), 400
+    
+    # Collect all descendant folder IDs recursively
+    def collect_descendants(parent_id):
+        ids = [parent_id]
+        children = Database.fetchall(
+            "SELECT id FROM folders WHERE parent_id = ?",
+            (parent_id,)
+        )
+        for child in children:
+            ids.extend(collect_descendants(child["id"]))
+        return ids
+    
+    all_folder_ids = collect_descendants(folder_id)
+    placeholders = ",".join(["?" for _ in all_folder_ids])
+    
+    # Count emails before deletion
+    email_count = Database.fetchone(
+        f"SELECT COUNT(*) as cnt FROM messages WHERE folder_id IN ({placeholders})",
+        tuple(all_folder_ids)
+    )["cnt"]
+    
+    # Delete message files for all folders in the tree
+    messages = Database.fetchall(
+        f"SELECT filepath FROM messages WHERE folder_id IN ({placeholders})",
+        tuple(all_folder_ids)
+    )
+    
+    for msg in messages:
+        try:
+            filepath = Config.get_base_path() / msg["filepath"]
+            if filepath.exists():
+                filepath.unlink()
+        except Exception as e:
+            log.warning(f"Could not delete file {msg['filepath']}: {e}")
+    
+    # Try to remove folder directories
+    for fid in all_folder_ids:
+        try:
+            folder_path = Config.get_archive_path() / str(fid)
+            if folder_path.exists() and folder_path.is_dir():
+                folder_path.rmdir()
+        except:
+            pass
+    
+    # Delete all folders (CASCADE will handle messages)
+    Database.execute(f"DELETE FROM folders WHERE id IN ({placeholders})", tuple(all_folder_ids))
+    Database.commit()
+    
+    return jsonify({"success": True, "emails_deleted": email_count})
+
+
+@api_bp.route("/folders/batch-permadelete", methods=["POST"])
+def batch_permadelete_vault():
+    """Permanently delete multiple folders from the Retention Vault."""
+    now = int(time.time())
+    
+    data = request.get_json()
+    folder_ids = data.get("folder_ids", [])
+    
+    if not folder_ids:
+        return jsonify({"error": "No folders specified"}), 400
+    
+    # Validate all folders
+    total_emails = 0
+    all_folder_ids_to_delete = []
+    
+    for folder_id in folder_ids:
+        folder = Database.fetchone(
+            "SELECT id, deleted_at, retention_date FROM folders WHERE id = ?",
+            (folder_id,)
+        )
+        if not folder:
+            return jsonify({"error": f"Folder {folder_id} not found"}), 404
+        if folder["deleted_at"]:
+            return jsonify({"error": f"Folder {folder_id} is in trash"}), 400
+        if not folder["retention_date"]:
+            return jsonify({"error": f"Folder {folder_id} is not in vault"}), 400
+        if folder["retention_date"] > now:
+            return jsonify({"error": f"Folder {folder_id} is not yet overdue"}), 400
+        
+        # Collect descendants
+        def collect_descendants(parent_id):
+            ids = [parent_id]
+            children = Database.fetchall(
+                "SELECT id FROM folders WHERE parent_id = ?",
+                (parent_id,)
+            )
+            for child in children:
+                ids.extend(collect_descendants(child["id"]))
+            return ids
+        
+        all_folder_ids_to_delete.extend(collect_descendants(folder_id))
+    
+    # Deduplicate (in case of nested selections)
+    all_folder_ids_to_delete = list(set(all_folder_ids_to_delete))
+    placeholders = ",".join(["?" for _ in all_folder_ids_to_delete])
+    
+    # Count emails
+    total_emails = Database.fetchone(
+        f"SELECT COUNT(*) as cnt FROM messages WHERE folder_id IN ({placeholders})",
+        tuple(all_folder_ids_to_delete)
+    )["cnt"]
+    
+    # Delete message files
+    messages = Database.fetchall(
+        f"SELECT filepath FROM messages WHERE folder_id IN ({placeholders})",
+        tuple(all_folder_ids_to_delete)
+    )
+    
+    for msg in messages:
+        try:
+            filepath = Config.get_base_path() / msg["filepath"]
+            if filepath.exists():
+                filepath.unlink()
+        except Exception as e:
+            log.warning(f"Could not delete file {msg['filepath']}: {e}")
+    
+    # Try to remove folder directories
+    for fid in all_folder_ids_to_delete:
+        try:
+            folder_path = Config.get_archive_path() / str(fid)
+            if folder_path.exists() and folder_path.is_dir():
+                folder_path.rmdir()
+        except:
+            pass
+    
+    # Delete all folders
+    Database.execute(f"DELETE FROM folders WHERE id IN ({placeholders})", tuple(all_folder_ids_to_delete))
+    Database.commit()
+    
+    return jsonify({
+        "success": True,
+        "folders_deleted": len(folder_ids),
+        "emails_deleted": total_emails
+    })

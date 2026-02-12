@@ -25,6 +25,7 @@ import { initStaging, openStageModal, renderFolderSelectTree, handleFolderSelect
 import { initFolderMgmt, showFolderManagementView, renameFolder, createSubfolder, openMoveFolder, confirmMoveFolder, deleteFolder, openColorPicker } from './views/folder-mgmt.js';
 import { initFolderSelection, showFolderSelectionView, showImportFolderSelectionView, stageSelectedFolders } from './views/folder-selection.js';
 import { initTrashView, showTrashView, updateTrashBadge, restoreFolder, permanentlyDeleteFolder, emptyTrash } from './views/trash.js';
+import { initVault, showVaultView, updateVaultBadge, checkOverdueFolders, hideOverdueAlert } from './views/vault.js';
 import { initSettingsView, showSettingsView } from './views/settings.js';
 import { initBackupsView, showBackupsView } from './views/backups.js';
 import { initReviewView, showReviewView } from './views/review.js';
@@ -125,6 +126,13 @@ document.addEventListener('DOMContentLoaded', () => {
         emailList: elements.emailList,
     });
     
+    // Initialize vault view
+    initVault({
+        contextTitle: elements.contextTitle,
+        contextMeta: elements.contextMeta,
+        emailList: elements.emailList,
+    });
+    
     // Initialize settings view
     initSettingsView({
         contextTitle: elements.contextTitle,
@@ -164,6 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initModalListeners();
     loadFolders().then(() => {
         updateTrashBadge();
+        checkOverdueFolders(true); // Update badge AND show alert on initial load (mail view)
         refreshSidebarFolders();
     });
     updateStagedBadge();
@@ -459,18 +468,27 @@ function handleImportUnmount(importId) {
                     showMailView();
                     break;
                 case 'staged':
+                    hideOverdueAlert();
                     showReviewView();
                     break;
                 case 'folders':
+                    hideOverdueAlert();
                     showFolderManagementView();
                     break;
                 case 'trash':
+                    hideOverdueAlert();
                     showTrashView();
                     break;
+                case 'vault':
+                    hideOverdueAlert();
+                    showVaultView();
+                    break;
                 case 'backups':
+                    hideOverdueAlert();
                     showBackupsView();
                     break;
                 case 'settings':
+                    hideOverdueAlert();
                     showSettingsView();
                     break;
             }
@@ -500,6 +518,9 @@ function showMailView() {
         subfoldersBar.style.display = 'none';
         subfoldersBar.innerHTML = '';
     }
+    
+    // Show overdue alert if there are overdue folders
+    checkOverdueFolders(true);
     
     // Show empty state prompt
     elements.contextTitle.textContent = 'Browse & Stage';

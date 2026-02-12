@@ -1,0 +1,252 @@
+/* MailRepo - Retention Vault View Styles */
+
+/* ============================================
+   VAULT TOOLBAR
+   ============================================ */
+
+.vault-list {
+    padding: var(--space-lg);
+}
+
+.vault-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+    flex-wrap: wrap;
+}
+
+.vault-filter {
+    position: relative;
+    flex: 1;
+    min-width: 200px;
+    max-width: 300px;
+}
+
+.vault-filter .search-icon {
+    position: absolute;
+    left: var(--space-sm);
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    color: var(--color-text-muted);
+    pointer-events: none;
+}
+
+
+.vault-filter input {
+    width: 100%;
+    padding: var(--space-sm) var(--space-md);
+    padding-left: 32px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+}
+
+.vault-filter input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: var(--shadow-focus);
+}
+
+.vault-filter .search-clear {
+    position: absolute;
+    right: var(--space-xs);
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    padding: var(--space-xs);
+    cursor: pointer;
+    color: var(--color-text-muted);
+}
+
+.vault-filter .search-clear:hover {
+    color: var(--color-text);
+}
+
+.vault-sort select {
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: white;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+
+/* ============================================
+   VAULT FOLDER LIST
+   ============================================ */
+
+.vault-folder-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.vault-folder-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-md) var(--space-lg);
+    background: white;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.vault-folder-item:hover {
+    border-color: var(--color-primary-light);
+}
+
+.vault-folder-item.overdue {
+    border-color: var(--color-danger);
+    background: linear-gradient(to right, rgba(229, 115, 115, 0.05), white);
+}
+
+.vault-folder-item.selected {
+    border-color: var(--color-primary);
+    box-shadow: var(--shadow-focus);
+}
+
+.vault-folder-select {
+    flex-shrink: 0;
+    width: 20px;
+}
+
+.vault-folder-select input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+.vault-select-placeholder {
+    display: block;
+    width: 16px;
+}
+
+
+.vault-folder-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.vault-folder-name {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    font-weight: 500;
+    color: var(--color-text-heading);
+}
+
+.vault-folder-name .folder-icon {
+    width: 18px;
+    height: 18px;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+}
+
+.vault-folder-name .color-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.vault-email-count {
+    font-weight: 400;
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+}
+
+.vault-folder-date {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    margin-top: var(--space-xs);
+}
+
+.vault-overdue-badge {
+    display: inline-block;
+    padding: 0.125rem 0.5rem;
+    background: var(--color-danger);
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.vault-folder-actions {
+    display: flex;
+    gap: var(--space-sm);
+    flex-shrink: 0;
+}
+
+
+/* ============================================
+   VAULT BADGE (Left Rail)
+   ============================================ */
+
+.vault-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    background: var(--color-danger);
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 600;
+    border-radius: 8px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ============================================
+   OVERDUE ALERT BAR
+   ============================================ */
+
+.overdue-alert {
+    display: none;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-sm) var(--space-lg);
+    background: linear-gradient(to right, var(--color-danger), #c62828);
+    color: white;
+}
+
+.overdue-alert i {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+.overdue-alert-text {
+    flex: 1;
+    font-size: 0.9rem;
+}
+
+.overdue-alert-text a {
+    color: white;
+    text-decoration: underline;
+    font-weight: 500;
+}
+
+.overdue-alert-dismiss {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-sm);
+    color: white;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+.overdue-alert-dismiss:hover {
+    background: rgba(255,255,255,0.3);
+}
