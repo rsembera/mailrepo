@@ -222,7 +222,7 @@ function renderVaultItem(folder) {
                     <i data-lucide="archive-restore"></i>
                 </button>
                 ${isOverdue ? `
-                    <button class="btn btn-sm btn-icon btn-danger-icon" onclick="permadeleteFolder(${folder.id})" title="Permanently Delete">
+                    <button class="btn btn-sm btn-icon btn-danger-subtle" onclick="permadeleteFolder(${folder.id})" title="Permanently Delete">
                         <i data-lucide="x"></i>
                     </button>
                 ` : ''}
