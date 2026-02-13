@@ -390,5 +390,6 @@ Session 9 (Feb 13, MacBook):
 - Trash: Auto-purge after 30 days — pass (also added email cleanup, was folders only)
 - Browser Compatibility: Chrome, Firefox, Safari — all pass
 - UI: Swapped Settings and Backup icon order in left rail
+- Refactor: Fixed circular dependency staging.js ↔ folder-selection.js (moved updateStagedBadge to state.js)
 - Remaining: Backup & Restore sub-items, Edge Cases
 

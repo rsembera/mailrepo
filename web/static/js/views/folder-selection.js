@@ -8,10 +8,9 @@
  */
 
 import { escapeHtml, escapeForOnclick } from '../utils.js';
-import { state, setSelectedFoldersGetter, setSelectedFoldersClearer } from '../state.js';
+import { state, setSelectedFoldersGetter, setSelectedFoldersClearer, updateStagedBadge } from '../state.js';
 import { showAlert } from '../modals.js';
 import { buildImapFolderTree, getFolderIcon } from '../components/sidebar.js';
-import { updateStagedBadge } from '../components/staging.js';
 import { getMountedImports } from '../components/imports.js';
 
 // Module state

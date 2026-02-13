@@ -12,6 +12,9 @@ let clearSelectedFolders = () => {};
 let checkBackupsUnsaved = () => false;
 let clearBackupsUnsaved = () => {};
 
+// Reference to staged badge element (set by staging.js)
+let stagedBadgeElement = null;
+
 export function setSelectedFoldersGetter(fn) {
     getSelectedFoldersCount = fn;
 }
@@ -26,6 +29,21 @@ export function setBackupsUnsavedChecker(fn) {
 
 export function setBackupsUnsavedClearer(fn) {
     clearBackupsUnsaved = fn;
+}
+
+export function setStagedBadgeElement(el) {
+    stagedBadgeElement = el;
+}
+
+/**
+ * Update the staged items badge count.
+ */
+export function updateStagedBadge() {
+    if (!stagedBadgeElement) return;
+    
+    const count = state.staged.size + state.stagedFolders.length;
+    stagedBadgeElement.textContent = count;
+    stagedBadgeElement.classList.toggle('hidden', count === 0);
 }
 
 /**

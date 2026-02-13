@@ -22,6 +22,10 @@ Continued manual testing on MacBook Air M4:
 - Duplicate check excludes trashed emails (was blocking re-commit)
 - Added email cleanup to trash auto-purge function
 
+**Refactoring:**
+- Fixed circular dependency between staging.js and folder-selection.js
+- Moved updateStagedBadge to state.js with setter pattern
+
 **UI polish:**
 - Swapped Settings and Backup icon order in left rail
 
@@ -52,7 +56,6 @@ Continued manual testing on MacBook Air M4:
 
 ## Known Technical Debt
 
-- **Circular dependency:** staging.js ↔ folder-selection.js (works, deferred)
 - **Mixed event handling:** Inline onclick + addEventListener patterns coexist
 - **SESSION_COOKIE_SECURE:** False (localhost doesn't support HTTPS)
 - **filesystem.py:** Uses os.path instead of pathlib (cosmetic inconsistency)

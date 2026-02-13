@@ -8,7 +8,7 @@
  * - Staged item badges and counts
  */
 
-import { state } from '../state.js';
+import { state, setStagedBadgeElement, updateStagedBadge } from '../state.js';
 import { closeModal, showAlert, showPrompt } from '../modals.js';
 import { renderFolderTree } from '../components/folder-tree.js';
 import { renderEmailList } from '../components/email-list.js';
@@ -54,6 +54,9 @@ export function initStaging(config) {
     reviewBtn = config.reviewBtn;
     onOpenNewFolderModal = config.onOpenNewFolderModal;
     beforeUnloadHandler = config.beforeUnloadHandler;
+    
+    // Register badge element with state module
+    setStagedBadgeElement(stagedBadge);
 }
 
 /**
@@ -396,17 +399,8 @@ export function confirmStage() {
     renderEmailList();
 }
 
-/**
- * Update the staged items badge count.
- */
-export function updateStagedBadge() {
-    if (!stagedBadge) return;
-    
-    let count = state.staged.size + state.stagedFolders.length;
-    
-    stagedBadge.textContent = count;
-    stagedBadge.classList.toggle('hidden', count === 0);
-}
+// Re-export updateStagedBadge from state.js for backwards compatibility
+export { updateStagedBadge } from '../state.js';
 
 /**
  * Update stage button state and text based on current selection.
