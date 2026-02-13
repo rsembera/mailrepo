@@ -203,7 +203,7 @@ Pre-release manual testing checklist. Run through before any public release.
 - [x] Can restore folder from Trash
 - [x] Can permanently delete from Trash
 - [x] "Empty Trash" works
-- [ ] Trash auto-purge after 30 days (check on restart)
+- [x] Trash auto-purge after 30 days (check on restart)
 
 ---
 
@@ -378,4 +378,17 @@ Session 8 (Feb 12, Mercury):
 - Fixed: Overdue alert dismiss now session-based (stays dismissed until page refresh)
 - Fixed: Overdue alert "View Vault" changed from link to button with proper styling
 - Remaining: Backup & Restore sub-items, Edge Cases, Browser Compatibility
+
+Session 9 (Feb 13, MacBook):
+- Database migration: Added retention_date column to MacBook database
+- Review: Unstage entire destination group — pass
+- Review: Unstage All clears everything — pass
+- Commit: Progress modal, success message, staged items cleared — all pass
+- Source actions: Tested trash action on server — pass
+- Fixed: Expanded source groups in Review now clear on unstage/commit
+- Fixed: Duplicate check now excludes trashed emails (was blocking re-commit after delete)
+- Trash: Auto-purge after 30 days — pass (also added email cleanup, was folders only)
+- Browser Compatibility: Chrome, Firefox, Safari — all pass
+- UI: Swapped Settings and Backup icon order in left rail
+- Remaining: Backup & Restore sub-items, Edge Cases
 

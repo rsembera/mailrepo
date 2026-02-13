@@ -1,38 +1,39 @@
 # MailRepo Session Notes
 
-**Date:** February 12, 2026  
-**Last Updated:** Session 36
+**Date:** February 13, 2026  
+**Last Updated:** Session 37
 
 ---
 
-## Completed Today (Session 36)
+## Completed Today (Session 37)
 
-### Retention Vault Testing — All Pass
+### Testing Checklist Progress
 
-Full testing of the Retention Vault feature completed:
+Continued manual testing on MacBook Air M4:
 
-- **Move to Vault:** Modal, date picker, presets (1/3/5/7/10 years) all working
-- **Vault View:** Listing, search, filter, sort all working
-- **Restore:** Destination picker, returns folder to archive correctly
-- **Permanent Deletion:** Confirmed folder "Redshirt" fully purged from database and filesystem
-- **Overdue Alert:** Badge count, banner, dismiss all working
+- **Review view:** Unstage destination group, Unstage All — both pass
+- **Commit flow:** Progress modal, success message, staged items cleared — all pass
+- **Source actions:** Trash on server tested and working
+- **Trash auto-purge:** Now cleans up emails too (was folders only)
+- **Browser compatibility:** Chrome, Firefox, Safari — all pass
 
-**Bug fixes during testing:**
-- Date picker preset buttons using wrong font (added font-family)
-- Icon consistency: X icon (red) for permanent delete, trash can for move-to-trash
-- Vault delete button style (btn-danger-subtle to match trash)
-- Overdue alert dismiss now session-based (stays dismissed until refresh)
-- Overdue alert "View Vault" changed from link to styled button
+**Bug fixes:**
+- Expanded source groups in Review now clear on unstage/commit
+- Duplicate check excludes trashed emails (was blocking re-commit)
+- Added email cleanup to trash auto-purge function
+
+**UI polish:**
+- Swapped Settings and Backup icon order in left rail
 
 ---
 
 ## Previous Sessions Summary
 
+**Session 36:** Retention Vault testing complete, icon consistency fixes, alert dismiss improvements
+
 **Session 35:** Retention Vault feature implementation (database, API, frontend)
 
 **Session 34:** Search fixes (HTML body text indexing), sort dropdowns, Trash polish, backup/restore fixes
-
-**Session 33:** Post-commit source actions (trash/archive/delete), commit flow polish, IMAP cache invalidation
 
 **Session 32:** Progress bar fix, session security fix (Safari/Firefox double-login race condition)
 
