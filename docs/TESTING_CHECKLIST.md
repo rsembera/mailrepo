@@ -115,18 +115,18 @@ Pre-release manual testing checklist. Run through before any public release.
 - [x] Items grouped by destination
 - [x] Can change destination for group
 - [x] Can unstage individual items
-- [ ] Can unstage entire destination group ← **test next**
+- [x] Can unstage entire destination group
 - [x] Source action dropdown works (Leave/Archive/Trash/Delete)
-- [ ] "Unstage All" clears everything ← **test next**
+- [x] "Unstage All" clears everything
 
 ### Commit
 - [x] Commit button starts process
-- [ ] Progress modal shows status ← **test next**
+- [x] Progress modal shows status
 - [x] Emails are copied to archive
-- [ ] Source actions execute (if not "Leave") ← **test next**
-- [ ] Success message shows count ← **test next**
+- [ ] Source actions execute (if not "Leave")
+- [x] Success message shows count
 - [x] Archived emails appear in destination folder
-- [ ] Staged items cleared after commit ← **test next**
+- [x] Staged items cleared after commit
 
 ---
 

@@ -66,11 +66,11 @@ def create_archive_folder_from_path(archive_path: str, parent_folder_id: int) ->
 
 
 def _check_duplicate(folder_id: int, message_id: str) -> bool:
-    """Check if an email with this message_id already exists in the folder."""
+    """Check if an email with this message_id already exists in the folder (excluding trashed)."""
     if not message_id:
         return False
     existing = Database.fetchone(
-        "SELECT id FROM messages WHERE folder_id = ? AND message_id = ?",
+        "SELECT id FROM messages WHERE folder_id = ? AND message_id = ? AND deleted_at IS NULL",
         (folder_id, message_id)
     )
     return existing is not None

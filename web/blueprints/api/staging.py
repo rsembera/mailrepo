@@ -121,7 +121,7 @@ def commit_staged():
                     message_id = email_data.get("message_id", "")
                     if message_id:
                         existing = Database.fetchone(
-                            "SELECT id FROM messages WHERE folder_id = ? AND message_id = ?",
+                            "SELECT id FROM messages WHERE folder_id = ? AND message_id = ? AND deleted_at IS NULL",
                             (folder_id, message_id)
                         )
                         if existing:
@@ -266,7 +266,7 @@ def commit_folders():
                         message_id = email_data.get("message_id", "")
                         if message_id:
                             existing = Database.fetchone(
-                                "SELECT id FROM messages WHERE folder_id = ? AND message_id = ?",
+                                "SELECT id FROM messages WHERE folder_id = ? AND message_id = ? AND deleted_at IS NULL",
                                 (archive_folder_id, message_id)
                             )
                             if existing:
