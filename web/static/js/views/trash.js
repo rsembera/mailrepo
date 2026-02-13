@@ -199,7 +199,7 @@ function renderFoldersTab(allTrashedFolders) {
                     ${renderTrashSortButton(['date-desc', 'Newest first'], ['date-asc', 'Oldest first'], ['name-asc', 'Name A–Z'], ['name-desc', 'Name Z–A'])}
                 </div>
                 <button class="btn btn-danger" onclick="emptyTrash()">
-                    <i data-lucide="trash-2"></i>
+                    <i data-lucide="x"></i>
                     Delete Folders
                 </button>
             </div>
@@ -321,7 +321,7 @@ function renderEmailsTab() {
                     ${renderTrashSortButton(['date-desc', 'Newest first'], ['date-asc', 'Oldest first'], ['sender-asc', 'Sender A–Z'], ['sender-desc', 'Sender Z–A'], ['name-asc', 'Subject A–Z'], ['name-desc', 'Subject Z–A'])}
                 </div>
                 <button class="btn btn-danger" onclick="emptyTrashEmails()">
-                    <i data-lucide="trash-2"></i>
+                    <i data-lucide="x"></i>
                     Delete Emails
                 </button>
             </div>
