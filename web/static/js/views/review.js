@@ -682,6 +682,9 @@ window.unstageDestination = async function(destId) {
     }
     sessionStorage.setItem('stagedFolders', JSON.stringify(stagedFolders));
     
+    // Clear expanded state for removed groups
+    expandedSourceGroups.clear();
+    
     updateStagedBadge();
     renderReviewView();
 };
@@ -950,6 +953,7 @@ function initIconSelects() {
  */
 function unstageAll() {
     clearAllStaged();
+    expandedSourceGroups.clear();
     updateStagedBadge();
     renderReviewView();
 }
@@ -1038,6 +1042,7 @@ async function commitAll() {
             onComplete: async (data) => {
                 modal.classList.remove('active');
                 clearAllStaged();
+                expandedSourceGroups.clear();
                 updateStagedBadge();
                 await refreshSidebar();
                 renderReviewView();
