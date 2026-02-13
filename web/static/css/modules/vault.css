@@ -246,13 +246,7 @@
     font-size: 0.9rem;
 }
 
-.overdue-alert-text a {
-    color: white;
-    text-decoration: underline;
-    font-weight: 500;
-}
-
-.overdue-alert-dismiss {
+.overdue-alert-btn {
     background: rgba(255,255,255,0.2);
     border: none;
     padding: var(--space-xs) var(--space-sm);
@@ -260,8 +254,9 @@
     color: white;
     cursor: pointer;
     font-size: 0.85rem;
+    font-family: var(--font-family);
 }
 
-.overdue-alert-dismiss:hover {
+.overdue-alert-btn:hover {
     background: rgba(255,255,255,0.3);
 }

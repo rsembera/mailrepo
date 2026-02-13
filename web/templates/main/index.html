@@ -157,9 +157,9 @@
             <i data-lucide="alert-triangle"></i>
             <span class="overdue-alert-text">
                 <strong><span id="overdueCount">0</span> folders</strong> in Retention Vault are ready for deletion review.
-                <a href="#" onclick="document.querySelector('.rail-btn[data-view=vault]').click(); return false;">View Vault</a>
             </span>
-            <button class="overdue-alert-dismiss" onclick="dismissOverdueAlert()">Dismiss</button>
+            <button class="overdue-alert-btn" onclick="document.querySelector('.rail-btn[data-view=vault]').click();">View Vault</button>
+            <button class="overdue-alert-btn" onclick="dismissOverdueAlert()">Dismiss</button>
         </div>
         
         <!-- Subfolders Bar (shown when viewing archive folder with subfolders) -->

@@ -551,14 +551,18 @@ export async function updateVaultBadge() {
     }
 }
 
+// Session-based dismiss tracking
+let overdueAlertDismissed = false;
+
 /**
  * Check for overdue folders and show alert if needed.
  * Only shows alert on main mail view.
+ * Respects session-based dismiss state.
  */
 export async function checkOverdueFolders(showAlert = true) {
     const count = await updateVaultBadge();
     
-    if (showAlert && count > 0) {
+    if (showAlert && count > 0 && !overdueAlertDismissed) {
         const alertBar = document.getElementById('overdueAlert');
         if (alertBar) {
             document.getElementById('overdueCount').textContent = count;
@@ -580,9 +584,17 @@ export function hideOverdueAlert() {
 }
 
 /**
- * Dismiss the overdue alert.
+ * Dismiss the overdue alert for this session.
  */
 function dismissOverdueAlert() {
+    overdueAlertDismissed = true;
     hideOverdueAlert();
 }
 window.dismissOverdueAlert = dismissOverdueAlert;
+
+/**
+ * Reset the dismiss state (e.g., when new folders become overdue).
+ */
+export function resetOverdueAlertDismiss() {
+    overdueAlertDismissed = false;
+}
