@@ -158,41 +158,41 @@ Pre-release manual testing checklist. Run through before any public release.
 ## Retention Vault
 
 ### Move to Vault
-- [ ] "Move to Vault" button appears in Manage Archive view
-- [ ] Modal opens with date picker
-- [ ] Date picker allows year/month/day selection
-- [ ] Quick preset buttons work (1, 3, 5, 7, 10 years)
-- [ ] Confirm button disabled until date selected
-- [ ] Folder disappears from archive after move
-- [ ] Folder appears in Retention Vault view
+- [x] "Move to Vault" button appears in Manage Archive view
+- [x] Modal opens with date picker
+- [x] Date picker allows year/month/day selection
+- [x] Quick preset buttons work (1, 3, 5, 7, 10 years)
+- [x] Confirm button disabled until date selected
+- [x] Folder disappears from archive after move
+- [x] Folder appears in Retention Vault view
 
 ### Vault View
-- [ ] Vault icon in left rail shows overdue badge count
-- [ ] Clicking vault icon opens Retention Vault view
-- [ ] Folders listed with name, email count, delete-by date
-- [ ] Overdue folders marked with red badge
-- [ ] Search/filter works
-- [ ] Sort dropdown works (soonest, latest, name A-Z, Z-A)
+- [x] Vault icon in left rail shows overdue badge count
+- [x] Clicking vault icon opens Retention Vault view
+- [x] Folders listed with name, email count, delete-by date
+- [x] Overdue folders marked with red badge
+- [x] Search/filter works
+- [x] Sort dropdown works (soonest, latest, name A-Z, Z-A)
 
 ### Restore from Vault
-- [ ] Restore button opens destination picker
-- [ ] Can select archive root as destination
-- [ ] Can select existing folder as destination
-- [ ] Folder returns to archive after restore
-- [ ] Folder removed from vault after restore
+- [x] Restore button opens destination picker
+- [x] Can select archive root as destination
+- [x] Can select existing folder as destination
+- [x] Folder returns to archive after restore
+- [x] Folder removed from vault after restore
 
 ### Permanent Deletion
-- [ ] Delete button only appears for overdue folders
-- [ ] Confirmation dialog shows folder name and email count
-- [ ] Folder and all emails permanently deleted after confirm
-- [ ] "Delete Overdue" button deletes all overdue folders
+- [x] Delete button only appears for overdue folders
+- [x] Confirmation dialog shows folder name and email count
+- [x] Folder and all emails permanently deleted after confirm
+- [x] "Delete Overdue" button deletes all overdue folders
 
 ### Overdue Alert
-- [ ] Alert banner appears on mail view when overdue folders exist
-- [ ] Alert shows count of overdue folders
-- [ ] "View Vault" link navigates to vault
-- [ ] Dismiss button hides alert
-- [ ] Alert hidden on non-mail views (Settings, Trash, etc.)
+- [x] Alert banner appears on mail view when overdue folders exist
+- [x] Alert shows count of overdue folders
+- [x] "View Vault" button navigates to vault
+- [x] Dismiss button hides alert (session-based)
+- [x] Alert hidden on non-mail views (Settings, Trash, etc.)
 
 ---
 
@@ -364,4 +364,18 @@ Session 7b (Feb 10, MacBook, evening):
 - Polish: Progress messages improved ("Updating server...", "Trashing emails in X...")
 - Polish: Summary now action-specific ("3 trashed on server" not "3 server actions applied")
 - Remaining: Verify success message count and staged items cleared after commit
+
+Session 8 (Feb 12, Mercury):
+- Retention Vault: All tests pass
+  - Move to Vault modal with date picker and presets
+  - Vault view with folder listing, search, filter, sort
+  - Restore flow returning folders to archive
+  - Overdue badge and "Delete Overdue" button
+  - Permanent deletion confirmed (folder "Redshirt" fully purged from DB and filesystem)
+- Fixed: Date picker preset buttons font (added font-family to .date-preset-btn)
+- Fixed: Icon consistency — permanent delete now uses X icon (red) everywhere, trash can for "move to trash"
+- Fixed: Vault delete button style (btn-danger-subtle to match trash view)
+- Fixed: Overdue alert dismiss now session-based (stays dismissed until page refresh)
+- Fixed: Overdue alert "View Vault" changed from link to button with proper styling
+- Remaining: Backup & Restore sub-items, Edge Cases, Browser Compatibility
 

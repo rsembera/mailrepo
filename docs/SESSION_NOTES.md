@@ -1,30 +1,34 @@
 # MailRepo Session Notes
 
-**Date:** February 11, 2026  
-**Last Updated:** Session 35
+**Date:** February 12, 2026  
+**Last Updated:** Session 36
 
 ---
 
-## Completed Today (Session 35)
+## Completed Today (Session 36)
 
-### Feature: Retention Vault
+### Retention Vault Testing — All Pass
 
-Implemented folder-level retention system for compliance workflows — similar to EdgeCase's retention feature but simpler (no audit log, as that belongs in broader practice management).
+Full testing of the Retention Vault feature completed:
 
-**Key components:**
-- Database: `retention_date` column on folders table
-- Backend: 6 API endpoints for vault operations
-- Frontend: Date picker, vault view, move/restore modals, overdue alert
+- **Move to Vault:** Modal, date picker, presets (1/3/5/7/10 years) all working
+- **Vault View:** Listing, search, filter, sort all working
+- **Restore:** Destination picker, returns folder to archive correctly
+- **Permanent Deletion:** Confirmed folder "Redshirt" fully purged from database and filesystem
+- **Overdue Alert:** Badge count, banner, dismiss all working
 
-**Design decisions:**
-- Folder-level only (not individual emails) for simplicity
-- Entire subfolder trees move together with same retention date
-- No auto-delete — always requires manual review for compliance
-- Alert banner only on mail view to avoid noise
+**Bug fixes during testing:**
+- Date picker preset buttons using wrong font (added font-family)
+- Icon consistency: X icon (red) for permanent delete, trash can for move-to-trash
+- Vault delete button style (btn-danger-subtle to match trash)
+- Overdue alert dismiss now session-based (stays dismissed until refresh)
+- Overdue alert "View Vault" changed from link to styled button
 
 ---
 
 ## Previous Sessions Summary
+
+**Session 35:** Retention Vault feature implementation (database, API, frontend)
 
 **Session 34:** Search fixes (HTML body text indexing), sort dropdowns, Trash polish, backup/restore fixes
 
