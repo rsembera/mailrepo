@@ -33,11 +33,11 @@
         </div>
         <div class="rail-bottom">
             <div class="rail-divider"></div>
-            <button class="rail-btn" data-view="backups" title="Backup & Restore">
-                <i data-lucide="hard-drive-download"></i>
-            </button>
             <button class="rail-btn" data-view="settings" title="Settings">
                 <i data-lucide="settings"></i>
+            </button>
+            <button class="rail-btn" data-view="backups" title="Backup & Restore">
+                <i data-lucide="hard-drive-download"></i>
             </button>
             <form action="{{ url_for('auth.logout') }}" method="POST" style="margin:0;" onsubmit="window.skipBeforeUnloadWarning && window.skipBeforeUnloadWarning(); window.markLoggingOut && window.markLoggingOut()">
                 <button type="submit" class="rail-btn" title="Logout">

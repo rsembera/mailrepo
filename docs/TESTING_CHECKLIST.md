@@ -256,9 +256,9 @@ Pre-release manual testing checklist. Run through before any public release.
 
 ## Browser Compatibility
 
-- [ ] Chrome/Chromium works
-- [ ] Firefox works
-- [ ] Safari works (if on Mac)
+- [x] Chrome/Chromium works
+- [x] Firefox works
+- [x] Safari works (if on Mac)
 
 ---
 

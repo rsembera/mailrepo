@@ -74,7 +74,7 @@ def init_database():
 
 def cleanup_expired_trash():
     """
-    Permanently delete folders that have been in trash longer than the retention period.
+    Permanently delete folders and emails that have been in trash longer than the retention period.
     Called on login to clean up stale trash items.
     """
     retention_days = get_setting("trash_retention_days", "0")
@@ -97,6 +97,28 @@ def cleanup_expired_trash():
                 Database.execute("DELETE FROM folders WHERE id = ?", (folder["id"],))
             Database.commit()
             log.info(f"Trash cleanup: permanently deleted {len(expired_folders)} expired folder(s)")
+        
+        # Find emails that have been deleted longer than retention period
+        expired_emails = Database.fetchall(
+            "SELECT id, filepath FROM messages WHERE deleted_at IS NOT NULL AND deleted_at < ?",
+            (cutoff_time,)
+        )
+        
+        if expired_emails:
+            # Delete the email files and database records
+            for email in expired_emails:
+                # Delete the file
+                try:
+                    filepath = Config.get_base_path() / email["filepath"]
+                    if filepath.exists():
+                        filepath.unlink()
+                except Exception as e:
+                    log.warning(f"Could not delete file {email['filepath']}: {e}")
+                
+                # Delete the database record
+                Database.execute("DELETE FROM messages WHERE id = ?", (email["id"],))
+            Database.commit()
+            log.info(f"Trash cleanup: permanently deleted {len(expired_emails)} expired email(s)")
     except Exception as e:
         log.warning(f"Trash cleanup error: {e}")
 
