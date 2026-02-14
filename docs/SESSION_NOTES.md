@@ -1,43 +1,39 @@
 # MailRepo Session Notes
 
 **Date:** February 13, 2026  
-**Last Updated:** Session 37
+**Last Updated:** Session 38
 
 ---
 
-## Completed Today (Session 37)
+## Completed Today (Session 38)
 
-### Testing Checklist Progress
+### Testing Checklist Progress (Mercury, evening)
 
-Continued manual testing on MacBook Air M4:
+Continued from Session 37 (MacBook lunch session).
 
-- **Review view:** Unstage destination group, Unstage All — both pass
-- **Commit flow:** Progress modal, success message, staged items cleared — all pass
-- **Source actions:** Trash on server tested and working
-- **Trash auto-purge:** Now cleans up emails too (was folders only)
-- **Browser compatibility:** Chrome, Firefox, Safari — all pass
+**Backup & Restore - All complete:**
+- Backup location setting works (tested with Dropbox)
+- Cloud folder detection works
+- Post-backup command executes (fixed: needed `shell=True` for redirects/pipes)
+- Automatic backup on logout - pass
+- Backup on shutdown (Ctrl+C) - pass
+- Retention setting changes - pass
+- Old backups cleaned up according to policy - pass
 
 **Bug fixes:**
-- Expanded source groups in Review now clear on unstage/commit
-- Duplicate check excludes trashed emails (was blocking re-commit)
-- Added email cleanup to trash auto-purge function
-
-**Refactoring:**
-- Fixed circular dependency between staging.js and folder-selection.js
-- Moved updateStagedBadge to state.js with setter pattern
-
-**UI polish:**
-- Swapped Settings and Backup icon order in left rail
+- Post-backup command now uses `shell=True` to support redirects and pipes
+- Backup listing now uses stored location per backup (shows backups from any location)
+- `get_restore_points()` also updated to use stored locations
 
 ---
 
 ## Previous Sessions Summary
 
+**Session 37:** Review/Commit testing, trash auto-purge (added email cleanup), browser compatibility, circular dependency fix (staging.js ↔ folder-selection.js)
+
 **Session 36:** Retention Vault testing complete, icon consistency fixes, alert dismiss improvements
 
 **Session 35:** Retention Vault feature implementation (database, API, frontend)
-
-**Session 34:** Search fixes (HTML body text indexing), sort dropdowns, Trash polish, backup/restore fixes
 
 **Session 32:** Progress bar fix, session security fix (Safari/Firefox double-login race condition)
 

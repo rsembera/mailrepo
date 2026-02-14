@@ -216,20 +216,20 @@ Pre-release manual testing checklist. Run through before any public release.
 - [x] Backup location setting works
 - [x] Cloud folder detection works (iCloud, Dropbox, etc.)
 - [x] Post-backup command executes (if configured)
-- [ ] Automatic backup on logout (based on frequency setting)
-- [ ] Backup on shutdown works
+- [x] Automatic backup on logout (based on frequency setting)
+- [x] Backup on shutdown works
 
 ### Restore
 - [x] Can select restore point
 - [x] Restore confirmation shows details
 - [x] Pre-restore safety backup created
 - [x] Restore completes successfully
-- [ ] Data matches backup state
+- [x] Data matches backup state
 - [x] Can cancel pending restore
 
 ### Retention
-- [ ] Retention setting can be changed
-- [ ] Old backups cleaned up according to policy
+- [x] Retention setting can be changed
+- [x] Old backups cleaned up according to policy
 
 ---
 
@@ -392,4 +392,15 @@ Session 9 (Feb 13, MacBook):
 - UI: Swapped Settings and Backup icon order in left rail
 - Refactor: Fixed circular dependency staging.js ↔ folder-selection.js (moved updateStagedBadge to state.js)
 - Remaining: Backup & Restore sub-items, Edge Cases
+
+Session 10 (Feb 13, Mercury evening):
+- Backup location setting works (Dropbox)
+- Cloud folder detection works
+- Post-backup command: Fixed to use shell=True for redirects/pipes
+- Automatic backup on logout — pass
+- Backup on shutdown (Ctrl+C) — pass
+- Fixed: Backup listing now uses stored location per backup
+- Fixed: get_restore_points() also uses stored locations
+- Retention cleanup — pass (backdated entire chain to test)
+- Remaining: Edge Cases only
 
