@@ -163,6 +163,17 @@ h1, h2, h3, h4, h5, h6 {
     line-height: 1.3;
 }
 
+/* Prevent text selection on interactive UI elements */
+.sidebar,
+.email-list,
+.folder-tree,
+.file-picker-list,
+.tree-item,
+[role="listbox"],
+[role="option"] {
+    user-select: none;
+}
+
 a {
     color: var(--color-primary);
     text-decoration: none;

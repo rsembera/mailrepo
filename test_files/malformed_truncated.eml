@@ -1,0 +1,18 @@
+From: test@example.com
+To: recipient@example.com
+Subject: Truncated MIME
+Message-ID: <truncated-001@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="BOUNDARY123"
+
+--BOUNDARY123
+Content-Type: text/plain
+
+This is the body.
+
+--BOUNDARY123
+Content-Type: application/octet-stream
+Content-Disposition: attachment; filename="broken.bin"
+Content-Transfer-Encoding: base64
+
+SGVsbG8gV29ybGQ

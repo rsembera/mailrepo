@@ -1,0 +1,7 @@
+From: test@example.com
+To: recipient@example.com
+Subject: Bad Encoding Test
+Message-ID: <bad-encoding-001@example.com>
+Content-Type: text/plain; charset=utf-8
+
+Here is some text with invalid UTF-8: ÿş and more € garbage.

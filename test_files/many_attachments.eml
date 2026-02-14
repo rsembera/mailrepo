@@ -1,0 +1,215 @@
+Content-Type: multipart/mixed; boundary="===============3963723846434239893=="
+MIME-Version: 1.0
+Subject: Test: Many Attachments (25 files)
+From: test@example.com
+To: recipient@example.com
+Date: Sat, 14 Feb 2026 18:24:13 +0000
+Message-ID: <many-attachments-test-001@example.com>
+
+--===============3963723846434239893==
+Content-Type: text/plain; charset="us-ascii"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+
+This email has 25 small attachments to test handling of many files.
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_01.txt"
+
+Q29udGVudCBvZiBmaWxlIDE=
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_02.txt"
+
+Q29udGVudCBvZiBmaWxlIDI=
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_03.txt"
+
+Q29udGVudCBvZiBmaWxlIDM=
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_04.txt"
+
+Q29udGVudCBvZiBmaWxlIDQ=
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_05.txt"
+
+Q29udGVudCBvZiBmaWxlIDU=
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_06.txt"
+
+Q29udGVudCBvZiBmaWxlIDY=
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_07.txt"
+
+Q29udGVudCBvZiBmaWxlIDc=
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_08.txt"
+
+Q29udGVudCBvZiBmaWxlIDg=
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_09.txt"
+
+Q29udGVudCBvZiBmaWxlIDk=
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_10.txt"
+
+Q29udGVudCBvZiBmaWxlIDEw
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_11.txt"
+
+Q29udGVudCBvZiBmaWxlIDEx
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_12.txt"
+
+Q29udGVudCBvZiBmaWxlIDEy
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_13.txt"
+
+Q29udGVudCBvZiBmaWxlIDEz
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_14.txt"
+
+Q29udGVudCBvZiBmaWxlIDE0
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_15.txt"
+
+Q29udGVudCBvZiBmaWxlIDE1
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_16.txt"
+
+Q29udGVudCBvZiBmaWxlIDE2
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_17.txt"
+
+Q29udGVudCBvZiBmaWxlIDE3
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_18.txt"
+
+Q29udGVudCBvZiBmaWxlIDE4
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_19.txt"
+
+Q29udGVudCBvZiBmaWxlIDE5
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_20.txt"
+
+Q29udGVudCBvZiBmaWxlIDIw
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_21.txt"
+
+Q29udGVudCBvZiBmaWxlIDIx
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_22.txt"
+
+Q29udGVudCBvZiBmaWxlIDIy
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_23.txt"
+
+Q29udGVudCBvZiBmaWxlIDIz
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_24.txt"
+
+Q29udGVudCBvZiBmaWxlIDI0
+
+--===============3963723846434239893==
+Content-Type: application/octet-stream
+MIME-Version: 1.0
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="file_25.txt"
+
+Q29udGVudCBvZiBmaWxlIDI1
+
+--===============3963723846434239893==--
