@@ -213,9 +213,9 @@ Pre-release manual testing checklist. Run through before any public release.
 - [x] Backup Now creates backup
 - [x] Backup appears in restore points list
 - [x] Full vs incremental decided automatically
-- [ ] Backup location setting works
-- [ ] Cloud folder detection works (iCloud, Dropbox, etc.)
-- [ ] Post-backup command executes (if configured)
+- [x] Backup location setting works
+- [x] Cloud folder detection works (iCloud, Dropbox, etc.)
+- [x] Post-backup command executes (if configured)
 - [ ] Automatic backup on logout (based on frequency setting)
 - [ ] Backup on shutdown works
 

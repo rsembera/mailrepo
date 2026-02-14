@@ -136,7 +136,8 @@ def list_backups():
     """List all available backups."""
     from utils import backup
     
-    backups_list = backup.list_backups()
+    location = get_setting('backup_location', '')
+    backups_list = backup.list_backups(location if location else None)
     return jsonify({'backups': backups_list})
 
 

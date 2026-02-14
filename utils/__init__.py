@@ -1,15 +1,14 @@
 # Utils package
 
-import shlex
 import subprocess
 
 
 def run_shell_command(command: str, timeout: int = 300) -> tuple[bool, str]:
     """
-    Safely run a shell command without shell=True injection risk.
+    Run a shell command.
     
     Args:
-        command: Command string to run
+        command: Command string to run (supports pipes, redirects, etc.)
         timeout: Timeout in seconds (default 300)
         
     Returns:
@@ -19,13 +18,9 @@ def run_shell_command(command: str, timeout: int = 300) -> tuple[bool, str]:
         return False, "No command provided"
     
     try:
-        # Parse command safely - shlex.split handles quotes and escapes properly
-        args = shlex.split(command)
-        if not args:
-            return False, "Empty command after parsing"
-        
         result = subprocess.run(
-            args,
+            command,
+            shell=True,
             timeout=timeout,
             capture_output=True,
             text=True
@@ -39,10 +34,5 @@ def run_shell_command(command: str, timeout: int = 300) -> tuple[bool, str]:
             
     except subprocess.TimeoutExpired:
         return False, f"Command timed out after {timeout} seconds"
-    except FileNotFoundError as e:
-        return False, f"Command not found: {e}"
-    except ValueError as e:
-        # shlex.split can raise ValueError on malformed strings
-        return False, f"Invalid command syntax: {e}"
     except Exception as e:
         return False, f"Command error: {e}"

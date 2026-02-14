@@ -39,6 +39,12 @@ def get_backups_dir():
     return Config.get_backup_path()
 
 
+def get_backup_path_for_entry(backup_entry: dict) -> Path:
+    """Get the path where a backup file should be located based on its manifest entry."""
+    backup_dir = Path(backup_entry.get('backup_dir', '')) if backup_entry.get('backup_dir') else get_backups_dir()
+    return backup_dir / backup_entry['filename']
+
+
 def get_restore_staging_dir():
     return get_data_root() / '.restore_staging'
 
@@ -400,18 +406,21 @@ def verify_backup(backup_path):
         raise ValueError("Backup file is corrupted")
 
 
-def list_backups():
+def list_backups(location: str | Path | None = None):
     """
     List all available backups with details.
     Returns list sorted by date (newest first).
+    
+    Args:
+        location: Ignored (kept for API compatibility). Each backup's
+                  stored location is used to check if file exists.
     """
     manifest = load_manifest()
     backups = []
     
     for backup in manifest['backups']:
-        # Check if file still exists
-        # Always use current backups directory (app may have moved)
-        backup_path = get_backups_dir() / backup['filename']
+        # Use the location where this backup was actually saved
+        backup_path = get_backup_path_for_entry(backup)
         
         if backup_path.exists():
             backups.append({
@@ -465,8 +474,7 @@ def get_restore_points():
         # Handle pre_restore backups (standalone, not part of a chain)
         if chain_id == 'pre_restore' and chain.get('pre_restore'):
             backup = chain['pre_restore']
-            # Always use current backups directory (app may have moved)
-            backup_path = get_backups_dir() / backup['filename']
+            backup_path = get_backup_path_for_entry(backup)
             if backup_path.exists():
                 # Format date with time
                 created = datetime.fromisoformat(backup['created_at'])
@@ -496,8 +504,7 @@ def get_restore_points():
         
         # Full backup as restore point
         full_backup = chain['full']
-        # Always use current backups directory (app may have moved)
-        backup_path = get_backups_dir() / full_backup['filename']
+        backup_path = get_backup_path_for_entry(full_backup)
         
         if backup_path.exists():
             # Format date with time
@@ -519,8 +526,7 @@ def get_restore_points():
         # Each incremental in the chain is also a restore point
         files_needed = [str(backup_path)]
         for i, incr in enumerate(chain['incrementals']):
-            # Always use current backups directory (app may have moved)
-            incr_path = get_backups_dir() / incr['filename']
+            incr_path = get_backup_path_for_entry(incr)
             if incr_path.exists():
                 files_needed = files_needed + [str(incr_path)]
                 
