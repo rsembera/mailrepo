@@ -76,11 +76,19 @@
 - CSRF protection - not needed for localhost-only app
 - Mbox sequential scan - complex fix, rare use case
 
+### Right-Click Context Menu
+
+- Added context menu for folder actions in sidebar (right-click any folder)
+- Actions: Rename, Move, Move to Retention Vault, Export as ZIP, Delete
+- Edge detection keeps menu within viewport bounds
+- Uses custom fonts from theme (not system defaults)
+- Works from Mail view - no need to switch to Manage Archive
+
 ---
 
 ## Previous Sessions Summary
 
-**Session 41:** Apple Mail fixes, retention vault fixes, account editing, restore UX, S/MIME badges, folder pickers, code review fixes
+**Session 41:** Apple Mail fixes, retention vault fixes, account editing, restore UX, S/MIME badges, folder pickers, code review fixes, right-click context menu
 
 **Session 40:** Empty state fix, Waitress server, backup log improvements
 
