@@ -11,7 +11,7 @@
 
 import { escapeHtml } from '../utils.js';
 import { state, confirmNavigation } from '../state.js';
-import { initContextMenu, showFolderContextMenu } from './context-menu.js';
+import { initContextMenu, showFolderContextMenu, showArchiveHeaderContextMenu } from './context-menu.js';
 
 // Callbacks set via init
 let onFolderSelect = null;
@@ -32,6 +32,12 @@ export function initSidebar(config = {}) {
     
     initSidebarResize();
     initContextMenu();
+    
+    // Right-click on Archive header to add root folder
+    const archiveHeader = document.querySelector('.section-header[data-section="archive"]');
+    if (archiveHeader) {
+        archiveHeader.addEventListener('contextmenu', showArchiveHeaderContextMenu);
+    }
 }
 
 /**
@@ -295,6 +301,13 @@ export function refreshSidebarFolders() {
     const archiveSection = document.getElementById('archiveSection');
     if (!archiveSection) return;
     
+    // Save expanded folder IDs before rebuilding
+    const expandedIds = new Set();
+    archiveSection.querySelectorAll('.tree-item-row.expanded').forEach(row => {
+        const id = row.dataset.id;
+        if (id) expandedIds.add(id);
+    });
+    
     archiveSection.querySelectorAll('.folder-item').forEach(el => el.remove());
     archiveSection.querySelector('.sidebar-empty')?.remove();
     
@@ -325,6 +338,16 @@ export function refreshSidebarFolders() {
             }
         });
     }
+    
+    // Restore expanded state
+    expandedIds.forEach(id => {
+        const row = archiveSection.querySelector(`.tree-item-row[data-id="${id}"]`);
+        if (row) {
+            row.classList.add('expanded');
+            const childContainer = row.closest('.folder-item')?.querySelector('.tree-children');
+            if (childContainer) childContainer.style.display = 'block';
+        }
+    });
     
     const countEl = document.getElementById('folderCount');
     if (countEl) countEl.textContent = topLevel.length;

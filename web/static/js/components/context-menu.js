@@ -54,6 +54,7 @@ export function showFolderContextMenu(e, folderId, folder) {
     
     // Build menu items
     const items = [
+        { icon: 'folder-plus', label: 'New Subfolder', action: 'subfolder' },
         { icon: 'pencil', label: 'Rename', action: 'rename' },
         { icon: 'folder-output', label: 'Move', action: 'move' },
         { divider: true },
@@ -151,6 +152,15 @@ export function hideContextMenu() {
  */
 async function handleAction(action, folderId, folder) {
     switch (action) {
+        case 'subfolder':
+            if (typeof window.createSubfolder === 'function') {
+                window.createSubfolder(folderId);
+            } else {
+                const { createSubfolder } = await import('../views/folder-mgmt.js');
+                createSubfolder(folderId);
+            }
+            break;
+            
         case 'rename':
             if (typeof window.renameFolder === 'function') {
                 window.renameFolder(folderId);
@@ -197,4 +207,59 @@ async function handleAction(action, folderId, folder) {
             }
             break;
     }
+}
+
+
+/**
+ * Show context menu for the Archive section header.
+ * @param {Event} e - The contextmenu event
+ */
+export function showArchiveHeaderContextMenu(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!menuElement) initContextMenu();
+    
+    currentFolderId = null;
+    
+    const items = [
+        { icon: 'folder-plus', label: 'New Folder', action: 'newfolder' },
+    ];
+    
+    let html = '';
+    for (const item of items) {
+        html += `
+            <div class="context-menu-item" data-action="${item.action}">
+                <i data-lucide="${item.icon}"></i>
+                <span>${item.label}</span>
+            </div>
+        `;
+    }
+    
+    menuElement.innerHTML = html;
+    
+    // Add click handlers
+    menuElement.querySelectorAll('.context-menu-item').forEach(el => {
+        el.addEventListener('click', async () => {
+            const action = el.dataset.action;
+            hideContextMenu();
+            if (action === 'newfolder') {
+                if (typeof window.createSubfolder === 'function') {
+                    window.createSubfolder(null);
+                } else {
+                    const { createSubfolder } = await import('../views/folder-mgmt.js');
+                    createSubfolder(null);
+                }
+            }
+        });
+    });
+    
+    // Render icons
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    
+    // Position menu with edge detection
+    positionMenu(e.clientX, e.clientY);
+    
+    // Show menu
+    menuElement.classList.add('visible');
 }

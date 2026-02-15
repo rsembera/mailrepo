@@ -79,10 +79,12 @@
 ### Right-Click Context Menu
 
 - Added context menu for folder actions in sidebar (right-click any folder)
-- Actions: Rename, Move, Move to Retention Vault, Export as ZIP, Delete
+- Actions: New Subfolder, Rename, Move, Move to Retention Vault, Export as ZIP, Delete
+- Right-click Archive header to create root-level folder
 - Edge detection keeps menu within viewport bounds
 - Uses custom fonts from theme (not system defaults)
 - Works from Mail view - no need to switch to Manage Archive
+- Preserves folder expanded state after operations
 
 ---
 

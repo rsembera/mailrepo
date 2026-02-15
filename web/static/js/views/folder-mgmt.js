@@ -307,7 +307,9 @@ export async function renameFolder(folderId) {
 window.renameFolder = renameFolder;
 
 export async function createSubfolder(parentId) {
-    const name = await showPrompt('New Subfolder Name', '', { placeholder: 'e.g., 2025 Correspondence' });
+    const isRoot = parentId === null || parentId === undefined;
+    const title = isRoot ? 'New Folder' : 'New Subfolder';
+    const name = await showPrompt(title, '', { placeholder: 'e.g., 2025 Correspondence' });
     
     // Validate folder name
     if (name === null) return; // User cancelled
@@ -339,7 +341,13 @@ export async function createSubfolder(parentId) {
         
         const data = await response.json();
         state.folders.push(data.folder);
-        showFolderManagementView();
+        
+        // Only refresh folder management view if we're on it
+        const emailList = document.getElementById('emailList');
+        if (emailList && emailList.querySelector('.folder-mgmt-list')) {
+            showFolderManagementView();
+        }
+        
         refreshSidebarFolders();
     } catch (error) {
         console.error('Error creating subfolder:', error);
