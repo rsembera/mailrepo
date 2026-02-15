@@ -9,6 +9,7 @@ Handles parsing of various email formats:
 """
 
 import os
+import re
 import mailbox
 import email as email_lib
 from email.header import decode_header
@@ -224,7 +225,6 @@ def extract_body_text(raw_email: bytes) -> str:
         
         def strip_html(html):
             """Strip HTML tags and entities, adding spaces for proper tokenization."""
-            import re
             text = re.sub(r'<style[^>]*>[\s\S]*?</style>', '', html, flags=re.IGNORECASE)
             text = re.sub(r'<script[^>]*>[\s\S]*?</script>', '', text, flags=re.IGNORECASE)
             text = re.sub(r'<[^>]+>', ' ', text)

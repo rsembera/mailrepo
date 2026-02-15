@@ -7,6 +7,7 @@ Handles IMAP connections for any email provider.
 import email
 import imaplib
 import json
+import re
 import ssl
 from email.header import decode_header
 from email.utils import parseaddr, parsedate_to_datetime
@@ -144,7 +145,6 @@ class IMAP:
                 decoded = item.decode() if isinstance(item, bytes) else item
                 
                 # Extract flags
-                import re
                 flags_match = re.match(r'\(([^)]*)\)', decoded)
                 flags = flags_match.group(1).split() if flags_match else []
                 noselect = any(f.lower() == '\\noselect' for f in flags)
@@ -193,7 +193,6 @@ class IMAP:
                 if status == 'OK' and status_data and status_data[0]:
                     # Parse response like: b'"INBOX" (UIDVALIDITY 12345)'
                     response = status_data[0].decode() if isinstance(status_data[0], bytes) else status_data[0]
-                    import re
                     match = re.search(r'UIDVALIDITY\s+(\d+)', response)
                     if match:
                         uidvalidity = int(match.group(1))
