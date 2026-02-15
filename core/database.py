@@ -193,12 +193,30 @@ class Database:
         """
         Run database migrations.
         
+        Each migration is a function that takes a connection and applies changes
+        for that version. Migrations run sequentially from from_version+1 to to_version.
+        
         Args:
             conn: Database connection.
             from_version: Current schema version.
             to_version: Target schema version.
         """
-        pass
+        migrations = {
+            # Example migration pattern:
+            # 6: cls._migrate_to_v6,
+            # 7: cls._migrate_to_v7,
+        }
+        
+        for version in range(from_version + 1, to_version + 1):
+            if version in migrations:
+                migrations[version](conn)
+    
+    # Migration functions - add new ones as needed
+    # @classmethod
+    # def _migrate_to_v6(cls, conn: sqlite3.Connection) -> None:
+    #     """Migration to schema version 6."""
+    #     conn.execute("ALTER TABLE folders ADD COLUMN new_field TEXT")
+    #     # etc.
 
 
 # SQL schema definition
