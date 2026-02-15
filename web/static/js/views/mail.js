@@ -170,8 +170,8 @@ export async function loadFolderEmails(folderId) {
         if (contextTitle) contextTitle.textContent = folder?.name || 'Archive';
         if (contextMeta) contextMeta.textContent = `${state.emails.length} archived emails`;
         
-        // Check for subfolders
-        const subfolders = state.folders.filter(f => f.parent_id == folderId && !f.deleted_at);
+        // Check for subfolders (exclude deleted and retention vault folders)
+        const subfolders = state.folders.filter(f => f.parent_id == folderId && !f.deleted_at && !f.retention_date);
         
         // Render subfolders + emails
         renderFolderContents(folderId, subfolders);

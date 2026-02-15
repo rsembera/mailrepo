@@ -37,7 +37,7 @@ import { state } from '../state.js';
  */
 export function renderFolderTree(container, options = {}) {
     const opts = {
-        filter: f => !f.deleted_at,
+        filter: f => !f.deleted_at && !f.retention_date,
         showChevrons: true,
         showColorDots: true,
         showAddButtons: false,

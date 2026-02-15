@@ -82,13 +82,18 @@ def get_folder(folder_id):
 @api_bp.route("/folders/<int:folder_id>", methods=["DELETE"])
 def delete_folder(folder_id):
     """Soft-delete a folder (move to trash)."""
-    folder = Database.fetchone("SELECT id FROM folders WHERE id = ?", (folder_id,))
+    folder = Database.fetchone("SELECT id, retention_date FROM folders WHERE id = ?", (folder_id,))
     if not folder:
         return jsonify({"error": "Folder not found"}), 404
+    
+    # Don't allow deleting folders that are in the retention vault
+    if folder["retention_date"]:
+        return jsonify({"error": "Cannot delete folders in the Retention Vault"}), 400
     
     now = int(time.time())
     
     # Recursively soft-delete folder and all descendants
+    # (Retention vault folders are already detached, so they won't be affected)
     def soft_delete_recursive(parent_id):
         Database.execute(
             "UPDATE folders SET deleted_at = ? WHERE id = ?",
@@ -275,6 +280,7 @@ def permanently_delete_folder(folder_id):
         return jsonify({"error": "Folder must be in trash before permanent deletion"}), 400
     
     # Collect all descendant folder IDs recursively
+    # (Retention vault folders are already detached when moved to vault, so they won't be included)
     def collect_descendants(parent_id):
         ids = [parent_id]
         children = Database.fetchall(
@@ -463,19 +469,27 @@ def move_to_vault(folder_id):
         return jsonify({"error": "Invalid retention date"}), 400
     
     # Set retention_date on this folder and all descendants
-    def set_retention_recursive(parent_id):
-        Database.execute(
-            "UPDATE folders SET retention_date = ? WHERE id = ?",
-            (retention_date, parent_id)
-        )
+    # Also detach from parent (set parent_id = NULL) so it's not affected by parent deletion
+    def set_retention_recursive(parent_id, is_root=False):
+        if is_root:
+            # Detach the root folder being moved to vault from its parent
+            Database.execute(
+                "UPDATE folders SET retention_date = ?, parent_id = NULL WHERE id = ?",
+                (retention_date, parent_id)
+            )
+        else:
+            Database.execute(
+                "UPDATE folders SET retention_date = ? WHERE id = ?",
+                (retention_date, parent_id)
+            )
         children = Database.fetchall(
             "SELECT id FROM folders WHERE parent_id = ? AND deleted_at IS NULL",
             (parent_id,)
         )
         for child in children:
-            set_retention_recursive(child["id"])
+            set_retention_recursive(child["id"], is_root=False)
     
-    set_retention_recursive(folder_id)
+    set_retention_recursive(folder_id, is_root=True)
     Database.commit()
     
     return jsonify({"success": True})

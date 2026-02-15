@@ -456,9 +456,9 @@ export async function deleteFolder(folderId) {
     const folder = state.folders.find(f => f.id == folderId);
     if (!folder) return;
     
-    // Count ALL descendants recursively
+    // Count ALL descendants recursively (excluding retention vault folders)
     function countDescendants(parentId) {
-        const children = state.folders.filter(f => f.parent_id == parentId && !f.deleted_at);
+        const children = state.folders.filter(f => f.parent_id == parentId && !f.deleted_at && !f.retention_date);
         let count = children.length;
         children.forEach(c => count += countDescendants(c.id));
         return count;
@@ -483,9 +483,9 @@ export async function deleteFolder(folderId) {
             return;
         }
         
-        // Mark folder and ALL descendants as deleted
+        // Mark folder and ALL descendants as deleted (excluding retention vault folders)
         function markDeleted(parentId) {
-            const children = state.folders.filter(f => f.parent_id == parentId);
+            const children = state.folders.filter(f => f.parent_id == parentId && !f.retention_date);
             children.forEach(c => {
                 c.deleted_at = Date.now() / 1000;
                 markDeleted(c.id);

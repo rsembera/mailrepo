@@ -242,9 +242,9 @@ function renderFoldersTab(allTrashedFolders) {
 function renderTrashItem(folder) {
     const deletedDate = new Date(folder.deleted_at * 1000);
     
-    // Count ALL descendants recursively
+    // Count ALL descendants recursively (excluding retention vault folders)
     function countDescendants(parentId) {
-        const children = state.folders.filter(f => f.parent_id == parentId);
+        const children = state.folders.filter(f => f.parent_id == parentId && !f.retention_date);
         let count = children.length;
         children.forEach(c => count += countDescendants(c.id));
         return count;
@@ -504,9 +504,9 @@ export async function permanentlyDeleteFolder(folderId) {
     const folder = state.folders.find(f => f.id == folderId);
     if (!folder) return;
     
-    // Count ALL descendants recursively
+    // Count ALL descendants recursively (excluding retention vault folders)
     function countDescendants(parentId) {
-        const children = state.folders.filter(f => f.parent_id == parentId);
+        const children = state.folders.filter(f => f.parent_id == parentId && !f.retention_date);
         let count = children.length;
         children.forEach(c => count += countDescendants(c.id));
         return count;
