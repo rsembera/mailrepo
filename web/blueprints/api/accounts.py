@@ -92,6 +92,70 @@ def create_account():
     }), 201
 
 
+@api_bp.route("/accounts/<int:account_id>", methods=["PATCH"])
+def update_account(account_id):
+    """Update an existing IMAP email account."""
+    account = Database.fetchone(
+        "SELECT id, name, email, credentials_encrypted FROM accounts WHERE id = ?",
+        (account_id,)
+    )
+    if not account:
+        return jsonify({"error": "Account not found"}), 404
+    
+    data = request.get_json()
+    
+    name = data.get("name", "").strip()
+    email_addr = data.get("email", "").strip()
+    password = data.get("password", "")  # Empty means don't change
+    host = data.get("host", "").strip()
+    port = int(data.get("port", 993))
+    use_ssl = data.get("use_ssl", True)
+
+    if not name:
+        return jsonify({"error": "Account name is required"}), 400
+    if not email_addr:
+        return jsonify({"error": "Email address is required"}), 400
+    
+    # If password provided, update credentials; otherwise keep existing
+    if password:
+        if not host:
+            detected = IMAP.detect_server(email_addr)
+            if detected:
+                host, port = detected
+            else:
+                return jsonify({
+                    "error": "Could not auto-detect IMAP server. Please enter server details manually."
+                }), 400
+        
+        # Test connection with new credentials
+        test_result = IMAP.test_connection(email_addr, password, host, port, use_ssl)
+        if not test_result["success"]:
+            return jsonify({"error": test_result["message"]}), 400
+        
+        # Save new credentials
+        IMAP.save_credentials(account_id, email_addr, password, host, port, use_ssl)
+        message = test_result["message"]
+    else:
+        message = "Account updated (password unchanged)"
+    
+    # Update account name and email
+    Database.execute(
+        "UPDATE accounts SET name = ?, email = ? WHERE id = ?",
+        (name, email_addr, account_id)
+    )
+    Database.commit()
+    
+    return jsonify({
+        "account": {
+            "id": account_id,
+            "name": name,
+            "email": email_addr,
+            "provider": "imap",
+        },
+        "message": message,
+    })
+
+
 @api_bp.route("/accounts/<int:account_id>/test", methods=["POST"])
 def test_account_connection(account_id):
     """Test connection to an existing IMAP account."""

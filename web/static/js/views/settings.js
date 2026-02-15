@@ -754,10 +754,13 @@ async function loadAccounts() {
                         </div>
                     </div>
                     <div class="account-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="editAccount(${account.id}, '${escapeHtml(account.name).replace(/'/g, "\\'")}', '${escapeHtml(account.email || '').replace(/'/g, "\\'")}')" title="Edit account">
+                            <i data-lucide="pencil"></i>
+                        </button>
                         <button class="btn btn-secondary btn-sm" onclick="testAccount(${account.id})" title="Test connection">
                             <i data-lucide="wifi"></i>
                         </button>
-                        <button class="btn btn-danger btn-sm" onclick="deleteAccount(${account.id})">
+                        <button class="btn btn-danger btn-sm" onclick="deleteAccount(${account.id})" title="Delete account">
                             <i data-lucide="trash-2"></i>
                         </button>
                     </div>
@@ -792,12 +795,21 @@ function escapeHtml(str) {
  * Open the Add Account modal.
  */
 window.openAddAccountModal = function() {
+    editingAccountId = null;  // Ensure we're in "add" mode
     const modal = document.getElementById('addAccountModal');
     if (modal) {
+        // Reset modal title and button
+        const title = modal.querySelector('.modal-header h3');
+        if (title) title.textContent = 'Add Email Account';
+        
+        const btn = document.getElementById('createAccountBtn');
+        if (btn) btn.textContent = 'Add Account';
+        
         // Clear form
         document.getElementById('accountName').value = '';
         document.getElementById('accountEmail').value = '';
         document.getElementById('accountPassword').value = '';
+        document.getElementById('accountPassword').placeholder = '';
         document.getElementById('imapHost').value = '';
         document.getElementById('imapPort').value = '993';
         document.getElementById('imapSsl').checked = true;
@@ -873,18 +885,71 @@ window.deleteAccount = async function(accountId) {
     }
 };
 
+/**
+ * Edit an existing account.
+ */
+let editingAccountId = null;
+
+window.editAccount = function(accountId, name, email) {
+    editingAccountId = accountId;
+    const modal = document.getElementById('addAccountModal');
+    if (modal) {
+        // Update modal title
+        const title = modal.querySelector('.modal-header h3');
+        if (title) title.textContent = 'Edit Email Account';
+        
+        // Update button text
+        const btn = document.getElementById('createAccountBtn');
+        if (btn) btn.textContent = 'Save Changes';
+        
+        // Fill in existing values
+        document.getElementById('accountName').value = name;
+        document.getElementById('accountEmail').value = email;
+        document.getElementById('accountPassword').value = '';  // Don't show password
+        document.getElementById('accountPassword').placeholder = 'Leave blank to keep current';
+        document.getElementById('imapHost').value = '';
+        document.getElementById('imapPort').value = '993';
+        document.getElementById('imapSsl').checked = true;
+        
+        // Collapse advanced settings
+        const details = modal.querySelector('.advanced-settings');
+        if (details) details.removeAttribute('open');
+        
+        modal.classList.add('active');
+        document.getElementById('accountName').focus();
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+};
+
+/**
+ * Reset modal to "Add" mode when closing.
+ */
+function resetAccountModal() {
+    editingAccountId = null;
+    const modal = document.getElementById('addAccountModal');
+    if (modal) {
+        const title = modal.querySelector('.modal-header h3');
+        if (title) title.textContent = 'Add Email Account';
+        
+        const btn = document.getElementById('createAccountBtn');
+        if (btn) btn.textContent = 'Add Account';
+        
+        document.getElementById('accountPassword').placeholder = '';
+    }
+}
+
 // Set up Create Account button handler
 document.addEventListener('DOMContentLoaded', () => {
     const createBtn = document.getElementById('createAccountBtn');
     if (createBtn) {
-        createBtn.addEventListener('click', createAccount);
+        createBtn.addEventListener('click', saveAccount);
     }
 });
 
 /**
- * Create a new account from the modal form.
+ * Create or update an account from the modal form.
  */
-async function createAccount() {
+async function saveAccount() {
     const { showAlert } = await import('../modals.js');
     const name = document.getElementById('accountName').value.trim();
     const email = document.getElementById('accountEmail').value.trim();
@@ -893,31 +958,37 @@ async function createAccount() {
     const port = document.getElementById('imapPort').value;
     const ssl = document.getElementById('imapSsl').checked;
     
-    if (!name || !email || !password) {
+    // For new accounts, password is required; for edits, it's optional
+    if (!name || !email || (!editingAccountId && !password)) {
         showAlert('Missing Fields', 'Please fill in all required fields');
         return;
     }
     
     try {
-        const response = await fetch('/api/accounts', {
-            method: 'POST',
+        const isEdit = !!editingAccountId;
+        const url = isEdit ? `/api/accounts/${editingAccountId}` : '/api/accounts';
+        const method = isEdit ? 'PATCH' : 'POST';
+        
+        const response = await fetch(url, {
+            method,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, email, password, host, port: parseInt(port), ssl })
+            body: JSON.stringify({ name, email, password, host, port: parseInt(port), use_ssl: ssl })
         });
         
         const data = await response.json();
         
         if (response.ok) {
             closeModal('addAccountModal');
+            resetAccountModal();
             loadAccounts();
             // Refresh sidebar
             const event = new CustomEvent('accountsChanged');
             window.dispatchEvent(event);
         } else {
-            showAlert('Error', data.error || 'Failed to create account');
+            showAlert('Error', data.error || `Failed to ${isEdit ? 'update' : 'create'} account`);
         }
     } catch (e) {
-        showAlert('Error', 'Failed to create account');
+        showAlert('Error', `Failed to ${editingAccountId ? 'update' : 'create'} account`);
     }
 }
 
@@ -927,6 +998,11 @@ async function createAccount() {
 function closeModal(id) {
     const modal = document.getElementById(id);
     if (modal) modal.classList.remove('active');
+    
+    // Reset account modal when closing
+    if (id === 'addAccountModal') {
+        resetAccountModal();
+    }
 }
 
 // Make closeModal available globally
