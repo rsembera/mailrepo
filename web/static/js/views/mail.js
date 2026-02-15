@@ -846,8 +846,7 @@ function renderHtmlBody(container, html, allowRemote = false) {
             ${cspMeta}
             <style>
                 html, body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-                       font-size: 14px; line-height: 1.5; color: #333; margin: 0; padding: 0;
-                       overflow: hidden; }
+                       font-size: 14px; line-height: 1.5; color: #333; margin: 0; padding: 0; }
                 img { max-width: 100%; height: auto; }
                 a { color: #1a73e8; }
                 @media print {
@@ -863,12 +862,27 @@ function renderHtmlBody(container, html, allowRemote = false) {
     
     // Adjust iframe height to fit content (let parent container scroll)
     const adjustHeight = () => {
-        const height = doc.documentElement.scrollHeight || doc.body.scrollHeight;
-        iframe.style.height = height + 'px';
+        try {
+            const body = doc.body;
+            const html = doc.documentElement;
+            // Get the maximum of various height measurements
+            const height = Math.max(
+                body.scrollHeight || 0,
+                body.offsetHeight || 0,
+                html.scrollHeight || 0,
+                html.offsetHeight || 0,
+                300 // minimum height
+            );
+            iframe.style.height = height + 'px';
+        } catch (e) {
+            // Fallback if we can't access iframe content
+            iframe.style.height = '500px';
+        }
     };
     setTimeout(adjustHeight, 100);
     // Adjust again after images may have loaded
     setTimeout(adjustHeight, 500);
+    setTimeout(adjustHeight, 1000);
 }
 
 /**

@@ -225,7 +225,7 @@
 .email-html-body iframe {
     width: 100%;
     border: none;
-    overflow: hidden;
+    min-height: 300px;
 }
 
 /* Make email rows clickable */
