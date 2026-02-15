@@ -5,8 +5,10 @@ MailRepo - Encrypted email archiving for solo practitioners.
 Run this file to start the application:
     python main.py
 
-Or use the installed command:
-    mailrepo
+Options:
+    --port=XXXX    Port to run on (default: 5050)
+    --dev          Development mode with auto-reload
+    --help         Show this message
 """
 
 import atexit
@@ -96,11 +98,39 @@ def shutdown_handler(signum, frame, app):
     sys.exit(0)
 
 
+def show_help():
+    """Display help text and exit."""
+    help_text = """
+MailRepo - Encrypted email archiving for solo practitioners
+
+Usage: python main.py [options]
+
+Options:
+  --port=XXXX    Port to run on (default: 5050)
+  --dev          Development mode with auto-reload
+  --help         Show this message
+
+Environment variables:
+  MAILREPO_PORT  Port number (default: 5050)
+"""
+    print(help_text)
+    sys.exit(0)
+
+
 def main():
     """Application entry point."""
+    
+    # Check for --help first
+    if '--help' in sys.argv or '-h' in sys.argv:
+        show_help()
+    
     # Suppress polling endpoint logging
     werkzeug_logger = logging.getLogger('werkzeug')
     werkzeug_logger.addFilter(PollingFilter())
+    
+    # Quiet Waitress queue warnings (normal for single-user app)
+    waitress_log = logging.getLogger('waitress')
+    waitress_log.setLevel(logging.ERROR)
     
     # Check for pending restore before opening database
     try:
@@ -118,17 +148,49 @@ def main():
     signal.signal(signal.SIGINT, lambda s, f: shutdown_handler(s, f, app))
     signal.signal(signal.SIGTERM, lambda s, f: shutdown_handler(s, f, app))
     
-    # Development server settings
+    # Get port from command line (--port=XXXX) or environment variable or default
+    port = 5050
+    for arg in sys.argv:
+        if arg.startswith('--port='):
+            try:
+                port = int(arg.split('=')[1])
+            except ValueError:
+                print(f"Invalid port: {arg}")
+                sys.exit(1)
+    
+    # Environment variable override
+    env_port = os.environ.get('MAILREPO_PORT')
+    if env_port:
+        try:
+            port = int(env_port)
+        except ValueError:
+            print(f"Invalid MAILREPO_PORT: {env_port}")
+            sys.exit(1)
+    
     host = "127.0.0.1"
-    port = 5050  # Different from EdgeCase's 5000
-    debug = os.environ.get('MAILREPO_DEBUG', '').lower() in ('1', 'true', 'yes')
     
     print(f"\n{'=' * 50}")
     print(f"  MailRepo v{app.config.get('app_version', '0.1.0')}")
-    print(f"  Running at http://{host}:{port}")
-    print(f"{'=' * 50}\n")
+    print(f"{'=' * 50}")
     
-    app.run(host=host, port=port, debug=debug)
+    # Register shutdown handler for clean database checkpoint on Ctrl-C
+    signal.signal(signal.SIGINT, lambda s, f: shutdown_handler(s, f, app))
+    signal.signal(signal.SIGTERM, lambda s, f: shutdown_handler(s, f, app))
+    
+    # Check for --dev flag for development mode with auto-reload
+    if '--dev' in sys.argv:
+        print("\nStarting in DEVELOPMENT mode (auto-reload enabled)...")
+        print(f"Open your browser to: http://localhost:{port}")
+        print("\nPress Ctrl+C to stop the server\n")
+        app.run(host=host, port=port, debug=True)
+    else:
+        # Production mode with Waitress
+        from waitress import serve
+        
+        print("\nStarting web server...")
+        print(f"Open your browser to: http://localhost:{port}")
+        print("\nPress Ctrl+C to stop the server\n")
+        serve(app, host=host, port=port)
 
 
 if __name__ == "__main__":
