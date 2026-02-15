@@ -1,39 +1,36 @@
 # MailRepo Session Notes
 
-**Date:** February 13, 2026  
-**Last Updated:** Session 38
+**Date:** February 14, 2026  
+**Last Updated:** Session 39
 
 ---
 
-## Completed Today (Session 38)
+## Completed Today (Session 39)
 
-### Testing Checklist Progress (Mercury, evening)
+### Testing Complete! 🎉
 
-Continued from Session 37 (MacBook lunch session).
+**Edge Cases - All pass:**
+- Large email (16MB) handles correctly
+- Email with 25 attachments renders properly
+- Malformed emails (no headers, truncated MIME, bad encoding) - all display gracefully
+- Corrupt mbox file - recovered both messages
+- Database lock - shows error modal, no crash, no data loss
+- Network disconnect - same error handling pattern
 
-**Backup & Restore - All complete:**
-- Backup location setting works (tested with Dropbox)
-- Cloud folder detection works
-- Post-backup command executes (fixed: needed `shell=True` for redirects/pipes)
-- Automatic backup on logout - pass
-- Backup on shutdown (Ctrl+C) - pass
-- Retention setting changes - pass
-- Old backups cleaned up according to policy - pass
+**UI fix:**
+- Disabled text selection on interactive elements (sidebar, lists, file pickers)
 
-**Bug fixes:**
-- Post-backup command now uses `shell=True` to support redirects and pipes
-- Backup listing now uses stored location per backup (shows backups from any location)
-- `get_restore_points()` also updated to use stored locations
+**MailRepo is now ready for production use!**
 
 ---
 
 ## Previous Sessions Summary
 
-**Session 37:** Review/Commit testing, trash auto-purge (added email cleanup), browser compatibility, circular dependency fix (staging.js ↔ folder-selection.js)
+**Session 38:** Backup & Restore testing complete (location, cloud detection, post-backup command, retention cleanup)
 
-**Session 36:** Retention Vault testing complete, icon consistency fixes, alert dismiss improvements
+**Session 37:** Review/Commit testing, trash auto-purge, browser compatibility, circular dependency fix
 
-**Session 35:** Retention Vault feature implementation (database, API, frontend)
+**Session 36:** Retention Vault testing complete
 
 **Session 32:** Progress bar fix, session security fix (Safari/Firefox double-login race condition)
 
