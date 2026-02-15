@@ -304,12 +304,8 @@ def get_import_email():
         if not raw_email:
             return jsonify({"error": "Email not found in import source"}), 404
         
-        print(f"DEBUG: Got raw_email, length={len(raw_email)}")
-        
         # Parse the email
         msg = email_lib.message_from_bytes(raw_email)
-        
-        print(f"DEBUG: Parsed email, is_multipart={msg.is_multipart()}, subject={msg.get('Subject', '')[:50]}")
         
         # Parse date
         date_str = msg.get("Date", "")

@@ -26,6 +26,7 @@
     /* Backgrounds */
     --color-background: #FBFCFD;
     --color-background-secondary: #F7FAFC;
+    --color-background-tertiary: rgba(0, 0, 0, 0.06);
     --color-background-page: #EDF2F5;
     
     /* Text */
@@ -62,6 +63,7 @@
     /* Backgrounds */
     --color-background: #FBFCFD;
     --color-background-secondary: #F8FAFC;
+    --color-background-tertiary: rgba(0, 0, 0, 0.06);
     --color-background-page: #F1F5F9;
     
     /* Text */
@@ -98,6 +100,7 @@
     /* Backgrounds */
     --color-background: #FBFCFD;
     --color-background-secondary: #F5F9FC;
+    --color-background-tertiary: rgba(0, 0, 0, 0.06);
     --color-background-page: #EBF2F8;
     
     /* Text */
@@ -134,6 +137,7 @@
     /* Backgrounds */
     --color-background: #FDFBFC;
     --color-background-secondary: #FAF5F7;
+    --color-background-tertiary: rgba(0, 0, 0, 0.06);
     --color-background-page: #F5EDEF;
     
     /* Text */
@@ -170,6 +174,7 @@
     /* Backgrounds */
     --color-background: #1e1e2e;
     --color-background-secondary: #181825;
+    --color-background-tertiary: rgba(255, 255, 255, 0.08);
     --color-background-page: #11111b;
     
     /* Text */
