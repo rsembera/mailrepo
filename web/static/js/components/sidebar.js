@@ -11,6 +11,7 @@
 
 import { escapeHtml } from '../utils.js';
 import { state, confirmNavigation } from '../state.js';
+import { initContextMenu, showFolderContextMenu } from './context-menu.js';
 
 // Callbacks set via init
 let onFolderSelect = null;
@@ -30,6 +31,7 @@ export function initSidebar(config = {}) {
     onImapFolderSelect = config.onImapFolderSelect;
     
     initSidebarResize();
+    initContextMenu();
 }
 
 /**
@@ -395,6 +397,11 @@ function createFolderTreeItem(folder, children, depth) {
             return;
         }
         handleTreeItemClick(e, row);
+    });
+    
+    // Right-click context menu for folder actions
+    row.addEventListener('contextmenu', (e) => {
+        showFolderContextMenu(e, folder.id, folder);
     });
     
     return folderItem;

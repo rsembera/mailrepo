@@ -291,7 +291,13 @@ export async function renameFolder(folderId) {
         }
         
         folder.name = newName.trim();
-        showFolderManagementView();
+        
+        // Only refresh folder management view if we're on it
+        const emailList = document.getElementById('emailList');
+        if (emailList && emailList.querySelector('.folder-mgmt-list')) {
+            showFolderManagementView();
+        }
+        
         refreshSidebarFolders();
     } catch (error) {
         console.error('Error renaming folder:', error);
@@ -443,7 +449,13 @@ export async function confirmMoveFolder() {
         
         folder.parent_id = newParentId;
         closeModal('moveFolderModal');
-        showFolderManagementView();
+        
+        // Only refresh folder management view if we're on it
+        const emailList = document.getElementById('emailList');
+        if (emailList && emailList.querySelector('.folder-mgmt-list')) {
+            showFolderManagementView();
+        }
+        
         refreshSidebarFolders();
     } catch (error) {
         console.error('Error moving folder:', error);
@@ -494,7 +506,12 @@ export async function deleteFolder(folderId) {
         folder.deleted_at = Date.now() / 1000;
         markDeleted(folderId);
         
-        showFolderManagementView();
+        // Only refresh folder management view if we're on it
+        const emailList = document.getElementById('emailList');
+        if (emailList && emailList.querySelector('.folder-mgmt-list')) {
+            showFolderManagementView();
+        }
+        
         updateTrashBadge();
         updateSidebarFoldersAfterDelete();
     } catch (error) {
@@ -743,7 +760,13 @@ async function confirmMoveToVault() {
         
         // Refresh the folder list
         await loadFolders();
-        showFolderManagementView();
+        
+        // Only refresh folder management view if we're on it
+        const emailList = document.getElementById('emailList');
+        if (emailList && emailList.querySelector('.folder-mgmt-list')) {
+            showFolderManagementView();
+        }
+        
         refreshSidebarFolders();
         
     } catch (error) {
