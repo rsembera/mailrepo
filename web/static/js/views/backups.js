@@ -755,9 +755,14 @@ async function confirmRestore() {
         const data = await response.json();
         
         if (data.success) {
-            showMessage('Restore prepared. Please restart MailRepo to complete the restore.', 'info');
-            settingsLoaded = false;
-            loadBackupStatus();
+            // Show modal explaining next steps, then redirect to login
+            const { showAlert } = await import('../modals.js');
+            await showAlert('Restore Prepared', 
+                'The restore has been staged. You must restart the MailRepo server to complete the restore.\n\n' +
+                'After restarting, log back in to see your restored data.');
+            
+            // Redirect to login page (effectively logging out)
+            window.location.href = '/auth/logout';
         } else {
             showMessage('Failed to prepare restore: ' + (data.error || 'Unknown error'), 'error');
         }
