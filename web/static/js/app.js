@@ -502,6 +502,9 @@ function showMailView() {
     state.selectedEmails.clear();
     state.emails = [];
     
+    // Refresh folder tree in case folders were created/modified in other views
+    loadFolders().then(() => refreshSidebarFolders());
+    
     // Restore normal mail view layout
     const sidebar = document.getElementById('sidebar');
     const toolbar = document.querySelector('.content-toolbar');
