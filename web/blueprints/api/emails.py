@@ -159,9 +159,11 @@ def get_archived_email(folder_id, message_id):
             for part in msg.walk():
                 content_type = part.get_content_type()
                 content_disposition = str(part.get("Content-Disposition", ""))
+                filename = part.get_filename()
                 
-                if "attachment" in content_disposition:
-                    filename = part.get_filename()
+                # Treat as attachment if explicitly marked as attachment,
+                # OR if it has a filename (even if inline) and isn't text
+                if "attachment" in content_disposition or (filename and part.get_content_maintype() != "text"):
                     if filename:
                         result["attachments"].append({
                             "filename": _decode_header(filename),
@@ -375,8 +377,11 @@ def download_archived_attachment(folder_id, message_id, index):
         if msg.is_multipart():
             for part in msg.walk():
                 content_disposition = str(part.get("Content-Disposition", ""))
-                if "attachment" in content_disposition:
-                    filename = part.get_filename()
+                filename = part.get_filename()
+                
+                # Treat as attachment if explicitly marked as attachment,
+                # OR if it has a filename (even if inline) and isn't text
+                if "attachment" in content_disposition or (filename and part.get_content_maintype() != "text"):
                     if filename:
                         attachments.append({
                             "filename": _decode_header(filename),

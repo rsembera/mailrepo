@@ -538,14 +538,14 @@ def scan_apple_mbox_folder():
             sibling_folder = folder_path[:-5]  # Remove .mbox
             if os.path.isdir(sibling_folder):
                 for entry in sorted(os.scandir(sibling_folder), key=lambda e: e.name.lower()):
-                    if entry.is_dir() and entry.name.endswith('.mbox'):
+                    if entry.is_dir():
                         child = scan_folder(entry.path)
                         if child["emails"] or child["children"]:
                             result["children"].append(child)
         else:
-            # Scan for .mbox packages inside this folder
+            # Scan for .mbox packages and container folders inside this folder
             for entry in sorted(os.scandir(folder_path), key=lambda e: e.name.lower()):
-                if entry.is_dir() and entry.name.endswith('.mbox'):
+                if entry.is_dir():
                     child = scan_folder(entry.path)
                     if child["emails"] or child["children"]:
                         result["children"].append(child)

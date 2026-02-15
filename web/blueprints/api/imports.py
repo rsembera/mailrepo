@@ -189,14 +189,22 @@ def get_import_email():
         if msg.is_multipart():
             for part in msg.walk():
                 content_disposition = str(part.get("Content-Disposition", ""))
-                if "attachment" in content_disposition:
-                    filename = part.get_filename()
+                filename = part.get_filename()
+                content_type = part.get_content_type()
+                
+                # Debug logging
+                print(f"  Part: {content_type}, filename: {filename}, disposition: {content_disposition[:30] if content_disposition else 'None'}")
+                
+                # Treat as attachment if explicitly marked as attachment,
+                # OR if it has a filename (even if inline)
+                if "attachment" in content_disposition or (filename and part.get_content_maintype() != "text"):
                     if filename:
                         attachments.append({
                             "filename": decode_header_value(filename),
                             "content_type": part.get_content_type(),
                             "size": len(part.get_payload(decode=True) or b""),
                         })
+        print(f"  Found {len(attachments)} attachments")
         return attachments
     
     try:
@@ -296,8 +304,12 @@ def get_import_email():
         if not raw_email:
             return jsonify({"error": "Email not found in import source"}), 404
         
+        print(f"DEBUG: Got raw_email, length={len(raw_email)}")
+        
         # Parse the email
         msg = email_lib.message_from_bytes(raw_email)
+        
+        print(f"DEBUG: Parsed email, is_multipart={msg.is_multipart()}, subject={msg.get('Subject', '')[:50]}")
         
         # Parse date
         date_str = msg.get("Date", "")

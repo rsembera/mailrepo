@@ -668,3 +668,36 @@ function formatTimeAgo(date) {
     const days = Math.floor(seconds / 86400);
     return `${days} day${days !== 1 ? 's' : ''} ago`;
 }
+
+// ============================================
+// LOGOUT HANDLER
+// ============================================
+
+async function handleLogout() {
+    // Skip navigation warning
+    window.skipBeforeUnloadWarning && window.skipBeforeUnloadWarning();
+    
+    // Show logout modal
+    const modal = document.getElementById('logoutModal');
+    const status = document.getElementById('logoutStatus');
+    modal.classList.add('active');
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    
+    status.textContent = 'Preparing backup...';
+    
+    try {
+        // Call logout endpoint
+        const response = await fetch('/auth/logout', { method: 'POST' });
+        
+        if (response.redirected) {
+            window.location.href = response.url;
+        } else {
+            window.location.href = '/auth/login';
+        }
+    } catch (error) {
+        console.error('Logout error:', error);
+        window.location.href = '/auth/login';
+    }
+}
+
+window.handleLogout = handleLogout;

@@ -39,11 +39,9 @@
             <button class="rail-btn" data-view="backups" title="Backup & Restore">
                 <i data-lucide="hard-drive-download"></i>
             </button>
-            <form action="{{ url_for('auth.logout') }}" method="POST" style="margin:0;" onsubmit="window.skipBeforeUnloadWarning && window.skipBeforeUnloadWarning(); window.markLoggingOut && window.markLoggingOut()">
-                <button type="submit" class="rail-btn" title="Logout">
-                    <i data-lucide="log-out"></i>
-                </button>
-            </form>
+            <button type="button" class="rail-btn" title="Logout" onclick="handleLogout()">
+                <i data-lucide="log-out"></i>
+            </button>
         </div>
     </nav>
 
@@ -645,6 +643,19 @@
                 <i data-lucide="trash-2" class="icon-inline"></i>
                 Reset Everything
             </button>
+        </div>
+    </div>
+</div>
+
+<!-- Logout Modal -->
+<div class="modal" id="logoutModal">
+    <div class="modal-content" style="max-width: 350px; text-align: center;">
+        <div class="modal-header" style="justify-content: center;">
+            <h2>Logging Out</h2>
+        </div>
+        <div style="padding: var(--space-lg) 0;">
+            <div class="spinner" style="margin: 0 auto var(--space-md);"></div>
+            <p id="logoutStatus">Saving your work...</p>
         </div>
     </div>
 </div>

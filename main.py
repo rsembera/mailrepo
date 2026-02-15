@@ -69,6 +69,7 @@ def _cleanup(app):
             # Run backup check before shutdown
             try:
                 from utils import backup
+                import subprocess
                 frequency = get_setting('backup_frequency', 'daily')
                 if backup.check_backup_needed(frequency):
                     location = get_setting('backup_location', '')
@@ -78,12 +79,28 @@ def _cleanup(app):
                         # Run post-backup command if configured
                         post_cmd = get_setting('post_backup_command', '')
                         if post_cmd:
-                            from utils import run_shell_command
-                            success, msg = run_shell_command(post_cmd, timeout=300)
-                            if success:
-                                log.info("Post-backup command completed")
-                            else:
-                                log.warning(f"Post-backup command error: {msg}")
+                            log.info(f"Running post-backup command: {post_cmd}")
+                            try:
+                                proc_result = subprocess.run(
+                                    post_cmd,
+                                    shell=True,
+                                    timeout=300,
+                                    capture_output=True,
+                                    text=True
+                                )
+                                if proc_result.stdout:
+                                    for line in proc_result.stdout.strip().split('\n'):
+                                        if line:
+                                            log.info(f"  {line}")
+                                if proc_result.returncode == 0:
+                                    log.info("Post-backup command completed")
+                                else:
+                                    error_msg = proc_result.stderr.strip() if proc_result.stderr else f"Exit code {proc_result.returncode}"
+                                    log.warning(f"Post-backup command failed: {error_msg}")
+                            except subprocess.TimeoutExpired:
+                                log.warning("Post-backup command timed out")
+                            except Exception as e:
+                                log.warning(f"Post-backup command error: {e}")
                     backup.record_backup_check()
             except Exception as e:
                 log.warning(f"Backup warning: {e}")
