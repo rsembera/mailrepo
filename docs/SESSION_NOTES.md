@@ -56,11 +56,31 @@
 - Fixed: Move email picker now shows current folder (disabled) so children are accessible
 - Fixed: Folder counts in management view exclude vault folders
 
+### Code Review Fixes (Cowork audit)
+
+**Tier 1 - Data Integrity:**
+- Fixed: Atomic file/DB writes in commit - orphaned files cleaned up if DB insert fails
+- Fixed: Deduplicated `_extract_body_text()` - all paths now use email_parser version with HTML stripping
+- Fixed: Database.close() now called on shutdown
+- Fixed: Duplicate signal handler registration removed
+
+**Tier 2/3 - Cleanup:**
+- Fixed: Debug print statements removed from imports.py
+- Fixed: ~65 lines of dead CSS removed (unused .email-item card styles)
+- Fixed: `--color-background-tertiary` defined in all themes
+- Fixed: Inline `import re` moved to module level in email_parser.py and imap.py
+- Added: Database migration scaffolding for future schema changes
+
+**Reviewed and dismissed:**
+- Event listener "leaks" - false positive, elements replaced via innerHTML
+- CSRF protection - not needed for localhost-only app
+- Mbox sequential scan - complex fix, rare use case
+
 ---
 
 ## Previous Sessions Summary
 
-**Session 41:** Apple Mail fixes, retention vault cascade delete fix, account editing, restore UX, S/MIME badges, folder picker fixes
+**Session 41:** Apple Mail fixes, retention vault fixes, account editing, restore UX, S/MIME badges, folder pickers, code review fixes
 
 **Session 40:** Empty state fix, Waitress server, backup log improvements
 
