@@ -251,13 +251,13 @@ def _run_auto_backup_check():
         log.debug(f"Backup frequency setting: {frequency}")
         
         if backup.check_backup_needed(frequency):
-            log.info("Backup needed, creating...")
+            log.info("Checking backup status...")
             location = get_setting('backup_location', '')
             if not location:
                 location = None  # Use default
             result = backup.create_backup(location)
             if result:
-                log.info(f"Automatic backup completed: {result['filename']}")
+                log.info(f"Backup created: {result['filename']}")
                 
                 # Run post-backup command if configured
                 post_cmd = get_setting('post_backup_command', '')
@@ -269,7 +269,7 @@ def _run_auto_backup_check():
                     else:
                         log.warning(f"Post-backup command error: {msg}")
             else:
-                log.debug("No changes to backup")
+                log.info("No changes since last backup")
             
             # Record that we checked today (whether backup created or not)
             backup.record_backup_check()
