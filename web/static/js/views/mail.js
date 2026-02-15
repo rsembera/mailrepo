@@ -791,7 +791,11 @@ function renderEmailContent(email, context = null) {
     const hasExternalContent = email.html_body && (
         email.html_body.includes('src="http') || 
         email.html_body.includes("src='http") ||
-        email.html_body.includes('url(http')
+        email.html_body.includes('src="//') ||
+        email.html_body.includes("src='//") ||
+        email.html_body.includes('url(http') ||
+        email.html_body.includes('url(//') ||
+        /src=["']\/[^"']+["']/.test(email.html_body)  // relative paths like /static/...
     );
     if (loadRemoteBtn) {
         loadRemoteBtn.style.display = hasExternalContent ? '' : 'none';
