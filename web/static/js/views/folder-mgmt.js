@@ -102,7 +102,10 @@ export async function showFolderManagementView() {
     
     await loadFolders();
     
-    if (state.folders.length === 0) {
+    // Check for active (non-deleted) folders
+    const activeFolders = state.folders.filter(f => !f.deleted_at);
+    
+    if (activeFolders.length === 0) {
         emailList.innerHTML = `
             <div class="empty-state">
                 <i data-lucide="folder" class="empty-icon"></i>
