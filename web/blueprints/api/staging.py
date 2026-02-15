@@ -2,6 +2,10 @@
 MailRepo API - Staging & Commit Routes
 
 Handles committing staged emails and folders to the archive.
+
+NOTE: The /api/commit and /api/commit-folders routes here are legacy.
+The frontend now uses /api/commit/stream (in progress.py) for all commits.
+These routes are kept for potential API/testing use.
 """
 
 from flask import request, jsonify
@@ -10,43 +14,12 @@ from core import Config
 from core import Encryption
 from core import IMAP, IMAPError
 from . import api_bp
-
-
-def _extract_body_text(raw_email: bytes) -> str:
-    """Extract plain text from email for full-text search indexing."""
-    import email
-    from email.header import decode_header
-    
-    try:
-        msg = email.message_from_bytes(raw_email)
-        text_parts = []
-        
-        def decode_part(part):
-            payload = part.get_payload(decode=True)
-            if payload:
-                charset = part.get_content_charset() or 'utf-8'
-                try:
-                    return payload.decode(charset, errors='replace')
-                except:
-                    return payload.decode('utf-8', errors='replace')
-            return ""
-        
-        if msg.is_multipart():
-            for part in msg.walk():
-                if part.get_content_type() == 'text/plain':
-                    text_parts.append(decode_part(part))
-        else:
-            if msg.get_content_type() == 'text/plain':
-                text_parts.append(decode_part(msg))
-        
-        return "\n".join(text_parts)[:10000]
-    except:
-        return ""
+from .email_parser import extract_body_text
 
 
 @api_bp.route("/commit", methods=["POST"])
 def commit_staged():
-    """Commit staged emails to archive."""
+    """Commit staged emails to archive (legacy - use /commit/stream instead)."""
     data = request.get_json()
     staged = data.get("staged", [])
     
@@ -133,7 +106,7 @@ def commit_staged():
                             continue
                     
                     raw_email = client.fetch_raw(uid)
-                    body_text = _extract_body_text(raw_email)
+                    body_text = extract_body_text(raw_email)
                     
                     archive_path = Config.get_archive_path() / str(folder_id)
                     archive_path.mkdir(parents=True, exist_ok=True)
@@ -143,23 +116,32 @@ def commit_staged():
                     filepath = archive_path / f"{safe_id}.eml.enc"
                     filepath.write_bytes(encrypted_data)
 
-                    Database.execute(
-                        """
-                        INSERT INTO messages 
-                        (folder_id, source_account_id, message_id, subject, sender, date, filepath, body_text)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            folder_id,
-                            account_id,
-                            email_data.get("message_id", ""),
-                            email_data.get("subject", ""),
-                            email_data.get("from", email_data.get("sender", "")),
-                            email_data.get("date"),
-                            str(filepath.relative_to(Config.get_base_path())),
-                            body_text,
+                    # Insert DB record - if this fails, clean up the file
+                    try:
+                        Database.execute(
+                            """
+                            INSERT INTO messages 
+                            (folder_id, source_account_id, message_id, subject, sender, date, filepath, body_text)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (
+                                folder_id,
+                                account_id,
+                                email_data.get("message_id", ""),
+                                email_data.get("subject", ""),
+                                email_data.get("from", email_data.get("sender", "")),
+                                email_data.get("date"),
+                                str(filepath.relative_to(Config.get_base_path())),
+                                body_text,
+                            )
                         )
-                    )
+                    except Exception:
+                        # DB insert failed - remove the orphaned file
+                        try:
+                            filepath.unlink()
+                        except OSError:
+                            pass
+                        raise
                     results["success"].append(uid)
                 except Exception as e:
                     results["failed"].append({"uid": uid, "error": str(e)})

@@ -81,6 +81,9 @@ def _save_email_to_archive(raw_email: bytes, folder_id: int, account_id: int | N
     """
     Encrypt and save a raw email to the archive, inserting a DB row.
     
+    This operation is made atomic: if the DB insert fails, the file is deleted.
+    If the file write fails, no DB record is created.
+    
     Args:
         raw_email: Raw RFC 2822 email bytes.
         folder_id: Destination archive folder ID.
@@ -95,24 +98,35 @@ def _save_email_to_archive(raw_email: bytes, folder_id: int, account_id: int | N
 
     encrypted_data = Encryption.encrypt(raw_email)
     filepath = archive_path / f"{uid_prefix}.eml.enc"
+    
+    # Write file first
     filepath.write_bytes(encrypted_data)
-
-    Database.execute(
-        """INSERT INTO messages
-           (folder_id, source_account_id, message_id, subject, sender, recipients, date, filepath, body_text)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (
-            folder_id,
-            account_id,
-            metadata.get("message_id", ""),
-            metadata.get("subject", ""),
-            metadata.get("sender", ""),
-            metadata.get("recipients", ""),
-            metadata.get("date"),
-            str(filepath.relative_to(Config.get_base_path())),
-            body_text,
+    
+    # Insert DB record - if this fails, clean up the file
+    try:
+        Database.execute(
+            """INSERT INTO messages
+               (folder_id, source_account_id, message_id, subject, sender, recipients, date, filepath, body_text)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                folder_id,
+                account_id,
+                metadata.get("message_id", ""),
+                metadata.get("subject", ""),
+                metadata.get("sender", ""),
+                metadata.get("recipients", ""),
+                metadata.get("date"),
+                str(filepath.relative_to(Config.get_base_path())),
+                body_text,
+            )
         )
-    )
+    except Exception:
+        # DB insert failed - remove the orphaned file
+        try:
+            filepath.unlink()
+        except OSError:
+            pass  # Best effort cleanup
+        raise  # Re-raise the original exception
 
 
 def commit_import_email(item: dict, results: dict) -> dict:

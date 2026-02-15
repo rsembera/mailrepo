@@ -104,6 +104,9 @@ def _cleanup(app):
                     backup.record_backup_check()
             except Exception as e:
                 log.warning(f"Backup warning: {e}")
+            
+            # Close database connection cleanly
+            Database.close()
     except Exception:
         pass  # Silent fail on exit
 
@@ -189,10 +192,6 @@ def main():
     print(f"\n{'=' * 50}")
     print(f"  MailRepo v{app.config.get('app_version', '0.1.0')}")
     print(f"{'=' * 50}")
-    
-    # Register shutdown handler for clean database checkpoint on Ctrl-C
-    signal.signal(signal.SIGINT, lambda s, f: shutdown_handler(s, f, app))
-    signal.signal(signal.SIGTERM, lambda s, f: shutdown_handler(s, f, app))
     
     # Check for --dev flag for development mode with auto-reload
     if '--dev' in sys.argv:
