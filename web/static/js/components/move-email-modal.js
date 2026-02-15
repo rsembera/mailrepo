@@ -34,11 +34,11 @@ export async function renderMoveEmailFolderTree() {
         }
     }
     
-    // Get current folder (to exclude from list)
+    // Get current folder (to exclude from selection but show in tree for children access)
     const currentFolderId = state.currentView?.id;
     
-    // Build tree of non-deleted folders
-    const folders = state.folders.filter(f => !f.deleted_at && f.id != currentFolderId);
+    // Build tree of non-deleted, non-vault folders
+    const folders = state.folders.filter(f => !f.deleted_at && !f.retention_date);
     const topLevel = folders.filter(f => !f.parent_id);
     
     if (folders.length === 0) {
@@ -51,11 +51,12 @@ export async function renderMoveEmailFolderTree() {
     function renderFolder(folder, depth = 0) {
         const indent = depth * 20;
         const children = folders.filter(f => f.parent_id == folder.id);
+        const isCurrent = folder.id == currentFolderId;
         
         html += `
-            <div class="folder-select-item" data-id="${folder.id}" onclick="selectMoveEmailFolder(${folder.id})" style="padding-left: ${indent + 12}px">
+            <div class="folder-select-item ${isCurrent ? 'disabled' : ''}" data-id="${folder.id}" ${isCurrent ? '' : `onclick="selectMoveEmailFolder(${folder.id})"`} style="padding-left: ${indent + 12}px">
                 <i data-lucide="folder" class="folder-icon"></i>
-                <span>${escapeHtml(folder.name)}</span>
+                <span>${escapeHtml(folder.name)}${isCurrent ? ' (current)' : ''}</span>
             </div>
         `;
         

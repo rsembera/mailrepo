@@ -559,7 +559,7 @@ window.toggleSourceGroup = function(groupId) {
 
 
 function renderDestinationDropdown(currentDestId) {
-    const topLevel = folders.filter(f => !f.parent_id && !f.deleted_at);
+    const topLevel = folders.filter(f => !f.parent_id && !f.deleted_at && !f.retention_date);
     
     function renderFolder(folder, depth) {
         const indent = depth * 12;
@@ -573,7 +573,7 @@ function renderDestinationDropdown(currentDestId) {
             </div>
         `;
         
-        const children = folders.filter(f => f.parent_id == folder.id && !f.deleted_at);
+        const children = folders.filter(f => f.parent_id == folder.id && !f.deleted_at && !f.retention_date);
         children.forEach(child => {
             html += renderFolder(child, depth + 1);
         });

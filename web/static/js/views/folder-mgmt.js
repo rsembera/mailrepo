@@ -102,8 +102,8 @@ export async function showFolderManagementView() {
     
     await loadFolders();
     
-    // Check for active (non-deleted) folders
-    const activeFolders = state.folders.filter(f => !f.deleted_at);
+    // Check for active (non-deleted, non-vault) folders
+    const activeFolders = state.folders.filter(f => !f.deleted_at && !f.retention_date);
     
     if (activeFolders.length === 0) {
         emailList.innerHTML = `
@@ -124,7 +124,7 @@ export async function showFolderManagementView() {
 }
 
 function renderFolderManagementList() {
-    const totalFolders = state.folders.filter(f => !f.deleted_at).length;
+    const totalFolders = state.folders.filter(f => !f.deleted_at && !f.retention_date).length;
     const filteredFolders = filterFolders(state.folders, archiveFilter);
     const filteredCount = filteredFolders.length;
     const topLevelFolders = filteredFolders.filter(f => !f.parent_id);
@@ -363,7 +363,7 @@ export function openMoveFolder(folderId) {
     `;
     
     const validFolders = state.folders.filter(f => 
-        !f.deleted_at && f.id != folderId && !descendants.includes(f.id)
+        !f.deleted_at && !f.retention_date && f.id != folderId && !descendants.includes(f.id)
     );
     
     function renderFolderOption(f, depth) {

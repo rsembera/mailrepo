@@ -43,11 +43,24 @@
 - Improved: Restore now shows clear alert explaining server restart requirement
 - Improved: Automatically logs user out after restore is prepared
 
+### S/MIME Signature Handling
+
+- Added: Emails with S/MIME signatures (smime.p7s) now show a "Signed" badge
+- Added: smime.p7s attachments hidden from attachment list (reduces clutter)
+
+### Folder Picker Fixes
+
+- Fixed: Retention vault folders no longer appear in move email destination picker
+- Fixed: Retention vault folders no longer appear in move folder destination picker
+- Fixed: Retention vault folders no longer appear in staging destination dropdown
+- Fixed: Move email picker now shows current folder (disabled) so children are accessible
+- Fixed: Folder counts in management view exclude vault folders
+
 ---
 
 ## Previous Sessions Summary
 
-**Session 41:** Apple Mail fixes, retention vault cascade delete fix, account editing, restore UX
+**Session 41:** Apple Mail fixes, retention vault cascade delete fix, account editing, restore UX, S/MIME badges, folder picker fixes
 
 **Session 40:** Empty state fix, Waitress server, backup log improvements
 

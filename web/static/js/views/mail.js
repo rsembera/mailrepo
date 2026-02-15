@@ -741,9 +741,30 @@ function renderEmailContent(email, context = null) {
     // Attachments with download/view links
     const attachDiv = document.getElementById('viewerAttachments');
     if (email.attachments && email.attachments.length > 0) {
+        // Check for S/MIME signature and filter it out from display
+        const hasSignature = email.attachments.some(att => 
+            att.filename && att.filename.toLowerCase() === 'smime.p7s'
+        );
+        const visibleAttachments = email.attachments.filter(att => 
+            !att.filename || att.filename.toLowerCase() !== 'smime.p7s'
+        );
+        
         let html = '<div class="attachment-list">';
-        email.attachments.forEach((att, index) => {
-            const downloadUrl = getAttachmentDownloadUrl(context, index);
+        
+        // Show signed badge if S/MIME signature present
+        if (hasSignature) {
+            html += `
+                <div class="attachment-badge signed">
+                    <i data-lucide="shield-check"></i>
+                    <span>Signed</span>
+                </div>
+            `;
+        }
+        
+        visibleAttachments.forEach((att, index) => {
+            // Find original index for download URL
+            const originalIndex = email.attachments.indexOf(att);
+            const downloadUrl = getAttachmentDownloadUrl(context, originalIndex);
             const isViewable = isViewableInBrowser(att.content_type, att.filename);
             
             if (downloadUrl && downloadUrl.startsWith('import-attachment:')) {
@@ -753,8 +774,8 @@ function renderEmailContent(email, context = null) {
                         <i data-lucide="paperclip"></i>
                         <span class="attachment-name">${escapeHtml(att.filename)}</span>
                         <span class="attachment-actions">
-                            <button class="attachment-action" onclick="downloadImportAttachment(${index}, false)" title="Download"><i data-lucide="download"></i></button>
-                            ${isViewable ? `<button class="attachment-action" onclick="downloadImportAttachment(${index}, true)" title="Open in new tab"><i data-lucide="external-link"></i></button>` : ''}
+                            <button class="attachment-action" onclick="downloadImportAttachment(${originalIndex}, false)" title="Download"><i data-lucide="download"></i></button>
+                            ${isViewable ? `<button class="attachment-action" onclick="downloadImportAttachment(${originalIndex}, true)" title="Open in new tab"><i data-lucide="external-link"></i></button>` : ''}
                         </span>
                     </div>
                 `;
@@ -781,7 +802,7 @@ function renderEmailContent(email, context = null) {
         });
         html += '</div>';
         attachDiv.innerHTML = html;
-        attachDiv.style.display = 'block';
+        attachDiv.style.display = (visibleAttachments.length > 0 || hasSignature) ? 'block' : 'none';
     } else {
         attachDiv.style.display = 'none';
     }
