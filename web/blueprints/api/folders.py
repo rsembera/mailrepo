@@ -14,15 +14,6 @@ from . import api_bp
 log = get_logger()
 
 
-@api_bp.route("/fix-vault-children", methods=["POST"])
-def fix_vault_children():
-    """One-time fix: restore parent relationships for 2024/2025 under 20240502-EK."""
-    # Restore 2024 and 2025 as children of 20240502-EK
-    Database.execute("UPDATE folders SET parent_id = 22 WHERE id IN (23, 24)")
-    Database.commit()
-    return jsonify({"success": True, "fixed": "Set parent_id=22 for folders 23 and 24"})
-
-
 @api_bp.route("/folders", methods=["GET"])
 def list_folders():
     """Get all archive folders."""
