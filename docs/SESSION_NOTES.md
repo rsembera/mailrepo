@@ -26,9 +26,18 @@
 - Added: Post-backup command output now shown in terminal
 - Fixed: Logout modal positioning (was using wrong CSS class)
 
+### Retention Vault Fixes
+
+- Fixed: Critical bug where deleting parent folder would cascade-delete children in Retention Vault
+- Fixed: Vault folders now properly detached from parent (`parent_id = NULL`) when moved to vault
+- Fixed: Vault view now only shows top-level vault folders, not nested children
+- Fixed: Date format changed from "October 7, 2034" to "2034-10-07" for consistency and compactness
+
 ---
 
 ## Previous Sessions Summary
+
+**Session 41:** Apple Mail attachment detection, iframe height, retention vault cascade delete fix
 
 **Session 40:** Empty state fix, Waitress server, backup log improvements
 
