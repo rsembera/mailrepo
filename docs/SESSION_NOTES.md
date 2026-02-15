@@ -33,11 +33,21 @@
 - Fixed: Vault view now only shows top-level vault folders, not nested children
 - Fixed: Date format changed from "October 7, 2034" to "2034-10-07" for consistency and compactness
 
+### Settings & Account Management
+
+- Added: Edit email accounts (pencil icon) - can change name, email, or password
+- Added: PATCH endpoint for account updates (password optional on edit)
+
+### Restore Flow
+
+- Improved: Restore now shows clear alert explaining server restart requirement
+- Improved: Automatically logs user out after restore is prepared
+
 ---
 
 ## Previous Sessions Summary
 
-**Session 41:** Apple Mail attachment detection, iframe height, retention vault cascade delete fix
+**Session 41:** Apple Mail fixes, retention vault cascade delete fix, account editing, restore UX
 
 **Session 40:** Empty state fix, Waitress server, backup log improvements
 
