@@ -1,40 +1,37 @@
 # MailRepo Session Notes
 
 **Date:** February 14, 2026  
-**Last Updated:** Session 39
+**Last Updated:** Session 40
 
-**Status: READY FOR PRODUCTION USE** 🎉
+**Status: PRODUCTION READY** 🎉
 
 ---
 
-## Completed Today (Session 39)
+## Completed Today (Session 40)
 
-### Testing Complete!
+### Final Production Polish
 
-**Edge Cases - All pass:**
-- Large email (16MB) handles correctly
-- Email with 25 attachments renders properly
-- Malformed emails (no headers, truncated MIME, bad encoding) - all display gracefully
-- Corrupt mbox file - recovered both messages
-- Database lock - shows error modal, no crash, no data loss
+- Fixed: Empty state in Manage Archive now shows when all folders deleted (was checking total folders, not active folders)
+- Fixed: Sidebar folder tree refreshes when returning to mail view from other views
+- Added: Waitress production server (same as EdgeCase)
+  - `python main.py` - Production mode with Waitress
+  - `python main.py --dev` - Development mode with auto-reload
+- Improved: Backup log messages now clearer ("Checking backup status..." / "No changes since last backup")
 
-**UI fixes:**
-- Disabled text selection on interactive elements (sidebar, lists, file pickers)
-- Fixed: Sidebar folder tree now refreshes when returning to mail view from other views
+### Previous Today (Session 39)
 
-**MailRepo is now ready for production use!**
+- Edge Cases testing complete (large emails, malformed emails, database lock)
+- UI: Disabled text selection on interactive elements
 
 ---
 
 ## Previous Sessions Summary
 
-**Session 38:** Backup & Restore testing complete (location, cloud detection, post-backup command, retention cleanup)
+**Session 38:** Backup & Restore testing complete
 
-**Session 37:** Review/Commit testing, trash auto-purge, browser compatibility, circular dependency fix
+**Session 37:** Review/Commit testing, trash auto-purge, browser compatibility
 
 **Session 36:** Retention Vault testing complete
-
-**Session 35:** Retention Vault feature implementation
 
 **Session 32:** Progress bar fix, session security fix (Safari/Firefox double-login race condition)
 
