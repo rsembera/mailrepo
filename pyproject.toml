@@ -1,57 +1,21 @@
-[project]
-name = "mailrepo"
-version = "0.1.0"
-description = "Encrypted email archiving for solo practitioners"
-readme = "README.md"
-license = {text = "MIT"}
-requires-python = ">=3.11"
-authors = [
-    {name = "Rick Support"}
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "-ra",
 ]
-keywords = ["email", "archive", "encryption", "gmail", "imap"]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Environment :: Web Environment",
-    "Framework :: Flask",
-    "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Topic :: Communications :: Email",
+filterwarnings = [
+    "ignore::DeprecationWarning",
 ]
-
-dependencies = [
-    "flask>=3.0.0",
-    "cryptography>=42.0.0",
-    "google-auth>=2.0.0",
-    "google-auth-oauthlib>=1.0.0",
-    "google-api-python-client>=2.0.0",
-]
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.0.0",
-    "ruff>=0.4.0",
-]
-
-[project.scripts]
-mailrepo = "main:main"
-
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "W"]
-ignore = ["E501"]  # Line length handled separately
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]  # Line too long - handled by formatter

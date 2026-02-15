@@ -79,4 +79,4 @@ To use a different location, set the `MAILREPO_DATA_DIR` environment variable.
 
 ## License
 
-MIT License — See LICENSE file for details.
+GNU Affero General Public License v3.0 — See LICENSE file for details.
