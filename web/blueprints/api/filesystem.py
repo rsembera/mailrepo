@@ -598,7 +598,7 @@ def check_pst_support():
     else:
         return jsonify({
             "supported": False,
-            "message": "PST import requires libpst-utils. Install with: apt install pst-utils",
+            "message": "PST import requires libpst. Install with: brew install libpst (macOS) or apt install pst-utils (Linux)",
         })
 
 
@@ -640,7 +640,7 @@ def convert_pst_to_mbox():
     readpst_path = shutil.which("readpst")
     if not readpst_path:
         return jsonify({
-            "error": "PST import requires libpst-utils. Install with: apt install pst-utils"
+            "error": "PST import requires libpst. Install with: brew install libpst (macOS) or apt install pst-utils (Linux)"
         }), 400
     
     try:

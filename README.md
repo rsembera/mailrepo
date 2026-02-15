@@ -75,7 +75,9 @@ To use a different location, set the `MAILREPO_DATA_DIR` environment variable.
 
 - Python 3.11+
 - SQLCipher libraries (bundled with `sqlcipher3` package on most platforms)
-- **For PST import:** libpst-utils (`apt install pst-utils` on Debian/Ubuntu)
+- **For PST import:** libpst
+  - macOS: `brew install libpst`
+  - Debian/Ubuntu: `apt install pst-utils`
 
 ## License
 
