@@ -415,3 +415,7 @@ Session 11 (Feb 14, Mercury):
 - Fixed: Disable text selection on interactive UI elements (sidebar, lists, pickers)
 - TESTING COMPLETE! MailRepo ready for production use.
 
+Session 12 (Feb 14, Mercury):
+- Fixed: Sidebar folder tree refreshes when returning to mail view
+- ALL TESTING COMPLETE - Ready for production use!
+

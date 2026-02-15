@@ -3,11 +3,13 @@
 **Date:** February 14, 2026  
 **Last Updated:** Session 39
 
+**Status: READY FOR PRODUCTION USE** 🎉
+
 ---
 
 ## Completed Today (Session 39)
 
-### Testing Complete! 🎉
+### Testing Complete!
 
 **Edge Cases - All pass:**
 - Large email (16MB) handles correctly
@@ -15,10 +17,10 @@
 - Malformed emails (no headers, truncated MIME, bad encoding) - all display gracefully
 - Corrupt mbox file - recovered both messages
 - Database lock - shows error modal, no crash, no data loss
-- Network disconnect - same error handling pattern
 
-**UI fix:**
+**UI fixes:**
 - Disabled text selection on interactive elements (sidebar, lists, file pickers)
+- Fixed: Sidebar folder tree now refreshes when returning to mail view from other views
 
 **MailRepo is now ready for production use!**
 
@@ -31,6 +33,8 @@
 **Session 37:** Review/Commit testing, trash auto-purge, browser compatibility, circular dependency fix
 
 **Session 36:** Retention Vault testing complete
+
+**Session 35:** Retention Vault feature implementation
 
 **Session 32:** Progress bar fix, session security fix (Safari/Firefox double-login race condition)
 
