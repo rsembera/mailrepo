@@ -140,6 +140,19 @@ def save_manifest(manifest):
         json.dump(manifest, f, indent=2)
 
 
+def refresh_hash_baseline():
+    """
+    Update the hash baseline to current file state.
+    
+    Call this after checkpoint to ensure the baseline reflects
+    post-checkpoint state, preventing false "changes" on next backup check.
+    """
+    manifest = load_manifest()
+    if manifest['last_full_hashes']:  # Only if we have a baseline
+        manifest['last_full_hashes'] = get_file_hashes()
+        save_manifest(manifest)
+
+
 def generate_backup_filename(backup_type):
     """Generate unique backup filename."""
     timestamp = datetime.now().strftime('%Y-%m-%d_%H%M%S')

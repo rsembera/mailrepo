@@ -70,6 +70,10 @@ def _cleanup(app):
             try:
                 from utils import backup
                 import subprocess
+                
+                # Refresh hash baseline after checkpoint to prevent false changes
+                backup.refresh_hash_baseline()
+                
                 frequency = get_setting('backup_frequency', 'daily')
                 if backup.check_backup_needed(frequency):
                     location = get_setting('backup_location', '')
