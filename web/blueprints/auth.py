@@ -247,6 +247,10 @@ def _run_auto_backup_check():
         # Checkpoint WAL first so backup captures all changes
         Database.checkpoint()
         
+        # Refresh hash baseline after checkpoint to prevent false changes
+        # (WAL checkpoint changes the .db file hash even if logical data is unchanged)
+        backup.refresh_hash_baseline()
+        
         frequency = get_setting('backup_frequency', 'daily')
         log.debug(f"Backup frequency setting: {frequency}")
         

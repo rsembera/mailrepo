@@ -93,6 +93,10 @@ def backup_now():
     # Checkpoint WAL to ensure all changes are in main database file
     Database.checkpoint()
     
+    # Refresh hash baseline after checkpoint to prevent false changes
+    # (WAL checkpoint changes the .db file hash even if logical data is unchanged)
+    backup.refresh_hash_baseline()
+    
     location = get_setting('backup_location', '')
     if not location:
         location = None  # Use default
