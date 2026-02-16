@@ -32,6 +32,7 @@ def create_app(test_config: dict = None) -> Flask:
     if test_config is None:
         app.config.from_object(FlaskConfig)
         app.config["SECRET_KEY"] = generate_flask_secret_key()
+        app.config["app_version"] = Config.VERSION
     else:
         app.config.update(test_config)
     
