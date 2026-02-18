@@ -111,6 +111,12 @@
     font-size: 0.875rem;
 }
 
+.search-hint-text {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
 .search-result {
     cursor: pointer;
 }
