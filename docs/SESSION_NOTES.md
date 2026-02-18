@@ -127,6 +127,10 @@
 - Session timeout warning can feel abrupt if idle for extended period
 - Some emails have inconsistent font rendering (source HTML issue, not MailRepo)
 
+## Pre-Release TODO
+
+- [ ] **README screenshots** — Need 4 screenshots for README: main browse view, email list with staged emails, review screen, email viewer. Requires sanitized/dummy email data to avoid exposing real correspondence.
+
 ---
 
 ## Quick Start
