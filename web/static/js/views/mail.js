@@ -237,7 +237,6 @@ function renderSearchView(results = null, query = '') {
                            onkeydown="if(event.key==='Enter') executeArchiveSearch()">
                 </div>
                 <div class="toolbar-actions">
-                    <span class="search-hint-text">Press Enter or click Search</span>
                     <button class="btn btn-primary" onclick="executeArchiveSearch()">
                         <i data-lucide="search"></i>
                         Search
