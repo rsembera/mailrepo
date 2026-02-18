@@ -193,7 +193,7 @@ def get_import_email():
                 content_type = part.get_content_type()
                 
                 # Debug logging
-                print(f"  Part: {content_type}, filename: {filename}, disposition: {content_disposition[:30] if content_disposition else 'None'}")
+                log.debug(f"  Part: {content_type}, filename: {filename}, disposition: {content_disposition[:30] if content_disposition else 'None'}")
                 
                 # Treat as attachment if explicitly marked as attachment,
                 # OR if it has a filename (even if inline)
@@ -204,7 +204,7 @@ def get_import_email():
                             "content_type": part.get_content_type(),
                             "size": len(part.get_payload(decode=True) or b""),
                         })
-        print(f"  Found {len(attachments)} attachments")
+        log.debug(f"  Found {len(attachments)} attachments")
         return attachments
     
     try:

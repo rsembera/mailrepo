@@ -1,8 +1,23 @@
 # MailRepo Code Quality Review
 
 **Date:** January 26, 2026  
-**Reviewer:** Claude Sonnet 4.5  
+**Updated:** February 17, 2026  
+**Reviewer:** Claude Sonnet 4.5 / 4.6  
 **Context:** Review prompted by concerns about Opus 4.5 code quality based on user reports of degradation since mid-January 2026
+
+---
+
+## Status (February 17, 2026)
+
+Re-reviewed codebase. Most issues have been resolved or were false positives on closer inspection:
+
+- ✅ **Event listener leak (review.js)** — False positive. Elements replaced via `innerHTML` before `initIconSelects()` runs; document-level listener correctly guarded by `dropdownClickListenerAdded`.
+- ✅ **Debug prints in imports.py** — Fixed. Two `print()` calls in `get_attachments()` converted to `log.debug()`.
+- ✅ **Duplicate logger import in auth.py** — False positive; only one import present in current code.
+- ⏳ **progress.py size (1,114 lines)** — Deferred to post-1.0. Not worth the refactoring risk before release.
+- ⏳ **Global window function pollution / inline onclick pattern** — Deferred to post-1.0. Works correctly, cosmetic issue only.
+
+**Overall:** Codebase is in good shape for release.
 
 ---
 
