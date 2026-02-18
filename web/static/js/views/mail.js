@@ -235,15 +235,12 @@ function renderSearchView(results = null, query = '') {
                            placeholder="Search by subject, sender, recipient, or content..." 
                            value="${escapeHtml(query)}"
                            onkeydown="if(event.key==='Enter') executeArchiveSearch()">
+                    ${hasQuery ? '<button class="search-clear" onclick="clearArchiveSearch()" title="Clear search"><i data-lucide="x"></i></button>' : ''}
                 </div>
                 <div class="toolbar-actions">
                     <button class="btn btn-primary" onclick="executeArchiveSearch()">
                         <i data-lucide="search"></i>
                         Search
-                    </button>
-                    <button class="btn btn-secondary" onclick="clearArchiveSearch()" ${!hasQuery ? 'disabled' : ''}>
-                        <i data-lucide="x"></i>
-                        Clear
                     </button>
                 </div>
             </div>
