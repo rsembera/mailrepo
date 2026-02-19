@@ -263,9 +263,10 @@ function renderSearchView(results = null, query = '') {
                         <tr><td><code>smith AND invoice</code></td><td>Both terms must appear</td></tr>
                         <tr><td><code>smith OR jones</code></td><td>Either term</td></tr>
                         <tr><td><code>invoice NOT receipt</code></td><td>Exclude a term</td></tr>
-                        <tr><td><code>subject: smith</code></td><td>Search subject line only</td></tr>
+                        <tr><td><code>subject: invoice</code></td><td>Search subject line only</td></tr>
                         <tr><td><code>sender: smith</code></td><td>Search by sender name</td></tr>
                         <tr><td><code>sender: "smith@gmail.com"</code></td><td>Search by exact email address</td></tr>
+                        <tr><td><code>recipients: jones</code></td><td>Search To, CC, and BCC fields</td></tr>
                     </table>
                     <p class="search-hint" style="margin-top: var(--space-sm);">Searches are always case-insensitive.</p>
                 </details>
