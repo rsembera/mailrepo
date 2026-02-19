@@ -723,6 +723,46 @@ export async function openEmailViewer(emailId) {
 }
 
 /**
+ * Convert plain text with > quote markers into nested HTML blockquotes.
+ * Handles multiple levels of quoting (>, >>, >>> etc.)
+ * @param {string} text - Plain text email body
+ * @returns {string} HTML string with blockquotes
+ */
+function plainTextToHtml(text) {
+    const blockquoteStyle = 'border-left: 2px solid #ccc; margin: 0 0 0 0.5em; padding: 0 0 0 0.5em; color: #888;';
+    const lines = text.split('\n');
+    let html = '';
+    let currentDepth = 0;
+
+    for (const line of lines) {
+        // Count leading > characters
+        const match = line.match(/^(>+)\s?/);
+        const depth = match ? match[1].length : 0;
+        const content = match ? line.slice(match[0].length) : line;
+
+        // Close or open blockquotes as needed
+        while (currentDepth > depth) {
+            html += '</blockquote>';
+            currentDepth--;
+        }
+        while (currentDepth < depth) {
+            html += `<blockquote style="${blockquoteStyle}">`;
+            currentDepth++;
+        }
+
+        html += escapeHtml(content) + '<br>';
+    }
+
+    // Close any remaining open blockquotes
+    while (currentDepth > 0) {
+        html += '</blockquote>';
+        currentDepth--;
+    }
+
+    return html;
+}
+
+/**
  * Convert email addresses in a header string to clickable mailto: links.
  * Handles formats like "Name <email@example.com>" and bare "email@example.com".
  * @param {string} headerText - Raw header text (From, To, Cc)
@@ -844,7 +884,7 @@ function renderEmailContent(email, context = null) {
     if (email.html_body) {
         renderHtmlBody(bodyDiv, email.html_body, false);
     } else if (email.text_body) {
-        bodyDiv.innerHTML = `<div class="email-text-body">${escapeHtml(email.text_body)}</div>`;
+        bodyDiv.innerHTML = `<div class="email-text-body">${plainTextToHtml(email.text_body)}</div>`;
     } else {
         bodyDiv.innerHTML = '<div class="email-text-body">(No content)</div>';
     }
@@ -1162,9 +1202,8 @@ async function copyAsReply() {
     const plainText = `On ${date}, ${fromStr} wrote:\n${quotedLines}`;
     
     // HTML version with blockquote (for HTML compose mode)
-    const quotedHtml = escapeHtml(textBody).replace(/\n/g, '<br>');
     const htmlText = `<p>On ${escapeHtml(date)}, ${escapeHtml(fromStr)} wrote:</p>` +
-        `<blockquote style="border-left: 2px solid #ccc; margin: 0 0 0 0.5em; padding: 0 0 0 0.5em; color: #555;">${quotedHtml}</blockquote>`;
+        `<blockquote style="border-left: 2px solid #ccc; margin: 0 0 0 0.5em; padding: 0 0 0 0.5em; color: #555;">${plainTextToHtml(textBody)}</blockquote>`;
     
     try {
         // Write both formats — mail client picks the one it prefers
