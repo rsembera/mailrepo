@@ -253,7 +253,7 @@ function renderSearchView(results = null, query = '') {
         // Initial state - show helpful text
         html += `
             <div class="search-help">
-                <p>Enter a search term to find emails across your entire archive.</p>
+                <p>Type a search term and press Enter (or click Search) to find emails across your entire archive.</p>
                 <p class="search-hint">Searches subject lines, sender/recipient addresses, and email content.</p>
             </div>
         `;
