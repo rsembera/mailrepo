@@ -111,6 +111,45 @@
     font-size: 0.875rem;
 }
 
+.search-tips {
+    margin-top: var(--space-md);
+}
+
+.search-tips summary {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    user-select: none;
+}
+
+.search-tips summary:hover {
+    color: var(--color-text);
+}
+
+.search-tips-table {
+    margin-top: var(--space-sm);
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.search-tips-table td {
+    padding: 3px 12px 3px 0;
+    vertical-align: top;
+    color: var(--color-text-muted);
+}
+
+.search-tips-table td:first-child {
+    white-space: nowrap;
+}
+
+.search-tips-table code {
+    font-family: monospace;
+    background: var(--color-background-secondary);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--color-text);
+}
+
 .search-result {
     cursor: pointer;
 }

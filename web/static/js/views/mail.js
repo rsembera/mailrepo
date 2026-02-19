@@ -255,6 +255,18 @@ function renderSearchView(results = null, query = '') {
             <div class="search-help">
                 <p>Type a search term and press Enter (or click Search) to find emails across your entire archive.</p>
                 <p class="search-hint">Searches subject lines, sender/recipient addresses, and email content.</p>
+                <details class="search-tips">
+                    <summary>Search tips</summary>
+                    <table class="search-tips-table">
+                        <tr><td><code>ther*</code></td><td>Prefix search — matches "therapy", "therapist", etc.</td></tr>
+                        <tr><td><code>"meeting notes"</code></td><td>Exact phrase</td></tr>
+                        <tr><td><code>smith AND invoice</code></td><td>Both terms must appear</td></tr>
+                        <tr><td><code>smith OR jones</code></td><td>Either term</td></tr>
+                        <tr><td><code>invoice NOT receipt</code></td><td>Exclude a term</td></tr>
+                        <tr><td><code>subject: smith</code></td><td>Search subject line only</td></tr>
+                        <tr><td><code>sender: gmail.com*</code></td><td>Search sender field only</td></tr>
+                    </table>
+                </details>
             </div>
         `;
     } else if (results.length === 0) {
