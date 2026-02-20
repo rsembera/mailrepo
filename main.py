@@ -71,15 +71,15 @@ def _cleanup(app):
                 from utils import backup
                 import subprocess
                 
-                # Refresh hash baseline after checkpoint to prevent false changes
-                backup.refresh_hash_baseline()
-                
                 frequency = get_setting('backup_frequency', 'daily')
                 if backup.check_backup_needed(frequency):
                     location = get_setting('backup_location', '')
                     result = backup.create_backup(location if location else None)
                     if result:
                         log.info(f"Backup completed: {result['filename']}")
+                        # Refresh hash baseline after backup so next session
+                        # compares against post-backup state, not pre-checkpoint state
+                        backup.refresh_hash_baseline()
                         # Run post-backup command if configured
                         post_cmd = get_setting('post_backup_command', '')
                         if post_cmd:
