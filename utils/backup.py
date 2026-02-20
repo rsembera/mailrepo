@@ -140,17 +140,78 @@ def save_manifest(manifest):
         json.dump(manifest, f, indent=2)
 
 
+# ============================================================================
+# External Backup State File (Libram-style)
+# 
+# Hash baseline is stored in .backup_state.json, NOT in the manifest.
+# This avoids the circular modification problem where checking database
+# state requires modifying the database.
+# ============================================================================
+
+def _get_backup_state_file():
+    """Get path to backup state file (stored in data dir, not backups)."""
+    return get_data_dir() / '.backup_state.json'
+
+
+def _read_backup_state():
+    """Read backup state from external JSON file."""
+    state_file = _get_backup_state_file()
+    if state_file.exists():
+        try:
+            with open(state_file, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {}
+
+
+def _write_backup_state(state):
+    """Write backup state to external JSON file."""
+    state_file = _get_backup_state_file()
+    get_data_dir().mkdir(parents=True, exist_ok=True)
+    with open(state_file, 'w') as f:
+        json.dump(state, f, indent=2)
+
+
+def _get_baseline_hashes():
+    """
+    Get hash baseline from external state file.
+    Falls back to manifest for migration from old system.
+    """
+    state = _read_backup_state()
+    if 'last_backup_hashes' in state:
+        return state['last_backup_hashes']
+    
+    # Migration: check manifest for old-style hashes
+    manifest = load_manifest()
+    if manifest.get('last_full_hashes'):
+        # Migrate to new system
+        _write_backup_state({
+            'last_backup_hashes': manifest['last_full_hashes'],
+            'last_backup_check': manifest.get('last_backup_check')
+        })
+        return manifest['last_full_hashes']
+    
+    return {}
+
+
+def _save_baseline_hashes(hashes):
+    """Save hash baseline to external state file."""
+    state = _read_backup_state()
+    state['last_backup_hashes'] = hashes
+    _write_backup_state(state)
+
+
 def refresh_hash_baseline():
     """
-    Update the hash baseline to current file state.
+    DEPRECATED: This function exists for backward compatibility only.
     
-    Call this after checkpoint to ensure the baseline reflects
-    post-checkpoint state, preventing false "changes" on next backup check.
+    The new system automatically updates the baseline in create_backup(),
+    so manual refresh is no longer needed.
     """
-    manifest = load_manifest()
-    if manifest['last_full_hashes']:  # Only if we have a baseline
-        manifest['last_full_hashes'] = get_file_hashes()
-        save_manifest(manifest)
+    # Still works, but shouldn't be necessary
+    current_hashes = get_file_hashes()
+    _save_baseline_hashes(current_hashes)
 
 
 def generate_backup_filename(backup_type):
@@ -222,7 +283,7 @@ def create_backup(backup_dir=None):
     
     if not manifest['backups']:
         need_full = True  # No backups exist
-    elif not manifest['last_full_hashes']:
+    elif not _get_baseline_hashes():
         need_full = True  # No hash baseline
     else:
         # Check age of last full backup (calendar days, not hours)
@@ -304,9 +365,11 @@ def create_full_backup(backup_dir=None):
     }
     
     manifest['backups'].append(backup_info)
-    manifest['last_full_hashes'] = hashes
     manifest['current_chain_id'] = chain_id
     save_manifest(manifest)
+    
+    # Save hashes to external state file (not manifest)
+    _save_baseline_hashes(hashes)
     
     return backup_info
 
@@ -323,7 +386,9 @@ def create_incremental_backup(backup_dir=None):
     """
     manifest = load_manifest()
     
-    if not manifest['last_full_hashes']:
+    # Get baseline from external state file
+    previous_hashes = _get_baseline_hashes()
+    if not previous_hashes:
         # No previous backup, need full backup first
         return create_full_backup(backup_dir)
     
@@ -339,7 +404,6 @@ def create_incremental_backup(backup_dir=None):
     
     # Get current state
     current_hashes = get_file_hashes()
-    previous_hashes = manifest['last_full_hashes']
     
     # Find changes
     changed_files = {}
@@ -353,11 +417,10 @@ def create_incremental_backup(backup_dir=None):
     deleted_files = [p for p in previous_hashes if p not in current_hashes]
     
     if not changed_files and not deleted_files:
-        # No changes - but still update baseline to current state
+        # No changes - update baseline in external state file
         # This prevents checkpoint-induced hash changes from appearing
         # as "changes" on the next backup check
-        manifest['last_full_hashes'] = current_hashes
-        save_manifest(manifest)
+        _save_baseline_hashes(current_hashes)
         return None
     
     filename = generate_backup_filename('incr')
@@ -399,9 +462,10 @@ def create_incremental_backup(backup_dir=None):
     }
     
     manifest['backups'].append(backup_info)
-    # Update hashes to current state
-    manifest['last_full_hashes'] = current_hashes
     save_manifest(manifest)
+    
+    # Save hashes to external state file (not manifest)
+    _save_baseline_hashes(current_hashes)
     
     return backup_info
 
