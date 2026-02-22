@@ -683,7 +683,7 @@ async function handleLogout() {
     modal.classList.add('active');
     if (typeof lucide !== 'undefined') lucide.createIcons();
     
-    status.textContent = 'Preparing backup...';
+    status.textContent = 'Signing out...';
     
     try {
         // Call logout endpoint
