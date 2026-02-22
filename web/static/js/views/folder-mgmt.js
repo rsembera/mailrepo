@@ -294,7 +294,7 @@ export async function renameFolder(folderId) {
         
         // Only refresh folder management view if we're on it
         const emailList = document.getElementById('emailList');
-        if (emailList && emailList.querySelector('.folder-mgmt-list')) {
+        if (emailList && emailList.querySelector('.folder-management-list')) {
             showFolderManagementView();
         }
         
@@ -344,7 +344,7 @@ export async function createSubfolder(parentId) {
         
         // Only refresh folder management view if we're on it
         const emailList = document.getElementById('emailList');
-        if (emailList && emailList.querySelector('.folder-mgmt-list')) {
+        if (emailList && emailList.querySelector('.folder-management-list')) {
             showFolderManagementView();
         }
         
@@ -460,7 +460,7 @@ export async function confirmMoveFolder() {
         
         // Only refresh folder management view if we're on it
         const emailList = document.getElementById('emailList');
-        if (emailList && emailList.querySelector('.folder-mgmt-list')) {
+        if (emailList && emailList.querySelector('.folder-management-list')) {
             showFolderManagementView();
         }
         
@@ -516,7 +516,7 @@ export async function deleteFolder(folderId) {
         
         // Only refresh folder management view if we're on it
         const emailList = document.getElementById('emailList');
-        if (emailList && emailList.querySelector('.folder-mgmt-list')) {
+        if (emailList && emailList.querySelector('.folder-management-list')) {
             showFolderManagementView();
         }
         
@@ -771,7 +771,7 @@ async function confirmMoveToVault() {
         
         // Only refresh folder management view if we're on it
         const emailList = document.getElementById('emailList');
-        if (emailList && emailList.querySelector('.folder-mgmt-list')) {
+        if (emailList && emailList.querySelector('.folder-management-list')) {
             showFolderManagementView();
         }
         
