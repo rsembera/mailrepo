@@ -770,30 +770,33 @@ function plainTextToHtml(text) {
  * @returns {string} Plain text with appropriate line breaks
  */
 function htmlToPlainText(html) {
+    // Pre-process: add markers for block boundaries and ensure spacing
+    let processed = html
+        // Add newlines after block-level closing tags
+        .replace(/<\/(p|div|tr|li|h[1-6]|blockquote)>/gi, '</$1>\n')
+        // Replace <br> with newlines
+        .replace(/<br\s*\/?>/gi, '\n')
+        // Add space before opening tags to prevent word concatenation
+        .replace(/<(p|div|span|td|th|li|a|b|strong|i|em|u)[\s>]/gi, ' <$1 ')
+        // Replace &nbsp; with space
+        .replace(/&nbsp;/gi, ' ')
+        // Decode common HTML entities
+        .replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'");
+    
     // Create a temporary element to parse HTML
     const temp = document.createElement('div');
-    temp.innerHTML = html;
+    temp.innerHTML = processed;
     
-    // Replace block elements with line breaks before getting text
-    const blockElements = temp.querySelectorAll('p, div, br, tr, li, h1, h2, h3, h4, h5, h6, blockquote');
-    blockElements.forEach(el => {
-        if (el.tagName === 'BR') {
-            el.replaceWith('\n');
-        } else if (el.tagName === 'LI') {
-            el.prepend(document.createTextNode('• '));
-            el.append(document.createTextNode('\n'));
-        } else {
-            el.append(document.createTextNode('\n'));
-        }
-    });
-    
-    // Get text content and clean up
+    // Get text content
     let text = temp.textContent || temp.innerText || '';
     
-    // Normalize whitespace: collapse multiple spaces but preserve line breaks
-    text = text.replace(/[^\S\n]+/g, ' ');  // Collapse horizontal whitespace only
-    text = text.replace(/\n /g, '\n');       // Remove space after line break
-    text = text.replace(/ \n/g, '\n');       // Remove space before line break
+    // Clean up whitespace
+    text = text.replace(/[^\S\n]+/g, ' ');   // Collapse horizontal whitespace
+    text = text.replace(/ ?\n ?/g, '\n');    // Clean up around line breaks
     text = text.replace(/\n{3,}/g, '\n\n');  // Max 2 consecutive line breaks
     text = text.trim();
     
