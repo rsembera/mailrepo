@@ -770,33 +770,52 @@ function plainTextToHtml(text) {
  * @returns {string} Plain text with appropriate line breaks
  */
 function htmlToPlainText(html) {
-    // Pre-process: add markers for block boundaries and ensure spacing
-    let processed = html
-        // Add newlines after block-level closing tags
-        .replace(/<\/(p|div|tr|li|h[1-6]|blockquote)>/gi, '</$1>\n')
-        // Replace <br> with newlines
-        .replace(/<br\s*\/?>/gi, '\n')
-        // Add space before opening tags to prevent word concatenation
-        .replace(/<(p|div|span|td|th|li|a|b|strong|i|em|u)[\s>]/gi, ' <$1 ')
-        // Replace &nbsp; with space
-        .replace(/&nbsp;/gi, ' ')
-        // Decode common HTML entities
-        .replace(/&amp;/gi, '&')
-        .replace(/&lt;/gi, '<')
-        .replace(/&gt;/gi, '>')
-        .replace(/&quot;/gi, '"')
-        .replace(/&#39;/gi, "'");
-    
     // Create a temporary element to parse HTML
     const temp = document.createElement('div');
-    temp.innerHTML = processed;
+    temp.innerHTML = html;
     
-    // Get text content
-    let text = temp.textContent || temp.innerText || '';
+    // Recursive function to extract text with proper spacing
+    function extractText(node) {
+        let result = '';
+        
+        for (const child of node.childNodes) {
+            if (child.nodeType === Node.TEXT_NODE) {
+                // Text node - normalize whitespace (newlines become spaces)
+                result += child.textContent.replace(/\s+/g, ' ');
+            } else if (child.nodeType === Node.ELEMENT_NODE) {
+                const tag = child.tagName.toLowerCase();
+                
+                // Block-level elements get line breaks
+                const blockTags = ['p', 'div', 'br', 'tr', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote'];
+                const isBlock = blockTags.includes(tag);
+                
+                if (tag === 'br') {
+                    result += '\n';
+                } else if (isBlock) {
+                    // Trim trailing space before block break
+                    result = result.replace(/ $/, '');
+                    if (result && !result.endsWith('\n')) {
+                        result += '\n';
+                    }
+                    result += extractText(child);
+                    if (!result.endsWith('\n')) {
+                        result += '\n';
+                    }
+                } else {
+                    // Inline element - just get content
+                    result += extractText(child);
+                }
+            }
+        }
+        
+        return result;
+    }
+    
+    let text = extractText(temp);
     
     // Clean up whitespace
-    text = text.replace(/[^\S\n]+/g, ' ');   // Collapse horizontal whitespace
-    text = text.replace(/ ?\n ?/g, '\n');    // Clean up around line breaks
+    text = text.replace(/[^\S\n]+/g, ' ');   // Collapse horizontal whitespace (but not newlines)
+    text = text.replace(/ ?\n ?/g, '\n');    // Clean up spaces around line breaks
     text = text.replace(/\n{3,}/g, '\n\n');  // Max 2 consecutive line breaks
     text = text.trim();
     
