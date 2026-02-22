@@ -725,8 +725,9 @@ export async function openEmailViewer(emailId) {
 /**
  * Convert plain text with > quote markers into nested HTML blockquotes.
  * Handles multiple levels of quoting (>, >>, >>> etc.)
+ * Also converts URLs to clickable links.
  * @param {string} text - Plain text email body
- * @returns {string} HTML string with blockquotes
+ * @returns {string} HTML string with blockquotes and links
  */
 function plainTextToHtml(text) {
     const blockquoteStyle = 'border-left: 2px solid #ccc; margin: 0 0 0 0.5em; padding: 0 0 0 0.5em; color: #888;';
@@ -750,7 +751,8 @@ function plainTextToHtml(text) {
             currentDepth++;
         }
 
-        html += escapeHtml(content) + '<br>';
+        // Escape HTML first, then linkify URLs
+        html += linkifyUrls(escapeHtml(content)) + '<br>';
     }
 
     // Close any remaining open blockquotes
@@ -760,6 +762,19 @@ function plainTextToHtml(text) {
     }
 
     return html;
+}
+
+/**
+ * Convert URLs in text to clickable links.
+ * @param {string} text - Text that has already been HTML-escaped
+ * @returns {string} HTML with URLs as clickable links
+ */
+function linkifyUrls(text) {
+    // Match URLs (http, https, ftp) - text is already escaped so no HTML to worry about
+    return text.replace(
+        /\b(https?:\/\/|ftp:\/\/)[^\s<>\[\]()'"]+/gi,
+        '<a href="$&" target="_blank" rel="noopener noreferrer">$&</a>'
+    );
 }
 
 /**
