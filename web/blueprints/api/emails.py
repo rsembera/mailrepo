@@ -155,11 +155,33 @@ def get_archived_email(folder_id, message_id):
             "attachments": [],
         }
         
+        # First pass: collect inline images (parts with Content-ID) for cid: replacement
+        import base64
+        inline_images = {}  # cid -> data URL
+        
+        if msg.is_multipart():
+            for part in msg.walk():
+                content_id = part.get("Content-ID")
+                if content_id:
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        content_type = part.get_content_type()
+                        # Strip angle brackets: <image001.png@...> -> image001.png@...
+                        cid = content_id.strip('<>')
+                        b64_data = base64.b64encode(payload).decode('ascii')
+                        inline_images[cid] = f"data:{content_type};base64,{b64_data}"
+        
+        # Second pass: collect body and attachments
         if msg.is_multipart():
             for part in msg.walk():
                 content_type = part.get_content_type()
                 content_disposition = str(part.get("Content-Disposition", ""))
                 filename = part.get_filename()
+                content_id = part.get("Content-ID")
+                
+                # Skip inline images - they're handled via cid: replacement
+                if content_id:
+                    continue
                 
                 # Treat as attachment if explicitly marked as attachment,
                 # OR if it has a filename (even if inline) and isn't text
@@ -190,6 +212,20 @@ def get_archived_email(folder_id, message_id):
                     result["html_body"] = body
                 else:
                     result["text_body"] = body
+        
+        # Replace cid: references in HTML body with data URLs
+        if result["html_body"] and inline_images:
+            import re
+            def replace_cid(match):
+                cid = match.group(1)
+                return inline_images.get(cid, match.group(0))
+            
+            # Match cid:xxx in src attributes (handles quoted and unquoted)
+            result["html_body"] = re.sub(
+                r'cid:([^"\'\s>]+)',
+                replace_cid,
+                result["html_body"]
+            )
         
         return jsonify({"email": result})
     except Exception as e:
@@ -372,12 +408,17 @@ def download_archived_attachment(folder_id, message_id, index):
         raw_bytes = Encryption.decrypt(raw_bytes)
         msg = email_lib.message_from_bytes(raw_bytes)
         
-        # Find attachments
+        # Find attachments (must match filtering in get_archived_email)
         attachments = []
         if msg.is_multipart():
             for part in msg.walk():
                 content_disposition = str(part.get("Content-Disposition", ""))
                 filename = part.get_filename()
+                content_id = part.get("Content-ID")
+                
+                # Skip inline images - they're handled via cid: replacement in HTML
+                if content_id:
+                    continue
                 
                 # Treat as attachment if explicitly marked as attachment,
                 # OR if it has a filename (even if inline) and isn't text

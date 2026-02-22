@@ -183,17 +183,53 @@ def get_import_email():
         
         return (html_body, text_body)
     
+    def get_inline_images(msg):
+        """Extract inline images (parts with Content-ID) for cid: replacement."""
+        import base64
+        inline_images = {}  # cid -> data URL
+        
+        if msg.is_multipart():
+            for part in msg.walk():
+                content_id = part.get("Content-ID")
+                if content_id:
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        content_type = part.get_content_type()
+                        # Strip angle brackets: <image001.png@...> -> image001.png@...
+                        cid = content_id.strip('<>')
+                        b64_data = base64.b64encode(payload).decode('ascii')
+                        inline_images[cid] = f"data:{content_type};base64,{b64_data}"
+        
+        return inline_images
+    
+    def replace_cid_refs(html_body, inline_images):
+        """Replace cid: references in HTML with data URLs."""
+        if not html_body or not inline_images:
+            return html_body
+        
+        import re
+        def replace_cid(match):
+            cid = match.group(1)
+            return inline_images.get(cid, match.group(0))
+        
+        return re.sub(r'cid:([^"\'\s>]+)', replace_cid, html_body)
+    
     def get_attachments(msg):
-        """Extract attachment info from email."""
+        """Extract attachment info from email (excludes inline images)."""
         attachments = []
         if msg.is_multipart():
             for part in msg.walk():
                 content_disposition = str(part.get("Content-Disposition", ""))
                 filename = part.get_filename()
                 content_type = part.get_content_type()
+                content_id = part.get("Content-ID")
                 
                 # Debug logging
                 log.debug(f"  Part: {content_type}, filename: {filename}, disposition: {content_disposition[:30] if content_disposition else 'None'}")
+                
+                # Skip inline images - they're handled via cid: replacement in HTML
+                if content_id:
+                    continue
                 
                 # Treat as attachment if explicitly marked as attachment,
                 # OR if it has a filename (even if inline)
@@ -318,6 +354,10 @@ def get_import_email():
                 pass
         
         html_body, text_body = get_email_body(msg)
+        
+        # Resolve cid: references in HTML body
+        inline_images = get_inline_images(msg)
+        html_body = replace_cid_refs(html_body, inline_images)
         
         email_data = {
             "uid": uid,
@@ -473,15 +513,23 @@ def download_import_attachment():
         if not raw_email:
             return jsonify({"error": "Email not found in import source"}), 404
         
-        # Parse the email and find attachments
+        # Parse the email and find attachments (must match filtering in get_attachments)
         msg = email_lib.message_from_bytes(raw_email)
         
         attachments = []
         if msg.is_multipart():
             for part in msg.walk():
                 content_disposition = str(part.get("Content-Disposition", ""))
-                if "attachment" in content_disposition:
-                    filename = part.get_filename()
+                filename = part.get_filename()
+                content_id = part.get("Content-ID")
+                
+                # Skip inline images - they're handled via cid: replacement in HTML
+                if content_id:
+                    continue
+                
+                # Treat as attachment if explicitly marked as attachment,
+                # OR if it has a filename (even if inline) and isn't text
+                if "attachment" in content_disposition or (filename and part.get_content_maintype() != "text"):
                     if filename:
                         attachments.append({
                             "filename": decode_header_value(filename),

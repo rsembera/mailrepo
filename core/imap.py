@@ -330,13 +330,34 @@ class IMAP:
             "attachments": [],
         }
         
-        # Parse body
+        # First pass: collect inline images (parts with Content-ID) for cid: replacement
+        import base64
+        inline_images = {}  # cid -> data URL
+        
+        if msg.is_multipart():
+            for part in msg.walk():
+                content_id = part.get("Content-ID")
+                if content_id:
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        content_type = part.get_content_type()
+                        # Strip angle brackets: <image001.png@...> -> image001.png@...
+                        cid = content_id.strip('<>')
+                        b64_data = base64.b64encode(payload).decode('ascii')
+                        inline_images[cid] = f"data:{content_type};base64,{b64_data}"
+        
+        # Second pass: parse body and collect attachments
         if msg.is_multipart():
             for part in msg.walk():
                 content_type = part.get_content_type()
                 content_disposition = str(part.get("Content-Disposition", ""))
+                content_id = part.get("Content-ID")
                 
-                # Skip attachments for body extraction
+                # Skip inline images - they're handled via cid: replacement
+                if content_id:
+                    continue
+                
+                # Collect attachments
                 if "attachment" in content_disposition:
                     filename = part.get_filename()
                     if filename:
@@ -369,6 +390,19 @@ class IMAP:
                     result["html_body"] = body
                 else:
                     result["text_body"] = body
+        
+        # Replace cid: references in HTML body with data URLs
+        if result["html_body"] and inline_images:
+            import re
+            def replace_cid(match):
+                cid = match.group(1)
+                return inline_images.get(cid, match.group(0))
+            
+            result["html_body"] = re.sub(
+                r'cid:([^"\'\s>]+)',
+                replace_cid,
+                result["html_body"]
+            )
         
         return result
     

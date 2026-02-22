@@ -393,11 +393,17 @@ def download_imap_attachment(account_id, uid, index):
         raw_bytes = client.fetch_raw(uid)
         msg = email.message_from_bytes(raw_bytes)
         
-        # Find attachments
+        # Find attachments (must match filtering in IMAP.fetch_email)
         attachments = []
         if msg.is_multipart():
             for part in msg.walk():
                 content_disposition = str(part.get("Content-Disposition", ""))
+                content_id = part.get("Content-ID")
+                
+                # Skip inline images - they're handled via cid: replacement in HTML
+                if content_id:
+                    continue
+                
                 if "attachment" in content_disposition:
                     filename = part.get_filename()
                     if filename:
