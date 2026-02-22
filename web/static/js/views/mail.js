@@ -1245,20 +1245,12 @@ async function copyAsReply() {
     const email = currentViewerContext.emailData;
     const fromStr = email.from || '';
     const date = email.date || '';
-    let textBody = email.text_body || '';
     
-    // If text body looks malformed (very long lines with no breaks, or run-together words),
-    // try to extract better text from HTML
-    const looksMailformed = textBody && (
-        // Very long with few line breaks (suggests stripped formatting)
-        (textBody.length > 500 && textBody.split('\n').length < 5) ||
-        // Has obvious run-together words (lowercase followed immediately by uppercase)
-        /[a-z][A-Z]/.test(textBody.substring(0, 500))
-    );
-    
-    if ((!textBody || looksMailformed) && email.html_body) {
-        textBody = htmlToPlainText(email.html_body);
-    }
+    // Prefer HTML body when available - it's more reliably formatted than plain text,
+    // which can have missing spaces or other formatting issues from the sender's system
+    let textBody = email.html_body 
+        ? htmlToPlainText(email.html_body)
+        : (email.text_body || '');
     
     if (!textBody) {
         const { showAlert } = await import('../modals.js');
