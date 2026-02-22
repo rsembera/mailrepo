@@ -160,12 +160,6 @@ def get_archived_email(folder_id, message_id):
                 content_type = part.get_content_type()
                 content_disposition = str(part.get("Content-Disposition", ""))
                 filename = part.get_filename()
-                content_id = part.get("Content-ID")
-                
-                # Skip inline images that are embedded in HTML body (have Content-ID)
-                # These are displayed within the email via cid: references, not as separate attachments
-                if content_id:
-                    continue
                 
                 # Treat as attachment if explicitly marked as attachment,
                 # OR if it has a filename (even if inline) and isn't text
@@ -378,17 +372,12 @@ def download_archived_attachment(folder_id, message_id, index):
         raw_bytes = Encryption.decrypt(raw_bytes)
         msg = email_lib.message_from_bytes(raw_bytes)
         
-        # Find attachments (must match filtering in get_archived_email)
+        # Find attachments
         attachments = []
         if msg.is_multipart():
             for part in msg.walk():
                 content_disposition = str(part.get("Content-Disposition", ""))
                 filename = part.get_filename()
-                content_id = part.get("Content-ID")
-                
-                # Skip inline images that are embedded in HTML body (have Content-ID)
-                if content_id:
-                    continue
                 
                 # Treat as attachment if explicitly marked as attachment,
                 # OR if it has a filename (even if inline) and isn't text
