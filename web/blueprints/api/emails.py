@@ -180,7 +180,8 @@ def get_archived_email(folder_id, message_id):
                 content_id = part.get("Content-ID")
                 
                 # Skip inline images - they're handled via cid: replacement
-                if content_id:
+                # Only skip if it's an image with Content-ID (actual inline embedded image)
+                if content_id and content_type.startswith("image/"):
                     continue
                 
                 # Treat as attachment if explicitly marked as attachment,
@@ -415,9 +416,11 @@ def download_archived_attachment(folder_id, message_id, index):
                 content_disposition = str(part.get("Content-Disposition", ""))
                 filename = part.get_filename()
                 content_id = part.get("Content-ID")
+                content_type = part.get_content_type()
                 
                 # Skip inline images - they're handled via cid: replacement in HTML
-                if content_id:
+                # Only skip if it's an image with Content-ID (actual inline embedded image)
+                if content_id and content_type.startswith("image/"):
                     continue
                 
                 # Treat as attachment if explicitly marked as attachment,
@@ -426,7 +429,7 @@ def download_archived_attachment(folder_id, message_id, index):
                     if filename:
                         attachments.append({
                             "filename": _decode_header(filename),
-                            "content_type": part.get_content_type(),
+                            "content_type": content_type,
                             "payload": part.get_payload(decode=True),
                         })
         

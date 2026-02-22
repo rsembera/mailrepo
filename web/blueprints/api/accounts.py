@@ -399,9 +399,11 @@ def download_imap_attachment(account_id, uid, index):
             for part in msg.walk():
                 content_disposition = str(part.get("Content-Disposition", ""))
                 content_id = part.get("Content-ID")
+                content_type = part.get_content_type()
                 
                 # Skip inline images - they're handled via cid: replacement in HTML
-                if content_id:
+                # Only skip if it's an image with Content-ID (actual inline embedded image)
+                if content_id and content_type.startswith("image/"):
                     continue
                 
                 if "attachment" in content_disposition:
@@ -409,7 +411,7 @@ def download_imap_attachment(account_id, uid, index):
                     if filename:
                         attachments.append({
                             "filename": _decode_header_value(filename),
-                            "content_type": part.get_content_type(),
+                            "content_type": content_type,
                             "payload": part.get_payload(decode=True),
                         })
         

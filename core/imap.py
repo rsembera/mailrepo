@@ -354,7 +354,8 @@ class IMAP:
                 content_id = part.get("Content-ID")
                 
                 # Skip inline images - they're handled via cid: replacement
-                if content_id:
+                # Only skip if it's an image with Content-ID (actual inline embedded image)
+                if content_id and content_type.startswith("image/"):
                     continue
                 
                 # Collect attachments

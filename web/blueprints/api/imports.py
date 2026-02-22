@@ -228,7 +228,8 @@ def get_import_email():
                 log.debug(f"  Part: {content_type}, filename: {filename}, disposition: {content_disposition[:30] if content_disposition else 'None'}")
                 
                 # Skip inline images - they're handled via cid: replacement in HTML
-                if content_id:
+                # Only skip if it's an image with Content-ID (actual inline embedded image)
+                if content_id and content_type.startswith("image/"):
                     continue
                 
                 # Treat as attachment if explicitly marked as attachment,
@@ -522,9 +523,11 @@ def download_import_attachment():
                 content_disposition = str(part.get("Content-Disposition", ""))
                 filename = part.get_filename()
                 content_id = part.get("Content-ID")
+                content_type = part.get_content_type()
                 
                 # Skip inline images - they're handled via cid: replacement in HTML
-                if content_id:
+                # Only skip if it's an image with Content-ID (actual inline embedded image)
+                if content_id and content_type.startswith("image/"):
                     continue
                 
                 # Treat as attachment if explicitly marked as attachment,
@@ -533,7 +536,7 @@ def download_import_attachment():
                     if filename:
                         attachments.append({
                             "filename": decode_header_value(filename),
-                            "content_type": part.get_content_type(),
+                            "content_type": content_type,
                             "data": part.get_payload(decode=True),
                         })
         
