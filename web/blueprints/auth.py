@@ -247,11 +247,6 @@ def _run_auto_backup_check():
         # Checkpoint WAL first so backup captures all changes
         Database.checkpoint()
         
-        # Note: No need to call refresh_hash_baseline() here.
-        # The Libram-style backup system handles baseline updates internally
-        # in create_backup() - either after a successful backup, or when
-        # no changes are found.
-        
         frequency = get_setting('backup_frequency', 'daily')
         log.debug(f"Backup frequency setting: {frequency}")
         
@@ -296,7 +291,11 @@ def _run_auto_backup_check():
             # Record that we checked today (whether backup created or not)
             backup.record_backup_check()
         else:
-            log.debug("Backup not needed (frequency check)")
+            # Frequency check says no backup needed, but we still need to
+            # update the hash baseline after checkpoint to prevent false
+            # positives on the next check (WAL checkpoint can change db binary)
+            backup.refresh_hash_baseline()
+            log.debug("Backup not needed (frequency check), baseline updated")
     except Exception as e:
         log.error(f"Auto-backup failed: {e}")
 
