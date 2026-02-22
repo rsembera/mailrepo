@@ -446,8 +446,9 @@ class IMAP:
                 continue
             
             # This is text content - linkify URLs and emails
+            # URL pattern: only match valid URL characters
             part = re.sub(
-                r'\b(https?://[^\s<>\[\]()\'\"]+)',
+                r'\b(https?://[a-zA-Z0-9\-._~:/?#\[\]@!$&\'()*+,;=%]+)',
                 r'<a href="\1" target="_blank" rel="noopener noreferrer">\1</a>',
                 part
             )

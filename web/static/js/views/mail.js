@@ -918,8 +918,10 @@ function renderEmailContent(email, context = null) {
  */
 function renderHtmlBody(container, html, allowRemote = false) {
     const iframe = document.createElement('iframe');
-    // Sandbox: allow-same-origin for script access, allow-modals for print dialog
-    iframe.sandbox = 'allow-same-origin allow-modals';
+    // Sandbox: allow-same-origin for script access, allow-modals for print dialog,
+    // allow-popups for opening links in new tabs, allow-popups-to-escape-sandbox so
+    // opened tabs aren't sandboxed
+    iframe.sandbox = 'allow-same-origin allow-modals allow-popups allow-popups-to-escape-sandbox';
     iframe.style.width = '100%';
     iframe.style.border = 'none';
     container.innerHTML = '';

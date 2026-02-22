@@ -37,9 +37,10 @@ def _linkify_html(html):
             continue
         
         # This is text content - linkify URLs and emails
-        # First linkify URLs
+        # URL pattern: only match valid URL characters, stop at spaces (including &nbsp;), 
+        # punctuation that typically ends a sentence, or HTML entities
         part = re.sub(
-            r'\b(https?://[^\s<>\[\]()\'\"]+)',
+            r'\b(https?://[a-zA-Z0-9\-._~:/?#\[\]@!$&\'()*+,;=%]+)',
             r'<a href="\1" target="_blank" rel="noopener noreferrer">\1</a>',
             part
         )
