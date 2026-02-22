@@ -1244,8 +1244,16 @@ async function copyAsReply() {
     const date = email.date || '';
     let textBody = email.text_body || '';
     
-    // If no text body, try to extract from HTML
-    if (!textBody && email.html_body) {
+    // If text body looks malformed (very long lines with no breaks, or run-together words),
+    // try to extract better text from HTML
+    const looksMailformed = textBody && (
+        // Very long with few line breaks (suggests stripped formatting)
+        (textBody.length > 500 && textBody.split('\n').length < 5) ||
+        // Has obvious run-together words (lowercase followed immediately by uppercase)
+        /[a-z][A-Z]/.test(textBody.substring(0, 500))
+    );
+    
+    if ((!textBody || looksMailformed) && email.html_body) {
         textBody = htmlToPlainText(email.html_body);
     }
     
