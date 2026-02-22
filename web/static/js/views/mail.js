@@ -765,6 +765,42 @@ function plainTextToHtml(text) {
 }
 
 /**
+ * Convert HTML to plain text, preserving structure with line breaks.
+ * @param {string} html - HTML content
+ * @returns {string} Plain text with appropriate line breaks
+ */
+function htmlToPlainText(html) {
+    // Create a temporary element to parse HTML
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    
+    // Replace block elements with line breaks before getting text
+    const blockElements = temp.querySelectorAll('p, div, br, tr, li, h1, h2, h3, h4, h5, h6, blockquote');
+    blockElements.forEach(el => {
+        if (el.tagName === 'BR') {
+            el.replaceWith('\n');
+        } else if (el.tagName === 'LI') {
+            el.prepend(document.createTextNode('• '));
+            el.append(document.createTextNode('\n'));
+        } else {
+            el.append(document.createTextNode('\n'));
+        }
+    });
+    
+    // Get text content and clean up
+    let text = temp.textContent || temp.innerText || '';
+    
+    // Normalize whitespace: collapse multiple spaces but preserve line breaks
+    text = text.replace(/[^\S\n]+/g, ' ');  // Collapse horizontal whitespace only
+    text = text.replace(/\n /g, '\n');       // Remove space after line break
+    text = text.replace(/ \n/g, '\n');       // Remove space before line break
+    text = text.replace(/\n{3,}/g, '\n\n');  // Max 2 consecutive line breaks
+    text = text.trim();
+    
+    return text;
+}
+
+/**
  * Convert URLs in text to clickable links.
  * @param {string} text - Text that has already been HTML-escaped
  * @returns {string} HTML with URLs as clickable links
@@ -1206,11 +1242,16 @@ async function copyAsReply() {
     const email = currentViewerContext.emailData;
     const fromStr = email.from || '';
     const date = email.date || '';
-    const textBody = email.text_body || '';
+    let textBody = email.text_body || '';
+    
+    // If no text body, try to extract from HTML
+    if (!textBody && email.html_body) {
+        textBody = htmlToPlainText(email.html_body);
+    }
     
     if (!textBody) {
         const { showAlert } = await import('../modals.js');
-        showAlert('Copy as Reply', 'No plain text body available to quote.');
+        showAlert('Copy as Reply', 'No text content available to quote.');
         return;
     }
     
