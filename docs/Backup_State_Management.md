@@ -1,7 +1,7 @@
 # Backup State Management
 
 **Created:** February 16, 2026  
-**Updated:** February 19, 2026  
+**Updated:** February 22, 2026  
 **Status:** ✅ Implemented  
 **Reference:** Libram's `WAL_Checkpoint_Backup_Handling.md`
 
@@ -42,12 +42,24 @@ Hash baseline is stored in `data/.backup_state.json`:
 
 ### Automatic Baseline Updates
 
-The baseline is automatically updated in two places:
+The baseline is automatically updated in three places:
 
 1. **After successful backup** - `create_full_backup()` and `create_incremental_backup()` save the new hashes
 2. **When no changes found** - `create_incremental_backup()` updates baseline even when returning `None`
+3. **When frequency check skips backup** - `_run_auto_backup_check()` in auth.py calls `refresh_hash_baseline()` after checkpoint even when frequency doesn't require a backup
 
-This second case is critical: it ensures WAL checkpoint-induced hash changes don't accumulate as false "changes".
+The third case was added to fix spurious backups: WAL checkpoints run on every logout, but if the frequency check says "already backed up today", we'd skip the backup without updating the baseline. The next day's check would then see the checkpoint-induced binary changes as "real" changes.
+
+---
+
+## Logout Flow
+
+1. `Database.checkpoint()` - flushes WAL to main database (may change `.db` binary)
+2. `check_backup_needed(frequency)` - checks if backup is due based on calendar date
+3. **If backup needed**: `create_backup()` runs, updates baseline after completion
+4. **If backup NOT needed**: `refresh_hash_baseline()` captures post-checkpoint state
+
+This ensures the baseline always reflects the current post-checkpoint state, regardless of whether a backup was created.
 
 ---
 
@@ -78,7 +90,8 @@ Verified scenarios:
 4. ✅ Database changes trigger backup
 5. ✅ Repeated calls don't create spurious backups
 6. ✅ Migration from old manifest-based system
+7. ✅ Frequency skip + checkpoint doesn't cause spurious backup next day
 
 ---
 
-*Implemented February 19, 2026*
+*Last updated February 22, 2026*
