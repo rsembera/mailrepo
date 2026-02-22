@@ -39,10 +39,10 @@ def _linkify_html(html):
             continue
         
         # This is text content - linkify URLs and emails
-        # URL pattern: match until we hit whitespace (including \u00a0 non-breaking space),
-        # or characters that shouldn't be in URLs
+        # URL pattern: match until we hit whitespace, quotes, angle brackets, or HTML entities
+        # The negative lookahead stops at &nbsp; &amp; &lt; etc but allows & in query strings
         part = re.sub(
-            r'(https?://[^\s\u00a0<>\"\']+)',
+            r'(https?://(?:(?!&(?:nbsp|amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)[^\s\u00a0<>"\'])+)',
             r'<a href="\1" target="_blank" rel="noopener noreferrer">\1</a>',
             part
         )

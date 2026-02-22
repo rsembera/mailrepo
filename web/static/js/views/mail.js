@@ -1305,6 +1305,27 @@ async function viewEmailSource() {
     
     if (!sourceUrl) return;
     
+    // Open window immediately (before async fetch) to avoid popup blocker
+    const win = window.open('', '_blank');
+    if (!win) {
+        const { showAlert } = await import('../modals.js');
+        showAlert('Error', 'Unable to open new window. Please allow popups for this site.');
+        return;
+    }
+    
+    // Show loading state
+    win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+    <title>Email Source</title>
+    <style>
+        body { font-family: monospace; white-space: pre-wrap; word-wrap: break-word; 
+               padding: 20px; background: #1e1e1e; color: #d4d4d4; margin: 0; }
+    </style>
+</head>
+<body>Loading...</body>
+</html>`);
+    
     try {
         const response = await fetch(sourceUrl);
         if (!response.ok) {
@@ -1314,25 +1335,11 @@ async function viewEmailSource() {
         
         const data = await response.json();
         
-        // Open in new window
-        const win = window.open('', '_blank');
-        win.document.write(`<!DOCTYPE html>
-<html>
-<head>
-    <title>Email Source</title>
-    <style>
-        body { font-family: monospace; white-space: pre-wrap; word-wrap: break-word; 
-               padding: 20px; background: #1e1e1e; color: #d4d4d4; margin: 0; }
-    </style>
-</head>
-<body></body>
-</html>`);
+        // Update window with source
         win.document.body.textContent = data.source;
-        win.document.close();
     } catch (error) {
         console.error('Error fetching email source:', error);
-        const { showAlert } = await import('../modals.js');
-        showAlert('Error', error.message);
+        win.document.body.textContent = `Error: ${error.message}`;
     }
 }
 window.viewEmailSource = viewEmailSource;
