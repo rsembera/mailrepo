@@ -219,18 +219,19 @@ export function handleFolderSelect(e) {
 /**
  * Get folder name from full path.
  * Handles both filesystem paths and IMAP folder names.
+ * 
+ * IMAP folders use '/' as the hierarchy delimiter (detected from server).
+ * Dots in folder names are NOT hierarchy separators - they're part of the name.
  */
 function getFolderName(fullPath) {
-    // Handle Apple mbox paths like "/path/to/Folder.mbox"
+    // Handle paths with '/' (both filesystem and IMAP hierarchy)
     if (fullPath.includes('/')) {
         const name = fullPath.split('/').pop();
-        // Remove .mbox extension if present
+        // Remove .mbox extension if present (for Apple Mail imports)
         return name.replace(/\.mbox$/, '');
     }
-    // Handle IMAP folder paths like "INBOX/Subfolder"
-    if (fullPath.includes('.')) {
-        return fullPath.split('.').pop();
-    }
+    // No hierarchy separator - return as-is
+    // (Dots are part of the folder name, not separators)
     return fullPath;
 }
 
