@@ -191,9 +191,15 @@ def get_import_email():
                 content_disposition = str(part.get("Content-Disposition", ""))
                 filename = part.get_filename()
                 content_type = part.get_content_type()
+                content_id = part.get("Content-ID")
                 
                 # Debug logging
                 log.debug(f"  Part: {content_type}, filename: {filename}, disposition: {content_disposition[:30] if content_disposition else 'None'}")
+                
+                # Skip inline images that are embedded in HTML body (have Content-ID)
+                # These are displayed within the email via cid: references, not as separate attachments
+                if content_id:
+                    continue
                 
                 # Treat as attachment if explicitly marked as attachment,
                 # OR if it has a filename (even if inline)
@@ -473,15 +479,23 @@ def download_import_attachment():
         if not raw_email:
             return jsonify({"error": "Email not found in import source"}), 404
         
-        # Parse the email and find attachments
+        # Parse the email and find attachments (must match filtering in get_attachments)
         msg = email_lib.message_from_bytes(raw_email)
         
         attachments = []
         if msg.is_multipart():
             for part in msg.walk():
                 content_disposition = str(part.get("Content-Disposition", ""))
-                if "attachment" in content_disposition:
-                    filename = part.get_filename()
+                filename = part.get_filename()
+                content_id = part.get("Content-ID")
+                
+                # Skip inline images that are embedded in HTML body (have Content-ID)
+                if content_id:
+                    continue
+                
+                # Treat as attachment if explicitly marked as attachment,
+                # OR if it has a filename (even if inline) and isn't text
+                if "attachment" in content_disposition or (filename and part.get_content_maintype() != "text"):
                     if filename:
                         attachments.append({
                             "filename": decode_header_value(filename),
