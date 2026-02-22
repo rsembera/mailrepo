@@ -14,8 +14,46 @@ from core import Encryption
 from utils.log import get_logger
 from .email_parser import decode_email_header, extract_body_text
 from . import api_bp
+import re
 
 log = get_logger()
+
+
+def _linkify_html(html):
+    """
+    Convert plain text URLs and email addresses in HTML to clickable links.
+    Skips content that's already inside anchor tags or other HTML attributes.
+    """
+    # Split HTML into parts: inside tags vs text content
+    # This regex captures HTML tags (including their content) as separate groups
+    parts = re.split(r'(<a\s[^>]*>.*?</a>|<[^>]+>)', html, flags=re.IGNORECASE | re.DOTALL)
+    
+    result = []
+    for part in parts:
+        # Skip empty parts
+        if not part:
+            continue
+        # Skip HTML tags and existing anchor elements
+        if part.startswith('<'):
+            result.append(part)
+            continue
+        
+        # This is text content - linkify URLs and emails
+        # First linkify URLs
+        part = re.sub(
+            r'\b(https?://[^\s<>\[\]()\'\"]+)',
+            r'<a href="\1" target="_blank" rel="noopener noreferrer">\1</a>',
+            part
+        )
+        # Then linkify email addresses (but not ones we just made into links)
+        part = re.sub(
+            r'\b([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\b(?![^<]*>)',
+            r'<a href="mailto:\1">\1</a>',
+            part
+        )
+        result.append(part)
+    
+    return ''.join(result)
 
 
 @api_bp.route("/search", methods=["GET"])
@@ -227,6 +265,10 @@ def get_archived_email(folder_id, message_id):
                 replace_cid,
                 result["html_body"]
             )
+        
+        # Linkify URLs and emails in HTML body that aren't already links
+        if result["html_body"]:
+            result["html_body"] = _linkify_html(result["html_body"])
         
         return jsonify({"email": result})
     except Exception as e:

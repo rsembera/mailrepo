@@ -405,6 +405,10 @@ class IMAP:
                 result["html_body"]
             )
         
+        # Linkify URLs and emails in HTML body that aren't already links
+        if result["html_body"]:
+            result["html_body"] = self._linkify_html(result["html_body"])
+        
         return result
     
     def _decode_header(self, header: str) -> str:
@@ -423,6 +427,38 @@ class IMAP:
             return " ".join(decoded)
         except:
             return header
+    
+    def _linkify_html(self, html: str) -> str:
+        """
+        Convert plain text URLs and email addresses in HTML to clickable links.
+        Skips content that's already inside anchor tags or other HTML attributes.
+        """
+        import re
+        # Split HTML into parts: inside tags vs text content
+        parts = re.split(r'(<a\s[^>]*>.*?</a>|<[^>]+>)', html, flags=re.IGNORECASE | re.DOTALL)
+        
+        result = []
+        for part in parts:
+            if not part:
+                continue
+            if part.startswith('<'):
+                result.append(part)
+                continue
+            
+            # This is text content - linkify URLs and emails
+            part = re.sub(
+                r'\b(https?://[^\s<>\[\]()\'\"]+)',
+                r'<a href="\1" target="_blank" rel="noopener noreferrer">\1</a>',
+                part
+            )
+            part = re.sub(
+                r'\b([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\b(?![^<]*>)',
+                r'<a href="mailto:\1">\1</a>',
+                part
+            )
+            result.append(part)
+        
+        return ''.join(result)
     
     # ==========================================
     # Credential management (stored encrypted)
