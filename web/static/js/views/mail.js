@@ -1265,13 +1265,15 @@ async function copyAsReply() {
     const fromStr = email.from || '';
     const date = email.date || '';
     
-    // Prefer HTML body when available - it's more reliably formatted than plain text,
-    // which can have missing spaces or other formatting issues from the sender's system
-    let textBody = email.html_body 
+    // For plain text: prefer extracting from HTML (more reliable), fall back to text_body
+    const textBody = email.html_body 
         ? htmlToPlainText(email.html_body)
         : (email.text_body || '');
     
-    if (!textBody) {
+    // For HTML: use original HTML body if available, otherwise convert plain text
+    const htmlBody = email.html_body || (email.text_body ? plainTextToHtml(email.text_body) : '');
+    
+    if (!textBody && !htmlBody) {
         const { showAlert } = await import('../modals.js');
         showAlert('Copy as Reply', 'No text content available to quote.');
         return;
@@ -1281,9 +1283,9 @@ async function copyAsReply() {
     const quotedLines = textBody.split('\n').map(line => `> ${line}`).join('\n');
     const plainText = `On ${date}, ${fromStr} wrote:\n${quotedLines}`;
     
-    // HTML version with blockquote (for HTML compose mode)
+    // HTML version with blockquote - use original HTML body directly for best fidelity
     const htmlText = `<p>On ${escapeHtml(date)}, ${escapeHtml(fromStr)} wrote:</p>` +
-        `<blockquote style="border-left: 2px solid #ccc; margin: 0 0 0 0.5em; padding: 0 0 0 0.5em; color: #555;">${plainTextToHtml(textBody)}</blockquote>`;
+        `<blockquote style="border-left: 2px solid #ccc; margin: 0 0 0 0.5em; padding: 0 0 0 0.5em; color: #555;">${htmlBody}</blockquote>`;
     
     try {
         // Write both formats — mail client picks the one it prefers
