@@ -152,7 +152,6 @@
 .archive-add-folder:hover {
     border-color: var(--color-primary);
     border-style: solid;
-    background: var(--color-primary-lighter);
     color: var(--color-primary);
 }
 
