@@ -324,6 +324,7 @@ async function loadBackupStatus() {
         populateLocationDropdown(data.cloud_folders || [], data.location || '');
         
         // Set dropdown values after a short delay to ensure custom selects are ready
+        // Use 150ms to ensure location dropdown (50ms) has finished first
         setTimeout(() => {
             const freqSelect = document.getElementById('backup-frequency-select');
             if (freqSelect && freqSelect._customSelect) {
@@ -335,10 +336,10 @@ async function loadBackupStatus() {
                 retSelect._customSelect.setValue(initialSettings.retention);
             }
             
-            // Mark settings as loaded AFTER setValue calls complete
+            // Mark settings as loaded AFTER all setValue calls complete
             // (setValue dispatches change events, so this must come last)
-            setTimeout(() => { settingsLoaded = true; }, 0);
-        }, 100);
+            setTimeout(() => { settingsLoaded = true; }, 50);
+        }, 150);
         
         // Check for pending restore
         if (data.restore_pending) {
