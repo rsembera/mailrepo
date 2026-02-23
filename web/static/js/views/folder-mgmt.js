@@ -16,10 +16,12 @@ import { updateStagedBadge } from '../components/staging.js';
 import { getMountedImports } from '../components/imports.js';
 import { updateTrashBadge } from './trash.js';
 import { DatePicker } from '../components/date-picker.js';
+import { renderFolderTree } from '../components/folder-tree.js';
 
 // Module state
 let movingFolderId = null;
 let moveDestinationId = null;
+let moveFolderTreeController = null;
 let vaultFolderId = null;
 let vaultDatePicker = null;
 
@@ -154,50 +156,61 @@ export function openMoveFolder(folderId) {
     const descendants = getDescendantIds(folderId);
     const list = document.getElementById('moveFolderList');
     
-    let html = `
-        <div class="folder-select-item" data-id="root">
+    // Build structure: root option + tree container
+    const isCurrentlyRoot = folder.parent_id === null;
+    list.innerHTML = `
+        <div class="folder-select-item root-option ${isCurrentlyRoot ? 'current-location' : ''}" data-id="root">
             <i data-lucide="home"></i>
             <span>Root level (no parent)</span>
+            ${isCurrentlyRoot ? '<span class="current-badge">current</span>' : ''}
         </div>
+        <div class="folder-tree-container" id="moveFolderTreeContainer"></div>
     `;
     
-    const validFolders = state.folders.filter(f => 
-        !f.deleted_at && !f.retention_date && f.id != folderId && !descendants.includes(f.id)
-    );
+    // Attach root option click handler
+    const rootOption = list.querySelector('.root-option');
+    rootOption.addEventListener('click', () => {
+        // Deselect tree selection
+        if (moveFolderTreeController) {
+            moveFolderTreeController.setSelected(null);
+        }
+        list.querySelectorAll('.folder-select-item').forEach(i => i.classList.remove('selected'));
+        rootOption.classList.add('selected');
+        moveDestinationId = 'root';
+        document.getElementById('confirmMoveBtn').disabled = false;
+    });
     
-    function renderFolderOption(f, depth) {
-        const indent = depth * 16;
-        const isCurrentParent = (folder.parent_id === f.id) || (folder.parent_id === null && f.id === 'root');
-        html += `
-            <div class="folder-select-item ${isCurrentParent ? 'current-location' : ''}" data-id="${f.id}" style="padding-left: ${12 + indent}px">
-                <i data-lucide="folder"></i>
-                <span>${escapeHtml(f.name)}</span>
-                ${isCurrentParent ? '<span class="current-badge">current</span>' : ''}
-            </div>
-        `;
-        const children = validFolders.filter(c => c.parent_id == f.id);
-        children.forEach(child => renderFolderOption(child, depth + 1));
-    }
+    // Render folder tree
+    const container = document.getElementById('moveFolderTreeContainer');
+    moveFolderTreeController = renderFolderTree(container, {
+        filter: f => !f.deleted_at && !f.retention_date && f.id != folderId && !descendants.includes(f.id),
+        selectable: true,
+        selectedId: null,
+        showChevrons: true,
+        showColorDots: true,
+        showAddButtons: false,
+        onSelect: (selectedFolderId) => {
+            // Deselect root option
+            rootOption.classList.remove('selected');
+            moveDestinationId = selectedFolderId;
+            document.getElementById('confirmMoveBtn').disabled = false;
+        }
+    });
     
-    validFolders.filter(f => !f.parent_id).forEach(f => renderFolderOption(f, 0));
-    list.innerHTML = html;
-    
-    if (folder.parent_id === null) {
-        list.querySelector('[data-id="root"]')?.classList.add('current-location');
-        const rootItem = list.querySelector('[data-id="root"]');
-        if (rootItem && !rootItem.querySelector('.current-badge')) {
-            rootItem.innerHTML += '<span class="current-badge">current</span>';
+    // Mark current parent in tree
+    if (folder.parent_id !== null) {
+        const currentParentRow = container.querySelector(`.folder-tree-row[data-id="${folder.parent_id}"]`);
+        if (currentParentRow) {
+            currentParentRow.classList.add('current-location');
+            // Add badge if not present
+            if (!currentParentRow.querySelector('.current-badge')) {
+                const badge = document.createElement('span');
+                badge.className = 'current-badge';
+                badge.textContent = 'current';
+                currentParentRow.appendChild(badge);
+            }
         }
     }
-    
-    list.querySelectorAll('.folder-select-item').forEach(item => {
-        item.addEventListener('click', () => {
-            list.querySelectorAll('.folder-select-item').forEach(i => i.classList.remove('selected'));
-            item.classList.add('selected');
-            moveDestinationId = item.dataset.id;
-            document.getElementById('confirmMoveBtn').disabled = false;
-        });
-    });
     
     document.getElementById('moveFolderModal').classList.add('active');
     if (typeof lucide !== 'undefined') lucide.createIcons();
