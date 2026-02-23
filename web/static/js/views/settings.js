@@ -11,6 +11,9 @@ let contextTitle = null;
 let contextMeta = null;
 let emailList = null;
 
+// Guard to prevent saving settings during initialization
+let settingsLoaded = false;
+
 /**
  * Initialize the settings view.
  */
@@ -24,6 +27,9 @@ export function initSettingsView(config) {
  * Show the settings view in the main content area.
  */
 export function showSettingsView() {
+    // Reset guard flag
+    settingsLoaded = false;
+    
     const sidebar = document.getElementById('sidebar');
     const toolbar = document.querySelector('.content-toolbar');
     const headerActions = document.querySelector('.header-actions');
@@ -314,6 +320,7 @@ function initSecurityHandlers() {
     // Session timeout handler (custom select)
     if (sessionTimeoutSelect) {
         sessionTimeoutSelect.addEventListener('change', async (e) => {
+            if (!settingsLoaded) return; // Skip during initialization
             const value = e.detail.value;
             try {
                 const response = await fetch('/api/settings/session-timeout', {
@@ -655,6 +662,10 @@ async function loadCurrentSettings() {
     } catch (err) {
         console.error('Failed to load session timeout setting:', err);
     }
+    
+    // Mark settings as loaded - changes after this are user-initiated
+    // Use setTimeout to ensure change events from setValue() have been processed
+    setTimeout(() => { settingsLoaded = true; }, 50);
 }
 
 /**
@@ -664,6 +675,7 @@ function initTrashHandlers() {
     const select = document.getElementById('trashRetentionSelect');
     if (select) {
         select.addEventListener('change', async (e) => {
+            if (!settingsLoaded) return; // Skip during initialization
             try {
                 await fetch('/api/settings/trash-retention', {
                     method: 'POST',
