@@ -497,7 +497,7 @@ function renderSourceGroup(source, sourceKey, destId, type) {
                     ${isImap ? `
                         <label class="source-action-label" title="Action to apply to emails on the server after committing">
                             <span>On server:</span>
-                            ${renderSourceActionDropdown(`${sourceKey}:${destId}`)}
+                            ${renderSourceActionDropdown(`${sourceKey}:${destId}`, sourceActions[`${sourceKey}:${destId}`] || 'leave')}
                         </label>
                     ` : `
                         <span class="review-import-label">No server action</span>
