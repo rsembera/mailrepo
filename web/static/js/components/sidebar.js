@@ -38,6 +38,16 @@ export function initSidebar(config = {}) {
     if (archiveHeader) {
         archiveHeader.addEventListener('contextmenu', showArchiveHeaderContextMenu);
     }
+    
+    // "+" button in Archive header to add root folder
+    const addFolderBtn = document.getElementById('addArchiveFolderBtn');
+    if (addFolderBtn) {
+        addFolderBtn.addEventListener('click', async (e) => {
+            e.stopPropagation(); // Don't toggle section
+            const { createSubfolder } = await import('../views/folder-mgmt.js');
+            createSubfolder(null);
+        });
+    }
 }
 
 /**

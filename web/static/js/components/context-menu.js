@@ -56,6 +56,7 @@ export function showFolderContextMenu(e, folderId, folder) {
     const items = [
         { icon: 'folder-plus', label: 'New Subfolder', action: 'subfolder' },
         { icon: 'pencil', label: 'Rename', action: 'rename' },
+        { icon: 'palette', label: 'Change Color', action: 'color' },
         { icon: 'folder-output', label: 'Move', action: 'move' },
         { divider: true },
         { icon: 'archive', label: 'Move to Retention Vault', action: 'vault' },
@@ -168,6 +169,15 @@ async function handleAction(action, folderId, folder) {
                 // Import and call if not on window
                 const { renameFolder } = await import('../views/folder-mgmt.js');
                 renameFolder(folderId);
+            }
+            break;
+            
+        case 'color':
+            if (typeof window.showColorPickerForFolder === 'function') {
+                window.showColorPickerForFolder(folderId);
+            } else {
+                const { showColorPickerForFolder } = await import('../views/folder-mgmt.js');
+                showColorPickerForFolder(folderId);
             }
             break;
             

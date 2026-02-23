@@ -641,6 +641,59 @@ export function openColorPicker(folderId, event) {
 }
 window.openColorPicker = openColorPicker;
 
+/**
+ * Show color picker for a folder, positioned near the folder row in sidebar.
+ * Used by context menu.
+ */
+export function showColorPickerForFolder(folderId) {
+    document.querySelector('.color-picker-popup')?.remove();
+    
+    const folder = state.folders.find(f => f.id == folderId);
+    
+    // Find the folder row in the sidebar to position near it
+    const folderRow = document.querySelector(`.tree-item-row[data-id="${folderId}"]`);
+    let top = 100, left = 100;
+    
+    if (folderRow) {
+        const rect = folderRow.getBoundingClientRect();
+        top = rect.bottom + 4;
+        left = rect.left + 20;
+    }
+    
+    const popup = document.createElement('div');
+    popup.className = 'color-picker-popup';
+    popup.style.top = `${top}px`;
+    popup.style.left = `${left}px`;
+    
+    popup.innerHTML = FOLDER_COLORS.map(c => `
+        <button class="color-option ${folder?.color === c.value ? 'selected' : ''}" 
+                data-color="${c.value || ''}" title="${c.name}">
+            ${c.value ? `<span style="background: ${c.value}"></span>` : '<i data-lucide="x"></i>'}
+        </button>
+    `).join('');
+    
+    document.body.appendChild(popup);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    
+    popup.addEventListener('click', async (e) => {
+        const option = e.target.closest('.color-option');
+        if (!option) return;
+        const color = option.dataset.color || null;
+        await setFolderColor(folderId, color);
+        popup.remove();
+    });
+    
+    setTimeout(() => {
+        document.addEventListener('click', function closePopup(e) {
+            if (!popup.contains(e.target)) {
+                popup.remove();
+                document.removeEventListener('click', closePopup);
+            }
+        });
+    }, 10);
+}
+window.showColorPickerForFolder = showColorPickerForFolder;
+
 async function setFolderColor(folderId, color) {
     try {
         const response = await fetch(`/api/folders/${folderId}`, {
@@ -658,7 +711,12 @@ async function setFolderColor(folderId, color) {
         const folder = state.folders.find(f => f.id == folderId);
         if (folder) folder.color = color;
         
-        showFolderManagementView();
+        // Only refresh management view if we're currently in it
+        const managementHeader = document.querySelector('.folder-management-header');
+        if (managementHeader) {
+            showFolderManagementView();
+        }
+        
         refreshSidebarFolders();
     } catch (error) {
         console.error('Error updating folder color:', error);
