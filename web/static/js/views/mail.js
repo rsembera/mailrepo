@@ -999,6 +999,7 @@ function renderHtmlBody(container, html, allowRemote = false) {
         <html>
         <head>
             ${cspMeta}
+            <base target="_blank">
             <style>
                 html, body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
                        font-size: 14px; line-height: 1.5; color: #333; margin: 0; padding: 0; }
