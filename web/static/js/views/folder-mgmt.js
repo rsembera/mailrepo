@@ -20,7 +20,6 @@ import { DatePicker } from '../components/date-picker.js';
 // Module state
 let movingFolderId = null;
 let moveDestinationId = null;
-let archiveFilter = '';
 let vaultFolderId = null;
 let vaultDatePicker = null;
 
@@ -51,209 +50,7 @@ export function initFolderMgmt(config) {
     emailList = config.emailList;
 }
 
-/**
- * Filter folders by name (keeps parent chain visible).
- * Excludes deleted folders and folders in the retention vault.
- */
-function filterFolders(folders, query) {
-    // Helper to check if folder is available (not deleted, not in vault)
-    const isAvailable = f => !f.deleted_at && !f.retention_date;
-    
-    if (!query) return folders.filter(isAvailable);
-    
-    const lowerQuery = query.toLowerCase();
-    const matchingIds = new Set();
-    
-    // Find all folders that match
-    folders.forEach(f => {
-        if (isAvailable(f) && f.name.toLowerCase().includes(lowerQuery)) {
-            matchingIds.add(f.id);
-            // Also include all ancestors
-            let parentId = f.parent_id;
-            while (parentId) {
-                matchingIds.add(parentId);
-                const parent = folders.find(p => p.id === parentId);
-                parentId = parent?.parent_id;
-            }
-        }
-    });
-    
-    return folders.filter(f => isAvailable(f) && matchingIds.has(f.id));
-}
 
-/**
- * Show the folder management view.
- */
-export async function showFolderManagementView() {
-    archiveFilter = '';
-    
-    const sidebar = document.getElementById('sidebar');
-    const toolbar = document.querySelector('.content-toolbar');
-    const headerActions = document.querySelector('.header-actions');
-    const subfoldersBar = document.getElementById('subfoldersBar');
-    
-    sidebar.style.display = 'none';
-    if (toolbar) toolbar.style.display = 'none';
-    if (headerActions) headerActions.style.display = 'none';
-    if (subfoldersBar) subfoldersBar.style.display = 'none';
-    
-    if (contextTitle) contextTitle.textContent = 'Manage Archive';
-    if (contextMeta) contextMeta.textContent = '';
-    
-    await loadFolders();
-    
-    // Check for active (non-deleted, non-vault) folders
-    const activeFolders = state.folders.filter(f => !f.deleted_at && !f.retention_date);
-    
-    if (activeFolders.length === 0) {
-        emailList.innerHTML = `
-            <div class="empty-state">
-                <i data-lucide="folder" class="empty-icon"></i>
-                <h3>No Folders</h3>
-                <p>Create your first folder to start archiving emails.</p>
-                <button class="btn btn-primary" onclick="openNewFolderModal(false)">
-                    <i data-lucide="plus"></i> New Folder
-                </button>
-            </div>
-        `;
-    } else {
-        renderFolderManagementList();
-    }
-    
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-}
-
-function renderFolderManagementList() {
-    const totalFolders = state.folders.filter(f => !f.deleted_at && !f.retention_date).length;
-    const filteredFolders = filterFolders(state.folders, archiveFilter);
-    const filteredCount = filteredFolders.length;
-    const topLevelFolders = filteredFolders.filter(f => !f.parent_id);
-    topLevelFolders.sort((a, b) => a.name.localeCompare(b.name));
-    
-    // Update context meta
-    if (contextMeta) {
-        if (archiveFilter && filteredCount !== totalFolders) {
-            contextMeta.textContent = `${filteredCount} of ${totalFolders} folders`;
-        } else {
-            contextMeta.textContent = `${totalFolders} folder${totalFolders !== 1 ? 's' : ''}`;
-        }
-    }
-    
-    let html = `
-        <div class="folder-management-list">
-            <div class="folder-management-toolbar">
-                <div class="archive-filter">
-                    <i data-lucide="search" class="search-icon"></i>
-                    <input type="text" 
-                           id="archiveFilterInput" 
-                           placeholder="Filter folders..." 
-                           value="${escapeHtml(archiveFilter)}"
-                           oninput="handleArchiveFilter(this.value)">
-                    ${archiveFilter ? '<button class="search-clear" onclick="clearArchiveFilter()"><i data-lucide="x"></i></button>' : ''}
-                </div>
-                <button class="btn btn-primary" onclick="openNewFolderModal(false)">
-                    <i data-lucide="plus"></i>
-                    New Folder
-                </button>
-            </div>
-    `;
-    
-    if (filteredCount === 0 && archiveFilter) {
-        html += `
-            <div class="empty-state" style="padding: var(--space-xl);">
-                <p>No folders match "${escapeHtml(archiveFilter)}"</p>
-            </div>
-        `;
-    } else {
-        html += `
-            <div class="folder-management-header">
-                <span>Folder</span>
-                <span>Color</span>
-                <span>Actions</span>
-            </div>
-        `;
-        
-        // ancestry is an array of booleans - true if that ancestor is the last child at its level
-        function renderFolderWithChildren(folder, depth, ancestry = []) {
-            const siblings = depth === 0 
-                ? topLevelFolders 
-                : filteredFolders.filter(f => f.parent_id == folder.parent_id);
-            const isLast = siblings[siblings.length - 1].id === folder.id;
-            
-            html += renderFolderManagementItem(folder, depth, ancestry, isLast);
-            
-            const children = filteredFolders.filter(f => f.parent_id == folder.id);
-            children.sort((a, b) => a.name.localeCompare(b.name));
-            children.forEach(child => renderFolderWithChildren(child, depth + 1, [...ancestry, isLast]));
-        }
-        
-        topLevelFolders.forEach(folder => renderFolderWithChildren(folder, 0, []));
-    }
-    
-    html += `</div>`;
-    
-    emailList.innerHTML = html;
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-}
-
-function renderFolderManagementItem(folder, depth = 0, ancestry = [], isLast = false) {
-    const colorDot = folder.color ? 
-        `<span class="color-dot" style="background: ${folder.color}"></span>` : 
-        `<span class="color-dot color-dot-none"></span>`;
-    
-    // Build tree lines
-    let treePrefix = '';
-    if (depth > 0) {
-        // Draw vertical lines for ancestors that aren't last at their level
-        for (let i = 0; i < ancestry.length; i++) {
-            if (ancestry[i]) {
-                treePrefix += '<span class="tree-spacer"></span>';
-            } else {
-                treePrefix += '<span class="tree-line-vertical"></span>';
-            }
-        }
-        // Draw branch for this item
-        treePrefix += isLast 
-            ? '<span class="tree-line-last"></span>' 
-            : '<span class="tree-line-branch"></span>';
-    }
-    
-    return `
-        <div class="folder-management-item" data-id="${folder.id}">
-            <div class="folder-management-name">
-                ${treePrefix}
-                ${colorDot}
-                <i data-lucide="folder" class="folder-icon"></i>
-                <span class="folder-label" data-id="${folder.id}">${escapeHtml(folder.name)}</span>
-            </div>
-            <div class="folder-management-color">
-                <button class="color-picker-btn" onclick="openColorPicker(${folder.id}, event)" title="Change color">
-                    ${folder.color ? `<span class="color-swatch" style="background: ${folder.color}"></span>` : '<i data-lucide="palette"></i>'}
-                </button>
-            </div>
-            <div class="folder-management-actions">
-                <button class="btn btn-sm btn-icon" onclick="renameFolder(${folder.id})" title="Rename">
-                    <i data-lucide="pencil"></i>
-                </button>
-                <button class="btn btn-sm btn-icon" onclick="openMoveFolder(${folder.id})" title="Move">
-                    <i data-lucide="folder-input"></i>
-                </button>
-                <button class="btn btn-sm btn-icon" onclick="createSubfolder(${folder.id})" title="Add subfolder">
-                    <i data-lucide="folder-plus"></i>
-                </button>
-                <button class="btn btn-sm btn-icon" onclick="openMoveToVault(${folder.id})" title="Move to Retention Vault">
-                    <i data-lucide="archive"></i>
-                </button>
-                <button class="btn btn-sm btn-icon" onclick="exportFolder(${folder.id})" title="Export as ZIP">
-                    <i data-lucide="download"></i>
-                </button>
-                <button class="btn btn-sm btn-icon btn-danger-subtle" onclick="deleteFolder(${folder.id})" title="Delete">
-                    <i data-lucide="trash-2"></i>
-                </button>
-            </div>
-        </div>
-    `;
-}
 
 export async function renameFolder(folderId) {
     const folder = state.folders.find(f => f.id == folderId);
@@ -291,12 +88,6 @@ export async function renameFolder(folderId) {
         }
         
         folder.name = newName.trim();
-        
-        // Only refresh folder management view if we're on it
-        const emailList = document.getElementById('emailList');
-        if (emailList && emailList.querySelector('.folder-management-list')) {
-            showFolderManagementView();
-        }
         
         refreshSidebarFolders();
     } catch (error) {
@@ -341,12 +132,6 @@ export async function createSubfolder(parentId) {
         
         const data = await response.json();
         state.folders.push(data.folder);
-        
-        // Only refresh folder management view if we're on it
-        const emailList = document.getElementById('emailList');
-        if (emailList && emailList.querySelector('.folder-management-list')) {
-            showFolderManagementView();
-        }
         
         refreshSidebarFolders();
     } catch (error) {
@@ -458,12 +243,6 @@ export async function confirmMoveFolder() {
         folder.parent_id = newParentId;
         closeModal('moveFolderModal');
         
-        // Only refresh folder management view if we're on it
-        const emailList = document.getElementById('emailList');
-        if (emailList && emailList.querySelector('.folder-management-list')) {
-            showFolderManagementView();
-        }
-        
         refreshSidebarFolders();
     } catch (error) {
         console.error('Error moving folder:', error);
@@ -513,12 +292,6 @@ export async function deleteFolder(folderId) {
         }
         folder.deleted_at = Date.now() / 1000;
         markDeleted(folderId);
-        
-        // Only refresh folder management view if we're on it
-        const emailList = document.getElementById('emailList');
-        if (emailList && emailList.querySelector('.folder-management-list')) {
-            showFolderManagementView();
-        }
         
         updateTrashBadge();
         updateSidebarFoldersAfterDelete();
@@ -711,44 +484,11 @@ async function setFolderColor(folderId, color) {
         const folder = state.folders.find(f => f.id == folderId);
         if (folder) folder.color = color;
         
-        // Only refresh management view if we're currently in it
-        const managementHeader = document.querySelector('.folder-management-header');
-        if (managementHeader) {
-            showFolderManagementView();
-        }
-        
         refreshSidebarFolders();
     } catch (error) {
         console.error('Error updating folder color:', error);
     }
 }
-
-/**
- * Handle archive filter input.
- */
-function handleArchiveFilter(query) {
-    archiveFilter = query;
-    renderFolderManagementList();
-    
-    // Refocus the input and restore cursor position
-    const input = document.getElementById('archiveFilterInput');
-    if (input) {
-        input.focus();
-        input.setSelectionRange(query.length, query.length);
-    }
-}
-window.handleArchiveFilter = handleArchiveFilter;
-
-/**
- * Clear archive filter.
- */
-function clearArchiveFilter() {
-    archiveFilter = '';
-    renderFolderManagementList();
-    const input = document.getElementById('archiveFilterInput');
-    if (input) input.focus();
-}
-window.clearArchiveFilter = clearArchiveFilter;
 
 // ============================================================
 // RETENTION VAULT FUNCTIONS
@@ -826,13 +566,6 @@ async function confirmMoveToVault() {
         
         // Refresh the folder list
         await loadFolders();
-        
-        // Only refresh folder management view if we're on it
-        const emailList = document.getElementById('emailList');
-        if (emailList && emailList.querySelector('.folder-management-list')) {
-            showFolderManagementView();
-        }
-        
         refreshSidebarFolders();
         
     } catch (error) {

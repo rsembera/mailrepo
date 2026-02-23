@@ -22,7 +22,7 @@ import { initEmailList, renderEmailList, toggleEmailSelection, updateSelectAllSt
 import { initSidebar, toggleSection, handleTreeItemClick, refreshSidebarFolders, refreshSidebarAccounts, loadAccountLabels, buildImapFolderTree, getFolderIcon } from './components/sidebar.js';
 import { initMailView, selectView, loadAccountEmails, loadFolderEmails, openEmailViewer, closeEmailViewer, showLoading, showError, restoreDefaultHeaderActions } from './views/mail.js';
 import { initStaging, openStageModal, renderFolderSelectTree, handleFolderSelect, confirmStage, updateStagedBadge, updateButtonStates, setSelectedDestinationFolder } from './components/staging.js';
-import { initFolderMgmt, showFolderManagementView, renameFolder, createSubfolder, openMoveFolder, confirmMoveFolder, deleteFolder, openColorPicker } from './views/folder-mgmt.js';
+import { initFolderMgmt, renameFolder, createSubfolder, openMoveFolder, confirmMoveFolder, deleteFolder, openColorPicker } from './views/folder-mgmt.js';
 import { initFolderSelection, showFolderSelectionView, showImportFolderSelectionView, stageSelectedFolders } from './views/folder-selection.js';
 import { initTrashView, showTrashView, updateTrashBadge, restoreFolder, permanentlyDeleteFolder, emptyTrash } from './views/trash.js';
 import { initVault, showVaultView, updateVaultBadge, checkOverdueFolders, hideOverdueAlert } from './views/vault.js';
@@ -288,13 +288,8 @@ async function createFolder(returnToStage) {
             selectedDestinationFolder = data.folder.id;
             document.getElementById('confirmStageBtn').disabled = false;
         } else {
-            // Check if we're in folder management view
-            const activeView = document.querySelector('.rail-btn.active')?.dataset.view;
-            if (activeView === 'folders') {
-                showFolderManagementView();
-            } else {
-                location.reload();
-            }
+            // Refresh sidebar to show new folder
+            refreshSidebarFolders();
         }
         
     } catch (error) {
@@ -470,10 +465,6 @@ function handleImportUnmount(importId) {
                 case 'staged':
                     hideOverdueAlert();
                     showReviewView();
-                    break;
-                case 'folders':
-                    hideOverdueAlert();
-                    showFolderManagementView();
                     break;
                 case 'trash':
                     hideOverdueAlert();
