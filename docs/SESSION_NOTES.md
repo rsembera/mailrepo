@@ -16,6 +16,12 @@
 - **Added "Change Color" to folder context menu** — Replaces separate management view
 - **Removed ~280 lines of dead code** — `showFolderManagementView()`, `renderFolderManagementList()`, `renderFolderManagementItem()`, filter functions, and related imports
 - **Fixed nested button HTML** — Archive header row now uses proper flex container instead of invalid nested buttons
+- **Moved Retention Vault icon** — Now in bottom rail between dividers, signaling "cold storage" separate from active workflow
+
+### Settings/Backups Initialization Bug
+
+- **Fixed spurious backup triggers** — Viewing Settings page was writing to database because `setValue()` on custom selects triggered `change` events that POSTed settings. Added `settingsLoaded` guard flag to skip saves during initialization.
+- **Same fix applied to Backups view** — Increased timing delays and added guard to prevent false "unsaved changes" warnings
 
 ### Copy as Quotation Fixes
 
