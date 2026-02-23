@@ -62,10 +62,6 @@
     background: var(--color-background-secondary);
 }
 
-.section-header-row:hover {
-    background: var(--color-border);
-}
-
 .section-header-row .section-header {
     flex: 1;
     min-width: 0;
