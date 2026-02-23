@@ -335,8 +335,9 @@ async function loadBackupStatus() {
                 retSelect._customSelect.setValue(initialSettings.retention);
             }
             
-            // Mark settings as loaded - changes after this point are user-initiated
-            settingsLoaded = true;
+            // Mark settings as loaded AFTER setValue calls complete
+            // (setValue dispatches change events, so this must come last)
+            setTimeout(() => { settingsLoaded = true; }, 0);
         }, 100);
         
         // Check for pending restore
