@@ -732,8 +732,11 @@ export async function openEmailViewer(emailId) {
 function plainTextToHtml(text) {
     const blockquoteStyle = 'border-left: 2px solid #ccc; margin: 0 0 0 0.5em; padding: 0 0 0 0.5em; color: #888;';
     
-    // Normalize excessive blank lines (3+ consecutive newlines -> 2)
-    text = text.replace(/\n{3,}/g, '\n\n');
+    // Normalize line endings and collapse excessive blank lines
+    text = text.replace(/\r\n/g, '\n');           // Windows -> Unix
+    text = text.replace(/\r/g, '\n');             // Old Mac -> Unix
+    text = text.replace(/^[ \t]+$/gm, '');        // Lines with only spaces/tabs -> empty
+    text = text.replace(/\n{3,}/g, '\n\n');       // 3+ blank lines -> 2
     
     const lines = text.split('\n');
     let html = '';
