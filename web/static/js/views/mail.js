@@ -731,6 +731,10 @@ export async function openEmailViewer(emailId) {
  */
 function plainTextToHtml(text) {
     const blockquoteStyle = 'border-left: 2px solid #ccc; margin: 0 0 0 0.5em; padding: 0 0 0 0.5em; color: #888;';
+    
+    // Normalize excessive blank lines (3+ consecutive newlines -> 2)
+    text = text.replace(/\n{3,}/g, '\n\n');
+    
     const lines = text.split('\n');
     let html = '';
     let currentDepth = 0;
