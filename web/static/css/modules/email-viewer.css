@@ -234,8 +234,9 @@
 
 .email-text-body {
     white-space: pre-wrap;
-    font-family: var(--font-body);
-    line-height: 1.6;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', monospace;
+    font-size: 0.9rem;
+    line-height: 1.5;
     color: var(--color-text);
 }
 
