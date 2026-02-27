@@ -282,11 +282,14 @@ def get_account_folders(account_id):
         client = IMAP.connect_with_credentials(account["credentials_encrypted"])
         folders = client.list_folders()
         
-        Database.execute(
-            "UPDATE accounts SET cached_folders = ?, cached_folders_at = ? WHERE id = ?",
-            (json.dumps(folders), int(time.time()), account_id)
-        )
-        Database.commit()
+        # Only update cache if folder list actually changed
+        new_folders_json = json.dumps(folders)
+        if new_folders_json != account.get("cached_folders"):
+            Database.execute(
+                "UPDATE accounts SET cached_folders = ?, cached_folders_at = ? WHERE id = ?",
+                (new_folders_json, int(time.time()), account_id)
+            )
+            Database.commit()
         
         return jsonify({"folders": folders, "cached": False})
     except IMAPError as e:
