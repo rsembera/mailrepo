@@ -1417,8 +1417,10 @@ async function viewEmailSource() {
 <head>
     <title>Email Source</title>
     <style>
-        body { font-family: monospace; white-space: pre-wrap; word-wrap: break-word; 
-               padding: 20px; background: #1e1e1e; color: #d4d4d4; margin: 0; }
+        body { font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace; 
+               white-space: pre-wrap; word-wrap: break-word; 
+               padding: 20px; background: #fff; color: #333; margin: 0;
+               font-size: 13px; line-height: 1.5; }
     </style>
 </head>
 <body>Loading...</body>
