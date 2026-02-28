@@ -274,6 +274,7 @@
 
 .vault-folder-toolbar {
     display: flex;
+    justify-content: flex-end;
     gap: var(--space-md);
     margin-bottom: var(--space-lg);
 }

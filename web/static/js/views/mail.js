@@ -691,9 +691,9 @@ export async function openEmailViewer(emailId, options = {}) {
         let context = { type: state.currentView?.type };
         
         if (vaultMode && folderId) {
-            // Vault mode: fetch from archived folder
+            // Vault mode: fetch from archived folder (use 'folder' type for API compatibility)
             const messageId = email.id;
-            context = { type: 'vault', folderId, messageId };
+            context = { type: 'folder', folderId, messageId };
             data = await fetchWithRetry(`/api/folders/${folderId}/emails/${messageId}`);
         } else if (state.currentView?.type === 'account') {
             const accountId = state.currentView.id;
