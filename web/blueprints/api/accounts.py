@@ -284,7 +284,7 @@ def get_account_folders(account_id):
         
         # Only update cache if folder list actually changed
         new_folders_json = json.dumps(folders)
-        if new_folders_json != account.get("cached_folders"):
+        if new_folders_json != account["cached_folders"]:
             Database.execute(
                 "UPDATE accounts SET cached_folders = ?, cached_folders_at = ? WHERE id = ?",
                 (new_folders_json, int(time.time()), account_id)
