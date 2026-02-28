@@ -4,6 +4,7 @@
  * Handles:
  * - Displaying folders in the retention vault
  * - Sorting and filtering vault folders
+ * - Viewing emails within vault folders (read-only)
  * - Restoring folders from vault
  * - Permanently deleting overdue folders
  */
@@ -13,6 +14,8 @@ import { state, loadFolders } from '../state.js';
 import { closeModal, showConfirm, showAlert } from '../modals.js';
 import { refreshSidebarFolders } from '../components/sidebar.js';
 import { formatDate, daysUntil } from '../components/date-picker.js';
+import { renderEmailList } from '../components/email-list.js';
+import { openEmailViewer } from './mail.js';
 
 // Module state
 let vaultFolders = [];
@@ -20,6 +23,10 @@ let vaultFilter = '';
 let vaultSort = 'date-asc'; // 'date-asc', 'date-desc', 'name-asc', 'name-desc'
 let restoreFolderId = null;
 let restoreDestinationId = null;
+
+// State for viewing folder contents
+let viewingFolder = null;  // null = folder list, object = viewing folder's emails
+let vaultEmails = [];
 
 // DOM references
 let contextTitle = null;
@@ -58,6 +65,8 @@ async function loadVaultFolders() {
  */
 export async function showVaultView() {
     vaultFilter = '';
+    viewingFolder = null;  // Reset to folder list view
+    vaultEmails = [];
     
     const sidebar = document.getElementById('sidebar');
     const toolbar = document.querySelector('.content-toolbar');
@@ -208,7 +217,7 @@ function renderVaultItem(folder) {
     
     return `
         <div class="vault-management-item ${isOverdue ? 'overdue' : ''}">
-            <div class="vault-management-name">
+            <div class="vault-management-name clickable" onclick="openVaultFolder(${folder.id})">
                 ${colorDot}
                 <i data-lucide="folder" class="folder-icon"></i>
                 <span class="folder-label">${escapeHtml(folder.name)}</span>
@@ -230,6 +239,127 @@ function renderVaultItem(folder) {
         </div>
     `;
 }
+
+/**
+ * Open a vault folder to view its emails.
+ */
+async function openVaultFolder(folderId) {
+    const folder = vaultFolders.find(f => f.id === folderId);
+    if (!folder) return;
+    
+    viewingFolder = folder;
+    
+    if (contextTitle) contextTitle.textContent = folder.name;
+    if (contextMeta) contextMeta.textContent = 'Loading...';
+    
+    try {
+        const response = await fetch(`/api/folders/${folderId}/emails`);
+        if (!response.ok) throw new Error('Failed to load emails');
+        
+        const data = await response.json();
+        vaultEmails = data.emails || [];
+        
+        renderVaultFolderContents();
+    } catch (error) {
+        console.error('Error loading vault folder emails:', error);
+        if (contextMeta) contextMeta.textContent = 'Error loading emails';
+    }
+}
+window.openVaultFolder = openVaultFolder;
+
+/**
+ * Go back to vault folder list from folder contents view.
+ */
+function backToVaultList() {
+    viewingFolder = null;
+    vaultEmails = [];
+    
+    if (contextTitle) contextTitle.textContent = 'Retention Vault';
+    renderVaultList();
+}
+window.backToVaultList = backToVaultList;
+
+/**
+ * Render the contents of a vault folder (email list).
+ */
+function renderVaultFolderContents() {
+    if (!viewingFolder) return;
+    
+    const dateText = viewingFolder.is_overdue 
+        ? 'OVERDUE' 
+        : `Delete by: ${formatDate(viewingFolder.retention_date)}`;
+    
+    if (contextMeta) contextMeta.textContent = `${vaultEmails.length} emails · ${dateText}`;
+    
+    let html = `
+        <div class="vault-folder-view">
+            <div class="vault-folder-toolbar">
+                <button class="btn btn-secondary" onclick="backToVaultList()">
+                    <i data-lucide="arrow-left"></i>
+                    Back to Vault
+                </button>
+                <button class="btn btn-secondary" onclick="openRestoreFolder(${viewingFolder.id})">
+                    <i data-lucide="archive-restore"></i>
+                    Restore Folder
+                </button>
+            </div>
+            <div class="vault-email-list">
+    `;
+    
+    if (vaultEmails.length === 0) {
+        html += `
+            <div class="empty-state">
+                <p>No emails in this folder</p>
+            </div>
+        `;
+    } else {
+        for (const email of vaultEmails) {
+            html += renderVaultEmailRow(email);
+        }
+    }
+    
+    html += `
+            </div>
+        </div>
+    `;
+    
+    emailList.innerHTML = html;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+/**
+ * Render a single email row in vault folder view.
+ */
+function renderVaultEmailRow(email) {
+    const date = new Date(email.date * 1000);
+    const dateStr = date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric',
+        year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
+    });
+    
+    return `
+        <div class="email-row" onclick="openVaultEmail(${viewingFolder.id}, ${email.id})">
+            <div class="email-row-main">
+                <span class="email-sender">${escapeHtml(email.sender || '(No sender)')}</span>
+                <span class="email-subject">${escapeHtml(email.subject || '(No subject)')}</span>
+            </div>
+            <div class="email-row-meta">
+                <span class="email-date">${dateStr}</span>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Open an email from the vault in the viewer (read-only).
+ */
+async function openVaultEmail(folderId, emailId) {
+    // Use the existing email viewer from mail.js
+    // Pass vault mode flag and folder ID for fetching
+    openEmailViewer(emailId, { vaultMode: true, folderId: folderId });
+}
+window.openVaultEmail = openVaultEmail;
 
 /**
  * Render sort icon button with dropdown.

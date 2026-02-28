@@ -619,15 +619,35 @@ export function showError(message) {
 
 /**
  * Open the email viewer overlay.
+ * @param {number|string} emailId - Email ID or UID
+ * @param {Object} options - Optional settings
+ * @param {boolean} options.vaultMode - If true, viewing from vault (read-only, folderId required)
+ * @param {number} options.folderId - Folder ID (required for vault mode)
  */
-export async function openEmailViewer(emailId) {
-    const email = state.emails.find(e => e.uid == emailId || e.id == emailId);
-    if (!email) return;
+export async function openEmailViewer(emailId, options = {}) {
+    const { vaultMode = false, folderId = null } = options;
+    
+    // For vault mode, we don't have the email in state.emails, so fetch minimal info
+    let email;
+    if (vaultMode && folderId) {
+        // We'll get full details from API, just set up minimal placeholder
+        email = { id: emailId };
+    } else {
+        email = state.emails.find(e => e.uid == emailId || e.id == emailId);
+        if (!email) return;
+    }
     
     const overlay = document.getElementById('emailViewerOverlay');
     overlay.classList.add('active');
     
-    document.getElementById('viewerSubject').textContent = email.subject || '(no subject)';
+    // In vault mode, hide any action buttons that modify emails
+    if (vaultMode) {
+        overlay.classList.add('vault-mode');
+    } else {
+        overlay.classList.remove('vault-mode');
+    }
+    
+    document.getElementById('viewerSubject').textContent = email.subject || 'Loading...';
     document.getElementById('viewerFrom').textContent = email.from || email.sender || '';
     document.getElementById('viewerTo').textContent = email.to || '';
     document.getElementById('viewerDate').textContent = email.date || '';
@@ -670,7 +690,12 @@ export async function openEmailViewer(emailId) {
         let data;
         let context = { type: state.currentView?.type };
         
-        if (state.currentView?.type === 'account') {
+        if (vaultMode && folderId) {
+            // Vault mode: fetch from archived folder
+            const messageId = email.id;
+            context = { type: 'vault', folderId, messageId };
+            data = await fetchWithRetry(`/api/folders/${folderId}/emails/${messageId}`);
+        } else if (state.currentView?.type === 'account') {
             const accountId = state.currentView.id;
             const folder = state.currentView.folder || 'INBOX';
             const uid = email.uid || email.id;

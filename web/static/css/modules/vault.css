@@ -261,3 +261,98 @@
 .overdue-alert-btn:hover {
     background: rgba(255,255,255,0.3);
 }
+
+/* ============================================
+   VAULT FOLDER CONTENTS VIEW
+   ============================================ */
+
+.vault-folder-view {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: var(--space-lg);
+}
+
+.vault-folder-toolbar {
+    display: flex;
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+}
+
+.vault-email-list {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.vault-email-list .email-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm) var(--space-md);
+    cursor: pointer;
+    border-bottom: 1px solid var(--color-border);
+    transition: background 0.15s;
+}
+
+.vault-email-list .email-row:last-child {
+    border-bottom: none;
+}
+
+.vault-email-list .email-row:hover {
+    background: var(--color-background-secondary);
+}
+
+.vault-email-list .email-row-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.vault-email-list .email-sender {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vault-email-list .email-subject {
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vault-email-list .email-row-meta {
+    flex-shrink: 0;
+    margin-left: var(--space-md);
+}
+
+.vault-email-list .email-date {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+/* Clickable folder name in vault list */
+.vault-management-name.clickable {
+    cursor: pointer;
+}
+
+.vault-management-name.clickable:hover .folder-label {
+    text-decoration: underline;
+    color: var(--color-primary);
+}
+
+/* ============================================
+   VAULT MODE EMAIL VIEWER
+   ============================================ */
+
+/* Hide staging/move actions when viewing vault emails */
+.email-viewer-overlay.vault-mode .viewer-action-stage,
+.email-viewer-overlay.vault-mode .viewer-action-move,
+.email-viewer-overlay.vault-mode .viewer-action-delete {
+    display: none;
+}
