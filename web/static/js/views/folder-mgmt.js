@@ -15,6 +15,7 @@ import { refreshSidebarFolders, buildImapFolderTree, getFolderIcon } from '../co
 import { updateStagedBadge } from '../components/staging.js';
 import { getMountedImports } from '../components/imports.js';
 import { updateTrashBadge } from './trash.js';
+import { updateVaultBadge } from './vault.js';
 import { DatePicker } from '../components/date-picker.js';
 import { renderFolderTree } from '../components/folder-tree.js';
 
@@ -562,6 +563,10 @@ async function confirmMoveToVault() {
     
     const timestamp = Math.floor(date.getTime() / 1000);
     
+    // Check if we're currently viewing this folder
+    const viewingThisFolder = state.currentView?.type === 'folder' && 
+        state.currentView?.id == vaultFolderId;
+    
     try {
         const response = await fetch(`/api/folders/${vaultFolderId}/vault`, {
             method: 'POST',
@@ -580,6 +585,34 @@ async function confirmMoveToVault() {
         // Refresh the folder list
         await loadFolders();
         refreshSidebarFolders();
+        updateVaultBadge();
+        
+        // Clear main view if we were viewing the moved folder
+        if (viewingThisFolder) {
+            state.currentView = null;
+            state.emails = [];
+            state.selectedEmails.clear();
+            
+            // Clear the display
+            const emailList = document.getElementById('emailList');
+            const contextTitle = document.getElementById('contextTitle');
+            const contextMeta = document.getElementById('contextMeta');
+            const subfoldersBar = document.getElementById('subfoldersBar');
+            
+            if (contextTitle) contextTitle.textContent = 'Select a folder';
+            if (contextMeta) contextMeta.textContent = '';
+            if (subfoldersBar) subfoldersBar.style.display = 'none';
+            if (emailList) {
+                emailList.innerHTML = `
+                    <div class="empty-state">
+                        <i data-lucide="archive" class="empty-icon"></i>
+                        <h3>Folder Moved to Vault</h3>
+                        <p>Select another folder from the sidebar to view emails.</p>
+                    </div>
+                `;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
+        }
         
     } catch (error) {
         console.error('Error moving folder to vault:', error);
