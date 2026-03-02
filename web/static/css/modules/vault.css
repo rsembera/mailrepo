@@ -354,29 +354,37 @@
 }
 
 /* ============================================
-   VAULT BREADCRUMBS
+   VAULT BREADCRUMBS & SUBFOLDER LINKS
    ============================================ */
+
+.vault-nav-bar {
+    background: var(--color-background-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-sm) var(--space-md);
+    margin-bottom: var(--space-md);
+}
 
 .vault-breadcrumbs {
     display: flex;
     align-items: center;
-    gap: var(--space-xs);
-    padding: var(--space-sm) 0;
-    font-size: 0.9rem;
-    color: var(--color-text-muted);
     flex-wrap: wrap;
+    gap: var(--space-xs);
+    font-size: 0.9rem;
 }
 
-.vault-breadcrumbs .breadcrumb-item {
+.vault-breadcrumbs .breadcrumb-link {
     color: var(--color-primary);
-    cursor: pointer;
+    text-decoration: none;
 }
 
-.vault-breadcrumbs .breadcrumb-item:hover {
+.vault-breadcrumbs .breadcrumb-link:hover {
     text-decoration: underline;
 }
 
 .vault-breadcrumbs .breadcrumb-sep {
+    width: 14px;
+    height: 14px;
     color: var(--color-text-muted);
 }
 
@@ -385,39 +393,21 @@
     font-weight: 500;
 }
 
-/* ============================================
-   VAULT SUBFOLDER ROWS
-   ============================================ */
-
-.vault-email-list .subfolder-row {
-    background: var(--color-background-secondary);
-}
-
-.vault-email-list .subfolder-row:hover {
-    background: var(--color-background-tertiary, rgba(0,0,0,0.06));
-}
-
-.vault-email-list .subfolder-icon {
-    width: 18px;
-    height: 18px;
+.vault-subfolder-links {
+    font-size: 0.9rem;
+    margin-top: var(--space-xs);
     color: var(--color-text-muted);
-    margin-right: var(--space-xs);
 }
 
-.vault-email-list .subfolder-name {
+.vault-subfolder-links .subfolder-label {
     font-weight: 500;
 }
 
-.vault-email-list .nav-chevron {
-    width: 16px;
-    height: 16px;
-    color: var(--color-text-muted);
+.vault-subfolder-links .subfolder-link {
+    color: var(--color-primary);
+    text-decoration: none;
 }
 
-.vault-email-list .color-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    margin-right: var(--space-xs);
+.vault-subfolder-links .subfolder-link:hover {
+    text-decoration: underline;
 }

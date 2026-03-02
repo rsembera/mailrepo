@@ -364,25 +364,40 @@ function renderVaultFolderContents() {
         ? 'OVERDUE' 
         : (topLevelFolder ? `Delete by: ${formatDate(topLevelFolder.retention_date)}` : '');
     
-    const itemCount = vaultSubfolders.length + vaultEmails.length;
-    const itemsText = vaultSubfolders.length > 0 
-        ? `${vaultSubfolders.length} subfolder${vaultSubfolders.length !== 1 ? 's' : ''}, ${vaultEmails.length} email${vaultEmails.length !== 1 ? 's' : ''}`
-        : `${vaultEmails.length} email${vaultEmails.length !== 1 ? 's' : ''}`;
+    if (contextMeta) contextMeta.textContent = dateText ? `${vaultEmails.length} emails · ${dateText}` : `${vaultEmails.length} emails`;
     
-    if (contextMeta) contextMeta.textContent = dateText ? `${itemsText} · ${dateText}` : itemsText;
+    // Build navigation bar (breadcrumbs + subfolders) like main view
+    let navBarHtml = '';
+    const hasBreadcrumbs = vaultBreadcrumbs.length > 0;
+    const hasSubfolders = vaultSubfolders.length > 0;
     
-    // Build breadcrumb HTML
-    let breadcrumbHtml = '';
-    if (vaultBreadcrumbs.length > 0) {
-        breadcrumbHtml = `
-            <div class="vault-breadcrumbs">
-                ${vaultBreadcrumbs.map(b => 
-                    `<span class="breadcrumb-item" onclick="navigateVaultBreadcrumb(${b.id})">${escapeHtml(b.name)}</span>`
-                ).join('<span class="breadcrumb-sep">/</span>')}
-                <span class="breadcrumb-sep">/</span>
-                <span class="breadcrumb-current">${escapeHtml(viewingFolder.name)}</span>
-            </div>
-        `;
+    if (hasBreadcrumbs || hasSubfolders) {
+        navBarHtml = `<div class="vault-nav-bar">`;
+        
+        // Breadcrumb trail
+        if (hasBreadcrumbs) {
+            navBarHtml += `<div class="vault-breadcrumbs">`;
+            vaultBreadcrumbs.forEach((b, i) => {
+                if (i > 0) navBarHtml += ` <i data-lucide="chevron-right" class="breadcrumb-sep"></i> `;
+                navBarHtml += `<a href="#" onclick="navigateVaultBreadcrumb(${b.id}); return false;" class="breadcrumb-link">${escapeHtml(b.name)}</a>`;
+            });
+            navBarHtml += ` <i data-lucide="chevron-right" class="breadcrumb-sep"></i> `;
+            navBarHtml += `<span class="breadcrumb-current">${escapeHtml(viewingFolder.name)}</span>`;
+            navBarHtml += `</div>`;
+        }
+        
+        // Subfolder links
+        if (hasSubfolders) {
+            navBarHtml += `<div class="vault-subfolder-links">`;
+            navBarHtml += `<span class="subfolder-label">Subfolders:</span> `;
+            navBarHtml += vaultSubfolders.map((sf, i) => {
+                const separator = i < vaultSubfolders.length - 1 ? ', ' : '';
+                return `<a href="#" onclick="openVaultFolder(${sf.id}, true); return false;" class="subfolder-link">${escapeHtml(sf.name)}</a>${separator}`;
+            }).join('');
+            navBarHtml += `</div>`;
+        }
+        
+        navBarHtml += `</div>`;
     }
     
     let html = `
@@ -397,30 +412,20 @@ function renderVaultFolderContents() {
                     Restore Folder
                 </button>
             </div>
-            ${breadcrumbHtml}
+            ${navBarHtml}
             <div class="vault-email-list">
     `;
     
-    // Render subfolders first
-    if (vaultSubfolders.length > 0) {
-        for (const subfolder of vaultSubfolders) {
-            html += renderVaultSubfolderRow(subfolder);
-        }
-    }
-    
-    // Then emails
-    if (vaultEmails.length > 0) {
-        for (const email of vaultEmails) {
-            html += renderVaultEmailRow(email);
-        }
-    }
-    
-    if (vaultSubfolders.length === 0 && vaultEmails.length === 0) {
+    if (vaultEmails.length === 0) {
         html += `
             <div class="empty-state">
                 <p>No emails in this folder</p>
             </div>
         `;
+    } else {
+        for (const email of vaultEmails) {
+            html += renderVaultEmailRow(email);
+        }
     }
     
     html += `
@@ -430,27 +435,6 @@ function renderVaultFolderContents() {
     
     emailList.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
-}
-
-/**
- * Render a subfolder row in vault folder view.
- */
-function renderVaultSubfolderRow(folder) {
-    const colorDot = folder.color ? 
-        `<span class="color-dot" style="background: ${folder.color}"></span>` : '';
-    
-    return `
-        <div class="email-row subfolder-row" onclick="openVaultFolder(${folder.id}, true)">
-            <div class="email-row-main">
-                ${colorDot}
-                <i data-lucide="folder" class="subfolder-icon"></i>
-                <span class="subfolder-name">${escapeHtml(folder.name)}</span>
-            </div>
-            <div class="email-row-meta">
-                <i data-lucide="chevron-right" class="nav-chevron"></i>
-            </div>
-        </div>
-    `;
 }
 
 /**
