@@ -342,11 +342,6 @@
     cursor: pointer;
 }
 
-.vault-management-name.clickable:hover .folder-label {
-    text-decoration: underline;
-    color: var(--color-primary);
-}
-
 /* ============================================
    VAULT MODE EMAIL VIEWER
    ============================================ */
@@ -356,4 +351,73 @@
 .email-viewer-overlay.vault-mode .viewer-action-move,
 .email-viewer-overlay.vault-mode .viewer-action-delete {
     display: none;
+}
+
+/* ============================================
+   VAULT BREADCRUMBS
+   ============================================ */
+
+.vault-breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-sm) 0;
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+    flex-wrap: wrap;
+}
+
+.vault-breadcrumbs .breadcrumb-item {
+    color: var(--color-primary);
+    cursor: pointer;
+}
+
+.vault-breadcrumbs .breadcrumb-item:hover {
+    text-decoration: underline;
+}
+
+.vault-breadcrumbs .breadcrumb-sep {
+    color: var(--color-text-muted);
+}
+
+.vault-breadcrumbs .breadcrumb-current {
+    color: var(--color-text);
+    font-weight: 500;
+}
+
+/* ============================================
+   VAULT SUBFOLDER ROWS
+   ============================================ */
+
+.vault-email-list .subfolder-row {
+    background: var(--color-background-secondary);
+}
+
+.vault-email-list .subfolder-row:hover {
+    background: var(--color-background-tertiary, rgba(0,0,0,0.06));
+}
+
+.vault-email-list .subfolder-icon {
+    width: 18px;
+    height: 18px;
+    color: var(--color-text-muted);
+    margin-right: var(--space-xs);
+}
+
+.vault-email-list .subfolder-name {
+    font-weight: 500;
+}
+
+.vault-email-list .nav-chevron {
+    width: 16px;
+    height: 16px;
+    color: var(--color-text-muted);
+}
+
+.vault-email-list .color-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-right: var(--space-xs);
 }

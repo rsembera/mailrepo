@@ -27,6 +27,8 @@ let restoreDestinationId = null;
 // State for viewing folder contents
 let viewingFolder = null;  // null = folder list, object = viewing folder's emails
 let vaultEmails = [];
+let vaultBreadcrumbs = [];  // Stack of {id, name} for navigation
+let vaultSubfolders = [];   // Subfolders of current viewing folder
 
 // DOM references
 let contextTitle = null;
@@ -242,10 +244,21 @@ function renderVaultItem(folder) {
 
 /**
  * Open a vault folder to view its emails.
+ * @param {number} folderId - Folder ID to open
+ * @param {boolean} isSubfolder - If true, this is navigating into a subfolder (add to breadcrumbs)
  */
-async function openVaultFolder(folderId) {
-    const folder = vaultFolders.find(f => f.id === folderId);
+async function openVaultFolder(folderId, isSubfolder = false) {
+    // Find folder in state.folders (includes all folders, not just top-level vault)
+    const folder = state.folders.find(f => f.id === folderId);
     if (!folder) return;
+    
+    // If navigating into a subfolder, add current folder to breadcrumbs first
+    if (isSubfolder && viewingFolder) {
+        vaultBreadcrumbs.push({ id: viewingFolder.id, name: viewingFolder.name });
+    } else if (!isSubfolder) {
+        // Starting fresh from vault list - clear breadcrumbs
+        vaultBreadcrumbs = [];
+    }
     
     viewingFolder = folder;
     
@@ -258,6 +271,13 @@ async function openVaultFolder(folderId) {
         
         const data = await response.json();
         vaultEmails = data.emails || [];
+        
+        // Find subfolders (children in vault that aren't deleted)
+        vaultSubfolders = state.folders.filter(f => 
+            f.parent_id === folderId && 
+            f.retention_date && 
+            !f.deleted_at
+        ).sort((a, b) => a.name.localeCompare(b.name));
         
         renderVaultFolderContents();
     } catch (error) {
@@ -273,6 +293,8 @@ window.openVaultFolder = openVaultFolder;
 function backToVaultList() {
     viewingFolder = null;
     vaultEmails = [];
+    vaultBreadcrumbs = [];
+    vaultSubfolders = [];
     
     if (contextTitle) contextTitle.textContent = 'Retention Vault';
     renderVaultList();
@@ -280,16 +302,88 @@ function backToVaultList() {
 window.backToVaultList = backToVaultList;
 
 /**
+ * Navigate to a breadcrumb folder.
+ */
+async function navigateVaultBreadcrumb(folderId) {
+    // Find index in breadcrumbs
+    const index = vaultBreadcrumbs.findIndex(b => b.id === folderId);
+    if (index === -1) return;
+    
+    // Trim breadcrumbs to this point (don't include the clicked one)
+    vaultBreadcrumbs = vaultBreadcrumbs.slice(0, index);
+    
+    // Open the folder (not as subfolder since we've already trimmed breadcrumbs)
+    const folder = state.folders.find(f => f.id === folderId);
+    if (!folder) return;
+    
+    viewingFolder = folder;
+    
+    if (contextTitle) contextTitle.textContent = folder.name;
+    if (contextMeta) contextMeta.textContent = 'Loading...';
+    
+    try {
+        const response = await fetch(`/api/folders/${folderId}/emails`);
+        if (!response.ok) throw new Error('Failed to load emails');
+        
+        const data = await response.json();
+        vaultEmails = data.emails || [];
+        
+        vaultSubfolders = state.folders.filter(f => 
+            f.parent_id === folderId && 
+            f.retention_date && 
+            !f.deleted_at
+        ).sort((a, b) => a.name.localeCompare(b.name));
+        
+        renderVaultFolderContents();
+    } catch (error) {
+        console.error('Error loading vault folder emails:', error);
+        if (contextMeta) contextMeta.textContent = 'Error loading emails';
+    }
+}
+window.navigateVaultBreadcrumb = navigateVaultBreadcrumb;
+
+/**
  * Render the contents of a vault folder (email list).
  */
 function renderVaultFolderContents() {
     if (!viewingFolder) return;
     
-    const dateText = viewingFolder.is_overdue 
-        ? 'OVERDUE' 
-        : `Delete by: ${formatDate(viewingFolder.retention_date)}`;
+    // Get retention info from top-level vault folder
+    const topLevelFolder = vaultFolders.find(f => f.id === viewingFolder.id) || 
+        vaultFolders.find(f => {
+            // Walk up to find the top-level vault folder
+            let current = viewingFolder;
+            while (current) {
+                if (f.id === current.id) return true;
+                current = state.folders.find(p => p.id === current.parent_id && p.retention_date);
+            }
+            return false;
+        });
     
-    if (contextMeta) contextMeta.textContent = `${vaultEmails.length} emails · ${dateText}`;
+    const dateText = topLevelFolder?.is_overdue 
+        ? 'OVERDUE' 
+        : (topLevelFolder ? `Delete by: ${formatDate(topLevelFolder.retention_date)}` : '');
+    
+    const itemCount = vaultSubfolders.length + vaultEmails.length;
+    const itemsText = vaultSubfolders.length > 0 
+        ? `${vaultSubfolders.length} subfolder${vaultSubfolders.length !== 1 ? 's' : ''}, ${vaultEmails.length} email${vaultEmails.length !== 1 ? 's' : ''}`
+        : `${vaultEmails.length} email${vaultEmails.length !== 1 ? 's' : ''}`;
+    
+    if (contextMeta) contextMeta.textContent = dateText ? `${itemsText} · ${dateText}` : itemsText;
+    
+    // Build breadcrumb HTML
+    let breadcrumbHtml = '';
+    if (vaultBreadcrumbs.length > 0) {
+        breadcrumbHtml = `
+            <div class="vault-breadcrumbs">
+                ${vaultBreadcrumbs.map(b => 
+                    `<span class="breadcrumb-item" onclick="navigateVaultBreadcrumb(${b.id})">${escapeHtml(b.name)}</span>`
+                ).join('<span class="breadcrumb-sep">/</span>')}
+                <span class="breadcrumb-sep">/</span>
+                <span class="breadcrumb-current">${escapeHtml(viewingFolder.name)}</span>
+            </div>
+        `;
+    }
     
     let html = `
         <div class="vault-folder-view">
@@ -298,24 +392,35 @@ function renderVaultFolderContents() {
                     <i data-lucide="arrow-left"></i>
                     Back to Vault
                 </button>
-                <button class="btn btn-secondary" onclick="openRestoreFolder(${viewingFolder.id})">
+                <button class="btn btn-secondary" onclick="openRestoreFolder(${vaultBreadcrumbs.length > 0 ? vaultBreadcrumbs[0].id : viewingFolder.id})">
                     <i data-lucide="archive-restore"></i>
                     Restore Folder
                 </button>
             </div>
+            ${breadcrumbHtml}
             <div class="vault-email-list">
     `;
     
-    if (vaultEmails.length === 0) {
+    // Render subfolders first
+    if (vaultSubfolders.length > 0) {
+        for (const subfolder of vaultSubfolders) {
+            html += renderVaultSubfolderRow(subfolder);
+        }
+    }
+    
+    // Then emails
+    if (vaultEmails.length > 0) {
+        for (const email of vaultEmails) {
+            html += renderVaultEmailRow(email);
+        }
+    }
+    
+    if (vaultSubfolders.length === 0 && vaultEmails.length === 0) {
         html += `
             <div class="empty-state">
                 <p>No emails in this folder</p>
             </div>
         `;
-    } else {
-        for (const email of vaultEmails) {
-            html += renderVaultEmailRow(email);
-        }
     }
     
     html += `
@@ -325,6 +430,27 @@ function renderVaultFolderContents() {
     
     emailList.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+/**
+ * Render a subfolder row in vault folder view.
+ */
+function renderVaultSubfolderRow(folder) {
+    const colorDot = folder.color ? 
+        `<span class="color-dot" style="background: ${folder.color}"></span>` : '';
+    
+    return `
+        <div class="email-row subfolder-row" onclick="openVaultFolder(${folder.id}, true)">
+            <div class="email-row-main">
+                ${colorDot}
+                <i data-lucide="folder" class="subfolder-icon"></i>
+                <span class="subfolder-name">${escapeHtml(folder.name)}</span>
+            </div>
+            <div class="email-row-meta">
+                <i data-lucide="chevron-right" class="nav-chevron"></i>
+            </div>
+        </div>
+    `;
 }
 
 /**
