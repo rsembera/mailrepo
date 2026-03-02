@@ -241,6 +241,10 @@ export async function confirmMoveFolder() {
         return;
     }
     
+    // Check if we're currently viewing this folder
+    const viewingThisFolder = state.currentView?.type === 'folder' && 
+        state.currentView?.id == movingFolderId;
+    
     try {
         const response = await fetch(`/api/folders/${movingFolderId}`, {
             method: 'PATCH',
@@ -258,6 +262,15 @@ export async function confirmMoveFolder() {
         closeModal('moveFolderModal');
         
         refreshSidebarFolders();
+        
+        // Re-select the folder in sidebar if we were viewing it
+        if (viewingThisFolder) {
+            import('../components/sidebar.js').then(m => {
+                if (m.selectFolderInSidebar) {
+                    m.selectFolderInSidebar(movingFolderId);
+                }
+            });
+        }
     } catch (error) {
         console.error('Error moving folder:', error);
         showAlert('Error', 'Failed to move folder');
