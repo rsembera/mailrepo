@@ -327,6 +327,22 @@ Response: { "count": 3 }
 
 ---
 
+## Enhancement: Email Viewing in Vault (March 2026)
+
+Users can now browse and view emails within vault folders without restoring them:
+
+1. Click folder name in Vault list to view its emails
+2. Subfolders shown as links above email list (same pattern as main archive)
+3. Breadcrumb navigation for nested folders
+4. Email viewer supports: view source, download .eml, print, load remote content
+5. All actions are read-only — no staging, moving, or deleting emails
+6. "Back to Vault" button returns to folder list
+7. "Restore Folder" button always restores the top-level vault folder
+
+**Use case:** Review old correspondence without leaving the vault, e.g., to verify if an incoming inquiry is legitimate.
+
+---
+
 ## Notes
 
 - Retention Vault is folder-level only (not individual emails) - keeps it simple
