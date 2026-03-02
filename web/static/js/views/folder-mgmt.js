@@ -277,7 +277,20 @@ export async function deleteFolder(folderId) {
         return count;
     }
     
+    // Collect folder IDs being deleted (for view clearing check)
+    function collectDescendantIds(parentId) {
+        const ids = [parentId];
+        const children = state.folders.filter(f => f.parent_id == parentId && !f.deleted_at && !f.retention_date);
+        children.forEach(c => ids.push(...collectDescendantIds(c.id)));
+        return ids;
+    }
+    
     const descendantCount = countDescendants(folderId);
+    const deletedFolderIds = collectDescendantIds(folderId);
+    
+    // Check if we're currently viewing any of the folders being deleted
+    const viewingDeletedFolder = state.currentView?.type === 'folder' && 
+        deletedFolderIds.includes(state.currentView?.id);
     
     let message = `Move "${folder.name}" to trash?`;
     if (descendantCount > 0) {
@@ -309,6 +322,32 @@ export async function deleteFolder(folderId) {
         
         updateTrashBadge();
         updateSidebarFoldersAfterDelete();
+        
+        // Clear main view if we were viewing a deleted folder
+        if (viewingDeletedFolder) {
+            state.currentView = null;
+            state.emails = [];
+            state.selectedEmails.clear();
+            
+            const emailList = document.getElementById('emailList');
+            const contextTitle = document.getElementById('contextTitle');
+            const contextMeta = document.getElementById('contextMeta');
+            const subfoldersBar = document.getElementById('subfoldersBar');
+            
+            if (contextTitle) contextTitle.textContent = 'Select a folder';
+            if (contextMeta) contextMeta.textContent = '';
+            if (subfoldersBar) subfoldersBar.style.display = 'none';
+            if (emailList) {
+                emailList.innerHTML = `
+                    <div class="empty-state">
+                        <i data-lucide="trash-2" class="empty-icon"></i>
+                        <h3>Folder Moved to Trash</h3>
+                        <p>Select another folder from the sidebar to view emails.</p>
+                    </div>
+                `;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
+        }
     } catch (error) {
         console.error('Error deleting folder:', error);
         showAlert('Error', 'Failed to delete folder');
