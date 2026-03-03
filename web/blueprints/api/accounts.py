@@ -35,9 +35,30 @@ def _decode_header_value(header):
 def list_accounts():
     """Get all email accounts."""
     accounts = Database.fetchall(
-        "SELECT id, name, email, provider, last_sync FROM accounts ORDER BY name"
+        "SELECT id, name, email, provider, credentials_encrypted, last_sync FROM accounts ORDER BY name"
     )
-    return jsonify({"accounts": [dict(a) for a in accounts]})
+    
+    result = []
+    for a in accounts:
+        account_dict = {
+            "id": a["id"],
+            "name": a["name"],
+            "email": a["email"],
+            "provider": a["provider"],
+            "last_sync": a["last_sync"],
+            "is_gmail": False,
+        }
+        # Check if this is a Gmail/Google Workspace account by examining the IMAP server
+        if a["credentials_encrypted"]:
+            try:
+                creds = IMAP.load_credentials(a["credentials_encrypted"])
+                if creds and creds.get("host", "").lower() == "imap.gmail.com":
+                    account_dict["is_gmail"] = True
+            except:
+                pass  # If decryption fails, default to False
+        result.append(account_dict)
+    
+    return jsonify({"accounts": result})
 
 
 @api_bp.route("/accounts", methods=["POST"])

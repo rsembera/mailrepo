@@ -49,15 +49,13 @@ function getAccountName(accountId) {
 }
 
 /**
- * Check if an account is Gmail (based on email address).
+ * Check if an account is Gmail (based on is_gmail flag from API).
  * @param {number|string} accountId
  * @returns {boolean}
  */
 function isGmailAccount(accountId) {
     const account = accounts.find(a => a.id == accountId);
-    if (!account) return false;
-    const email = (account.email || '').toLowerCase();
-    return email.endsWith('@gmail.com') || email.endsWith('@googlemail.com');
+    return account?.is_gmail || false;
 }
 
 /**
