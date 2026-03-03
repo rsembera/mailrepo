@@ -49,6 +49,18 @@ function getAccountName(accountId) {
 }
 
 /**
+ * Check if an account is Gmail (based on email address).
+ * @param {number|string} accountId
+ * @returns {boolean}
+ */
+function isGmailAccount(accountId) {
+    const account = accounts.find(a => a.id == accountId);
+    if (!account) return false;
+    const email = (account.email || '').toLowerCase();
+    return email.endsWith('@gmail.com') || email.endsWith('@googlemail.com');
+}
+
+/**
  * Get import name by ID.
  * @param {string} importId
  * @returns {string}
@@ -469,6 +481,7 @@ function renderFolderTreeItems(nodes, depth, ancestry) {
 function renderSourceGroup(source, sourceKey, destId, type) {
     const isImap = sourceKey.startsWith('account:');
     const sourceName = isImap ? getAccountName(source.accountId) : getImportName(source.importId);
+    const isGmail = isImap && isGmailAccount(source.accountId);
     const groupId = `${sourceKey}:${destId}:${type}`;
     const isExpanded = expandedSourceGroups.has(groupId);
     const escapedGroupId = escapeForOnclick(groupId);
@@ -497,7 +510,7 @@ function renderSourceGroup(source, sourceKey, destId, type) {
                     ${isImap ? `
                         <label class="source-action-label" title="Action to apply to emails on the server after committing">
                             <span>On server:</span>
-                            ${renderSourceActionDropdown(`${sourceKey}:${destId}`, sourceActions[`${sourceKey}:${destId}`] || 'leave')}
+                            ${renderSourceActionDropdown(`${sourceKey}:${destId}`, sourceActions[`${sourceKey}:${destId}`] || 'leave', isGmail)}
                         </label>
                     ` : `
                         <span class="review-import-label">No server action</span>
@@ -603,13 +616,23 @@ function renderDestinationDropdown(currentDestId) {
     `;
 }
 
-function renderSourceActionDropdown(sourceKey, selectedValue = 'leave') {
-    const options = [
+function renderSourceActionDropdown(sourceKey, selectedValue = 'leave', isGmail = false) {
+    let options = [
         { value: 'leave', label: 'Leave in place' },
         { value: 'archive', label: 'Archive emails' },
         { value: 'trash', label: 'Trash emails' },
-        { value: 'delete', label: 'Delete emails' },
     ];
+    
+    // Only show Delete option for non-Gmail accounts
+    // Gmail's IMAP delete just archives, so it's misleading
+    if (!isGmail) {
+        options.push({ value: 'delete', label: 'Delete emails' });
+    }
+    
+    // If selected value was 'delete' but we're on Gmail, fall back to 'leave'
+    if (isGmail && selectedValue === 'delete') {
+        selectedValue = 'leave';
+    }
     
     const selected = options.find(o => o.value === selectedValue) || options[0];
     
