@@ -283,20 +283,19 @@ def get_account_folders(account_id):
         return jsonify({"error": "Account not configured"}), 401
     
     force_refresh = request.args.get("refresh") == "1"
-    cache_max_age = 3600
     
-    if not force_refresh and account["cached_folders"] and account["cached_folders_at"]:
-        cache_age = int(time.time()) - account["cached_folders_at"]
-        if cache_age < cache_max_age:
-            try:
-                folders = json.loads(account["cached_folders"])
-                # Invalidate cache if missing noselect field (schema upgrade)
-                if folders and "noselect" not in folders[0]:
-                    pass  # Fall through to live fetch
-                else:
-                    return jsonify({"folders": folders, "cached": True})
-            except (json.JSONDecodeError, IndexError, TypeError):
-                pass
+    # Use cache if available (no time-based expiry - folders rarely change)
+    # Only refresh on explicit request or when cache is missing
+    if not force_refresh and account["cached_folders"]:
+        try:
+            folders = json.loads(account["cached_folders"])
+            # Invalidate cache if missing noselect field (schema upgrade)
+            if folders and "noselect" not in folders[0]:
+                pass  # Fall through to live fetch
+            else:
+                return jsonify({"folders": folders, "cached": True})
+        except (json.JSONDecodeError, IndexError, TypeError):
+            pass
     
     client = None
     try:
