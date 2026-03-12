@@ -178,6 +178,11 @@ export function renderEmailList() {
     
     const isArchiveView = state.currentView?.type === 'folder';
     
+    // Detect if we're viewing a "Sent" folder (show recipient instead of sender)
+    const folderName = state.currentView?.folder || '';
+    const isSentFolder = /^sent|sent\s*mail|sent\s*items$/i.test(folderName) || 
+                         folderName.toLowerCase().includes('[gmail]/sent');
+    
     if (state.emails.length === 0) {
         emailListEl.innerHTML = `
             <div class="empty-state">
@@ -360,7 +365,7 @@ export function renderEmailList() {
                 <div class="email-list-content">
                     <div class="email-list-main">
                         <div class="email-list-header-row">
-                            <span class="email-sender">${escapeHtml(extractName(email.from || email.sender))}</span>
+                            <span class="email-sender">${isSentFolder ? 'To: ' : ''}${escapeHtml(extractName(isSentFolder ? (email.to || email.recipients) : (email.from || email.sender)))}</span>
                             <span class="email-date">${formatDate(email.date)}</span>
                         </div>
                         <span class="email-subject">${escapeHtml(email.subject || '(no subject)')}</span>
