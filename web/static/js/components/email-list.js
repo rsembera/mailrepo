@@ -178,8 +178,9 @@ export function renderEmailList() {
     
     const isArchiveView = state.currentView?.type === 'folder';
     
-    // Detect if we're viewing a "Sent" folder (show recipient instead of sender)
-    const folderName = state.currentView?.folder || '';
+    // Detect if we're viewing a "Sent" folder on IMAP (show recipient instead of sender)
+    // Only applies to IMAP views, not archive folders
+    const folderName = state.currentView?.type === 'account' ? (state.currentView?.folder || '') : '';
     const isSentFolder = /^sent|sent\s*mail|sent\s*items$/i.test(folderName) || 
                          folderName.toLowerCase().includes('[gmail]/sent');
     
