@@ -148,6 +148,40 @@ def get_file_hashes():
     return hashes, new_file_info
 
 
+def has_file_changes():
+    """
+    Quick check if any files have changed since last backup.
+    
+    Uses mtime/size comparison only - no hashing required.
+    Returns True if any file appears changed or is new/deleted.
+    """
+    files = get_all_backup_files()
+    state = _read_backup_state()
+    previous_file_info = state.get('file_info', {})
+    
+    # No cached info means we need to do a full check
+    if not previous_file_info:
+        return True
+    
+    # Check for new or deleted files
+    current_paths = set(files.keys())
+    cached_paths = set(previous_file_info.keys())
+    
+    if current_paths != cached_paths:
+        return True  # Files added or removed
+    
+    # Check for modified files (mtime or size changed)
+    for rel_path, abs_path in files.items():
+        current_meta = get_file_metadata(abs_path)
+        prev_info = previous_file_info.get(rel_path, {})
+        
+        if (prev_info.get('mtime') != current_meta['mtime'] or
+            prev_info.get('size') != current_meta['size']):
+            return True  # File modified
+    
+    return False  # No changes detected
+
+
 def load_manifest():
     """Load backup manifest from disk."""
     manifest_file = get_manifest_file()
@@ -458,6 +492,10 @@ def create_incremental_backup(backup_dir=None):
     if not previous_hashes:
         # No previous backup, need full backup first
         return create_full_backup(backup_dir)
+    
+    # Quick check: any files changed? (mtime/size only, no hashing)
+    if not has_file_changes():
+        return None  # No changes - skip expensive hash computation
     
     if backup_dir is None:
         backup_dir = get_backups_dir()
