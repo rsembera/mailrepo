@@ -67,6 +67,15 @@ def get_file_hash(filepath):
     return sha256.hexdigest()
 
 
+def get_file_metadata(filepath):
+    """Get file metadata (mtime, size) for quick change detection."""
+    stat = filepath.stat()
+    return {
+        'mtime': stat.st_mtime,
+        'size': stat.st_size
+    }
+
+
 def get_all_backup_files():
     """
     Get list of all files that should be backed up.
@@ -104,13 +113,39 @@ def get_all_backup_files():
 def get_file_hashes():
     """
     Calculate hashes for all backup files.
-    Returns dict: {relative_path: hash}
+    Returns tuple: (hashes_dict, file_info_dict)
+    
+    Uses smart change detection: only rehashes files where mtime/size changed.
     """
     files = get_all_backup_files()
+    state = _read_backup_state()
+    previous_file_info = state.get('file_info', {})
+    
     hashes = {}
+    new_file_info = {}
+    
     for rel_path, abs_path in files.items():
-        hashes[rel_path] = get_file_hash(abs_path)
-    return hashes
+        current_meta = get_file_metadata(abs_path)
+        prev_info = previous_file_info.get(rel_path, {})
+        
+        # Check if file might have changed (mtime or size different)
+        if (prev_info.get('mtime') == current_meta['mtime'] and 
+            prev_info.get('size') == current_meta['size'] and
+            prev_info.get('hash')):
+            # File unchanged - reuse cached hash
+            file_hash = prev_info['hash']
+        else:
+            # File changed or new - compute hash
+            file_hash = get_file_hash(abs_path)
+        
+        hashes[rel_path] = file_hash
+        new_file_info[rel_path] = {
+            'hash': file_hash,
+            'mtime': current_meta['mtime'],
+            'size': current_meta['size']
+        }
+    
+    return hashes, new_file_info
 
 
 def load_manifest():
@@ -195,10 +230,34 @@ def _get_baseline_hashes():
     return {}
 
 
-def _save_baseline_hashes(hashes):
-    """Save hash baseline to external state file."""
+def _save_baseline_hashes(hashes, file_info=None):
+    """
+    Save hash baseline to external state file.
+    
+    Args:
+        hashes: Dict of {relative_path: hash}
+        file_info: Optional dict of {relative_path: {hash, mtime, size}}
+                   If not provided, builds from hashes and current file state.
+    """
     state = _read_backup_state()
     state['last_backup_hashes'] = hashes
+    
+    # Update file_info for smart change detection
+    if file_info:
+        state['file_info'] = file_info
+    elif 'file_info' not in state:
+        # Build file_info from current state if not present
+        files = get_all_backup_files()
+        state['file_info'] = {}
+        for rel_path, abs_path in files.items():
+            if rel_path in hashes:
+                meta = get_file_metadata(abs_path)
+                state['file_info'][rel_path] = {
+                    'hash': hashes[rel_path],
+                    'mtime': meta['mtime'],
+                    'size': meta['size']
+                }
+    
     _write_backup_state(state)
 
 
@@ -329,8 +388,9 @@ def create_full_backup(backup_dir=None):
     if not files:
         raise ValueError("No files to backup")
     
-    # Calculate hashes before backup
+    # Calculate hashes and collect file info for smart change detection
     hashes = {}
+    file_info = {}
     total_size = 0
     
     # Create zip archive
@@ -338,8 +398,15 @@ def create_full_backup(backup_dir=None):
         with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zf:
             for rel_path, abs_path in files.items():
                 zf.write(abs_path, rel_path)
-                hashes[rel_path] = get_file_hash(abs_path)
-                total_size += abs_path.stat().st_size
+                file_hash = get_file_hash(abs_path)
+                meta = get_file_metadata(abs_path)
+                hashes[rel_path] = file_hash
+                file_info[rel_path] = {
+                    'hash': file_hash,
+                    'mtime': meta['mtime'],
+                    'size': meta['size']
+                }
+                total_size += meta['size']
     except OSError as e:
         # Clean up partial backup
         if backup_path.exists():
@@ -368,8 +435,8 @@ def create_full_backup(backup_dir=None):
     manifest['current_chain_id'] = chain_id
     save_manifest(manifest)
     
-    # Save hashes to external state file (not manifest)
-    _save_baseline_hashes(hashes)
+    # Save hashes and file info to external state file
+    _save_baseline_hashes(hashes, file_info)
     
     return backup_info
 
@@ -402,8 +469,8 @@ def create_incremental_backup(backup_dir=None):
     if not valid:
         raise ValueError(error)
     
-    # Get current state
-    current_hashes = get_file_hashes()
+    # Get current state (uses smart mtime/size change detection)
+    current_hashes, current_file_info = get_file_hashes()
     
     # Find changes
     changed_files = {}
@@ -420,7 +487,7 @@ def create_incremental_backup(backup_dir=None):
         # No changes - update baseline in external state file
         # This prevents checkpoint-induced hash changes from appearing
         # as "changes" on the next backup check
-        _save_baseline_hashes(current_hashes)
+        _save_baseline_hashes(current_hashes, current_file_info)
         return None
     
     filename = generate_backup_filename('incr')
@@ -464,8 +531,8 @@ def create_incremental_backup(backup_dir=None):
     manifest['backups'].append(backup_info)
     save_manifest(manifest)
     
-    # Save hashes to external state file (not manifest)
-    _save_baseline_hashes(current_hashes)
+    # Save hashes and file info to external state file
+    _save_baseline_hashes(current_hashes, current_file_info)
     
     return backup_info
 
