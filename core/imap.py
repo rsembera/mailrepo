@@ -176,7 +176,7 @@ class IMAP:
             folder: Folder name (default INBOX).
             
         Returns:
-            Dict with folder info (message count, uidvalidity, etc.).
+            Dict with folder info (message_count, uidvalidity, highestmodseq).
         """
         if not self.connection:
             raise IMAPError("Not connected")
@@ -186,25 +186,44 @@ class IMAP:
             if status != "OK":
                 raise IMAPError(f"Failed to select folder: {folder}")
             
-            # Get UIDVALIDITY using STATUS command (more reliable)
-            uidvalidity = None
-            try:
-                status, status_data = self.connection.status(f'"{folder}"', '(UIDVALIDITY)')
-                if status == 'OK' and status_data and status_data[0]:
-                    # Parse response like: b'"INBOX" (UIDVALIDITY 12345)'
-                    response = status_data[0].decode() if isinstance(status_data[0], bytes) else status_data[0]
-                    match = re.search(r'UIDVALIDITY\s+(\d+)', response)
-                    if match:
-                        uidvalidity = int(match.group(1))
-            except Exception as e:
-                # Log but don't fail - caching just won't work
-                log.debug(f"Could not get UIDVALIDITY: {e}")
-            
-            return {
+            result = {
                 "folder": folder,
                 "message_count": int(data[0]) if data else 0,
-                "uidvalidity": uidvalidity,
+                "uidvalidity": None,
+                "highestmodseq": None,
             }
+            
+            # Get UIDVALIDITY and HIGHESTMODSEQ using STATUS command
+            try:
+                status, status_data = self.connection.status(
+                    f'"{folder}"', '(UIDVALIDITY HIGHESTMODSEQ)'
+                )
+                if status == 'OK' and status_data and status_data[0]:
+                    response = status_data[0].decode() if isinstance(status_data[0], bytes) else status_data[0]
+                    
+                    uv_match = re.search(r'UIDVALIDITY\s+(\d+)', response)
+                    if uv_match:
+                        result["uidvalidity"] = int(uv_match.group(1))
+                    
+                    hm_match = re.search(r'HIGHESTMODSEQ\s+(\d+)', response)
+                    if hm_match:
+                        result["highestmodseq"] = int(hm_match.group(1))
+            except Exception as e:
+                # HIGHESTMODSEQ not supported — fall back to UIDVALIDITY only
+                log.debug(f"Could not get STATUS with HIGHESTMODSEQ: {e}")
+                try:
+                    status, status_data = self.connection.status(
+                        f'"{folder}"', '(UIDVALIDITY)'
+                    )
+                    if status == 'OK' and status_data and status_data[0]:
+                        response = status_data[0].decode() if isinstance(status_data[0], bytes) else status_data[0]
+                        uv_match = re.search(r'UIDVALIDITY\s+(\d+)', response)
+                        if uv_match:
+                            result["uidvalidity"] = int(uv_match.group(1))
+                except Exception as e2:
+                    log.debug(f"Could not get UIDVALIDITY: {e2}")
+            
+            return result
         except Exception as e:
             raise IMAPError(f"Failed to select folder {folder}: {e}")
     

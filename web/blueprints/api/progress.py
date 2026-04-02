@@ -34,6 +34,9 @@ from .streaming import (
     get_any_cached_emails,
     cache_email,
     remove_stale_cache_entries,
+    get_folder_sync_state,
+    update_folder_sync_state,
+    is_cache_fresh,
 )
 from .commit import (
     create_archive_folder_from_path,
@@ -119,18 +122,39 @@ def stream_account_emails(account_id):
         cached_emails = []
         
         try:
-            # Connection phase
-            yield sse_message("status", {"phase": "connecting", "message": "Connecting to server..."})
+            # ----- Option A: TTL short-circuit ----------------------------
+            # If we synced this folder recently and user isn't forcing refresh,
+            # return the cache immediately without touching the network.
+            if not force_refresh and is_cache_fresh(account_id, folder):
+                sync_state = get_folder_sync_state(account_id, folder)
+                if sync_state and sync_state["uidvalidity"]:
+                    cached_emails = get_cached_emails(
+                        account_id, folder, sync_state["uidvalidity"]
+                    )
+                    if cached_emails:
+                        yield sse_message("complete", {
+                            "emails": cached_emails,
+                            "total": len(cached_emails),
+                            "from_cache": len(cached_emails),
+                            "fetched": 0,
+                        })
+                        return
+            
+            # ----- Connect to server -------------------------------------
+            yield sse_message("status", {
+                "phase": "connecting",
+                "message": "Connecting to server...",
+            })
             
             try:
                 client = IMAP.connect_with_credentials(account["credentials_encrypted"])
             except IMAPError as e:
-                # Connection failed - try to use cache
+                # Connection failed — try to use cache
                 cached_emails = get_any_cached_emails(account_id, folder)
                 if cached_emails:
                     yield sse_message("status", {
                         "phase": "offline",
-                        "message": f"Server unavailable. Showing {len(cached_emails)} cached emails."
+                        "message": f"Server unavailable. Showing {len(cached_emails)} cached emails.",
                     })
                     yield sse_message("complete", {
                         "emails": cached_emails,
@@ -143,11 +167,40 @@ def stream_account_emails(account_id):
                 else:
                     raise e
 
-            yield sse_message("status", {"phase": "selecting", "message": f"Opening {folder}..."})
+            yield sse_message("status", {
+                "phase": "selecting",
+                "message": f"Opening {folder}...",
+            })
             
             folder_info = client.select_folder(folder)
             uidvalidity = folder_info.get("uidvalidity")
+            highestmodseq = folder_info.get("highestmodseq")
             
+            # ----- Option B: CONDSTORE short-circuit ----------------------
+            # If the server supports HIGHESTMODSEQ and it hasn't changed
+            # since last sync, nothing in the folder has changed — return cache.
+            if not force_refresh and uidvalidity and highestmodseq:
+                sync_state = get_folder_sync_state(account_id, folder)
+                if (sync_state
+                        and sync_state["uidvalidity"] == uidvalidity
+                        and sync_state["highestmodseq"] == highestmodseq):
+                    cached_emails = get_cached_emails(
+                        account_id, folder, uidvalidity
+                    )
+                    if cached_emails:
+                        # Update last_synced_at so TTL resets
+                        update_folder_sync_state(
+                            account_id, folder, uidvalidity, highestmodseq
+                        )
+                        yield sse_message("complete", {
+                            "emails": cached_emails,
+                            "total": len(cached_emails),
+                            "from_cache": len(cached_emails),
+                            "fetched": 0,
+                        })
+                        return
+            
+            # ----- Full incremental sync ----------------------------------
             # Check cache validity
             highest_cached_uid = 0
             cache_valid = False
@@ -156,10 +209,12 @@ def stream_account_emails(account_id):
                 cached_emails = get_cached_emails(account_id, folder, uidvalidity)
                 if cached_emails:
                     cache_valid = True
-                    highest_cached_uid = get_highest_cached_uid(account_id, folder, uidvalidity)
+                    highest_cached_uid = get_highest_cached_uid(
+                        account_id, folder, uidvalidity
+                    )
                     yield sse_message("status", {
                         "phase": "cache",
-                        "message": f"Found {len(cached_emails)} cached emails, checking for new..."
+                        "message": f"Found {len(cached_emails)} cached emails, checking for new...",
                     })
             
             if force_refresh and uidvalidity:
@@ -167,7 +222,10 @@ def stream_account_emails(account_id):
                 cached_emails = []
                 cache_valid = False
             
-            yield sse_message("status", {"phase": "searching", "message": "Finding emails..."})
+            yield sse_message("status", {
+                "phase": "searching",
+                "message": "Finding emails...",
+            })
             
             # Get all UIDs from server
             all_uids = client.search("ALL", limit=0)
@@ -175,10 +233,13 @@ def stream_account_emails(account_id):
             # Remove cached emails that no longer exist on server
             stale_removed = 0
             if cache_valid and uidvalidity:
-                stale_removed = remove_stale_cache_entries(account_id, folder, uidvalidity, all_uids)
+                stale_removed = remove_stale_cache_entries(
+                    account_id, folder, uidvalidity, all_uids
+                )
                 if stale_removed > 0:
-                    # Refresh cached_emails after removing stale entries
-                    cached_emails = get_cached_emails(account_id, folder, uidvalidity)
+                    cached_emails = get_cached_emails(
+                        account_id, folder, uidvalidity
+                    )
             
             # Determine which UIDs are new (not in cache)
             if cache_valid and highest_cached_uid > 0:
@@ -225,6 +286,11 @@ def stream_account_emails(account_id):
             
             # Sort by UID descending (newest first)
             emails.sort(key=lambda e: int(e.get("uid", 0)), reverse=True)
+            
+            # Record successful sync with server-side markers
+            update_folder_sync_state(
+                account_id, folder, uidvalidity, highestmodseq
+            )
             
             yield sse_message("complete", {
                 "emails": emails,

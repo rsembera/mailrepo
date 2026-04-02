@@ -5,7 +5,67 @@ Handles streaming of emails from IMAP servers and import sources.
 Implements caching with UIDVALIDITY for incremental sync.
 """
 
+import time
 from core import Database
+
+
+# ---------------------------------------------------------------------------
+# Folder sync state (TTL + CONDSTORE support)
+# ---------------------------------------------------------------------------
+
+# How many seconds a cached folder listing is considered fresh.
+# Within this window, clicking a folder returns cached data instantly
+# without contacting the IMAP server at all.
+FOLDER_CACHE_TTL_SECONDS = 120
+
+
+def get_folder_sync_state(account_id: int, folder: str) -> dict | None:
+    """
+    Get the sync state for a folder (last_synced_at, uidvalidity, highestmodseq).
+
+    Returns None if no state exists yet.
+    """
+    row = Database.fetchone(
+        """SELECT uidvalidity, highestmodseq, last_synced_at
+           FROM folder_sync_state
+           WHERE account_id = ? AND folder_name = ?""",
+        (account_id, folder),
+    )
+    if not row:
+        return None
+    return {
+        "uidvalidity": row["uidvalidity"],
+        "highestmodseq": row["highestmodseq"],
+        "last_synced_at": row["last_synced_at"],
+    }
+
+
+def update_folder_sync_state(
+    account_id: int, folder: str,
+    uidvalidity: int | None, highestmodseq: int | None,
+) -> None:
+    """
+    Record that we just synced a folder, storing server-side markers.
+    """
+    now = int(time.time())
+    Database.execute(
+        """INSERT OR REPLACE INTO folder_sync_state
+           (account_id, folder_name, uidvalidity, highestmodseq, last_synced_at)
+           VALUES (?, ?, ?, ?, ?)""",
+        (account_id, folder, uidvalidity, highestmodseq, now),
+    )
+    Database.commit()
+
+
+def is_cache_fresh(account_id: int, folder: str) -> bool:
+    """
+    Check whether the cache for this folder is within the TTL window.
+    """
+    state = get_folder_sync_state(account_id, folder)
+    if not state or not state["last_synced_at"]:
+        return False
+    age = int(time.time()) - state["last_synced_at"]
+    return age < FOLDER_CACHE_TTL_SECONDS
 
 
 def get_cached_emails(account_id: int, folder: str, uidvalidity: int) -> list[dict]:
@@ -58,9 +118,14 @@ def get_highest_cached_uid(account_id: int, folder: str, uidvalidity: int) -> in
 def clear_folder_cache(account_id: int, folder: str):
     """
     Clear cache for a folder (when UIDVALIDITY changes or force refresh).
+    Also clears the sync state so the next load does a full server check.
     """
     Database.execute(
         "DELETE FROM email_cache WHERE account_id = ? AND folder_name = ?",
+        (account_id, folder)
+    )
+    Database.execute(
+        "DELETE FROM folder_sync_state WHERE account_id = ? AND folder_name = ?",
         (account_id, folder)
     )
     Database.commit()
