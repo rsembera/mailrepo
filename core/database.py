@@ -19,7 +19,7 @@ from .config import Config
 
 
 # Current schema version (increment when schema changes)
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 class Database:
@@ -202,21 +202,28 @@ class Database:
             to_version: Target schema version.
         """
         migrations = {
-            # Example migration pattern:
-            # 6: cls._migrate_to_v6,
-            # 7: cls._migrate_to_v7,
+            6: cls._migrate_to_v6,
         }
         
         for version in range(from_version + 1, to_version + 1):
             if version in migrations:
                 migrations[version](conn)
     
-    # Migration functions - add new ones as needed
-    # @classmethod
-    # def _migrate_to_v6(cls, conn: sqlite3.Connection) -> None:
-    #     """Migration to schema version 6."""
-    #     conn.execute("ALTER TABLE folders ADD COLUMN new_field TEXT")
-    #     # etc.
+    # Migration functions
+    @classmethod
+    def _migrate_to_v6(cls, conn: sqlite3.Connection) -> None:
+        """Migration to schema version 6: Add folder_sync_state table."""
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS folder_sync_state (
+                account_id INTEGER NOT NULL,
+                folder_name TEXT NOT NULL,
+                uidvalidity INTEGER,
+                highestmodseq INTEGER,
+                last_synced_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                PRIMARY KEY (account_id, folder_name),
+                FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+            )
+        """)
 
 
 # SQL schema definition
