@@ -34,6 +34,8 @@ from .streaming import (
     get_any_cached_emails,
     cache_email,
     remove_stale_cache_entries,
+)
+from core.sync_cache import (
     get_folder_sync_state,
     update_folder_sync_state,
     is_cache_fresh,

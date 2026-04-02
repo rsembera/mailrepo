@@ -19,7 +19,7 @@ from .config import Config
 
 
 # Current schema version (increment when schema changes)
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 5
 
 
 class Database:
@@ -202,28 +202,19 @@ class Database:
             to_version: Target schema version.
         """
         migrations = {
-            6: cls._migrate_to_v6,
+            # Add migrations here when needed post-release:
+            # 6: cls._migrate_to_v6,
         }
         
         for version in range(from_version + 1, to_version + 1):
             if version in migrations:
                 migrations[version](conn)
     
-    # Migration functions
-    @classmethod
-    def _migrate_to_v6(cls, conn: sqlite3.Connection) -> None:
-        """Migration to schema version 6: Add folder_sync_state table."""
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS folder_sync_state (
-                account_id INTEGER NOT NULL,
-                folder_name TEXT NOT NULL,
-                uidvalidity INTEGER,
-                highestmodseq INTEGER,
-                last_synced_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
-                PRIMARY KEY (account_id, folder_name),
-                FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
-            )
-        """)
+    # Migration functions — add new ones here post-release
+    # @classmethod
+    # def _migrate_to_v6(cls, conn: sqlite3.Connection) -> None:
+    #     """Migration to schema version 6."""
+    #     conn.execute("ALTER TABLE ...")
 
 
 # SQL schema definition
@@ -348,19 +339,6 @@ CREATE TABLE IF NOT EXISTS pending_commit (
 );
 CREATE INDEX IF NOT EXISTS idx_pending_commit_id ON pending_commit(commit_id);
 CREATE INDEX IF NOT EXISTS idx_pending_commit_status ON pending_commit(status);
-
--- Folder sync state for smart cache management
--- Tracks when each IMAP folder was last synced and server-side change markers
--- (HIGHESTMODSEQ from CONDSTORE) to avoid unnecessary full folder scans.
-CREATE TABLE IF NOT EXISTS folder_sync_state (
-    account_id INTEGER NOT NULL,
-    folder_name TEXT NOT NULL,
-    uidvalidity INTEGER,
-    highestmodseq INTEGER,
-    last_synced_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
-    PRIMARY KEY (account_id, folder_name),
-    FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
-);
 """
 
 
