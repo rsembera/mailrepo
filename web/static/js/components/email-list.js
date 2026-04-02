@@ -267,6 +267,11 @@ export function renderEmailList() {
                     ${renderSortSelect()}
                 </div>
                 <div class="toolbar-actions">
+                    ${state.currentView?.type === 'account' ? `
+                    <button class="btn btn-secondary btn-icon-only" onclick="refreshImapFolder()" title="Refresh folder">
+                        <i data-lucide="refresh-cw"></i>
+                    </button>
+                    ` : ''}
                     <button class="btn btn-secondary" onclick="selectAllEmails()">
                         <i data-lucide="check-square"></i>
                         All

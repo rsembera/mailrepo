@@ -102,7 +102,7 @@ export function selectView(view) {
  * Load emails from an IMAP account folder.
  * Uses streaming for progress updates.
  */
-export async function loadAccountEmails(accountId, folder = 'INBOX') {
+export async function loadAccountEmails(accountId, folder = 'INBOX', { forceRefresh = false } = {}) {
     // Restore default header actions and toolbar
     restoreDefaultHeaderActions();
     
@@ -128,7 +128,7 @@ export async function loadAccountEmails(accountId, folder = 'INBOX') {
     
     // Start streaming - fetch all emails (or use a large limit)
     // The backend can handle large numbers efficiently with streaming
-    const streamUrl = `/api/accounts/${accountId}/emails/stream?folder=${encodeURIComponent(folder)}`;
+    const streamUrl = `/api/accounts/${accountId}/emails/stream?folder=${encodeURIComponent(folder)}${forceRefresh ? '&refresh=true' : ''}`;
     
     progress.startStream(streamUrl, {
         onComplete: (data) => {
@@ -586,6 +586,16 @@ window.navigateToImapFolder = function(accountId, folderPath) {
     
     // Load the folder
     loadAccountEmails(accountId, folderPath);
+};
+
+/**
+ * Refresh the current IMAP folder, bypassing cache.
+ */
+window.refreshImapFolder = function() {
+    if (state.currentView?.type !== 'account') return;
+    const accountId = state.currentView.id;
+    const folder = state.currentView.folder || 'INBOX';
+    loadAccountEmails(accountId, folder, { forceRefresh: true });
 };
 
 /**
