@@ -155,13 +155,13 @@ function renderAppearanceSection() {
         <div class="appearance-group">
             <label class="appearance-label">Theme</label>
             <div class="theme-grid" id="themeGrid">
-                <button class="theme-option" data-theme="graphite" title="Graphite">
-                    <span class="theme-swatch" style="background: #475569;"></span>
-                    <span class="theme-name">Graphite</span>
-                </button>
                 <button class="theme-option" data-theme="pine" title="Pine">
                     <span class="theme-swatch" style="background: #1F8F74;"></span>
                     <span class="theme-name">Pine</span>
+                </button>
+                <button class="theme-option" data-theme="graphite" title="Graphite">
+                    <span class="theme-swatch" style="background: #475569;"></span>
+                    <span class="theme-name">Graphite</span>
                 </button>
                 <button class="theme-option" data-theme="atlantic" title="Atlantic">
                     <span class="theme-swatch" style="background: #3B6EA5;"></span>
@@ -621,7 +621,7 @@ function initAppearanceHandlers() {
  */
 async function loadCurrentSettings() {
     // Get current theme
-    const currentTheme = localStorage.getItem('mailrepo-theme') || 'graphite';
+    const currentTheme = localStorage.getItem('mailrepo-theme') || 'pine';
     const themeBtn = document.querySelector(`.theme-option[data-theme="${currentTheme}"]`);
     if (themeBtn) themeBtn.classList.add('active');
     

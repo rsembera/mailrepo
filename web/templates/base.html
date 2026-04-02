@@ -22,7 +22,7 @@
     <script>
         (function() {
             // Theme
-            const theme = localStorage.getItem('mailrepo-theme') || 'graphite';
+            const theme = localStorage.getItem('mailrepo-theme') || 'pine';
             document.documentElement.setAttribute('data-theme', theme);
             
             // Font family
@@ -212,7 +212,7 @@
     {% block scripts %}{% endblock %}
     <script>
         // Apply theme to body as well (html already has it from head script)
-        document.body.setAttribute('data-theme', localStorage.getItem('mailrepo-theme') || 'graphite');
+        document.body.setAttribute('data-theme', localStorage.getItem('mailrepo-theme') || 'pine');
         lucide.createIcons();
     </script>
     
