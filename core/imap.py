@@ -388,17 +388,17 @@ class IMAP:
                         })
                     continue
                 
-                if content_type == "text/plain" and not result["text_body"]:
+                if content_type == "text/plain":
                     payload = part.get_payload(decode=True)
                     if payload:
                         charset = part.get_content_charset() or "utf-8"
-                        result["text_body"] = payload.decode(charset, errors="replace")
+                        result["text_body"] = (result["text_body"] or "") + payload.decode(charset, errors="replace")
                 
-                elif content_type == "text/html" and not result["html_body"]:
+                elif content_type == "text/html":
                     payload = part.get_payload(decode=True)
                     if payload:
                         charset = part.get_content_charset() or "utf-8"
-                        result["html_body"] = payload.decode(charset, errors="replace")
+                        result["html_body"] = (result["html_body"] or "") + payload.decode(charset, errors="replace")
         else:
             # Simple message
             content_type = msg.get_content_type()

@@ -238,10 +238,10 @@ def get_archived_email(folder_id, message_id):
                 if payload:
                     charset = part.get_content_charset() or "utf-8"
                     body = payload.decode(charset, errors="replace")
-                    if content_type == "text/plain" and not result["text_body"]:
-                        result["text_body"] = body
-                    elif content_type == "text/html" and not result["html_body"]:
-                        result["html_body"] = body
+                    if content_type == "text/plain":
+                        result["text_body"] = (result["text_body"] or "") + body
+                    elif content_type == "text/html":
+                        result["html_body"] = (result["html_body"] or "") + body
         else:
             content_type = msg.get_content_type()
             payload = msg.get_payload(decode=True)
