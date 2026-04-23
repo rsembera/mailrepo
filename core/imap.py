@@ -88,10 +88,11 @@ class IMAP:
                 self.connection = imaplib.IMAP4_SSL(
                     self.host, 
                     self.port,
-                    ssl_context=context
+                    ssl_context=context,
+                    timeout=60,
                 )
             else:
-                self.connection = imaplib.IMAP4(self.host, self.port)
+                self.connection = imaplib.IMAP4(self.host, self.port, timeout=60)
         except Exception as e:
             raise IMAPError(f"Failed to connect to {self.host}:{self.port}: {e}")
     
