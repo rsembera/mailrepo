@@ -536,6 +536,6 @@ def build_commit_summary(results: dict) -> str:
             msg_parts.append(f"{count} updated on server")
     if results["post_actions"]["failed"]:
         count = results["post_actions"]["failed"]
-        msg_parts.append(f"{count} server update{'s' if count != 1 else ''} failed")
+        msg_parts.append(f"{count} server update{'s' if count != 1 else ''} failed — your emails are archived safely, but you may need to remove them from the server manually")
     
     return ". ".join(msg_parts) + "." if msg_parts else "Nothing committed."

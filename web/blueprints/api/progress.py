@@ -696,8 +696,15 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
                 except IMAPError:
                     results["post_actions"]["failed"] += len(folder_items)
                     
-        except Exception:
+        except Exception as e:
             results["post_actions"]["failed"] += len(account_items)
+            # Report connection issues to the user via SSE
+            import socket
+            if isinstance(e, (socket.timeout, OSError)):
+                yield sse_message("status", {
+                    "phase": "post_actions",
+                    "message": "Server not responding — skipping server updates. Your emails are safely archived.",
+                })
         finally:
             if client:
                 try:
