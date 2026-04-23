@@ -183,6 +183,7 @@ export function createProgress(container) {
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
+            let completeFired = false;
             
             while (true) {
                 const { done, value } = await reader.read();
@@ -201,9 +202,22 @@ export function createProgress(container) {
                         currentEvent = line.slice(7);
                     } else if (line.startsWith('data: ') && currentEvent) {
                         const data = JSON.parse(line.slice(6));
+                        if (currentEvent === 'complete') completeFired = true;
                         handleEvent(currentEvent, data);
                         currentEvent = null;
                     }
+                }
+            }
+            
+            // If the stream ended without a complete event, the server
+            // was interrupted (killed, crashed, etc.)
+            if (!completeFired) {
+                render({
+                    phase: 'error',
+                    message: 'Connection to server was lost. Your archived emails are safe.',
+                });
+                if (onError) {
+                    onError({ error: 'Connection to server was lost. Your archived emails are safe.' });
                 }
             }
         } catch (error) {

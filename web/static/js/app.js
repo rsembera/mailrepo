@@ -573,6 +573,17 @@ async function checkPendingCommit() {
         const data = await response.json();
         if (!data.hasPending) return;
         
+        // If everything was committed but the process was interrupted during
+        // post-commit server actions, just clean up silently — nothing to resume.
+        if (data.pending === 0) {
+            await fetch('/api/commit/discard', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ commitId: data.commitId }),
+            });
+            return;
+        }
+        
         // Format the timestamp
         const createdDate = new Date(data.createdAt * 1000);
         const timeAgo = formatTimeAgo(createdDate);
@@ -583,7 +594,7 @@ async function checkPendingCommit() {
             'Resume Interrupted Commit',
             `A commit was interrupted ${timeAgo}. ` +
             `${data.committed} of ${data.total} items were committed before the interruption.\n\n` +
-            `Would you like to resume and commit the remaining ${data.pending} items?`,
+            `Would you like to resume and commit the remaining ${data.pending} item${data.pending !== 1 ? 's' : ''}?`,
             {
                 confirmText: 'Resume',
                 cancelText: 'Discard',
