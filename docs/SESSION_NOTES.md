@@ -1,6 +1,6 @@
 # MailRepo Session Notes
 
-**Date:** February 22, 2026  
+**Date:** February 22, 2026\
 **Last Updated:** Session 43
 
 **Status: PRODUCTION READY** 🎉
@@ -14,7 +14,7 @@
 - **Removed "Manage Archive" view** — Folder operations now happen via sidebar context menu
 - **Added "+" button to Archive header** — Creates new root-level folders inline
 - **Added "Change Color" to folder context menu** — Replaces separate management view
-- **Removed ~280 lines of dead code** — `showFolderManagementView()`, `renderFolderManagementList()`, `renderFolderManagementItem()`, filter functions, and related imports
+- **Removed \~280 lines of dead code** — `showFolderManagementView()`, `renderFolderManagementList()`, `renderFolderManagementItem()`, filter functions, and related imports
 - **Fixed nested button HTML** — Archive header row now uses proper flex container instead of invalid nested buttons
 - **Moved Retention Vault icon** — Now in bottom rail between dividers, signaling "cold storage" separate from active workflow
 
@@ -26,7 +26,7 @@
 ### Copy as Quotation Fixes
 
 - **Fixed HTML-only emails** — Emails without text_body now properly extract text from HTML
-- **Fixed malformed text_body detection** — Detects placeholder text like "[See HTML version]"
+- **Fixed malformed text_body detection** — Detects placeholder text like "\[See HTML version\]"
 - **Fixed HTML to plain text conversion** — Properly handles inline tags (b, i, em, strong, a) without adding extra newlines
 - **Fixed reply formatting** — Uses original HTML body directly in blockquote for better fidelity
 
@@ -80,7 +80,7 @@
 
 ## Pre-Release TODO
 
-- [ ] **README screenshots** — Need 4 screenshots for README: main browse view, email list with staged emails, review screen, email viewer. Requires sanitized/dummy email data to avoid exposing real correspondence.
+- \[ \] **README screenshots** — Need 4 screenshots for README: main browse view, email list with staged emails, review screen, email viewer. Requires sanitized/dummy email data to avoid exposing real correspondence.
 
 ---
 

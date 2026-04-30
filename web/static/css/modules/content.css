@@ -97,6 +97,16 @@
     width: 400px;
 }
 
+.search-folder-select {
+    padding: var(--space-xs) var(--space-sm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: 0.875rem;
+    max-width: 200px;
+}
+
 .search-help {
     color: var(--color-text-muted);
     max-width: 500px;

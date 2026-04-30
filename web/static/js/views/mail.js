@@ -225,10 +225,17 @@ function renderSearchView(results = null, query = '') {
     
     const hasQuery = query.length > 0;
     
+    // Build folder options for the scope dropdown
+    const folders = state.folders || [];
+    const folderOptions = buildFolderOptions(folders);
+    
+    // Preserve the current folder selection
+    const currentFolderId = window._searchFolderId || '';
+    
     let html = `
         <div class="folder-management-list search-view">
             <div class="email-list-toolbar">
-                <div class="email-filter">
+                <div class="email-filter" style="flex: 1;">
                     <i data-lucide="search" class="search-icon"></i>
                     <input type="text" 
                            id="archiveSearchInput" 
@@ -237,6 +244,10 @@ function renderSearchView(results = null, query = '') {
                            onkeydown="if(event.key==='Enter') executeArchiveSearch()">
                 </div>
                 <div class="toolbar-actions">
+                    <select id="searchFolderSelect" class="search-folder-select" onchange="window._searchFolderId = this.value">
+                        <option value="">All folders</option>
+                        ${folderOptions}
+                    </select>
                     <button class="btn btn-primary" onclick="executeArchiveSearch()">
                         <i data-lucide="search"></i>
                         Search
@@ -308,6 +319,30 @@ function renderSearchView(results = null, query = '') {
     // Focus the search input
     const input = document.getElementById('archiveSearchInput');
     if (input && !query) input.focus();
+    
+    // Restore folder selection
+    const folderSelect = document.getElementById('searchFolderSelect');
+    if (folderSelect && currentFolderId) {
+        folderSelect.value = currentFolderId;
+    }
+}
+
+/**
+ * Build folder option elements for the search scope dropdown.
+ * Renders a flat indented list from the folder tree.
+ */
+function buildFolderOptions(folders, parentId = null, depth = 0) {
+    let html = '';
+    const children = folders
+        .filter(f => f.parent_id === parentId && !f.deleted_at)
+        .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    
+    for (const folder of children) {
+        const indent = '\u00A0\u00A0'.repeat(depth);
+        html += `<option value="${folder.id}">${indent}${escapeHtml(folder.name)}</option>`;
+        html += buildFolderOptions(folders, folder.id, depth + 1);
+    }
+    return html;
 }
 
 /**
@@ -326,7 +361,9 @@ async function executeArchiveSearch() {
     if (contextMeta) contextMeta.textContent = 'Searching...';
     
     try {
-        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&limit=100`);
+        const folderId = window._searchFolderId || '';
+        const folderParam = folderId ? `&folder_id=${encodeURIComponent(folderId)}` : '';
+        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&limit=100${folderParam}`);
         
         if (!response.ok) {
             const data = await response.json();
@@ -354,6 +391,7 @@ window.executeArchiveSearch = executeArchiveSearch;
  * Clear archive search and reset to initial state.
  */
 function clearArchiveSearch() {
+    window._searchFolderId = '';
     if (contextMeta) contextMeta.textContent = 'Search all archived emails';
     renderSearchView(null, '');
 }

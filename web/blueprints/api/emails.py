@@ -57,6 +57,28 @@ def _linkify_html(html):
     return ''.join(result)
 
 
+def _get_folder_and_descendants(folder_id: int) -> list[int]:
+    """Get a folder ID and all its descendant folder IDs."""
+    all_folders = Database.fetchall(
+        "SELECT id, parent_id FROM folders WHERE deleted_at IS NULL"
+    )
+    folder_map = {}
+    for f in all_folders:
+        parent = f["parent_id"]
+        if parent not in folder_map:
+            folder_map[parent] = []
+        folder_map[parent].append(f["id"])
+    
+    result = [folder_id]
+    queue = [folder_id]
+    while queue:
+        current = queue.pop()
+        children = folder_map.get(current, [])
+        result.extend(children)
+        queue.extend(children)
+    return result
+
+
 @api_bp.route("/search", methods=["GET"])
 def search_emails():
     """Search archived emails using full-text search."""
@@ -70,17 +92,20 @@ def search_emails():
     fts_query = query.replace('"', '""')
     
     if folder_id:
+        # Get this folder and all descendant folder IDs
+        folder_ids = _get_folder_and_descendants(int(folder_id))
+        placeholders = ",".join("?" * len(folder_ids))
         results = Database.fetchall(
-            """
+            f"""
             SELECT m.id, m.folder_id, m.subject, m.sender, m.date, f.name as folder_name
             FROM messages m
             JOIN messages_fts fts ON m.id = fts.rowid
             JOIN folders f ON m.folder_id = f.id
-            WHERE messages_fts MATCH ? AND m.folder_id = ? AND m.deleted_at IS NULL
+            WHERE messages_fts MATCH ? AND m.folder_id IN ({placeholders}) AND m.deleted_at IS NULL
             ORDER BY m.date DESC
             LIMIT ?
             """,
-            (fts_query, folder_id, limit)
+            (fts_query, *folder_ids, limit)
         )
     else:
         results = Database.fetchall(
