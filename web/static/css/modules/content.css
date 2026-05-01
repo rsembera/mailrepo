@@ -94,17 +94,134 @@
    ARCHIVE SEARCH VIEW
    ============================================ */
 .search-view .email-filter input {
-    width: 400px;
+    width: 100%;
 }
 
-.search-folder-select {
-    padding: var(--space-xs) var(--space-sm);
+/* Scope button — replaces the old native <select>.
+   Looks like a secondary button but with a chevron + truncating label. */
+.search-scope-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    max-width: 240px;
+    overflow: hidden;
+}
+
+.search-scope-btn .search-scope-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.search-scope-btn .search-scope-chevron {
+    flex-shrink: 0;
+    opacity: 0.6;
+}
+
+.search-scope-btn.has-scope {
+    background: var(--color-primary-lighter);
+    color: var(--color-primary);
+    border-color: var(--color-primary-lighter);
+}
+
+/* Scope picker modal */
+.search-scope-modal {
+    max-width: 520px;
+    width: 92%;
+    display: flex;
+    flex-direction: column;
+    max-height: 75vh;
+}
+
+.search-scope-filter {
+    position: relative;
+    margin-bottom: var(--space-sm);
+}
+
+.search-scope-filter input {
+    width: 100%;
+    padding: var(--space-sm) var(--space-sm) var(--space-sm) calc(var(--space-lg) + var(--space-xs));
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     background: var(--color-surface);
     color: var(--color-text);
+    font-size: 0.9rem;
+}
+
+.search-scope-filter .search-icon {
+    position: absolute;
+    left: var(--space-sm);
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    color: var(--color-text-muted);
+    pointer-events: none;
+}
+
+.search-scope-all-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    margin-bottom: var(--space-sm);
+    transition: background 0.1s;
+}
+
+.search-scope-all-row:hover {
+    background: var(--color-background-secondary);
+}
+
+.search-scope-all-row.selected {
+    background: var(--color-primary-lighter);
+    border-color: var(--color-primary-lighter);
+    color: var(--color-primary);
+}
+
+.search-scope-all-row .search-scope-all-hint {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+}
+
+.search-scope-all-row.selected .search-scope-all-hint {
+    color: var(--color-primary);
+    opacity: 0.8;
+}
+
+.search-scope-tree {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-xs);
+    min-height: 200px;
+}
+
+.search-scope-subfolders {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs) var(--space-md);
+    margin-bottom: var(--space-sm);
     font-size: 0.875rem;
-    max-width: 200px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.search-scope-subfolders input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+.search-scope-subfolders-hint {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
 }
 
 .search-help {

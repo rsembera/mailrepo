@@ -152,6 +152,15 @@ Pre-release manual testing checklist. Run through before any public release.
 - [x] Search finds emails by body text
 - [x] Search results are clickable
 - [x] Clear search returns to folder view
+- [ ] Scope button shows current scope ("All folders" or folder path)
+- [ ] Scope picker opens a modal with a folder tree
+- [ ] Picker filter input narrows the visible folders and auto-expands ancestors
+- [ ] Selecting a folder closes the picker and updates the scope label
+- [ ] "All folders" row in picker resets the scope
+- [ ] "Include subfolders" toggle defaults to on; turning it off appends "(only)" to the scope label
+- [ ] Helper text reflects the current scope ("…in X and its subfolders" / "…in X only" / whole archive)
+- [ ] Search runs against the selected scope (folder + subs / folder only / all)
+- [ ] Typing over a previous query and pressing Enter runs a new search without needing Clear
 
 ---
 

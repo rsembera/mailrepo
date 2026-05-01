@@ -4,6 +4,52 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## April 30, 2026 — Evening Session
+
+**Participants:** Rick, Claude (Opus 4.7)
+
+**Work Done:**
+
+### Search scope picker overhaul
+
+The previous session added a folder-scope dropdown to the archive search, but used a native `<select>` that dumped every folder into a flat list with no way to navigate the tree. Replaced it with a proper folder picker.
+
+**Changes:**
+
+1. **Scope button instead of `<select>`** — Toolbar now has `[input] [Scope: All folders ▾] [Search] [Clear]`. The scope button shows the current scope label and tints when a specific folder is selected.
+
+2. **Folder picker modal** — Clicking the scope button opens a modal with:
+   - Filter input at the top (narrows the tree, auto-expands ancestors of matches)
+   - "All folders" row to reset scope
+   - "Include subfolders" checkbox (defaults on)
+   - Recursive folder tree with expand/collapse, reusing the existing `renderFolderTree` component
+
+3. **Include subfolders toggle** — Backend already searched folder + descendants when `folder_id` was passed. Added `include_subfolders` query param (defaults `true`); when `false`, only the chosen folder is searched. Frontend sends the param and reflects state in the scope label as `Folder/Path (only)`.
+
+4. **Scope-aware helper text** — Initial search-view sentence now reads:
+   - "…across your entire archive." (no scope)
+   - "…in **Folder** and its subfolders." (folder + subs)
+   - "…in **Folder** only." (folder only)
+   
+   Re-renders on scope change (when no results are showing) so the sentence stays accurate.
+
+5. **Fixed Enter-to-search after first search** — The inline `onkeydown` attribute combined with `innerHTML` re-emission was leaving the input without focus after results rendered. Replaced with a real `addEventListener('keydown')` and added focus + caret-position preservation across re-renders so subsequent searches work without clicking back into the field.
+
+### Bugs Fixed
+
+- **Empty folder tree in picker** — Passing `filter: undefined` into `renderFolderTree` clobbered the component's default filter via object spread, leading to `state.folders.filter(undefined)` and an empty `rootFolders` array. Fixed by only setting `treeOptions.filter` when a filter function actually exists.
+
+- **Stale "across your entire archive" copy** — Helper text claimed whole-archive scope even when a specific folder was selected. Now scope-aware.
+
+### Files Changed
+
+- `web/static/js/views/mail.js` — Scope button, picker modal, tree rendering, filter, subfolder toggle, scope-aware helper, focus preservation, Enter handler. Removed `buildFolderOptions`.
+- `web/static/css/modules/content.css` — Scope button styles, picker modal styles, subfolder checkbox row styles. Removed `.search-folder-select`.
+- `web/blueprints/api/emails.py` — Added `include_subfolders` query param to `/api/search`.
+- `docs/TESTING_CHECKLIST.md` — New test cases for picker, subfolder toggle, scope-aware helper, multi-search Enter.
+
+---
+
 ## February 4, 2026 — Afternoon Session (Session 31)
 
 **Participants:** Rick, Claude (Opus 4.5)

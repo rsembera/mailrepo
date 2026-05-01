@@ -85,6 +85,10 @@ def search_emails():
     query = request.args.get("q", "").strip()
     folder_id = request.args.get("folder_id")
     limit = int(request.args.get("limit", 50))
+    # When a folder is selected, decide whether to also search its descendants.
+    # Defaults to True to preserve previous behavior.
+    include_subfolders_arg = request.args.get("include_subfolders", "true").lower()
+    include_subfolders = include_subfolders_arg not in ("0", "false", "no")
     
     if not query:
         return jsonify({"error": "Search query is required"}), 400
@@ -92,8 +96,11 @@ def search_emails():
     fts_query = query.replace('"', '""')
     
     if folder_id:
-        # Get this folder and all descendant folder IDs
-        folder_ids = _get_folder_and_descendants(int(folder_id))
+        # Either the folder alone, or the folder + all descendants
+        if include_subfolders:
+            folder_ids = _get_folder_and_descendants(int(folder_id))
+        else:
+            folder_ids = [int(folder_id)]
         placeholders = ",".join("?" * len(folder_ids))
         results = Database.fetchall(
             f"""

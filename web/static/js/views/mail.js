@@ -225,12 +225,8 @@ function renderSearchView(results = null, query = '') {
     
     const hasQuery = query.length > 0;
     
-    // Build folder options for the scope dropdown
-    const folders = state.folders || [];
-    const folderOptions = buildFolderOptions(folders);
-    
-    // Preserve the current folder selection
-    const currentFolderId = window._searchFolderId || '';
+    // Current scope label (for the scope button)
+    const scopeLabel = getSearchScopeLabel();
     
     let html = `
         <div class="folder-management-list search-view">
@@ -241,13 +237,14 @@ function renderSearchView(results = null, query = '') {
                            id="archiveSearchInput" 
                            placeholder="Search by subject, sender, recipient, or content..." 
                            value="${escapeHtml(query)}"
-                           onkeydown="if(event.key==='Enter') executeArchiveSearch()">
+                           autocomplete="off">
                 </div>
                 <div class="toolbar-actions">
-                    <select id="searchFolderSelect" class="search-folder-select" onchange="window._searchFolderId = this.value">
-                        <option value="">All folders</option>
-                        ${folderOptions}
-                    </select>
+                    <button class="btn btn-secondary search-scope-btn" id="searchScopeBtn" onclick="openSearchScopePicker()" title="Choose folder to search in">
+                        <i data-lucide="folder"></i>
+                        <span class="search-scope-label">${escapeHtml(scopeLabel)}</span>
+                        <i data-lucide="chevron-down" class="search-scope-chevron"></i>
+                    </button>
                     <button class="btn btn-primary" onclick="executeArchiveSearch()">
                         <i data-lucide="search"></i>
                         Search
@@ -261,10 +258,26 @@ function renderSearchView(results = null, query = '') {
     `;
     
     if (results === null) {
+        // Build a scope-aware sentence so the helper text matches the active scope.
+        const folderId = window._searchFolderId;
+        const includeSubs = window._searchIncludeSubfolders !== false;
+        let scopeSentence;
+        if (!folderId) {
+            scopeSentence = 'Type a search term and press Enter (or click Search) to find emails across your entire archive.';
+        } else {
+            // Use the folder's name (not the full path) for the helper sentence — readable inline.
+            const folder = (state.folders || []).find(f => String(f.id) === String(folderId));
+            const folderName = folder ? folder.name : 'this folder';
+            const where = includeSubs
+                ? `${escapeHtml(folderName)} and its subfolders`
+                : `${escapeHtml(folderName)} only`;
+            scopeSentence = `Type a search term and press Enter (or click Search) to find emails in <strong>${where}</strong>. Use the folder button above to change the scope.`;
+        }
+        
         // Initial state - show helpful text
         html += `
             <div class="search-help">
-                <p>Type a search term and press Enter (or click Search) to find emails across your entire archive.</p>
+                <p>${scopeSentence}</p>
                 <p class="search-hint">Searches subject lines, sender/recipient addresses, and email content.</p>
                 <details class="search-tips">
                     <summary>Search tips</summary>
@@ -313,36 +326,285 @@ function renderSearchView(results = null, query = '') {
     
     html += `</div>`;
     
+    // Capture pre-render focus state so re-renders don't yank focus from the
+    // search input (which would otherwise stop Enter from working until the
+    // user clicked back into the field).
+    const oldInput = document.getElementById('archiveSearchInput');
+    const hadFocus = oldInput && document.activeElement === oldInput;
+    const caretPos = hadFocus ? oldInput.selectionStart : null;
+    
     emailList.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
     
-    // Focus the search input
     const input = document.getElementById('archiveSearchInput');
-    if (input && !query) input.focus();
-    
-    // Restore folder selection
-    const folderSelect = document.getElementById('searchFolderSelect');
-    if (folderSelect && currentFolderId) {
-        folderSelect.value = currentFolderId;
+    if (input) {
+        // Attach a real listener so Enter triggers a search reliably,
+        // even after the input has been re-emitted into the DOM.
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                executeArchiveSearch();
+            }
+        });
+        
+        if (hadFocus) {
+            input.focus();
+            // Put the caret back where it was, or at the end if we don't know.
+            const pos = caretPos != null ? caretPos : input.value.length;
+            try { input.setSelectionRange(pos, pos); } catch (_) { /* ignore */ }
+        } else if (!query) {
+            input.focus();
+        }
     }
 }
 
 /**
- * Build folder option elements for the search scope dropdown.
- * Renders a flat indented list from the folder tree.
+ * Get the human-readable label for the current search scope.
+ * Returns "All folders" if no folder is selected, or the folder path
+ * (e.g., "Clients/Smith") for a specific folder.
  */
-function buildFolderOptions(folders, parentId = null, depth = 0) {
-    let html = '';
-    const children = folders
-        .filter(f => f.parent_id === parentId && !f.deleted_at)
-        .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+function getSearchScopeLabel() {
+    const folderId = window._searchFolderId;
+    if (!folderId) return 'All folders';
     
-    for (const folder of children) {
-        const indent = '\u00A0\u00A0'.repeat(depth);
-        html += `<option value="${folder.id}">${indent}${escapeHtml(folder.name)}</option>`;
-        html += buildFolderOptions(folders, folder.id, depth + 1);
+    const folders = state.folders || [];
+    const folder = folders.find(f => String(f.id) === String(folderId));
+    if (!folder) return 'All folders';
+    
+    // Build full path by walking up parents
+    const parts = [];
+    let current = folder;
+    const seen = new Set();
+    while (current && !seen.has(current.id)) {
+        seen.add(current.id);
+        parts.unshift(current.name);
+        current = folders.find(f => f.id === current.parent_id);
     }
-    return html;
+    const path = parts.join('/');
+    
+    // Note when subfolders are excluded — only meaningful for a specific folder.
+    // Default (undefined or true) means "include", so we only annotate when false.
+    const includeSubs = window._searchIncludeSubfolders;
+    if (includeSubs === false) {
+        return `${path} (only)`;
+    }
+    return path;
+}
+
+// Track the picker's tree controller and its filter state across re-renders
+let _searchScopePickerController = null;
+let _searchScopePickerFilter = '';
+
+/**
+ * Open the search scope picker modal.
+ * Lets the user navigate the folder tree to pick a folder to search within
+ * (or "All folders" to search the whole archive).
+ */
+async function openSearchScopePicker() {
+    // Lazily build the modal markup on first use
+    let modal = document.getElementById('searchScopePickerModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'searchScopePickerModal';
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal-content search-scope-modal">
+                <div class="modal-header">
+                    <h2>Search in folder</h2>
+                </div>
+                <div class="search-scope-filter">
+                    <i data-lucide="search" class="search-icon"></i>
+                    <input type="text" id="searchScopeFilterInput"
+                           placeholder="Filter folders…"
+                           autocomplete="off">
+                </div>
+                <div class="search-scope-all-row" id="searchScopeAllRow">
+                    <i data-lucide="inbox"></i>
+                    <span>All folders</span>
+                    <span class="search-scope-all-hint">Search the whole archive</span>
+                </div>
+                <label class="search-scope-subfolders">
+                    <input type="checkbox" id="searchScopeSubfoldersToggle">
+                    <span>Include subfolders</span>
+                    <span class="search-scope-subfolders-hint">Also search inside nested folders</span>
+                </label>
+                <div class="search-scope-tree" id="searchScopeTree"></div>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" id="searchScopeCancelBtn">Cancel</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        // Wire up cancel + backdrop close
+        modal.querySelector('#searchScopeCancelBtn').addEventListener('click', closeSearchScopePicker);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeSearchScopePicker();
+        });
+        
+        // Filter input
+        modal.querySelector('#searchScopeFilterInput').addEventListener('input', (e) => {
+            _searchScopePickerFilter = e.target.value.trim().toLowerCase();
+            renderSearchScopeTreeContent();
+        });
+        
+        // "All folders" row → clear scope and close
+        modal.querySelector('#searchScopeAllRow').addEventListener('click', () => {
+            window._searchFolderId = '';
+            closeSearchScopePicker();
+            updateSearchScopeButton();
+        });
+        
+        // Subfolder toggle → just persist state; user closes via tree-pick or backdrop
+        modal.querySelector('#searchScopeSubfoldersToggle').addEventListener('change', (e) => {
+            window._searchIncludeSubfolders = e.target.checked;
+            updateSearchScopeButton();
+        });
+    }
+    
+    // Reset filter and render fresh
+    _searchScopePickerFilter = '';
+    const filterInput = modal.querySelector('#searchScopeFilterInput');
+    if (filterInput) filterInput.value = '';
+    
+    // Sync the checkbox to the current state (defaults to true on first open)
+    if (window._searchIncludeSubfolders === undefined) {
+        window._searchIncludeSubfolders = true;
+    }
+    const subfolderToggle = modal.querySelector('#searchScopeSubfoldersToggle');
+    if (subfolderToggle) subfolderToggle.checked = !!window._searchIncludeSubfolders;
+    
+    // Highlight the current selection on "All folders" row if applicable
+    const allRow = modal.querySelector('#searchScopeAllRow');
+    if (allRow) {
+        allRow.classList.toggle('selected', !window._searchFolderId);
+    }
+    
+    renderSearchScopeTreeContent();
+    
+    modal.classList.add('active');
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    
+    // Focus the filter input for fast typing
+    setTimeout(() => filterInput?.focus(), 50);
+}
+window.openSearchScopePicker = openSearchScopePicker;
+
+/**
+ * Close the search scope picker modal.
+ */
+function closeSearchScopePicker() {
+    const modal = document.getElementById('searchScopePickerModal');
+    if (modal) modal.classList.remove('active');
+}
+
+/**
+ * Render the folder tree inside the scope picker, applying the current filter.
+ * Uses the unified folder-tree component for consistency with the rest of the app.
+ */
+async function renderSearchScopeTreeContent() {
+    const container = document.getElementById('searchScopeTree');
+    if (!container) return;
+    
+    const { renderFolderTree } = await import('../components/folder-tree.js');
+    
+    const filter = _searchScopePickerFilter;
+    const allFolders = state.folders || [];
+    
+    // If filtering, compute the set of folders to show (matches + their ancestors,
+    // so the tree stays valid). Also auto-expand ancestors of matches.
+    let folderFilterFn;
+    let autoExpandIds = null;
+    
+    if (filter) {
+        const matchIds = new Set();
+        const ancestorIds = new Set();
+        
+        for (const f of allFolders) {
+            if (f.deleted_at || f.retention_date) continue;
+            if ((f.name || '').toLowerCase().includes(filter)) {
+                matchIds.add(f.id);
+                // Walk up parents to keep the path visible
+                let cur = f;
+                const seen = new Set();
+                while (cur && cur.parent_id && !seen.has(cur.id)) {
+                    seen.add(cur.id);
+                    const parent = allFolders.find(p => p.id === cur.parent_id);
+                    if (!parent) break;
+                    ancestorIds.add(parent.id);
+                    cur = parent;
+                }
+            }
+        }
+        
+        const visibleIds = new Set([...matchIds, ...ancestorIds]);
+        folderFilterFn = (f) => !f.deleted_at && !f.retention_date && visibleIds.has(f.id);
+        autoExpandIds = ancestorIds;
+        
+        if (visibleIds.size === 0) {
+            container.innerHTML = '<div class="folder-tree-empty">No folders match.</div>';
+            return;
+        }
+    }
+    
+    const treeOptions = {
+        selectable: true,
+        selectedId: window._searchFolderId ? Number(window._searchFolderId) : null,
+        showChevrons: true,
+        showColorDots: true,
+        showAddButtons: false,
+        onSelect: (folderId) => {
+            window._searchFolderId = String(folderId);
+            closeSearchScopePicker();
+            updateSearchScopeButton();
+        }
+    };
+    // Only override the component's default filter when we actually have one
+    if (folderFilterFn) {
+        treeOptions.filter = folderFilterFn;
+    }
+    
+    const controller = renderFolderTree(container, treeOptions);
+    
+    _searchScopePickerController = controller;
+    
+    // Auto-expand ancestors of filter matches so the matches are visible
+    if (autoExpandIds && controller && controller.expand) {
+        for (const id of autoExpandIds) {
+            try { controller.expand(id); } catch (_) { /* ignore */ }
+        }
+    }
+    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+/**
+ * Update the scope button label without re-rendering the whole search view.
+ * Called after the user picks a folder (or clears the scope).
+ */
+function updateSearchScopeButton() {
+    // Re-render the search view so both the button label AND the helper text
+    // reflect the new scope. Preserve the current query so the user doesn't
+    // lose what they've typed.
+    const input = document.getElementById('archiveSearchInput');
+    const currentQuery = input?.value || '';
+    
+    // If results are currently displayed, leave them — the user will run a new
+    // search when they're ready. Just update the button in place.
+    const hasResults = !!document.querySelector('.search-result, .empty-state');
+    if (hasResults) {
+        const btn = document.getElementById('searchScopeBtn');
+        if (btn) {
+            const labelEl = btn.querySelector('.search-scope-label');
+            if (labelEl) labelEl.textContent = getSearchScopeLabel();
+            btn.classList.toggle('has-scope', !!window._searchFolderId);
+        }
+        return;
+    }
+    
+    // Otherwise we're on the initial helper screen — re-render so the helper
+    // sentence matches the new scope.
+    renderSearchView(null, currentQuery);
 }
 
 /**
@@ -362,7 +624,14 @@ async function executeArchiveSearch() {
     
     try {
         const folderId = window._searchFolderId || '';
-        const folderParam = folderId ? `&folder_id=${encodeURIComponent(folderId)}` : '';
+        let folderParam = '';
+        if (folderId) {
+            folderParam = `&folder_id=${encodeURIComponent(folderId)}`;
+            // Only meaningful when a folder is chosen. Default is true.
+            if (window._searchIncludeSubfolders === false) {
+                folderParam += '&include_subfolders=false';
+            }
+        }
         const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&limit=100${folderParam}`);
         
         if (!response.ok) {
@@ -392,8 +661,10 @@ window.executeArchiveSearch = executeArchiveSearch;
  */
 function clearArchiveSearch() {
     window._searchFolderId = '';
+    window._searchIncludeSubfolders = true;
     if (contextMeta) contextMeta.textContent = 'Search all archived emails';
     renderSearchView(null, '');
+    updateSearchScopeButton();
 }
 window.clearArchiveSearch = clearArchiveSearch;
 
