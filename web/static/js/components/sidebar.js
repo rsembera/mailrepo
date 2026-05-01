@@ -11,7 +11,7 @@
 
 import { escapeHtml } from '../utils.js';
 import { state, confirmNavigation } from '../state.js';
-import { initContextMenu, showFolderContextMenu, showArchiveHeaderContextMenu } from './context-menu.js';
+import { initContextMenu, showFolderContextMenu, showFolderContextMenuAtElement, showArchiveHeaderContextMenu } from './context-menu.js';
 
 // Callbacks set via init
 let onFolderSelect = null;
@@ -390,6 +390,9 @@ function createFolderTreeItem(folder, children, depth) {
             ${colorDot}
             <i data-lucide="folder" class="tree-icon"></i>
             <span class="tree-label">${escapeHtml(folder.name)}</span>
+            <button class="folder-actions-btn" type="button" aria-label="Folder actions" title="Folder actions">
+                <i data-lucide="more-horizontal"></i>
+            </button>
         </div>
     `;
     
@@ -436,6 +439,19 @@ function createFolderTreeItem(folder, children, depth) {
     row.addEventListener('contextmenu', (e) => {
         showFolderContextMenu(e, folder.id, folder);
     });
+    
+    // ⋯ actions button — same menu as right-click, anchored to the button.
+    // Stop propagation so the row's click handler doesn't navigate into the
+    // folder and the document-level "click outside" handler doesn't close
+    // the menu the moment we open it.
+    const actionsBtn = row.querySelector('.folder-actions-btn');
+    if (actionsBtn) {
+        actionsBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            showFolderContextMenuAtElement(e, actionsBtn, folder.id, folder);
+        });
+    }
     
     return folderItem;
 }

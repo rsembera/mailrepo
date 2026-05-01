@@ -4,6 +4,44 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## May 1, 2026 — Evening Session
+
+**Participants:** Rick, Claude (Opus 4.7)
+
+**Work Done:**
+
+### Folder actions ⋯ button (sidebar discoverability)
+
+Folder management has always been right-click only on the sidebar tree, which is poorly discoverable — users don't know the menu exists, and right-click on trackpads is awkward (control-click, two-finger tap, varies by system). Added a persistent affordance: a `⋯` button that appears on row hover (always visible on touch) and opens the same context menu, anchored below the button.
+
+**Decision on drag-to-rearrange:** discussed but deferred. Users already control folder order via numeric prefix convention (`01`, `02`, …); adding drag would introduce a competing ordering mechanism plus significant complexity (drop target ambiguity, auto-expand timing, touch gestures, accessibility, schema changes). If reordering becomes a real need, "Move up / Move down" menu items would be the simpler next step.
+
+**Changes:**
+
+1. **`context-menu.js`** — Factored menu-build logic into private `_showFolderMenu(folderId, folder)`. Existing `showFolderContextMenu(e, …)` retains cursor-position behavior for right-click. New `showFolderContextMenuAtElement(e, anchorEl, folderId, folder)` opens the same menu anchored just below the button's left edge; viewport edge detection still applies.
+
+2. **`sidebar.js`** — `createFolderTreeItem` now appends a `<button class="folder-actions-btn">` (Lucide `more-horizontal`) inside the row. Click handler stops propagation and calls `showFolderContextMenuAtElement` — propagation must be stopped or (a) the row's click handler navigates into the folder and (b) the document-level "click outside" listener immediately closes the menu.
+
+3. **`sidebar.css`** — Button is `position: absolute` at the right edge of the row (not in flex flow), `opacity: 0` by default, fades to `opacity: 1` on `.tree-item-row:hover` or `:focus-visible`. `@media (hover: none)` makes it always visible on touch devices.
+
+### Bug fixed: horizontal scrollbar in sidebar
+
+First-pass implementation put the `⋯` button in the row's flex flow with `margin-left`, which widened every row by ~30px. Combined with `.tree-label { white-space: nowrap }` and `.section-content.expanded { overflow-x: auto }`, long folder names spilled past the container and triggered a horizontal scrollbar on the whole archive section.
+
+Fix:
+- `.folder-item > .tree-item-row` now uses `position: relative` with 32px right padding to reserve space for the button.
+- `.folder-actions-btn` is `position: absolute` at `right: 6px`, vertically centered — out of the flex flow entirely, so it contributes no width.
+- `.tree-label` got `overflow: hidden; text-overflow: ellipsis; min-width: 0` — long names truncate with `…` instead of pushing the row wider. This was actually a latent issue; the dots button only made it visible.
+
+### Files Changed
+
+- `web/static/js/components/context-menu.js` — Refactored to share menu-build logic; new `showFolderContextMenuAtElement` for anchored opening.
+- `web/static/js/components/sidebar.js` — Added `⋯` button to folder rows; wired click with stopPropagation.
+- `web/static/css/modules/sidebar.css` — Absolute-positioned button, label ellipsis, touch-device handling.
+- `docs/TESTING_CHECKLIST.md` — 7 new test cases for the ⋯ affordance.
+
+---
+
 ## April 30, 2026 — Evening Session
 
 **Participants:** Rick, Claude (Opus 4.7)

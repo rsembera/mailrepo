@@ -91,6 +91,13 @@ Pre-release manual testing checklist. Run through before any public release.
 - [x] Can delete folder (moves to Trash)
 - [x] Folder with emails can be deleted
 - [x] Folder with subfolders can be deleted
+- [ ] ⋯ actions button appears on folder row hover
+- [ ] Clicking ⋯ button opens the folder actions menu (same items as right-click)
+- [ ] Menu is anchored below the button and stays within the viewport
+- [ ] Right-click on folder row still opens the same menu (existing behavior preserved)
+- [ ] Clicking ⋯ does not navigate into the folder
+- [ ] Long folder names truncate with ellipsis instead of horizontal-scrolling the sidebar
+- [ ] Keyboard focus on ⋯ button shows it (focus-visible)
 
 ---
 

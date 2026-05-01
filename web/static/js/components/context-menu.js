@@ -48,6 +48,41 @@ export function showFolderContextMenu(e, folderId, folder) {
     e.preventDefault();
     e.stopPropagation();
     
+    _showFolderMenu(folderId, folder);
+    positionMenu(e.clientX, e.clientY);
+    menuElement.classList.add('visible');
+}
+
+/**
+ * Show context menu for a folder, anchored to a UI element (e.g. a "⋯" button).
+ * The menu opens just below the element and aligns to its right edge so the
+ * menu's right side never falls off-screen for typical sidebar widths.
+ * @param {Event} e - The originating click event (used only for preventDefault/stopPropagation)
+ * @param {HTMLElement} anchorEl - Element to anchor to
+ * @param {number} folderId - The folder ID
+ * @param {Object} folder - The folder object from state
+ */
+export function showFolderContextMenuAtElement(e, anchorEl, folderId, folder) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    
+    _showFolderMenu(folderId, folder);
+    
+    const rect = anchorEl.getBoundingClientRect();
+    // Default: align menu's left to the button's left, drop below the button.
+    // positionMenu will nudge it back into the viewport if it would overflow.
+    positionMenu(rect.left, rect.bottom + 4);
+    
+    menuElement.classList.add('visible');
+}
+
+/**
+ * Internal: build the folder context menu DOM and wire up its click handlers.
+ * Does not position or show the menu — callers do that.
+ */
+function _showFolderMenu(folderId, folder) {
     if (!menuElement) initContextMenu();
     
     currentFolderId = folderId;
@@ -92,12 +127,6 @@ export function showFolderContextMenu(e, folderId, folder) {
     
     // Render icons
     if (typeof lucide !== 'undefined') lucide.createIcons();
-    
-    // Position menu with edge detection
-    positionMenu(e.clientX, e.clientY);
-    
-    // Show menu
-    menuElement.classList.add('visible');
 }
 
 /**

@@ -247,6 +247,62 @@
 .tree-label {
     flex: 1;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+/* Folder actions "⋯" button — hidden by default, fades in on row hover.
+   Same menu as right-click; provides a discoverable affordance for users
+   who don't know about the context menu.
+   Positioned absolutely so it doesn't widen the row (which would push
+   the section into a horizontal scrollbar). The folder row has
+   matching right padding to keep the label from running under it. */
+.folder-item > .tree-item-row {
+    position: relative;
+    padding-right: 32px;
+}
+
+.folder-actions-btn {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.12s, background 0.12s, color 0.12s;
+}
+
+.folder-actions-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.tree-item-row:hover .folder-actions-btn,
+.folder-actions-btn:focus-visible {
+    opacity: 1;
+}
+
+.folder-actions-btn:hover {
+    background: var(--color-border);
+    color: var(--color-text);
+}
+
+/* On touch devices there is no hover, so the button must always be visible. */
+@media (hover: none) {
+    .folder-actions-btn {
+        opacity: 1;
+    }
 }
 
 .tree-children {
