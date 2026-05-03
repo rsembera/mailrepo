@@ -253,6 +253,12 @@ function renderSearchView(results = null, query = '') {
                         <i data-lucide="x"></i>
                         Clear
                     </button>
+                    ${(results && results.length > 0) ? `
+                        <button class="btn btn-secondary" onclick="exportSearchResults()" title="Export these search results as PDF">
+                            <i data-lucide="download"></i>
+                            Export…
+                        </button>
+                    ` : ''}
                 </div>
             </div>
     `;
@@ -703,6 +709,46 @@ async function openSearchResult(messageId, folderId) {
     }
 }
 window.openSearchResult = openSearchResult;
+
+/**
+ * Export the current search results via the bulk-export modal (Phase 2).
+ *
+ * Uses the search source (not messages) so the backend re-runs the FTS
+ * query at export time. This is consistent with what the user just saw,
+ * and avoids the ceiling that would apply if we packed thousands of IDs
+ * into the message_ids payload.
+ */
+function exportSearchResults() {
+    const input = document.getElementById('archiveSearchInput');
+    const query = (input?.value || '').trim();
+    if (!query) return;
+
+    if (typeof window.openExportModal !== 'function') {
+        console.error('Export modal not loaded');
+        return;
+    }
+
+    const folderId = window._searchFolderId || null;
+    // Default is true for include_subfolders (matches the picker default)
+    const includeSubs = window._searchIncludeSubfolders !== false;
+
+    // Build a folder_name hint for the modal\'s "Exporting" line so the
+    // user sees the same scope they searched in.
+    let folderName = null;
+    if (folderId) {
+        const folder = (state.folders || []).find(f => String(f.id) === String(folderId));
+        if (folder?.name) folderName = folder.name;
+    }
+
+    window.openExportModal({
+        source: 'search',
+        query,
+        folder_id: folderId,
+        include_subfolders: includeSubs,
+        folder_name: folderName,
+    });
+}
+window.exportSearchResults = exportSearchResults;
 
 // Helper functions for search results display
 function extractName(sender) {

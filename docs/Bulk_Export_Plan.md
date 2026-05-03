@@ -178,7 +178,7 @@ To resolve when this work is picked up:
 ## Implementation phases
 
 1. **Skeleton + Polish (combined)**: ✅ **Done — May 3, 2026.** See "Phase 1 status" below.
-2. **Selection sources**: Pending. Wire up the search-result-set source and the batch-selected-emails source to the same modal. Backend already supports both via the `selection.kind` payload (`folder` / `messages` / `search`); frontend wiring is the remaining work.
+2. **Selection sources**: ✅ **Done — May 3, 2026.** Both the archive batch-select toolbar and the search-results toolbar now open the same export modal. See "Phase 2 status" below.
 3. **Attachments — non-PDF types**: Pending. Inline images and pypdf-appended PDFs are done. Image attachments and other file types still need a sibling-folder treatment in a wrapper ZIP.
 4. **Encryption**: Pending. AES-256 encrypted ZIP via `pyzipper` with the one-time warning modal. Format radio in the export modal already lists this, just disabled.
 
@@ -217,4 +217,20 @@ What was specifically deferred from Phase 1:
 
 ---
 
-*Doc created May 1, 2026 after architecture conversation between Rick and Claude. Phase 1 implemented May 3, 2026.*
+## Phase 2 status — May 3, 2026 (evening)
+
+Wiring only — no new backend or modal work. The export modal already supported the `messages` and `search` selection sources from Phase 1; this just exposes the entry points in the UI.
+
+**Archive folder view (batch-select → export):** When the user has one or more archived emails selected via the row check buttons, the existing toolbar (All / Clear / Move / Trash) now also shows an "Export…" button. Clicking it opens the modal with `source: 'messages'` and a label like "12 emails from Clients/Smith" so the cover page reflects where the emails came from.
+
+**Search results view (export results):** When a search has produced one or more results, an "Export…" button appears in the search toolbar (next to Clear). It opens the modal with `source: 'search'` and the current query / folder scope / subfolder toggle, so the export re-runs the same FTS query at export time. This is intentional — it keeps the export consistent with what the user saw in the results list, and avoids embedding thousands of message IDs in the payload for big result sets.
+
+The Phase 1 form-state-preservation fix from earlier today applies here too — opening the destination picker no longer clobbers the user\'s format / sort / cover / remote-images choices.
+
+What\'s deferred to Phase 3:
+- Format = "both" still produces a wrapper ZIP (PDF + emails.zip) but neither output is encrypted yet.
+- The `.eml ZIP` format card is enabled for "eml" exports as plain ZIP, but encrypted ZIP via pyzipper with a one-time warning modal is the Phase 3 deliverable. Until then, the existing in-modal "not encrypted" warning is shown.
+
+---
+
+*Doc created May 1, 2026 after architecture conversation between Rick and Claude. Phase 1 implemented May 3, 2026. Phase 2 wired May 3, 2026 (evening).*

@@ -239,6 +239,10 @@ export function renderEmailList() {
                         <i data-lucide="folder-input"></i>
                         Move
                     </button>
+                    <button class="btn btn-secondary" onclick="exportSelectedArchivedEmails()" ${archiveSelectedCount === 0 ? 'disabled' : ''} title="Export selected emails as PDF">
+                        <i data-lucide="download"></i>
+                        Export…
+                    </button>
                     <button class="btn btn-danger" onclick="deleteSelectedArchivedEmails()" ${archiveSelectedCount === 0 ? 'disabled' : ''}>
                         <i data-lucide="trash-2"></i>
                         Trash
@@ -676,3 +680,36 @@ async function deleteSelectedArchivedEmails() {
     }
 }
 window.deleteSelectedArchivedEmails = deleteSelectedArchivedEmails;
+
+/**
+ * Export selected archived emails via the bulk-export modal (Phase 2).
+ *
+ * Builds a human-readable scope label that names the current folder when
+ * we\'re in a folder view, so the cover page tells the recipient where
+ * these emails came from.
+ */
+function exportSelectedArchivedEmails() {
+    if (selectedArchivedEmails.size === 0) return;
+    const ids = Array.from(selectedArchivedEmails);
+
+    // Try to name the source folder (we\'re always in an archive folder
+    // view when this button is clickable, but be defensive).
+    let label = `${ids.length} selected email${ids.length === 1 ? '' : 's'}`;
+    if (state.currentView?.type === 'folder') {
+        const folder = (state.folders || []).find(f => String(f.id) === String(state.currentView.id));
+        if (folder?.name) {
+            label = `${ids.length} email${ids.length === 1 ? '' : 's'} from ${folder.name}`;
+        }
+    }
+
+    if (typeof window.openExportModal !== 'function') {
+        console.error('Export modal not loaded');
+        return;
+    }
+    window.openExportModal({
+        source: 'messages',
+        message_ids: ids,
+        label,
+    });
+}
+window.exportSelectedArchivedEmails = exportSelectedArchivedEmails;

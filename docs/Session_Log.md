@@ -4,6 +4,39 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## May 3, 2026 — Bulk Export Phase 2 (evening)
+
+**Participants:** Rick, Claude (Opus 4.7)
+
+**Work Done:**
+
+Wired two new entry points into the existing bulk-export modal:
+
+1. **Archive batch-select → Export.** The archive folder view\'s toolbar already had All / Clear / Move / Trash for batch operations on selected archived emails. Added an "Export…" button between Move and Trash. Calls `openExportModal({source: 'messages', message_ids, label})` with a label like "12 emails from Clients/Smith" so the cover page reflects the source folder.
+
+2. **Search results → Export results.** The search view\'s toolbar gets an "Export…" button next to Clear, conditionally visible only when results are showing (not on the initial helper screen, not on the empty-results state). Calls `openExportModal({source: 'search', query, folder_id, include_subfolders, folder_name})`, which re-runs the FTS query at export time. Re-running the query on the backend rather than embedding all the message ids is intentional — it scales to large result sets and stays consistent with what the user saw.
+
+Backend already supported both `messages` and `search` selection sources from Phase 1; this was pure frontend wiring. The form-state-preservation fix earlier this session applies to both new entry points by construction.
+
+### Bug fixed earlier today
+
+**Form state lost when opening destination picker.** Switching to the picker view re-rendered the modal HTML; coming back re-read `window._export`, which only got updated in `_startExport`. Result: opening the picker after picking options reset everything to defaults. Fixed with three layers: a `_captureFormState()` helper that reads form values into `window._export`, `change` listeners on every form input that call it, and an explicit call right before `_openPickerView` tears down the form\'s DOM.
+
+### Files changed
+
+- `web/static/js/components/email-list.js` (Export button + handler in archive toolbar)
+- `web/static/js/views/mail.js` (Export results button + handler in search toolbar)
+- `web/static/js/components/export-modal.js` (form-state preservation fix from earlier today)
+- `docs/Bulk_Export_Plan.md` (Phase 2 status)
+- `docs/Session_Log.md` (this entry)
+
+### Deferred to Phase 3
+
+- AES-256 encrypted ZIP via pyzipper with one-time warning modal
+- Non-PDF attachment handling (images, Office docs in sibling folder)
+
+---
+
 ## May 3, 2026 — Bulk Export Phase 1
 
 **Participants:** Rick, Claude (Opus 4.7)
