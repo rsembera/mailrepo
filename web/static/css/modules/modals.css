@@ -52,9 +52,42 @@
     margin-bottom: var(--space-lg);
 }
 
+/* When a modal header contains an inline close button, switch to flex
+   layout so the title sits on the left and the X on the right.
+   :has() is well-supported in modern browsers; modals without a close
+   button keep the default block layout. */
+.modal-header:has(.btn-icon) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+}
+
 .modal-header h2 {
     margin: 0;
     font-size: 1.25rem;
+}
+
+/* Inline close button inside a modal header */
+.modal-header > .btn-icon {
+    background: transparent;
+    border: none;
+    padding: var(--space-xs);
+    color: var(--color-text-muted, #777);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm, 4px);
+    transition: background 0.15s ease;
+}
+.modal-header > .btn-icon:hover {
+    background: var(--color-bg-subtle, #f0f0f0);
+    color: var(--color-text, #222);
+}
+.modal-header > .btn-icon i {
+    width: 18px;
+    height: 18px;
 }
 
 .modal-actions {

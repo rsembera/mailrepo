@@ -979,29 +979,42 @@ def _append_pdf_attachments(main_pdf: bytes, refs: list[dict]) -> bytes:
     Bad attachments (corrupt, encrypted, not actually a PDF) are silently
     skipped — they\'re still listed in the appendix table on the main PDF,
     so the user can see something\'s amiss.
+
+    pypdf logs a WARNING for every minor structural irregularity it
+    encounters ("Ignoring wrong pointing object", etc.). For exports with
+    many attachments these warnings flood the terminal even though pypdf
+    handles them gracefully and the merge succeeds. Silence them at the
+    logger level for the duration of the merge \u2014 actual unrecoverable
+    failures still raise exceptions and surface via the try/except below.
     """
     from pypdf import PdfReader, PdfWriter
 
-    writer = PdfWriter()
+    pypdf_logger = logging.getLogger("pypdf")
+    prev_level = pypdf_logger.level
+    pypdf_logger.setLevel(logging.ERROR)
     try:
-        for page in PdfReader(io.BytesIO(main_pdf)).pages:
-            writer.add_page(page)
-    except Exception:
-        # If we can\'t even read what WeasyPrint produced, return the original
-        return main_pdf
-
-    for ref in refs:
+        writer = PdfWriter()
         try:
-            reader = PdfReader(io.BytesIO(ref["data"]))
-            if reader.is_encrypted:
-                logger.info("Skipping encrypted PDF attachment: %s", ref["filename"])
-                continue
-            for page in reader.pages:
+            for page in PdfReader(io.BytesIO(main_pdf)).pages:
                 writer.add_page(page)
-        except Exception as e:
-            logger.warning("Skipping unreadable PDF attachment %s: %s", ref["filename"], e)
-            continue
+        except Exception:
+            # If we can\'t even read what WeasyPrint produced, return the original
+            return main_pdf
 
-    out = io.BytesIO()
-    writer.write(out)
-    return out.getvalue()
+        for ref in refs:
+            try:
+                reader = PdfReader(io.BytesIO(ref["data"]))
+                if reader.is_encrypted:
+                    logger.info("Skipping encrypted PDF attachment: %s", ref["filename"])
+                    continue
+                for page in reader.pages:
+                    writer.add_page(page)
+            except Exception as e:
+                logger.warning("Skipping unreadable PDF attachment %s: %s", ref["filename"], e)
+                continue
+
+        out = io.BytesIO()
+        writer.write(out)
+        return out.getvalue()
+    finally:
+        pypdf_logger.setLevel(prev_level)
