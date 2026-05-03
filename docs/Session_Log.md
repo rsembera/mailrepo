@@ -4,6 +4,70 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## May 3, 2026 — Bulk Export Phase 1
+
+**Participants:** Rick, Claude (Opus 4.7)
+
+**Work Done:**
+
+Built the bulk PDF export feature end to end, from skeleton through polish. The bulk-export design doc had this scoped as four phases; we collapsed phases 1 + 4 into a single shippable Phase 1 covering folder-source export, PDF rendering, attachments, save-to-disk, progress UI, cover page, and a remote-content toggle. Phases 2 (search/messages sources) and 3 (encryption + non-PDF attachment handling) remain.
+
+### What's new
+
+**Backend (`core/pdf_export.py` ~922 lines, `web/blueprints/api/exports.py` ~700 lines):**
+- WeasyPrint pipeline: combined HTML document → single render → pypdf merge for PDF attachments
+- Cover page with scope, email count, date range, export date
+- Email sections with header table (From/To/Cc/Date/Folder) and CSS-scoped HTML body
+- Appendix page listing PDF attachments before they're merged onto the back
+- 5 endpoints: `/api/export/start`, `/progress/<job_id>` (SSE), `/download/<job_id>`, `/cancel/<job_id>`, `/reveal`
+
+**Frontend (`web/static/js/components/export-modal.js` ~520 lines, `export.css` ~340 lines):**
+- Modal with form view → progress view → complete view → error view
+- Custom folder picker (no native dialogs); last-used directory persisted in `localStorage`
+- Sort toggle (chronological / reverse)
+- Include cover page checkbox
+- Include subfolders checkbox (folder source)
+- "Load remote images" checkbox (default off)
+- Triggered from sidebar folder context menu and ⋯ button — same `openExportModal({source:'folder', folder_id, folder_name})` entry point
+
+### The hard problems
+
+**CSS scoping (cream-on-cover-page bleed).** Email HTML often sets a body background via inline `<body style="background: cream">` or a `<style>body { background: cream }</style>` block, sometimes wrapped in `@media only screen`. Concatenated naively into one combined document, that cream applied to the cover page and every email afterward. Fix: rewrite `<html>`/`<body>`/`<head>` tags as scoped `<div class="email-shell">` containers, preserving attributes (including inline styles), and rewrite selectors in `<style>` blocks to be prefixed with `.email-scope-eN`. Recursive descent into `@media`/`@supports`/`@layer`/`@container`/`@scope` so nested selectors get scoped too. Verified with three real email styles plus the user's actual `.eml` files.
+
+**WeasyPrint table-layout quirks (centering).** Two HTML attributes WeasyPrint doesn't honor like browsers do:
+- `<table width="100%">` renders content-width, not container-width. Fix: `table[width="100%"] { width: 100% !important }` in base CSS.
+- `<td align="center">` doesn't center block-level descendants (nested tables). Fix: `td[align="center"] > table { margin: 0 auto !important }`.
+
+Both took several test iterations to isolate (variants A/B/C/D in `/tmp/center_*.pdf`) before landing on the right rules. Both are now in `_BASE_CSS`, scoped to `.email-body-html` so they don't affect the cover page or appendix tables.
+
+**80% stall.** WeasyPrint's `write_pdf()` is synchronous with no progress callback, so the progress bar sat at 80% for 10–15s during a 200-email render and looked frozen. Fix: when the WeasyPrint phase starts, send `{"indeterminate": true}`; the JS modal flips the bar to a pulsing-opacity animation and changes the status to "Composing PDF (N emails)… this can take a moment." Bar resumes determinate mode at 85% once render completes.
+
+**Log noise from blocked images.** With remote loading off, WeasyPrint logs an ERROR for every blocked `<img src="https://...">` — hundreds of lines per export. Fix: temporarily raise the `weasyprint` logger to CRITICAL during the blocked render and restore it afterward. Real WeasyPrint failures still surface via the surrounding try/except.
+
+### Files changed
+
+- `core/pdf_export.py` (new)
+- `web/blueprints/api/exports.py` (new)
+- `web/blueprints/api/__init__.py` (registered `exports` blueprint)
+- `web/static/js/components/export-modal.js` (new)
+- `web/static/css/modules/export.css` (new)
+- `web/static/css/main.css` (registered `export.css`)
+- `web/static/js/components/context-menu.js` (folder menu calls `openExportModal`, label "Export…")
+- `requirements.txt` (added `weasyprint>=60.0`, `pypdf>=4.0`)
+- `docs/Bulk_Export_Plan.md` (Phase 1 status section appended)
+- `docs/TESTING_CHECKLIST.md` (added export tests)
+
+### Deferred
+
+- Custom export filename (auto-generated names sufficient for now)
+- TOC for >20-email exports
+- Verbose headers option (full raw headers)
+- Anchor-id collision sanitization (cosmetic warnings only)
+- Phase 2: batch-select toolbar and search-results toolbar wiring
+- Phase 3: AES-256 encrypted ZIP via pyzipper with one-time warning
+
+---
+
 ## May 1, 2026 — Evening Session
 
 **Participants:** Rick, Claude (Opus 4.7)

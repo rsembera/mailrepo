@@ -95,7 +95,7 @@ function _showFolderMenu(folderId, folder) {
         { icon: 'folder-output', label: 'Move', action: 'move' },
         { divider: true },
         { icon: 'archive', label: 'Move to Retention Vault', action: 'vault' },
-        { icon: 'download', label: 'Export as ZIP', action: 'export' },
+        { icon: 'download', label: 'Export\u2026', action: 'export' },
         { divider: true },
         { icon: 'trash-2', label: 'Delete', action: 'delete', danger: true },
     ];
@@ -228,14 +228,25 @@ async function handleAction(action, folderId, folder) {
             }
             break;
             
-        case 'export':
-            if (typeof window.exportFolder === 'function') {
-                window.exportFolder(folderId);
+        case 'export': {
+            // Open the bulk-export modal with this folder as the source.
+            const folderName = folder?.name || 'Folder';
+            if (typeof window.openExportModal === 'function') {
+                window.openExportModal({
+                    source: 'folder',
+                    folder_id: folderId,
+                    folder_name: folderName,
+                });
             } else {
-                const { exportFolder } = await import('../views/folder-mgmt.js');
-                exportFolder(folderId);
+                const { openExportModal } = await import('./export-modal.js');
+                openExportModal({
+                    source: 'folder',
+                    folder_id: folderId,
+                    folder_name: folderName,
+                });
             }
             break;
+        }
             
         case 'delete':
             if (typeof window.deleteFolder === 'function') {

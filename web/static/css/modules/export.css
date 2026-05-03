@@ -1,0 +1,429 @@
+/* Export modal — bulk PDF / .eml export
+   ----------------------------------------
+   Three views in one modal: form, progress, complete/error.
+   Re-uses .modal-overlay / .modal-content / .modal-header / .modal-actions
+   from modals.css; only adds export-specific layout. */
+
+.export-modal {
+    max-width: 560px;
+    width: 92%;
+}
+
+/* Modal header — title on left, close button on right.
+   Scoped to .export-modal so other modals aren't affected. */
+.export-modal .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+}
+
+.export-modal .modal-header h2 {
+    margin: 0;
+}
+
+.export-modal .modal-header .btn-icon {
+    background: transparent;
+    border: none;
+    padding: var(--space-xs);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--color-text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.export-modal .modal-header .btn-icon:hover {
+    background: var(--color-background-secondary);
+    color: var(--color-text);
+}
+
+.export-modal .modal-header .btn-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* Scope strip at the top of the form view */
+.export-scope {
+    background: var(--color-background-secondary);
+    border-radius: var(--radius-md);
+    padding: var(--space-sm) var(--space-md);
+    margin-bottom: var(--space-md);
+}
+.export-scope-label {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+}
+.export-scope-value {
+    font-weight: 600;
+    color: var(--color-text);
+    word-break: break-word;
+}
+
+/* Section blocks within the form */
+.export-section {
+    margin-bottom: var(--space-md);
+}
+.export-section-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: var(--space-sm);
+}
+
+/* Format radio cards — 3-up grid */
+.export-format-options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-sm);
+}
+
+.export-format-option {
+    display: flex;
+    cursor: pointer;
+}
+.export-format-option > .export-format-card {
+    flex: 1;
+}
+.export-format-option input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+.export-format-card {
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-sm);
+    text-align: center;
+    transition: border-color 0.12s, background 0.12s;
+}
+.export-format-option:hover .export-format-card {
+    border-color: var(--color-text-muted);
+}
+.export-format-option input[type="radio"]:checked + .export-format-card {
+    border-color: var(--color-primary);
+    background: var(--color-primary-lighter);
+}
+.export-format-icon {
+    color: var(--color-text-muted);
+    margin-bottom: 4px;
+}
+.export-format-icon svg {
+    width: 22px;
+    height: 22px;
+}
+.export-format-option input[type="radio"]:checked + .export-format-card .export-format-icon {
+    color: var(--color-primary);
+}
+.export-format-name {
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+.export-format-hint {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    line-height: 1.3;
+}
+
+/* Checkbox / radio rows (cover page, subfolders, sort order) */
+.export-checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs) 0;
+    cursor: pointer;
+    user-select: none;
+}
+.export-checkbox-row input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+.export-checkbox-row .export-hint {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+}
+
+.export-radio-group {
+    margin-top: var(--space-sm);
+}
+.export-radio-label {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-xs);
+}
+.export-radio-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: 2px 0;
+    cursor: pointer;
+    user-select: none;
+}
+.export-radio-row input[type="radio"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+/* Unencrypted-export warning strip */
+.export-warning {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: #fff7e6;
+    border: 1px solid #ffd591;
+    border-radius: var(--radius-md);
+    color: #8b6914;
+    font-size: 0.85rem;
+    margin-bottom: var(--space-md);
+}
+.export-warning svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+/* Progress view */
+.export-progress {
+    padding: var(--space-md) 0;
+}
+.export-progress-message {
+    text-align: center;
+    margin-bottom: var(--space-md);
+    color: var(--color-text);
+}
+.export-progress-bar {
+    height: 8px;
+    background: var(--color-border);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: var(--space-sm);
+}
+.export-progress-fill {
+    height: 100%;
+    background: var(--color-primary);
+    transition: width 0.3s ease;
+    border-radius: 4px;
+}
+.export-progress-percent {
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Complete view */
+.export-complete {
+    text-align: center;
+    padding: var(--space-md) 0;
+}
+.export-complete-icon {
+    color: var(--color-primary);
+    margin-bottom: var(--space-sm);
+}
+.export-complete-icon svg {
+    width: 48px;
+    height: 48px;
+}
+.export-complete-filename {
+    font-weight: 600;
+    word-break: break-all;
+    margin-bottom: 4px;
+}
+.export-complete-size {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+}
+.export-complete-note {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    justify-content: center;
+    margin-top: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--color-background-secondary);
+    border-radius: var(--radius-md);
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    text-align: left;
+}
+.export-complete-note svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+/* Error view */
+.export-error {
+    text-align: center;
+    padding: var(--space-md) 0;
+}
+.export-error-icon {
+    color: #c53030;
+    margin-bottom: var(--space-sm);
+}
+.export-error-icon svg {
+    width: 40px;
+    height: 40px;
+}
+.export-error-message {
+    color: var(--color-text);
+}
+
+/* Tighter format grid on narrow viewports */
+@media (max-width: 520px) {
+    .export-format-options {
+        grid-template-columns: 1fr;
+    }
+}
+
+
+/* ============================================
+   DESTINATION (form view "Save to" row)
+   ============================================ */
+.export-dest-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--color-background-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+}
+.export-dest-icon {
+    width: 18px;
+    height: 18px;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+}
+.export-dest-path {
+    flex: 1;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.85rem;
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.btn-small {
+    padding: 4px 10px;
+    font-size: 0.85rem;
+}
+
+/* ============================================
+   PICKER VIEW
+   ============================================ */
+.export-picker-modal {
+    /* Slightly taller so the directory list has room */
+    max-height: min(80vh, 640px);
+    display: flex;
+    flex-direction: column;
+}
+.export-picker-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-sm);
+}
+.export-picker-path {
+    flex: 1;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.85rem;
+    color: var(--color-text);
+    background: var(--color-background-secondary);
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.export-picker-list {
+    flex: 1;
+    min-height: 240px;
+    max-height: 360px;
+    overflow-y: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 4px;
+    margin-bottom: var(--space-md);
+}
+.export-picker-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.1s;
+}
+.export-picker-item svg {
+    width: 16px;
+    height: 16px;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+}
+.export-picker-item:hover {
+    background: var(--color-background-secondary);
+}
+.export-picker-item.selected {
+    background: var(--color-primary-lighter);
+    color: var(--color-primary);
+}
+.export-picker-item.selected svg {
+    color: var(--color-primary);
+}
+.export-picker-empty {
+    padding: var(--space-md);
+    text-align: center;
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+}
+
+/* ============================================
+   COMPLETE VIEW — saved path display
+   ============================================ */
+.export-complete-path {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    justify-content: center;
+    margin-top: var(--space-sm);
+    padding: var(--space-xs) var(--space-md);
+    background: var(--color-background-secondary);
+    border-radius: var(--radius-sm);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    max-width: 100%;
+    overflow: hidden;
+}
+.export-complete-path span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.export-complete-path svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+
+/* Indeterminate progress — used during the WeasyPrint phase when we can\'t
+   report incremental progress. The bar fills the width and pulses. */
+.export-progress-bar.indeterminate .export-progress-fill {
+    animation: export-progress-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes export-progress-pulse {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; }
+}

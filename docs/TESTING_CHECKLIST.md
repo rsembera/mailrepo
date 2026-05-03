@@ -171,6 +171,65 @@ Pre-release manual testing checklist. Run through before any public release.
 
 ---
 
+## Bulk Export (PDF)
+
+### Triggering the export modal
+- [ ] Right-click a folder in the sidebar → "Export…" opens the modal
+- [ ] Click the ⋯ button on a folder row → "Export…" opens the modal
+- [ ] Modal shows the folder name in the scope label
+- [ ] Esc and clicking outside both close the modal
+
+### Form options
+- [ ] Format card "PDF" is selected by default (".eml ZIP" is shown but disabled with a "Coming soon" hint)
+- [ ] "Include subfolders" is checked by default (folder source)
+- [ ] "Include cover page" is checked by default
+- [ ] "Load remote images" is unchecked by default
+- [ ] Sort toggle defaults to chronological
+- [ ] Last-used directory persists across sessions (stored in localStorage)
+- [ ] First-time default directory is the user's home (`/Users/<name>` on Mac, `/home/<name>` on Linux)
+
+### Folder picker
+- [ ] Picker opens from the destination row, defaulting to the persisted/home directory
+- [ ] Folder list shows directories with click-to-navigate
+- [ ] Breadcrumb / parent navigation works (clicking up goes to parent)
+- [ ] Picker rejects nonsensical paths and falls back to home
+
+### Export with cover + cream-background email
+- [ ] Cover page is white (no cream/grey bleed)
+- [ ] Email with `<body style="background: cream">` shows cream as that email's background only
+- [ ] Email with `@media only screen { html { background: grey } }` shows the grey background
+- [ ] Subsequent emails with no background stay white
+- [ ] Inner content panels (e.g. 600px tables inside `<td align="center">`) render centered, not left-aligned
+- [ ] Tables with `width="100%"` fill the available content area
+
+### Progress & completion
+- [ ] Progress bar advances during loading (decrypting emails) — 0% to ~30%
+- [ ] Progress bar advances during rendering (building HTML) — ~30% to ~80%
+- [ ] When WeasyPrint phase begins, the bar pulses (indeterminate) and the status reads "Composing PDF (N emails)…"
+- [ ] Once WeasyPrint completes, bar jumps to 85% and resumes determinate mode
+- [ ] If there are PDF attachments, status shows "Attaching N appendices…"
+- [ ] Final progress event reaches 100% and the modal switches to the complete view
+- [ ] Complete view shows file size in B/KB/MB
+- [ ] "Reveal in Finder" / "Show in file manager" opens the destination directory with the file selected
+
+### PDF content
+- [ ] Cover page shows scope label, email count, date range, export date
+- [ ] Each email has a header (counter "Email N of M", subject, From/To/Cc/Date/Folder)
+- [ ] Email body renders with original styling preserved (per email)
+- [ ] PDF attachments are listed inline as "(see Appendix X)" and appended on the back of the PDF
+- [ ] Page footer shows "MailRepo Export" and "page N of M" on every email page (cover page has no footer)
+
+### Load remote images toggle
+- [ ] With unchecked: no http/https images load; emails render with broken-image placeholders or simply blank where images would have been
+- [ ] With unchecked: terminal does NOT show "Failed to load image" ERROR lines from WeasyPrint
+- [ ] With checked: remote images load (if reachable); export takes longer but appearance matches what an email client would show
+
+### Cancel
+- [ ] Cancel button during progress aborts the export
+- [ ] Aborted exports do not leave a partial PDF on disk
+
+---
+
 ## Retention Vault
 
 ### Move to Vault

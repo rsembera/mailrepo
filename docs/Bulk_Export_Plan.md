@@ -175,17 +175,46 @@ To resolve when this work is picked up:
 
 ---
 
-## Implementation phases (when picked up)
+## Implementation phases
 
-Roughly:
-
-1. **Skeleton**: Export button on folder view, modal with format-only choice, PDF and ZIP formats both producing minimal output. Use the existing folder-as-source path. No subfolder toggle, no encryption, no attachments-in-PDF beyond inline listing.
-2. **Selection sources**: Wire up the search-result-set source and the batch-selected-emails source to the same modal.
-3. **Attachments**: Inline images, pypdf-appended PDFs, sibling folder for other types.
-4. **Polish**: Cover page, TOC, headers/footers, encryption, progress UI, one-time warning.
-
-Each phase is a coherent shippable increment. Don't wait until phase 4 to ship something useful.
+1. **Skeleton + Polish (combined)**: ✅ **Done — May 3, 2026.** See "Phase 1 status" below.
+2. **Selection sources**: Pending. Wire up the search-result-set source and the batch-selected-emails source to the same modal. Backend already supports both via the `selection.kind` payload (`folder` / `messages` / `search`); frontend wiring is the remaining work.
+3. **Attachments — non-PDF types**: Pending. Inline images and pypdf-appended PDFs are done. Image attachments and other file types still need a sibling-folder treatment in a wrapper ZIP.
+4. **Encryption**: Pending. AES-256 encrypted ZIP via `pyzipper` with the one-time warning modal. Format radio in the export modal already lists this, just disabled.
 
 ---
 
-*Doc created May 1, 2026 after architecture conversation between Rick and Claude. Refinement pending.*
+## Phase 1 status — May 3, 2026
+
+What got built in the first build, beyond the original "skeleton" scope:
+
+**Folder source** — Right-click a folder or use the ⋯ menu → "Export…" opens the modal. Subfolder toggle exposed (default on). Backend resolves all archived emails under the folder including descendants.
+
+**PDF generation** — WeasyPrint pipeline in `core/pdf_export.py`. Combined HTML document with cover page → email sections → appendix references → merged PDF attachments. Cover page shows scope, email count, date range, export date. Each email has a header table (From/To/Date/Subject/Folder) and the original HTML body, CSS-scoped per-email so styles don't leak across sections. PDF attachments are appended on the back via pypdf.
+
+**CSS scoping fix (the hard problem)** — Email HTML often sets backgrounds via `<body style>` or `<style>html, body { ... }</style>`, sometimes wrapped in `@media only screen`. Naive concatenation causes one email's background to leak across the cover page and other sections. Fix: rewrite `<html>`/`<body>`/`<head>` tags as `<div class="email-shell">` (preserving attributes including inline styles), and rewrite selectors in `<style>` blocks to be prefixed with the email's scope class. Recurses into `@media`/`@supports`/`@layer`/`@container`/`@scope` so nested selectors get scoped too. Functions: `_scope_css_selectors`, `_prefix_selector`, `_sanitize_email_html`.
+
+**WeasyPrint compatibility shims** — Two HTML-attribute behaviors WeasyPrint doesn't honor like browsers do, both mattered for real email layouts:
+- `<table width="100%">` doesn't reliably fill its container. Promoted to `table[width="100%"] { width: 100% !important }` in base CSS.
+- `<td align="center">` doesn't center block-level descendants like nested tables. Added `td[align="center"] > table { margin: 0 auto !important }`.
+
+**Save to disk (not download)** — User picks a destination directory inside the modal with a custom folder picker. Backend writes the PDF directly to disk. After success, "Reveal in Finder" button (uses `open -R` on macOS, `xdg-open` on Linux). Last-used directory persists in `localStorage`. Default is `~` (home), expanded server-side via `os.path.expanduser` so it works on Mac and Linux.
+
+**Progress UI** — SSE streaming through `/api/export/progress/<job_id>`. Bar advances during loading and rendering phases. WeasyPrint's render call has no progress callback, so when it starts, the bar switches to indeterminate mode (pulsing animation) with a clearer status message ("Composing PDF (N emails)… this can take a moment.") so 15-second stalls don't look like crashes.
+
+**Load remote images toggle** — Default off. When off, a custom WeasyPrint `url_fetcher` returns an empty PNG for any non-`data:` URL, blocking remote image loads (faster, no tracking pixels). Inline `cid:` images aren't affected — those are converted to data URLs upstream during email parsing. The WeasyPrint logger is temporarily raised to CRITICAL during the blocked render so each blocked image doesn't spam the terminal with an ERROR line.
+
+**Cover page** — Title, scope, email count, date range, export date. White background enforced as defense-in-depth (in case scoping ever misses something).
+
+**Cosmetic polish** — Format card heights equalized, modal close button properly placed, file-size formatting in B/KB/MB.
+
+What was specifically deferred from Phase 1:
+
+- Custom export filename: auto-generated (scope + timestamp) is good enough for now. Can add an optional input field later if recipient-aware naming becomes a real need.
+- TOC in the combined PDF: deferred. Auto-include for >20 emails would be a useful default if it comes up.
+- Verbose headers option: deferred. Four-field summary (From/To/Date/Subject + Folder) is sufficient for current users.
+- Anchor-id collision warnings: WeasyPrint logs "Anchor defined twice" for emails that reuse template `id`/`name` attributes. Cosmetic, no impact on output. Could rewrite duplicate ids to be scope-unique during sanitization if it ever matters.
+
+---
+
+*Doc created May 1, 2026 after architecture conversation between Rick and Claude. Phase 1 implemented May 3, 2026.*
