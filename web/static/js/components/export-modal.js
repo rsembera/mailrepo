@@ -238,6 +238,40 @@ function _renderFormView() {
         input.addEventListener('change', updatePdfOptionsVisibility);
     });
     updatePdfOptionsVisibility();
+
+    // Persist every form change into window._export so view switches
+    // (e.g. opening the destination picker) don\'t lose the user\'s choices.
+    const formInputs = _modalEl.querySelectorAll(
+        'input[name="export-format"], input[name="export-sort"], '
+        + '#export-include-cover, #export-include-subfolders, #export-load-remote'
+    );
+    formInputs.forEach(input => {
+        input.addEventListener('change', _captureFormState);
+    });
+}
+
+/**
+ * Read the current form values into window._export so they survive any
+ * subsequent _renderFormView() call. Called on every form input change
+ * AND right before switching to the picker view, so coming back to the
+ * form view never silently resets the user\'s choices.
+ *
+ * Safe to call when the form view isn\'t mounted: missing inputs simply
+ * leave existing prefs untouched.
+ */
+function _captureFormState() {
+    if (!_modalEl) return;
+    const fmt = _modalEl.querySelector('input[name="export-format"]:checked')?.value;
+    const sort = _modalEl.querySelector('input[name="export-sort"]:checked')?.value;
+    const cover = _modalEl.querySelector('#export-include-cover');
+    const subs = _modalEl.querySelector('#export-include-subfolders');
+    const loadRemote = _modalEl.querySelector('#export-load-remote');
+
+    if (fmt) window._export.format = fmt;
+    if (sort) window._export.sort_order = sort;
+    if (cover) window._export.include_cover = cover.checked;
+    if (subs) window._export.include_subfolders = subs.checked;
+    if (loadRemote) window._export.load_remote_content = loadRemote.checked;
 }
 
 function _scopeDescription(src) {
@@ -260,6 +294,10 @@ function _scopeDescription(src) {
 // ---------------------------------------------------------------------------
 
 async function _openPickerView() {
+    // Save current form state before re-rendering the modal as the picker.
+    // Otherwise coming back via "Back" or "Choose this folder" would
+    // re-render the form from stale prefs.
+    _captureFormState();
     _pickerSelectedDir = null;
     _pickerCwd = _currentDir;
     _renderPickerShell();
