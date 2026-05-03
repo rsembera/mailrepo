@@ -4,6 +4,65 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## May 3, 2026 — Bulk Export Phase 3 (late evening)
+
+**Participants:** Rick, Claude (Opus 4.7)
+
+**Work Done:**
+
+Closed out the bulk-export plan. Three pieces in sequence:
+
+### 3a — Encryption (AES-256 ZIP via pyzipper)
+
+Added `pyzipper>=0.3` dependency. The export modal grew an "Encrypt this export" checkbox; when checked, password + confirm fields appear with live validation (length warning at < 8 chars, match indicator). Frontend validates before submitting; backend receives the password in the start payload, uses it once for the ZIP write, doesn\'t log it.
+
+Format-aware encryption:
+- **PDF + password** → wrapper AES ZIP containing the PDF
+- **eml + password** → native AES eml ZIP (no double-wrapping; single layer)
+- **both + password** → single wrapper AES ZIP with PDF + flat `emails/<folder>/<file>.eml` (no nested ZIP)
+
+Recipient notes surfaced in the modal: macOS Archive Utility doesn\'t open AES, recommend The Unarchiver; Windows 11 (23H2+) and Linux unzip 6.0+ are native.
+
+### 3b — One-time first-use friction modal
+
+First time the user opens the export modal in this browser, an "About exports" screen explains the encryption-boundary issue: an export creates a regular file on disk outside MailRepo\'s encrypted database. Has a "Don\'t show again" checkbox (default on) stored under `localStorage["mailrepo.exportWarningDismissed"]`. Once dismissed, the modal opens straight to the form view. Cancel aborts without consuming the dismissal so the user can re-enter and see the warning.
+
+### 3c — Non-PDF attachments as sibling files
+
+`pdf_export.py` already discriminated PDF attachments (pypdf-merged onto the back) from image/other attachments (previously just listed by name). Now image and other-type attachments are returned in a separate `other_attachments` list on the `complete` event. `exports.py` packages them as `attachments/email-N/<filename>` sibling files inside a wrapper ZIP, with per-email-folder filename de-duplication. Composes cleanly with encryption: encrypted exports get the same wrapper, just AES-256.
+
+Email body attachment list now reads "(see attachments/email-N/)" when the file is actually included alongside (vs "(image attachment)" before, which was a dead-end).
+
+Wrapper-vs-bare logic:
+- No password, no non-PDF attachments → bare PDF (preserves the original Phase 1 behavior for the simple case)
+- No password, has non-PDF attachments → plain ZIP wrapper
+- Password → encrypted ZIP wrapper
+
+### Files changed
+
+- `requirements.txt` (+pyzipper)
+- `core/pdf_export.py` (other_attachments tracking + return)
+- `web/blueprints/api/exports.py` (encryption helpers, wrapper-ZIP logic, attachment packaging)
+- `web/static/js/components/export-modal.js` (encryption section, first-use warning)
+- `web/static/css/modules/export.css` (styling for both)
+- `docs/Bulk_Export_Plan.md` (Phase 3 status)
+- `docs/Session_Log.md` (this entry)
+
+### Verified offline
+
+Plain and encrypted ZIPs round-trip correctly. Wrong-password decryption raises RuntimeError as expected. Filename sanitization handles weird characters (`tricky..name//here.png` becomes a valid ZIP entry name). De-duplication kicks in correctly for repeated filenames within the same email folder. App boots, all five export endpoints register.
+
+### Deferred (no longer in scope of the bulk-export plan)
+
+- Custom export filename input
+- TOC for >20-email exports
+- Verbose headers option
+- Anchor-id collision sanitization (cosmetic warnings only)
+
+The bulk-export plan is now complete. Future export work would be its own design conversation.
+
+---
+
 ## May 3, 2026 — Bulk Export Phase 2 (evening)
 
 **Participants:** Rick, Claude (Opus 4.7)

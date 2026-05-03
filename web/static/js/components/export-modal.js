@@ -28,6 +28,7 @@ import { escapeHtml } from '../utils.js';
 
 const MODAL_ID = 'exportModal';
 const STORAGE_KEY_DEST = 'mailrepo.exportDir';
+const STORAGE_KEY_WARNING = 'mailrepo.exportWarningDismissed';
 
 let _modalEl = null;
 let _eventSource = null;
@@ -51,13 +52,75 @@ window._export = window._export || {
  *   {source: 'folder',   folder_id, folder_name}
  *   {source: 'search',   query, folder_id?, include_subfolders?}
  *   {source: 'messages', message_ids, label}
+ *
+ * On the user\'s first export ever (per browser), show a one-time warning
+ * about exports being unencrypted before the form view. Once dismissed
+ * (with "Don\'t show again"), we skip directly to the form. The user can
+ * opt into per-export encryption from inside the form regardless.
  */
 export function openExportModal(options) {
     _currentSource = options || {};
     _currentDir = _loadSavedDir() || _defaultDir();
     _ensureModal();
-    _renderFormView();
+    if (_loadWarningDismissed()) {
+        _renderFormView();
+    } else {
+        _renderFirstUseWarning();
+    }
     _modalEl.classList.add('active');
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function _loadWarningDismissed() {
+    try { return localStorage.getItem(STORAGE_KEY_WARNING) === '1'; }
+    catch { return false; }
+}
+
+function _saveWarningDismissed() {
+    try { localStorage.setItem(STORAGE_KEY_WARNING, '1'); }
+    catch {}
+}
+
+/**
+ * One-time friction modal that explains what exports are and aren\'t.
+ *
+ * Goal: make sure new users notice that an export crosses MailRepo\'s
+ * encryption-at-rest boundary \u2014 the resulting file on disk is plaintext
+ * unless they choose to encrypt it. Not a hard block; just a pause.
+ */
+function _renderFirstUseWarning() {
+    _modalEl.innerHTML = `
+        <div class="modal-content export-modal">
+            <div class="modal-header">
+                <h2>About exports</h2>
+                <button class="btn-icon" id="exportWarningCloseBtn" title="Cancel">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="export-first-warning">
+                <div class="export-first-warning-icon"><i data-lucide="alert-triangle"></i></div>
+                <p>An export creates a regular file on your computer outside MailRepo\u2019s encrypted database.</p>
+                <p>The file you create can be opened by anyone with access to it. If you need protection, choose <strong>Encrypt this export</strong> in the next screen and set a password.</p>
+                <p class="export-first-warning-hint">You\u2019ll see this once. You can always opt into encryption per export.</p>
+                <label class="export-checkbox-row export-first-warning-dontshow">
+                    <input type="checkbox" id="exportWarningDontShow" checked>
+                    <span>Don\u2019t show this again</span>
+                </label>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="exportWarningCancelBtn">Cancel</button>
+                <button class="btn btn-primary" id="exportWarningContinueBtn">I understand \u2014 continue</button>
+            </div>
+        </div>
+    `;
+    _modalEl.querySelector('#exportWarningCloseBtn').addEventListener('click', _closeModal);
+    _modalEl.querySelector('#exportWarningCancelBtn').addEventListener('click', _closeModal);
+    _modalEl.querySelector('#exportWarningContinueBtn').addEventListener('click', () => {
+        const dontShow = _modalEl.querySelector('#exportWarningDontShow')?.checked;
+        if (dontShow) _saveWarningDismissed();
+        _renderFormView();
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    });
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
@@ -207,9 +270,24 @@ function _renderFormView() {
                 </div>
             </div>
 
-            <div class="export-warning">
-                <i data-lucide="alert-triangle"></i>
-                <span>Exports are not encrypted. Anyone with the file can read it.</span>
+            <div class="export-section">
+                <div class="export-section-title">Encryption</div>
+                <label class="export-checkbox-row">
+                    <input type="checkbox" id="export-encrypt">
+                    <span>Encrypt this export</span>
+                    <span class="export-hint">AES-256 password-protected ZIP</span>
+                </label>
+                <div class="export-encryption-fields" id="export-encryption-fields" style="display: none;">
+                    <div class="export-password-row">
+                        <input type="password" id="export-password" placeholder="Password" autocomplete="new-password">
+                        <input type="password" id="export-password-confirm" placeholder="Confirm password" autocomplete="new-password">
+                    </div>
+                    <div class="export-password-feedback" id="export-password-feedback"></div>
+                    <div class="export-encryption-note">
+                        <i data-lucide="info"></i>
+                        <span>Recipient notes: macOS users need The Unarchiver (free). Windows 11 (23H2+) and Linux unzip 6.0+ support AES natively. The password is not stored anywhere \u2014 share it with the recipient out of band.</span>
+                    </div>
+                </div>
             </div>
 
             <div class="modal-actions">
@@ -248,6 +326,52 @@ function _renderFormView() {
     formInputs.forEach(input => {
         input.addEventListener('change', _captureFormState);
     });
+
+    // Encryption: show/hide fields, live-validate password match
+    const encryptCb = _modalEl.querySelector('#export-encrypt');
+    const encryptFields = _modalEl.querySelector('#export-encryption-fields');
+    const pwInput = _modalEl.querySelector('#export-password');
+    const pwConfirm = _modalEl.querySelector('#export-password-confirm');
+    const pwFeedback = _modalEl.querySelector('#export-password-feedback');
+
+    const updateEncryptionUi = () => {
+        if (!encryptFields) return;
+        encryptFields.style.display = encryptCb?.checked ? '' : 'none';
+        // When toggled off, clear the password fields so they don\'t silently
+        // get included on next submit if the user re-enables.
+        if (!encryptCb?.checked && pwInput && pwConfirm) {
+            pwInput.value = '';
+            pwConfirm.value = '';
+            if (pwFeedback) pwFeedback.textContent = '';
+        }
+    };
+
+    const validatePassword = () => {
+        if (!encryptCb?.checked || !pwFeedback) return;
+        const a = pwInput?.value || '';
+        const b = pwConfirm?.value || '';
+        if (!a) {
+            pwFeedback.textContent = '';
+            pwFeedback.className = 'export-password-feedback';
+        } else if (a.length < 8) {
+            pwFeedback.textContent = 'Password should be at least 8 characters.';
+            pwFeedback.className = 'export-password-feedback export-password-feedback-warn';
+        } else if (b && a !== b) {
+            pwFeedback.textContent = 'Passwords don\u2019t match.';
+            pwFeedback.className = 'export-password-feedback export-password-feedback-warn';
+        } else if (b && a === b) {
+            pwFeedback.textContent = 'Passwords match.';
+            pwFeedback.className = 'export-password-feedback export-password-feedback-ok';
+        } else {
+            pwFeedback.textContent = '';
+            pwFeedback.className = 'export-password-feedback';
+        }
+    };
+
+    encryptCb?.addEventListener('change', updateEncryptionUi);
+    pwInput?.addEventListener('input', validatePassword);
+    pwConfirm?.addEventListener('input', validatePassword);
+    updateEncryptionUi();
 }
 
 /**
@@ -426,7 +550,38 @@ async function _startExport() {
     const cover = _modalEl.querySelector('#export-include-cover')?.checked ?? true;
     const subs = _modalEl.querySelector('#export-include-subfolders')?.checked ?? true;
     const loadRemote = _modalEl.querySelector('#export-load-remote')?.checked ?? false;
+    const encrypt = _modalEl.querySelector('#export-encrypt')?.checked ?? false;
+    const password = _modalEl.querySelector('#export-password')?.value || '';
+    const passwordConfirm = _modalEl.querySelector('#export-password-confirm')?.value || '';
 
+    // Validate encryption inputs in-place \u2014 surface errors above the
+    // submit button instead of dropping the user into the progress view.
+    if (encrypt) {
+        const fb = _modalEl.querySelector('#export-password-feedback');
+        if (!password) {
+            if (fb) {
+                fb.textContent = 'Enter a password.';
+                fb.className = 'export-password-feedback export-password-feedback-warn';
+            }
+            return;
+        }
+        if (password.length < 8) {
+            if (fb) {
+                fb.textContent = 'Password must be at least 8 characters.';
+                fb.className = 'export-password-feedback export-password-feedback-warn';
+            }
+            return;
+        }
+        if (password !== passwordConfirm) {
+            if (fb) {
+                fb.textContent = 'Passwords don\u2019t match.';
+                fb.className = 'export-password-feedback export-password-feedback-warn';
+            }
+            return;
+        }
+    }
+
+    // Persist non-secret prefs only. Never persist the password.
     window._export = {
         format: fmt,
         sort_order: sort,
@@ -444,17 +599,21 @@ async function _startExport() {
     _renderProgressView('Starting export\u2026');
 
     try {
+        const body = {
+            selection,
+            format: fmt,
+            sort_order: sort,
+            include_cover: cover,
+            load_remote_content: loadRemote,
+            output_dir: _currentDir,
+        };
+        if (encrypt && password) {
+            body.encryption_password = password;
+        }
         const response = await fetch('/api/export/start', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                selection,
-                format: fmt,
-                sort_order: sort,
-                include_cover: cover,
-                load_remote_content: loadRemote,
-                output_dir: _currentDir,
-            }),
+            body: JSON.stringify(body),
         });
         if (!response.ok) {
             const err = await response.json().catch(() => ({error: 'Failed to start export'}));

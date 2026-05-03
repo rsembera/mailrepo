@@ -230,6 +230,37 @@ Pre-release manual testing checklist. Run through before any public release.
 
 ---
 
+### Phase 3 — encryption, first-use warning, non-PDF attachments
+
+#### First-use warning
+- [ ] First export attempt in a fresh browser shows the "About exports" warning screen
+- [ ] "Don\'t show again" checkbox is checked by default
+- [ ] Clicking "I understand — continue" with the box checked stores dismissal; subsequent exports skip straight to the form
+- [ ] Clicking "I understand — continue" with the box unchecked still proceeds, but next export shows the warning again
+- [ ] Cancel/Close on the warning closes the modal without recording dismissal
+- [ ] Clearing localStorage brings the warning back
+
+#### Encryption
+- [ ] "Encrypt this export" checkbox is unchecked by default
+- [ ] Password fields appear when checked, hide when unchecked
+- [ ] Live feedback: empty → nothing, < 8 chars → length warning, mismatched → mismatch warning, matched → ok confirmation
+- [ ] Submit with encryption on but empty password is blocked with inline error
+- [ ] Submit with mismatched passwords is blocked
+- [ ] Successful encrypted PDF export produces a `.zip` containing the PDF
+- [ ] The ZIP requires the password to open (verify in macOS Finder / The Unarchiver / unzip)
+- [ ] Wrong password is rejected
+- [ ] Encryption note in the modal mentions The Unarchiver / Windows 11 / unzip 6.0+
+
+#### Non-PDF attachments
+- [ ] Folder with emails containing only PDF attachments → bare PDF output (no wrapper ZIP)
+- [ ] Folder with emails containing image attachments → ZIP output containing PDF + `attachments/email-N/photo.png`
+- [ ] Folder with emails containing Office docs → ZIP output with `attachments/email-N/<doc>`
+- [ ] Inline images embedded in HTML body still render in the PDF (cid: handling unchanged)
+- [ ] PDF attachments still get pypdf-merged onto the back of the PDF (unchanged)
+- [ ] Email body lists image/other attachments with "(see attachments/email-N/)" hint
+- [ ] Duplicate filenames within the same email get de-duplicated (`photo.png`, `photo_1.png`)
+- [ ] Combination: encrypted + non-PDF attachments → single AES-256 wrapper ZIP with everything
+
 ## Retention Vault
 
 ### Move to Vault

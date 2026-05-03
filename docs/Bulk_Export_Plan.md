@@ -179,8 +179,8 @@ To resolve when this work is picked up:
 
 1. **Skeleton + Polish (combined)**: ✅ **Done — May 3, 2026.** See "Phase 1 status" below.
 2. **Selection sources**: ✅ **Done — May 3, 2026.** Both the archive batch-select toolbar and the search-results toolbar now open the same export modal. See "Phase 2 status" below.
-3. **Attachments — non-PDF types**: Pending. Inline images and pypdf-appended PDFs are done. Image attachments and other file types still need a sibling-folder treatment in a wrapper ZIP.
-4. **Encryption**: Pending. AES-256 encrypted ZIP via `pyzipper` with the one-time warning modal. Format radio in the export modal already lists this, just disabled.
+3. **Attachments — non-PDF types**: ✅ **Done — May 3, 2026 (late evening).** Image and other-type attachments now land in `attachments/email-N/<file>` inside a wrapper ZIP. Bare PDF output is preserved when there are no non-PDF attachments and no password.
+4. **Encryption**: ✅ **Done — May 3, 2026 (late evening).** AES-256 encrypted ZIP via `pyzipper`, with a per-export password the user types into the modal. One-time first-use friction modal explains that exports are unencrypted by default and gestures at the new "Encrypt this export" checkbox.
 
 ---
 
@@ -233,4 +233,33 @@ What\'s deferred to Phase 3:
 
 ---
 
-*Doc created May 1, 2026 after architecture conversation between Rick and Claude. Phase 1 implemented May 3, 2026. Phase 2 wired May 3, 2026 (evening).*
+## Phase 3 status — May 3, 2026 (late evening)
+
+The remaining design pieces from the original plan, all in one session.
+
+**Encryption (3a).** `pyzipper>=0.3` added as a dependency. The export modal now has an "Encrypt this export" checkbox; when checked, password + confirm fields appear with a live strength/match indicator. Submit validates locally before kicking off the export. The password is sent in the start payload but never persisted (not in `window._export`, not in localStorage, not in logs). Backend handling depends on format:
+- **PDF + password** → wrapper AES-256 ZIP containing the PDF
+- **eml + password** → the eml ZIP itself is AES-256 (single layer, no double-zipping)
+- **both + password** → single wrapper AES-256 ZIP containing the PDF + flat `emails/<folder>/<file>.eml` entries (no nested ZIP for the recipient)
+
+Recipient notes are surfaced in the modal\'s encryption section: macOS users need The Unarchiver (built-in Archive Utility doesn\'t support AES); Windows 11 (23H2+) and Linux unzip 6.0+ handle AES natively.
+
+**One-time first-use warning (3b).** The first time a user opens the export modal in this browser, a friction screen explains that exports cross MailRepo\'s encryption boundary (a regular file on disk that anyone can read unless encrypted). Has a "Don\'t show again" checkbox (default on); dismissal stored under `localStorage["mailrepo.exportWarningDismissed"]`. After dismissal the modal opens straight to the form view as before. Cancel button on the warning aborts the whole flow without consuming the dismissal.
+
+**Non-PDF attachments (3c).** The PDF render pipeline already separated PDF attachments (which get pypdf-merged onto the back) from images and other types (which were previously just listed by name). Images and other types are now packaged as sibling files inside a wrapper ZIP under `attachments/email-N/<filename>`. De-duplicates filenames per email folder. The packaging logic composes cleanly with the encryption path:
+- No password, no non-PDF attachments → bare PDF (unchanged)
+- No password, has non-PDF attachments → plain ZIP wrapper
+- Password → encrypted ZIP wrapper (covers both cases)
+
+The email body\'s attachments list updates its annotation when packaging: "(see attachments/email-N/)" instead of "(image attachment)" when the file is actually included alongside.
+
+What was deferred:
+
+- **Strict password strength enforcement.** We warn at < 8 characters but don\'t block. Solo-practitioner users know their recipient\'s needs better than a one-size-fits-all rule.
+- **Custom export filename.** Still auto-generated. Could revisit if recipient-aware naming becomes a real need.
+- **TOC for >20-email exports.** Deferred from Phase 1, still deferred.
+- **Verbose headers option.** Deferred from Phase 1, still deferred.
+
+---
+
+*Doc created May 1, 2026 after architecture conversation between Rick and Claude. Phases 1–3 implemented May 3, 2026.*

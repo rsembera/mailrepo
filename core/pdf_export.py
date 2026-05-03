@@ -232,7 +232,13 @@ def _esc(s: str | None) -> str:
     return html_module.escape(s)
 
 
-def _render_email_section(email: dict, index: int, total: int, attachment_refs: list[dict]) -> str:
+def _render_email_section(
+    email: dict,
+    index: int,
+    total: int,
+    attachment_refs: list[dict],
+    other_attachments: list[dict] | None = None,
+) -> str:
     """Build the HTML for one email section in the combined export.
 
     ``attachment_refs`` is mutated as a side effect: PDF attachments encountered
@@ -240,6 +246,12 @@ def _render_email_section(email: dict, index: int, total: int, attachment_refs: 
     rendered PDF. The structure of each entry is::
 
         {"label": "A", "filename": "contract.pdf", "data": <bytes>, "email_index": 1}
+
+    ``other_attachments``, if provided, is also mutated: image and other
+    non-PDF attachments are appended as ``{"filename", "data", "email_index",
+    "content_type"}``. The caller decides whether to package them as sibling
+    files inside a wrapper ZIP. Pass ``None`` to ignore non-PDF attachments
+    (e.g. when the caller can\'t package them anyway).
     """
     body_html = email.get("html_body") or ""
     text_body = email.get("text_body") or ""
@@ -262,14 +274,38 @@ def _render_email_section(email: dict, index: int, total: int, attachment_refs: 
                 f'<span class="att-ref">(see Appendix {label})</span></li>'
             )
         elif att["is_image"]:
-            attachment_lines.append(
-                f'<li><span class="att-icon">📎</span> {_esc(att["filename"])} '
-                f'<span class="att-ref">(image attachment)</span></li>'
-            )
+            if other_attachments is not None:
+                other_attachments.append({
+                    "filename": att["filename"],
+                    "data": att["data"],
+                    "email_index": index,
+                    "content_type": att["content_type"],
+                })
+                attachment_lines.append(
+                    f'<li><span class="att-icon">📎</span> {_esc(att["filename"])} '
+                    f'<span class="att-ref">(image \u2014 see attachments/email-{index}/)</span></li>'
+                )
+            else:
+                attachment_lines.append(
+                    f'<li><span class="att-icon">📎</span> {_esc(att["filename"])} '
+                    f'<span class="att-ref">(image attachment)</span></li>'
+                )
         else:
-            attachment_lines.append(
-                f'<li><span class="att-icon">📎</span> {_esc(att["filename"])}</li>'
-            )
+            if other_attachments is not None:
+                other_attachments.append({
+                    "filename": att["filename"],
+                    "data": att["data"],
+                    "email_index": index,
+                    "content_type": att["content_type"],
+                })
+                attachment_lines.append(
+                    f'<li><span class="att-icon">📎</span> {_esc(att["filename"])} '
+                    f'<span class="att-ref">(see attachments/email-{index}/)</span></li>'
+                )
+            else:
+                attachment_lines.append(
+                    f'<li><span class="att-icon">📎</span> {_esc(att["filename"])}</li>'
+                )
 
     attachments_block = ""
     if attachment_lines:
@@ -810,8 +846,9 @@ def build_combined_pdf(
         parts.append(_render_cover_page(scope_label, emails, export_date))
 
     attachment_refs: list[dict] = []
+    other_attachments: list[dict] = []
     for idx, em in enumerate(emails, start=1):
-        parts.append(_render_email_section(em, idx, len(emails), attachment_refs))
+        parts.append(_render_email_section(em, idx, len(emails), attachment_refs, other_attachments))
         if idx % 10 == 0 or idx == len(emails):
             yield {
                 "event": "progress",
@@ -897,6 +934,11 @@ def build_combined_pdf(
             "filename_hint": filename_hint,
             "email_count": len(emails),
             "appendix_count": len(attachment_refs),
+            # Non-PDF attachments (images and other types) for the caller to
+            # package alongside the PDF as sibling files. The caller may
+            # ignore these if it can\'t package them \u2014 the email body
+            # already lists them by name.
+            "other_attachments": other_attachments,
         },
     }
 

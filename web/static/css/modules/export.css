@@ -427,3 +427,87 @@
     0%, 100% { opacity: 0.55; }
     50% { opacity: 1; }
 }
+
+
+/* ---------------------------------------------------------------------------
+ * Phase 3: encryption + first-use warning
+ * ------------------------------------------------------------------------- */
+
+/* First-use warning view */
+.export-first-warning {
+    padding: var(--space-md);
+    background: var(--color-bg-subtle, #fafafa);
+    border-radius: var(--radius-md, 6px);
+    margin-bottom: var(--space-md);
+}
+.export-first-warning-icon {
+    color: var(--color-warning, #b58900);
+    font-size: 24px;
+    margin-bottom: var(--space-sm);
+}
+.export-first-warning-icon i {
+    width: 32px;
+    height: 32px;
+}
+.export-first-warning p {
+    margin: 0 0 var(--space-sm) 0;
+    line-height: 1.5;
+}
+.export-first-warning-hint {
+    color: var(--color-text-muted, #777);
+    font-size: 0.9em;
+    font-style: italic;
+}
+.export-first-warning-dontshow {
+    margin-top: var(--space-md);
+    padding-top: var(--space-sm);
+    border-top: 1px solid var(--color-border, #e5e5e5);
+}
+
+/* Encryption fields inside the form */
+.export-encryption-fields {
+    margin-top: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--color-bg-subtle, #fafafa);
+    border-radius: var(--radius-sm, 4px);
+}
+.export-password-row {
+    display: flex;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-xs);
+}
+.export-password-row input {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid var(--color-border, #ccc);
+    border-radius: var(--radius-sm, 4px);
+    font-family: inherit;
+    font-size: 0.95em;
+}
+.export-password-feedback {
+    font-size: 0.85em;
+    min-height: 1.2em;
+    color: var(--color-text-muted, #777);
+}
+.export-password-feedback-warn {
+    color: var(--color-warning, #b58900);
+}
+.export-password-feedback-ok {
+    color: var(--color-success, #2a8a3e);
+}
+.export-encryption-note {
+    display: flex;
+    gap: var(--space-sm);
+    margin-top: var(--space-sm);
+    padding-top: var(--space-sm);
+    border-top: 1px solid var(--color-border, #e5e5e5);
+    font-size: 0.85em;
+    color: var(--color-text-muted, #777);
+    line-height: 1.4;
+}
+.export-encryption-note i {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    margin-top: 2px;
+}
