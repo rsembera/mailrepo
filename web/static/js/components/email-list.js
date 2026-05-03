@@ -235,17 +235,14 @@ export function renderEmailList() {
                         <i data-lucide="x"></i>
                         Clear
                     </button>
-                    <button class="btn btn-secondary" onclick="moveSelectedArchivedEmails()" ${archiveSelectedCount === 0 ? 'disabled' : ''}>
+                    <button class="btn btn-secondary btn-icon-only" onclick="moveSelectedArchivedEmails()" ${archiveSelectedCount === 0 ? 'disabled' : ''} title="Move selected emails">
                         <i data-lucide="folder-input"></i>
-                        Move
                     </button>
-                    <button class="btn btn-secondary" onclick="exportSelectedArchivedEmails()" ${archiveSelectedCount === 0 ? 'disabled' : ''} title="Export selected emails as PDF">
+                    <button class="btn btn-secondary btn-icon-only" onclick="exportSelectedArchivedEmails()" ${archiveSelectedCount === 0 ? 'disabled' : ''} title="Export selected emails as PDF">
                         <i data-lucide="download"></i>
-                        Export…
                     </button>
-                    <button class="btn btn-danger" onclick="deleteSelectedArchivedEmails()" ${archiveSelectedCount === 0 ? 'disabled' : ''}>
+                    <button class="btn btn-danger btn-icon-only" onclick="deleteSelectedArchivedEmails()" ${archiveSelectedCount === 0 ? 'disabled' : ''} title="Move to Trash">
                         <i data-lucide="trash-2"></i>
-                        Trash
                     </button>
                 </div>
             </div>

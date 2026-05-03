@@ -23,9 +23,30 @@ def get_home_dir():
     return str(Path.home())
 
 
+# Folders that aren't dotfile-hidden but should still be hidden from
+# the destination picker on macOS \u2014 they're Windows artifacts that
+# show up on shared external drives or USB sticks formatted on Windows.
+_SYSTEM_DIRS_TO_HIDE = {
+    "$RECYCLE.BIN",
+    "System Volume Information",
+    "RECYCLER",
+    "$Recycle.Bin",
+    ".Spotlight-V100",
+    ".Trashes",
+    ".fseventsd",
+    ".DocumentRevisions-V100",
+    ".TemporaryItems",
+}
+
+
 def is_hidden(name):
-    """Check if file/folder is hidden."""
-    return name.startswith('.')
+    """Check if file/folder is hidden.
+
+    Hides dotfiles (Unix convention) and a small allowlist of cross-platform
+    system directories that aren\'t dotfile-hidden but are still useless
+    in a destination picker (Windows-style $RECYCLE.BIN, etc.).
+    """
+    return name.startswith('.') or name in _SYSTEM_DIRS_TO_HIDE
 
 
 def is_mbox_file(filepath, name):

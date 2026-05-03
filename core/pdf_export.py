@@ -123,9 +123,36 @@ def _replace_cid_refs(html: str, inline_images: dict[str, str]) -> str:
     return re.sub(r'cid:([^"\'\s>]+)', replace, html)
 
 
+# S/MIME and PGP signatures and other crypto/protocol artifacts that mail
+# clients attach automatically. These aren't user-visible content and just
+# clutter the export's attachments folder. Filter at parse time.
+_CRYPTO_ATTACHMENT_FILENAMES = {"smime.p7s", "smime.p7m", "signature.asc", "winmail.dat"}
+_CRYPTO_ATTACHMENT_TYPES = {
+    "application/pkcs7-signature",
+    "application/x-pkcs7-signature",
+    "application/pkcs7-mime",
+    "application/x-pkcs7-mime",
+    "application/pgp-signature",
+    "application/ms-tnef",
+}
+
+
+def _is_crypto_artifact(filename: str, ctype: str) -> bool:
+    """True if this attachment is an S/MIME or similar protocol artifact
+    that doesn't need to appear in the export's sibling-files folder."""
+    if (filename or "").lower() in _CRYPTO_ATTACHMENT_FILENAMES:
+        return True
+    if (ctype or "").lower() in _CRYPTO_ATTACHMENT_TYPES:
+        return True
+    return False
+
+
 def _get_attachments(msg) -> list[dict]:
     """Return a list of attachments. Each entry has ``filename``, ``content_type``,
     ``data`` (bytes), and ``is_pdf``/``is_image`` convenience flags.
+
+    Skips S/MIME signatures and similar crypto/protocol artifacts \u2014 those
+    aren\'t user content, they\'re mail-client metadata.
     """
     attachments: list[dict] = []
     if not msg.is_multipart():
@@ -140,6 +167,9 @@ def _get_attachments(msg) -> list[dict]:
             continue
         if "attachment" in disposition or (filename and part.get_content_maintype() != "text"):
             if not filename:
+                continue
+            # Skip crypto/protocol artifacts (smime.p7s, signature.asc, etc.)
+            if _is_crypto_artifact(filename, ctype):
                 continue
             payload = part.get_payload(decode=True)
             if not payload:

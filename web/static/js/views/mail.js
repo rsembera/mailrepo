@@ -235,7 +235,7 @@ function renderSearchView(results = null, query = '') {
                     <i data-lucide="search" class="search-icon"></i>
                     <input type="text" 
                            id="archiveSearchInput" 
-                           placeholder="Search by subject, sender, recipient, or content..." 
+                           placeholder="Search subject, sender, or content…" 
                            value="${escapeHtml(query)}"
                            autocomplete="off">
                 </div>
