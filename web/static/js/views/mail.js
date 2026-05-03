@@ -723,11 +723,6 @@ function exportSearchResults() {
     const query = (input?.value || '').trim();
     if (!query) return;
 
-    if (typeof window.openExportModal !== 'function') {
-        console.error('Export modal not loaded');
-        return;
-    }
-
     const folderId = window._searchFolderId || null;
     // Default is true for include_subfolders (matches the picker default)
     const includeSubs = window._searchIncludeSubfolders !== false;
@@ -740,13 +735,24 @@ function exportSearchResults() {
         if (folder?.name) folderName = folder.name;
     }
 
-    window.openExportModal({
+    const opts = {
         source: 'search',
         query,
         folder_id: folderId,
         include_subfolders: includeSubs,
         folder_name: folderName,
-    });
+    };
+
+    if (typeof window.openExportModal === 'function') {
+        window.openExportModal(opts);
+    } else {
+        // Lazy-load on first use \u2014 same pattern as context-menu.js
+        import('../components/export-modal.js').then((m) => {
+            (m.openExportModal || window.openExportModal)?.(opts);
+        }).catch((err) => {
+            console.error('Failed to load export modal:', err);
+        });
+    }
 }
 window.exportSearchResults = exportSearchResults;
 

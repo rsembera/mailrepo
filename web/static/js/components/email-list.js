@@ -227,13 +227,11 @@ export function renderEmailList() {
                     ${renderSortSelect()}
                 </div>
                 <div class="toolbar-actions">
-                    <button class="btn btn-secondary" onclick="selectAllArchivedEmails()">
+                    <button class="btn btn-secondary btn-icon-only" onclick="selectAllArchivedEmails()" title="Select all">
                         <i data-lucide="check-square"></i>
-                        All
                     </button>
-                    <button class="btn btn-secondary" onclick="clearSelectedArchivedEmails()" ${archiveSelectedCount === 0 ? 'disabled' : ''}>
+                    <button class="btn btn-secondary btn-icon-only" onclick="clearSelectedArchivedEmails()" ${archiveSelectedCount === 0 ? 'disabled' : ''} title="Clear selection">
                         <i data-lucide="x"></i>
-                        Clear
                     </button>
                     <button class="btn btn-secondary btn-icon-only" onclick="moveSelectedArchivedEmails()" ${archiveSelectedCount === 0 ? 'disabled' : ''} title="Move selected emails">
                         <i data-lucide="folder-input"></i>
@@ -699,14 +697,21 @@ function exportSelectedArchivedEmails() {
         }
     }
 
-    if (typeof window.openExportModal !== 'function') {
-        console.error('Export modal not loaded');
-        return;
-    }
-    window.openExportModal({
+    const opts = {
         source: 'messages',
         message_ids: ids,
         label,
-    });
+    };
+    if (typeof window.openExportModal === 'function') {
+        window.openExportModal(opts);
+    } else {
+        // Lazy-load on first use \u2014 same pattern as context-menu.js.
+        // The module registers window.openExportModal on import.
+        import('./export-modal.js').then((m) => {
+            (m.openExportModal || window.openExportModal)?.(opts);
+        }).catch((err) => {
+            console.error('Failed to load export modal:', err);
+        });
+    }
 }
 window.exportSelectedArchivedEmails = exportSelectedArchivedEmails;
