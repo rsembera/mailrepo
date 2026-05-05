@@ -4,9 +4,16 @@
 /* ============================================
    APP CONTAINER (Three-Pane Layout)
    ============================================ */
+/* Fixed height (not min-height) so the page itself never scrolls.
+   Each pane (sidebar, main content) handles its own internal overflow.
+   Without this, a tall sidebar (deeply nested folder list) or a long
+   email list would push the document past the viewport, causing the
+   page to scroll as a whole — when you click a folder buried deep in
+   the tree, the email pane would open below the visible area. */
 .app-container {
     display: flex;
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
     background: var(--color-background-page);
 }
 

@@ -12,7 +12,13 @@
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
-    overflow: hidden;
+    /* Constrain to the height of the parent (.app-container is height: 100vh)
+       and let the sidebar's own content scroll vertically inside this column.
+       Without overflow-y: auto here, the sidebar would expand and push the
+       parent past the viewport, dragging the email pane along with it. */
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
     position: relative;
 }
 
