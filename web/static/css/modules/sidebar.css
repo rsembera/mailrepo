@@ -162,6 +162,13 @@
     height: 14px;
 }
 
+/* Collapsed sections animate their height to 0; expanded sections grow
+   to fit their content. The outer .sidebar handles overflow scrolling
+   for the entire pane, so individual sections do NOT get their own
+   scroll context (otherwise the sidebar shows nested scrollbars).
+
+   max-height on the expanded state is set to a value larger than any
+   plausible folder list so animation and natural growth coexist. */
 .section-content {
     overflow: hidden;
     max-height: 0;
@@ -169,9 +176,8 @@
 }
 
 .section-content.expanded {
-    max-height: 500px;
-    overflow-y: auto;
-    overflow-x: auto;
+    max-height: 9999px;
+    overflow: visible;
 }
 
 /* Tree Items */
