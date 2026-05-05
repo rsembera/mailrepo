@@ -4,6 +4,34 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## May 5, 2026 — UI fix: shared scroll context in three-pane layout
+
+**Participants:** Rick, Claude (Opus 4.7)
+
+**Issue:** Selecting a deeply nested archive folder pushed the email pane off the top edge of the screen. The email rows for the selected folder were technically there but had to be scrolled back into view at the page level. Confirmed via screenshot.
+
+**Root cause:** `.app-container` used `min-height: 100vh`, so the document grew with its content rather than being capped at the viewport. The sidebar (which hosts the long folder tree) had `overflow: hidden` but no fixed height, so when the folder tree got tall it pushed the parent past the viewport, and the page itself became the scroll context. From the user's perspective: clicking a folder caused the email list to "open below" the visible area.
+
+**Fix (commit `3881be4`):** Switched the layout to a fixed-height shell.
+- `.app-container`: `height: 100vh` + `overflow: hidden` so the document is exactly one viewport tall, never more.
+- `.sidebar`: `height: 100%` + `overflow-y: auto` so the folder tree scrolls inside its own pane.
+- `.main-content` already had `overflow: hidden` and `.email-list` already had `flex: 1; overflow-y: auto`, so the right side was already correctly set up — it just needed the parent to stop growing.
+
+**Follow-up (commit `f064d81`):** First fix introduced nested scrollbars — the new outer `.sidebar` scroll layered on top of the existing `.section-content.expanded { max-height: 500px; overflow-y: auto }` per-section caps. Three nested scrollbars in some cases. Removed the per-section caps so each section grows naturally and only the outer sidebar scrolls. One scrollbar per pane, no nesting.
+
+Trade-off: when many sections are expanded simultaneously, the user may need to scroll past one to reach the next. Acceptable for the visual cleanliness.
+
+### Files changed
+
+- `web/static/css/modules/layout.css` (`.app-container` height lock)
+- `web/static/css/modules/sidebar.css` (sidebar own scroll + per-section cap removal)
+
+### Verified
+
+Each pane now scrolls independently. Selecting any folder, no matter how deeply nested, lands the email pane in view. Single scrollbar in the sidebar, single scrollbar in the email list, no page-level scroll.
+
+---
+
 ## May 3, 2026 — Bulk Export Phase 3 (late evening)
 
 **Participants:** Rick, Claude (Opus 4.7)
