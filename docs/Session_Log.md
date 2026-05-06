@@ -4,6 +4,38 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## May 6, 2026 — Review screen: unify destination picker
+
+**Participants:** Rick, Claude (Opus 4.7)
+
+**Issue:** The Review screen's "Change Destination" button opened a custom `icon-select` dropdown — a flat list of all archive folders rendered with depth-indented padding. The rest of the app (Stage modal, Move Email, Move Folder) had standardized on the unified `renderFolderTree` modal-based picker, so this was a leftover inconsistency. With many folders, the flat list was hard to navigate.
+
+**Fix:** Added a `'change-destination'` mode to the existing Stage modal, then swapped the Review screen's inline dropdown for a button that opens the Stage modal in this mode.
+
+The Stage modal already uses `renderFolderTree` and was sized correctly for tree picking — adding a third mode flag (`'staging'` / `'folders'` / `'change-destination'`) was a much smaller change than building a new picker. The new mode:
+- Renames the modal title to "Change Destination" and the confirm button to "Move"
+- Pre-selects the current destination so the tree highlights it
+- On confirm, fires a callback with the new folder ID instead of running staging logic
+
+The Review screen now calls `openChangeDestinationModal({currentDestId, onConfirm})` and wires the callback to its existing `changeDestination(oldDestId, newDestId)` function. No backend changes; same data flow as before, just a different picker UI.
+
+While in there, added an X close button to the Stage modal header (consistency with the Move Email and Move Folder modals which already have one).
+
+The dead `dest-change-dropdown` branch in `initIconSelects()` was removed; the matching CSS rule in `review-view.css` is now orphaned but harmless, left for a future cleanup pass.
+
+### Files changed
+
+- `web/static/js/components/staging.js` (`openChangeDestinationModal` + new branch in `confirmStage`)
+- `web/static/js/views/review.js` (`renderDestinationDropdown` rewritten as a button; dead `dest-change-dropdown` handler removed)
+- `web/templates/main/index.html` (X close button on Stage modal)
+- `docs/Session_Log.md` (this entry)
+
+### Verified
+
+JS syntax checks pass. App boots without import errors. The change-destination mode reuses the same `renderFolderTree` instance the Stage modal already mounts, so creating a new folder mid-flow continues to work in this mode too (same `onAddFolder` plumbing).
+
+---
+
 ## May 5, 2026 — UI fix: shared scroll context in three-pane layout
 
 **Participants:** Rick, Claude (Opus 4.7)

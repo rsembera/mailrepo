@@ -21,10 +21,65 @@ import { escapeHtml } from '../utils.js';
 let selectedDestinationFolder = null;
 
 /**
+ * Callback invoked when confirming the modal in 'change-destination' mode.
+ * Set by openChangeDestinationModal(); called with the picked folder ID.
+ * @type {((newFolderId: number|string) => void) | null}
+ */
+let changeDestinationCallback = null;
+
+/**
  * Reset the destination folder selection (call before opening modal).
  */
 export function resetDestinationSelection() {
     selectedDestinationFolder = null;
+}
+
+/**
+ * Open the Stage modal in 'change-destination' mode — the existing tree
+ * picker UI, but on confirm we hand the new folder ID off to the caller
+ * via a callback instead of running staging logic. Used by the Review
+ * screen's "Change Destination" button so it shares the same picker as
+ * staging, Move Email, and Move Folder.
+ *
+ * @param {Object} opts
+ * @param {string|number|null} [opts.currentDestId] - Currently selected
+ *   destination, used as the initial highlight in the tree.
+ * @param {string} [opts.title] - Modal title text.
+ * @param {function} opts.onConfirm - Called with the new folder ID
+ *   when the user confirms.
+ */
+export function openChangeDestinationModal(opts) {
+    const modal = document.getElementById('stageModal');
+    if (!modal) return;
+
+    const titleEl = document.getElementById('stageModalTitle');
+    if (titleEl) titleEl.textContent = opts.title || 'Change Destination';
+
+    const desc = document.getElementById('stageModalDesc');
+    if (desc) desc.textContent = 'Select a new destination folder:';
+
+    const confirmBtn = document.getElementById('confirmStageBtn');
+    if (confirmBtn) confirmBtn.textContent = 'Move';
+
+    // Pre-select the current destination so the tree highlights it.
+    // 'unassigned' isn't a real folder ID — fall through to null in that case.
+    const initial = (opts.currentDestId && opts.currentDestId !== 'unassigned')
+        ? opts.currentDestId
+        : null;
+    selectedDestinationFolder = initial;
+
+    modal.dataset.stagingMode = 'change-destination';
+    changeDestinationCallback = opts.onConfirm;
+
+    renderFolderSelectTree();
+
+    if (confirmBtn) {
+        // Enabled if we already have a pre-selection; user can also pick a
+        // different folder, which will keep it enabled via onSelect.
+        confirmBtn.disabled = !initial;
+    }
+
+    modal.classList.add('active');
 }
 
 // DOM references
@@ -78,8 +133,14 @@ export function openStageModal() {
     if (desc) {
         desc.textContent = 'Select destination folder:';
     }
-    
+
+    // The change-destination mode renames the confirm button to "Move";
+    // reset it back to "Stage" for the staging path.
+    const confirmBtn = document.getElementById('confirmStageBtn');
+    if (confirmBtn) confirmBtn.textContent = 'Stage';
+
     selectedDestinationFolder = null;
+    changeDestinationCallback = null;
     modal.dataset.stagingMode = '';
     
     renderFolderSelectTree();
@@ -301,7 +362,20 @@ export function confirmStage() {
     
     const modal = document.getElementById('stageModal');
     const stagingMode = modal?.dataset.stagingMode;
-    
+
+    // Change-destination mode: hand the picked folder ID off to the caller
+    // and close. No state changes here — the callback owns the update.
+    if (stagingMode === 'change-destination') {
+        const cb = changeDestinationCallback;
+        changeDestinationCallback = null;
+        modal.dataset.stagingMode = '';
+        closeModal('stageModal');
+        if (typeof cb === 'function') {
+            cb(selectedDestinationFolder);
+        }
+        return;
+    }
+
     if (stagingMode === 'folders') {
         // Staging entire folders
         const pending = getPendingFolderStaging();

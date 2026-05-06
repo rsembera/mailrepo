@@ -8,7 +8,7 @@
  */
 
 import { escapeHtml, escapeForOnclick } from '../utils.js';
-import { getStagedEmails, getStagedFolders, clearAllStaged, updateStagedBadge } from '../components/staging.js';
+import { getStagedEmails, getStagedFolders, clearAllStaged, updateStagedBadge, openChangeDestinationModal } from '../components/staging.js';
 import { showConfirm, showAlert } from '../modals.js';
 import { state, loadFolders } from '../state.js';
 import { refreshSidebarFolders } from '../components/sidebar.js';
@@ -569,50 +569,34 @@ window.toggleSourceGroup = function(groupId) {
 };
 
 
+/**
+ * Render the "Change Destination" button for a destination group.
+ * Clicking it opens the unified Stage modal in change-destination mode,
+ * which uses the same tree picker as staging / Move Email / Move Folder.
+ */
 function renderDestinationDropdown(currentDestId) {
-    const topLevel = folders.filter(f => !f.parent_id && !f.deleted_at && !f.retention_date);
-    
-    function renderFolder(folder, depth) {
-        const indent = depth * 12;
-        const isSelected = folder.id == currentDestId;
-        
-        let html = `
-            <div class="icon-select-option ${isSelected ? 'selected' : ''}" 
-                 data-value="${folder.id}" style="padding-left: ${8 + indent}px">
-                <i data-lucide="folder"></i>
-                <span>${escapeHtml(folder.name)}</span>
-            </div>
-        `;
-        
-        const children = folders.filter(f => f.parent_id == folder.id && !f.deleted_at && !f.retention_date);
-        children.forEach(child => {
-            html += renderFolder(child, depth + 1);
-        });
-        
-        return html;
-    }
-    
-    let optionsHtml = '';
-    topLevel.forEach(folder => {
-        optionsHtml += renderFolder(folder, 0);
-    });
-    
-    const currentFolder = folders.find(f => f.id == currentDestId);
-    const currentName = currentFolder ? currentFolder.name : 'Select...';
-    
     return `
-        <div class="icon-select dest-change-dropdown" data-dest-id="${currentDestId}">
-            <button class="icon-select-trigger" title="Change destination folder">
-                <i data-lucide="folder-output" class="icon-select-icon"></i>
-                <span>Change Destination</span>
-                <i data-lucide="chevron-down" class="icon-select-arrow"></i>
-            </button>
-            <div class="icon-select-dropdown">
-                ${optionsHtml || '<div class="icon-select-empty">No folders available</div>'}
-            </div>
-        </div>
+        <button class="btn btn-sm btn-secondary" onclick="openChangeDestPicker('${escapeForOnclick(String(currentDestId))}')" title="Change destination folder">
+            <i data-lucide="folder-output"></i>
+            Change Destination
+        </button>
     `;
 }
+
+/**
+ * Open the change-destination picker for a given current destination.
+ * On confirm, updates all staged items currently going to oldDestId so
+ * they go to newDestId instead.
+ */
+window.openChangeDestPicker = function(oldDestId) {
+    openChangeDestinationModal({
+        currentDestId: oldDestId,
+        title: 'Change Destination',
+        onConfirm: (newDestId) => {
+            changeDestination(oldDestId, newDestId);
+        },
+    });
+};
 
 function renderSourceActionDropdown(sourceKey, selectedValue = 'leave', isGmail = false) {
     let options = [
@@ -939,12 +923,10 @@ function initIconSelects() {
                 // Close dropdown immediately
                 dropdown.classList.remove('open');
                 
-                if (select.classList.contains('dest-change-dropdown')) {
-                    // Change destination dropdown
-                    const oldDestId = select.dataset.destId;
-                    changeDestination(oldDestId, value);
-                } else if (select.classList.contains('source-action-dropdown')) {
-                    // Source action dropdown
+                if (select.classList.contains('source-action-dropdown')) {
+                    // Source action dropdown (Leave / Archive / Trash / Delete)
+                    // Note: change-destination is no longer a dropdown — it
+                    // opens the unified Stage modal in change-destination mode.
                     const sourceKey = select.dataset.sourceKey;
                     select.dataset.value = value;
                     const triggerSpan = trigger.querySelector('span');
