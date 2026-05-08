@@ -1405,19 +1405,35 @@ function renderHtmlBody(container, html, allowRemote = false) {
             ${cspMeta}
             <base target="_blank">
             <style>
-                /* Force the iframe document to never show its own vertical
-                   scrollbar — the outer .email-viewer-body is the only scroll
-                   context. Without this, content taller than the current
-                   iframe height triggers an internal scrollbar on top of the
-                   outer one (the "double scrollbar" bug). */
+                /* The iframe document handles its own overflow:
+                   - overflow-y: hidden so the iframe never shows a vertical
+                     scrollbar (outer .email-viewer-body is the only V scroll)
+                   - overflow-x: hidden so the iframe never shows a horizontal
+                     scrollbar either. Wide content gets constrained or clipped
+                     by the rules below. Same approach as Gmail/Apple Mail. */
                 html, body { 
                     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
                     font-size: 14px; line-height: 1.5; color: #333; 
                     margin: 0; padding: 0; 
-                    overflow-y: hidden;
+                    overflow: hidden;
+                    word-wrap: break-word;
+                    overflow-wrap: break-word;
                 }
+                /* Constrain common wide elements so they fit the iframe width.
+                   Email HTML often contains 600-700px fixed-width tables, long
+                   unbroken URLs, or wide images. Without these rules, that
+                   content overflows horizontally and triggers a scrollbar. */
                 img { max-width: 100%; height: auto; }
-                a { color: #1a73e8; }
+                table { max-width: 100% !important; }
+                pre, code { 
+                    white-space: pre-wrap; 
+                    word-wrap: break-word; 
+                    overflow-wrap: anywhere;
+                    max-width: 100%;
+                }
+                /* Long unbroken strings (URLs, IDs, etc.) get broken at any
+                   character rather than pushing the viewport wider. */
+                a { color: #1a73e8; word-break: break-word; overflow-wrap: anywhere; }
                 @media print {
                     html, body { overflow: visible; height: auto; }
                     * { page-break-inside: auto; }
