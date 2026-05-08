@@ -4,6 +4,49 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## May 8, 2026 — Email viewer: kill double scrollbars
+
+**Participants:** Rick, Claude (Opus 4.7)
+
+**Issue:** When viewing an archived HTML email, the viewer panel showed two scrollbars: a thick one inside the iframe rendering the email body, and the outer `.email-viewer-body` scrollbar at the panel edge. Later: the same iframe was also showing a horizontal scrollbar at the bottom on emails with wide content.
+
+### Root cause (vertical)
+
+`renderHtmlBody` in `mail.js` was sizing the iframe to its content using three timed `setTimeout` snapshots (100ms / 500ms / 1s). If layout shifted after the third snapshot — slow images, web fonts loading, late CSS — the iframe stayed at the old height and its built-in scrollbar appeared on top of the parent\'s.
+
+### Fix part 1 — vertical scrollbar (commit `541ede2`)
+
+Two complementary changes:
+
+- **ResizeObserver** inside the iframe now tracks the document\'s height continuously instead of guessing when content is "done". Image-load and window-load listeners cover gaps where some browsers don\'t fire ResizeObserver for image loads. Falls back to the original timed snapshots if observer setup throws.
+- **`overflow-y: hidden`** on the iframe document\'s `html, body` so the iframe physically cannot show its own vertical scrollbar regardless of content. The outer `.email-viewer-body` is the single vertical scroll context. Belt-and-braces with the height tracking — even if a measurement is missed, no internal scrollbar appears.
+
+Also added `display: block` on the iframe element to remove the small inline-element baseline gap that was making the scroll area subtly taller than visible content.
+
+### Fix part 2 — horizontal scrollbar (commit `5dfe162`)
+
+After the vertical fix, a horizontal scrollbar appeared on emails with wide content. Common cause: 600–700px fixed-width tables (most email templates), long unbroken URLs, wide images. Same approach as Gmail / Apple Mail in their reading panes: hide horizontal overflow entirely and constrain wide content to fit.
+
+Extended the iframe document CSS:
+
+- `overflow: hidden` on `html, body` (was just `overflow-y: hidden`) — no scrollbar on either axis, ever
+- `table { max-width: 100% }` so fixed-width tables shrink to fit
+- `pre, code` get `white-space: pre-wrap` + `overflow-wrap: anywhere` so code blocks wrap instead of overflowing
+- `word-break: break-word` + `overflow-wrap: anywhere` on body and links so long URLs / message IDs break at any character rather than pushing the viewport wider
+
+In rare cases where content physically can\'t fit even with these rules (e.g. a 1200px image with explicit dimensions overriding CSS), it gets clipped at the right edge rather than triggering a scrollbar — same trade-off Gmail makes.
+
+### Files changed
+
+- `web/static/js/views/mail.js` (`renderHtmlBody`: ResizeObserver + iframe document CSS)
+- `docs/Session_Log.md` (this entry)
+
+### Verified
+
+Confirmed via screenshots from Rick that both vertical and horizontal scrollbars are now gone on the affected email. The outer `.email-viewer-body` is now the only scroll context in the email viewer.
+
+---
+
 ## May 6, 2026 — Review screen: unify destination picker
 
 **Participants:** Rick, Claude (Opus 4.7)
