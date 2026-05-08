@@ -1385,6 +1385,7 @@ function renderHtmlBody(container, html, allowRemote = false) {
     iframe.sandbox = 'allow-same-origin allow-modals allow-popups allow-popups-to-escape-sandbox';
     iframe.style.width = '100%';
     iframe.style.border = 'none';
+    iframe.style.display = 'block';  // Remove inline-element baseline gap
     container.innerHTML = '';
     container.appendChild(iframe);
     
@@ -1404,8 +1405,17 @@ function renderHtmlBody(container, html, allowRemote = false) {
             ${cspMeta}
             <base target="_blank">
             <style>
-                html, body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-                       font-size: 14px; line-height: 1.5; color: #333; margin: 0; padding: 0; }
+                /* Force the iframe document to never show its own vertical
+                   scrollbar — the outer .email-viewer-body is the only scroll
+                   context. Without this, content taller than the current
+                   iframe height triggers an internal scrollbar on top of the
+                   outer one (the "double scrollbar" bug). */
+                html, body { 
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                    font-size: 14px; line-height: 1.5; color: #333; 
+                    margin: 0; padding: 0; 
+                    overflow-y: hidden;
+                }
                 img { max-width: 100%; height: auto; }
                 a { color: #1a73e8; }
                 @media print {
@@ -1419,29 +1429,64 @@ function renderHtmlBody(container, html, allowRemote = false) {
     `);
     doc.close();
     
-    // Adjust iframe height to fit content (let parent container scroll)
+    // Resize the iframe to match its content height. The iframe contains
+    // an HTML document whose size can change at any time (images loading,
+    // web fonts loading, JS-driven layout shifts). The previous code used
+    // three timed snapshots (100ms/500ms/1s); if the content changed after
+    // the last snapshot, the iframe stayed at the wrong size and its own
+    // scrollbar appeared on top of the parent\'s.
+    //
+    // ResizeObserver is the right primitive here: we resize on every
+    // genuine layout change rather than guessing when content is "done".
     const adjustHeight = () => {
         try {
             const body = doc.body;
-            const html = doc.documentElement;
-            // Get the maximum of various height measurements
+            const root = doc.documentElement;
             const height = Math.max(
                 body.scrollHeight || 0,
                 body.offsetHeight || 0,
-                html.scrollHeight || 0,
-                html.offsetHeight || 0,
-                300 // minimum height
+                root.scrollHeight || 0,
+                root.offsetHeight || 0,
+                300  // minimum height for very short emails
             );
             iframe.style.height = height + 'px';
         } catch (e) {
-            // Fallback if we can't access iframe content
+            // Cross-origin or torn-down iframe \u2014 fall back to a sane default
             iframe.style.height = '500px';
         }
     };
-    setTimeout(adjustHeight, 100);
-    // Adjust again after images may have loaded
-    setTimeout(adjustHeight, 500);
-    setTimeout(adjustHeight, 1000);
+
+    // Initial measurement once the document is parsed
+    adjustHeight();
+
+    // ResizeObserver tracks ongoing layout changes. Some browsers don\'t
+    // fire it for image loads inside the iframe document, so we keep an
+    // image-load listener as a belt-and-braces measure.
+    try {
+        if (typeof iframe.contentWindow?.ResizeObserver === 'function') {
+            const ro = new iframe.contentWindow.ResizeObserver(() => adjustHeight());
+            ro.observe(doc.body);
+            ro.observe(doc.documentElement);
+        }
+        // Image-load fallback: re-measure as each image lands
+        const imgs = doc.querySelectorAll('img');
+        imgs.forEach(img => {
+            if (!img.complete) {
+                img.addEventListener('load', adjustHeight, { once: true });
+                img.addEventListener('error', adjustHeight, { once: true });
+            }
+        });
+        // One more measurement after the load event in case anything else
+        // shifted layout (web fonts, late-running CSS)
+        if (iframe.contentWindow) {
+            iframe.contentWindow.addEventListener('load', adjustHeight, { once: true });
+        }
+    } catch (e) {
+        // If observer setup throws, fall back to the original timed snapshots
+        setTimeout(adjustHeight, 100);
+        setTimeout(adjustHeight, 500);
+        setTimeout(adjustHeight, 1000);
+    }
 }
 
 /**
