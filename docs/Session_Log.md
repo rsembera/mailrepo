@@ -4,6 +4,41 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## May 10, 2026 — Remove 5K export limit; update website with export feature
+
+**Participants:** Rick, Claude (Opus 4.7) — working on Apollo (Linux ThinkPad) for the first time this session, since the website lives here.
+
+### Removed the 5,000-email export limit
+
+Phase 1 added a hard cap at 5,000 emails per export with the comment "to protect the user (and the server) from accidental huge exports." Reviewing this while drafting docs for the website, the rationale doesn't hold up: MailRepo is a local-first single-user app, and the export UI already has a percent-based progress bar (loading 0–30%, rendering 30–80%, WeasyPrint 80–85%, packaging on top) plus an indeterminate "pulsing" mode during the WeasyPrint phase. The user always sees what's happening. If they want to export 12,000 emails and wait, that's their tradeoff.
+
+Removed the limit check from `_run_export_job` in `web/blueprints/api/exports.py`. Marked the corresponding open question in `docs/Bulk_Export_Plan.md` as resolved with the new reasoning.
+
+### Updated the MailRepo website with export documentation
+
+The website at `/home/rick/Websites/mailrepo-website` (last updated April 1) was missing any mention of the bulk export feature shipped May 3. Updated three pages:
+
+- **`docs.html`** — added a new "Exporting" section under "Using MailRepo," between Searching and Retention Vault. Covers the three entry points (folder, search, batch select), the three output formats (PDF / .eml ZIP / both), AES-256 encryption with passphrase handling and recipient-tooling notes, attachment handling (PDFs merged on the back, images and other types as sibling files), saving and reveal, and the "Load remote images" toggle. Sidebar nav updated to match.
+- **`index_final.html`** — replaced the outdated "How it works" line ("export individual threads when you need them") with a more accurate description, and added a fourth feature card.
+- Verified all factual claims against actual source code on Apollo (which had been six weeks behind — pulled to current `011859d` first). Caught and corrected three inaccuracies in my first draft: Windows 11 native AES support shouldn't be cheerleaded since MailRepo doesn't target Windows, the cover page doesn't actually carry the source folder name for batch-select exports (backend ignores the frontend's nicely-formatted label and uses `"{N} selected emails"`), and PDF appendices are referenced in each email's attachment list with a labeled appendix page — not "in the cover."
+
+### Files changed (app repo)
+
+- `web/blueprints/api/exports.py` — removed the limit check
+- `docs/Bulk_Export_Plan.md` — marked open question 6 as resolved
+- `docs/Session_Log.md` — this entry
+
+### Files changed (website repo)
+
+- `docs.html` — new Exporting section + sidebar nav entry
+- `index_final.html` — feature card + How it works update
+
+### Verified
+
+`exports.py` parses cleanly. App still boots. Website renders locally. Both repos commit and push successfully.
+
+---
+
 ## May 8, 2026 — Email viewer: kill double scrollbars
 
 **Participants:** Rick, Claude (Opus 4.7)

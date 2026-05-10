@@ -161,7 +161,7 @@ To resolve when this work is picked up:
 3. **Header/footer convention** — page numbers always; what else? Folder/scope on every page is helpful for context; the title might be redundant if it's already on the cover.
 4. **Verbose headers option** — full raw email headers for legal authenticity, vs the four-field summary. Probably yes-as-toggle, default off.
 5. **Order** — chronological default (oldest first) feels right for correspondence review. Newest first is useful for "what just happened." Probably toggle, default chronological.
-6. **Manual selection ceiling** — if a user batch-selects 5,000 emails and clicks Export, do we warn? Probably yes around 500 or 1,000.
+6. **Manual selection ceiling** — ~~if a user batch-selects 5,000 emails and clicks Export, do we warn? Probably yes around 500 or 1,000.~~ **Resolved May 10, 2026:** No limit, no warning. The progress UI (percent-based bar plus indeterminate pulsing during WeasyPrint) keeps the user informed; throughput is theirs to manage. A 5,000-email cap was implemented during Phase 1 and removed in this same revision after dogfooding showed it was paternalistic for the audience.
 7. **Progress UI** — a 200-email PDF export will take time. Reuse the existing SSE progress streaming pattern from import/commit.
 
 ---

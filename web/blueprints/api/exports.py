@@ -452,16 +452,6 @@ def _run_export_job(job_id: str, payload: dict) -> None:
             _fail_job(job_id, f"Unknown format: {export_format!r}")
             return
 
-        # Cap on count to protect the user (and the server) from accidental huge exports.
-        limit = int(payload.get("limit") or 5000)
-        if len(message_ids) > limit:
-            _fail_job(
-                job_id,
-                f"Selection has {len(message_ids):,} emails; the export limit is {limit:,}. "
-                "Narrow the selection or contact support to lift the limit.",
-            )
-            return
-
         if export_format == "pdf":
             _build_pdf_only(job_id, message_ids, scope_label, payload)
         elif export_format == "eml":
