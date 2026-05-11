@@ -268,10 +268,13 @@ Extract:
 - `GET /api/folders/<id>/emails/<id>`
 - `POST /api/trash/empty`
 
-### Step 3.4: Create api/staging.py
+### Step 3.4: ~~Create api/staging.py~~ — superseded
 Extract:
-- `POST /api/commit`
-- `POST /api/commit-folders`
+- ~~`POST /api/commit`~~
+- ~~`POST /api/commit-folders`~~
+
+**Superseded May 11, 2026.** The plain `/api/commit` and `/api/commit-folders` routes from `staging.py` were superseded by the streaming commit pipeline (`/api/commit/stream`, `/api/commit/pending`, `/api/commit/discard` in `progress.py`, with helpers in `commit.py`). The frontend never called the plain routes; `staging.py` was deleted along with its `commit_staged`, `commit_folders`, and `_create_archive_folder_path` functions, and the corresponding import was removed from `web/blueprints/api/__init__.py`.
+
 
 ### Step 3.5: Update app.py
 Register new API blueprint structure.

@@ -4,6 +4,37 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## May 11, 2026 — Remove dead legacy commit routes
+
+**Participants:** Rick, Claude (Opus 4.7) — back on the MacBook.
+
+**Context:** Rick asked whether MailRepo protects against duplicate commits (e.g. accidentally committing the same batch of emails to the same archive folder twice). Verifying this in the code turned up two things:
+
+1. **Duplicate protection is solid.** `commit.py`\'s `_check_duplicate(folder_id, message_id)` helper queries `messages WHERE folder_id = ? AND message_id = ? AND deleted_at IS NULL` and is called at three sites in the streaming commit path (single-email commit, resume-interrupted-commit, folder-commit). Duplicates are added to the `skipped` results with reason `"duplicate"`, the file isn\'t written, no DB row is inserted, and the user sees "N skipped (already archived)" in the commit summary. Scope is per-folder (filing copies in multiple folders is a legitimate workflow); ignores trashed copies (`deleted_at IS NULL`) so re-archiving after a trash works; degrades gracefully if `Message-ID` is missing (`if not message_id: return False`).
+
+2. **There was a pile of dead code carrying parallel duplicate protection.** `web/blueprints/api/staging.py` (306 lines) registered two routes — `POST /api/commit` and `POST /api/commit-folders` — that the frontend never called. The file\'s own header comment said "These routes are kept for potential API/testing use," but verification across the repo found zero callers: no JS fetch, no test, no script. The streaming commit path in `progress.py` (plus `commit.py` helpers) has been doing the work for months.
+
+**Fix:**
+
+- Deleted `web/blueprints/api/staging.py` outright (`commit_staged`, `commit_folders`, `_create_archive_folder_path` — all dead).
+- Removed `from . import staging` from `web/blueprints/api/__init__.py`.
+- Annotated the corresponding step in `docs/Refactoring_Plan.md` as superseded with a pointer to where the work actually lives now.
+
+### Files changed
+
+- `web/blueprints/api/staging.py` — **deleted** (12,424 bytes / 306 lines)
+- `web/blueprints/api/__init__.py` — removed the staging import
+- `docs/Refactoring_Plan.md` — annotated Step 3.4 as superseded
+- `docs/Session_Log.md` — this entry
+
+### Verified
+
+App boots cleanly. All three live `/api/commit/*` routes (`/discard`, `/pending`, `/stream`) still register. Total `/api/` route count drops by two (from 80 to 78) — the two dead routes — with no other changes to the URL map. The note in the API module that another `staging` module no longer exists doesn\'t cause any import errors (only `web/blueprints/api/__init__.py` referenced it).
+
+Naming note: `web/static/js/components/staging.js` is the frontend staging UI component and is unrelated to the deleted `api/staging.py`. Same name, different concerns; no overlap.
+
+---
+
 ## May 10, 2026 — Remove 5K export limit; update website with export feature
 
 **Participants:** Rick, Claude (Opus 4.7) — working on Apollo (Linux ThinkPad) for the first time this session, since the website lives here.
