@@ -418,6 +418,41 @@ def permanently_delete_message(message_id):
     return jsonify({"success": True})
 
 
+@api_bp.route("/messages/<int:message_id>/flag", methods=["PATCH"])
+def flag_message(message_id):
+    """Set or clear the flagged_at timestamp on a message.
+
+    Body: {"flagged": true} sets flagged_at to now; {"flagged": false}
+    clears it. Returns the resulting flagged_at value (timestamp or null)
+    so the frontend can sync local state without re-fetching."""
+    message = Database.fetchone(
+        "SELECT id FROM messages WHERE id = ?",
+        (message_id,)
+    )
+    if not message:
+        return jsonify({"error": "Message not found"}), 404
+
+    data = request.get_json(silent=True) or {}
+    if "flagged" not in data:
+        return jsonify({"error": "Body must include 'flagged' (true or false)"}), 400
+
+    if data["flagged"]:
+        now = int(time.time())
+        Database.execute(
+            "UPDATE messages SET flagged_at = ? WHERE id = ?",
+            (now, message_id)
+        )
+        Database.commit()
+        return jsonify({"flagged_at": now})
+    else:
+        Database.execute(
+            "UPDATE messages SET flagged_at = NULL WHERE id = ?",
+            (message_id,)
+        )
+        Database.commit()
+        return jsonify({"flagged_at": None})
+
+
 @api_bp.route("/messages/<int:message_id>", methods=["PATCH"])
 def update_message(message_id):
     """Update message properties (move to different folder)."""

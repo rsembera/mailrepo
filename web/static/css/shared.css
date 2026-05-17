@@ -89,7 +89,8 @@
     --color-primary-light: #9FCFC0;
     --color-primary-lighter: #BFDCDC;
     --color-primary-dark: #115D4F;
-    
+    --color-star: var(--color-primary);
+
     /* UI colors */
     --color-border: #DEE2E6;
     --color-border-focus: #1F8F74;

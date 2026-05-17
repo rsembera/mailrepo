@@ -67,6 +67,50 @@ function _updatePrevNextButtons(context) {
     nextBtn.disabled = idx < 0 || idx >= emails.length - 1;
 }
 
+/**
+ * Show, hide, and reflect the current flagged state of the star button.
+ *
+ * The star is archive-only (context.type === 'folder'). For live IMAP
+ * and import previews the button stays hidden. The icon swaps between
+ * empty and filled based on whether the email currently has a
+ * flagged_at value.
+ *
+ * Lucide swaps icons by re-creating from data-lucide, so we re-run
+ * lucide.createIcons() after changing it.
+ */
+function _updateStarButton(context) {
+    const btn = document.getElementById('starBtn');
+    if (!btn) return;
+
+    const isArchive = context && context.type === 'folder' && context.messageId;
+    if (!isArchive) {
+        btn.style.display = 'none';
+        return;
+    }
+    btn.style.display = '';
+
+    // Find the email in the current list to read flagged_at. The viewer
+    // context doesn't carry flagged_at directly — the source of truth is
+    // state.emails (folder list) or the email-data attached during render.
+    const emails = state.emails || [];
+    const email = emails.find(e => (e.id == context.messageId));
+    const isFlagged = !!(email && email.flagged_at);
+
+    // Update icon and tooltip
+    const iconHost = btn.querySelector('[data-lucide]');
+    if (iconHost) {
+        iconHost.setAttribute('data-lucide', 'star');
+        if (isFlagged) {
+            btn.classList.add('starred');
+            btn.title = 'Unstar this email — press s';
+        } else {
+            btn.classList.remove('starred');
+            btn.title = 'Star this email — press s';
+        }
+    }
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
 // Callbacks
 let onButtonStatesUpdate = null;
 
@@ -1158,6 +1202,7 @@ export async function openEmailViewer(emailId, options = {}) {
         currentViewerContext = context;
         _updateStageThreadButton(context);
         _updatePrevNextButtons(context);
+        _updateStarButton(context);
         renderEmailContent(data.email, context);
         
     } catch (error) {
@@ -1627,6 +1672,7 @@ export function closeEmailViewer() {
     currentViewerContext = null;
     _updateStageThreadButton(null);
     _updatePrevNextButtons(null);
+    _updateStarButton(null);
 }
 
 /**
@@ -2058,3 +2104,48 @@ document.addEventListener('keydown', (e) => {
         window.viewerNavigate(-1);
     }
 });
+
+
+/**
+ * Click handler for the viewer star button. Toggles the message's
+ * flagged_at via PATCH /api/messages/<id>/flag, then updates local
+ * state.emails so the renderer (and any subsequent re-render of the
+ * email list) reflects the new value.
+ */
+window.toggleStarFromViewer = async function() {
+    const ctx = currentViewerContext;
+    if (!ctx || ctx.type !== 'folder' || !ctx.messageId) return;
+
+    const emails = state.emails || [];
+    const email = emails.find(e => (e.id == ctx.messageId));
+    const isCurrentlyFlagged = !!(email && email.flagged_at);
+    const newFlagged = !isCurrentlyFlagged;
+
+    try {
+        const response = await fetch(`/api/messages/${ctx.messageId}/flag`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ flagged: newFlagged }),
+        });
+        if (!response.ok) {
+            console.error('Failed to toggle star:', response.status);
+            return;
+        }
+        const data = await response.json();
+
+        // Update local state so the indicator is in sync without a refetch
+        if (email) {
+            email.flagged_at = data.flagged_at;
+        }
+
+        // Refresh the viewer's star icon
+        _updateStarButton(ctx);
+
+        // Refresh the email list rows so the indicator updates immediately
+        if (typeof renderEmailList === 'function') {
+            renderEmailList();
+        }
+    } catch (e) {
+        console.error('Star toggle failed:', e);
+    }
+};

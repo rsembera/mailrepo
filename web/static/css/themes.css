@@ -22,7 +22,8 @@
     --color-primary-light: #9FCFC0;
     --color-primary-lighter: #BFDCDC;
     --color-primary-dark: #115D4F;
-    
+    --color-star: var(--color-primary);
+
     /* Backgrounds */
     --color-background: #FBFCFD;
     --color-background-secondary: #F7FAFC;
@@ -59,7 +60,8 @@
     --color-primary-light: #94a3b8;
     --color-primary-lighter: #e2e8f0;
     --color-primary-dark: #334155;
-    
+    --color-star: var(--color-primary);
+
     /* Backgrounds */
     --color-background: #FBFCFD;
     --color-background-secondary: #F8FAFC;
@@ -96,7 +98,8 @@
     --color-primary-light: #7BA3C9;
     --color-primary-lighter: #D4E4F2;
     --color-primary-dark: #2A5080;
-    
+    --color-star: var(--color-primary);
+
     /* Backgrounds */
     --color-background: #FBFCFD;
     --color-background-secondary: #F5F9FC;
@@ -133,7 +136,8 @@
     --color-primary-light: #C98A98;
     --color-primary-lighter: #F2E0E4;
     --color-primary-dark: #8A4557;
-    
+    --color-star: var(--color-primary);
+
     /* Backgrounds */
     --color-background: #FDFBFC;
     --color-background-secondary: #FAF5F7;
@@ -170,7 +174,8 @@
     --color-primary-light: #b4befe;
     --color-primary-lighter: #313244;
     --color-primary-dark: #74c7ec;
-    
+    --color-star: var(--color-primary);
+
     /* Backgrounds */
     --color-background: #1e1e2e;
     --color-background-secondary: #181825;

@@ -303,3 +303,19 @@
         min-height: 0 !important;
     }
 }
+
+/* ============================================
+   STAR / FLAG BUTTON
+   The star button in the email viewer's action bar.
+   Empty outline when unflagged, filled and themed when starred.
+   Color uses --color-star which defaults to --color-primary per theme.
+   ============================================ */
+
+#starBtn.starred {
+    color: var(--color-star);
+}
+
+#starBtn.starred svg {
+    fill: var(--color-star);
+    stroke: var(--color-star);
+}
