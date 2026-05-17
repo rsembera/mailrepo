@@ -73,7 +73,7 @@ Rick tested the decoupling fix and reported a separate bug: trashing a folder di
 
 Tracked it to a string-vs-number mismatch in `deleteFolder`. The sidebar passes `row.dataset.id` (always a string) through `onFolderSelect(id)` → `selectView({ type: 'folder', id })`, so `state.currentView.id` is a string when set from a sidebar click. But `deletedFolderIds` is built from `state.folders[].id` (numbers from the backend). Array `.includes()` is strict equality, so `[33].includes("33")` was silently false — the view-clearing branch never fired.
 
-Fix in `eaba6ed` (one-liner in folder-mgmt.js): use `.some(fid => fid == currentId)` instead of `.includes`, matching the loose-equality pattern used elsewhere in the codebase for folder ID comparisons. Verified working.
+Fix in `db2b34f` (one-liner in folder-mgmt.js): use `.some(fid => fid == currentId)` instead of `.includes`, matching the loose-equality pattern used elsewhere in the codebase for folder ID comparisons. Verified working.
 
 ### What's pending
 - **Apollo pull.** That machine is now several commits behind; pull before next session there.
