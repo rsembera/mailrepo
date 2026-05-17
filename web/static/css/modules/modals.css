@@ -13,7 +13,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    /* 1050 (not 1000) so regular modals sit above the email viewer overlay,
+       which is also z-index 1000. System modals at 1100 still stack above. */
+    z-index: 1050;
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.2s, visibility 0.2s;
