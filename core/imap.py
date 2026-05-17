@@ -350,33 +350,65 @@ class IMAP:
             "attachments": [],
         }
         
-        # First pass: collect inline images (parts with Content-ID) for cid: replacement
+        # Pre-scan: extract every cid: reference that appears in the html
+        # bodies of this message. A MIME part with a Content-ID is only
+        # truly "inline" if its id is actually referenced by the html.
+        # This matters for Gmail mobile and similar clients that set both
+        # Content-Disposition: attachment AND Content-ID on attached
+        # images that the html doesn\'t reference \u2014 those should appear
+        # in the attachments list, not be silently dropped.
         import base64
+        referenced_cids: set[str] = set()
+        if msg.is_multipart():
+            for part in msg.walk():
+                if part.get_content_type() != "text/html":
+                    continue
+                payload = part.get_payload(decode=True)
+                if not payload:
+                    continue
+                charset = part.get_content_charset() or "utf-8"
+                try:
+                    html_text = payload.decode(charset, errors="replace")
+                except Exception:
+                    continue
+                for m in re.finditer(r'cid:([^"\'\s>]+)', html_text):
+                    referenced_cids.add(m.group(1))
+
+        # First pass: collect inline images for cid: replacement. Only
+        # parts whose Content-ID is actually referenced in the html.
         inline_images = {}  # cid -> data URL
-        
+
         if msg.is_multipart():
             for part in msg.walk():
                 content_id = part.get("Content-ID")
-                if content_id:
-                    payload = part.get_payload(decode=True)
-                    if payload:
-                        content_type = part.get_content_type()
-                        # Strip angle brackets: <image001.png@...> -> image001.png@...
-                        cid = content_id.strip('<>')
-                        b64_data = base64.b64encode(payload).decode('ascii')
-                        inline_images[cid] = f"data:{content_type};base64,{b64_data}"
-        
+                if not content_id:
+                    continue
+                cid = content_id.strip('<>')
+                if cid not in referenced_cids:
+                    # Has a Content-ID but the html doesn\'t use it \u2014
+                    # the second pass will handle it as a regular attachment.
+                    continue
+                payload = part.get_payload(decode=True)
+                if not payload:
+                    continue
+                content_type = part.get_content_type()
+                b64_data = base64.b64encode(payload).decode('ascii')
+                inline_images[cid] = f"data:{content_type};base64,{b64_data}"
+
         # Second pass: parse body and collect attachments
         if msg.is_multipart():
             for part in msg.walk():
                 content_type = part.get_content_type()
                 content_disposition = str(part.get("Content-Disposition", ""))
                 content_id = part.get("Content-ID")
-                
-                # Skip inline images - they're handled via cid: replacement
-                # Only skip if it's an image with Content-ID (actual inline embedded image)
+
+                # Skip parts we registered as inline images above. Use the
+                # set of referenced cids so we don\'t accidentally also skip
+                # attachments that happen to have a Content-ID.
                 if content_id and content_type.startswith("image/"):
-                    continue
+                    cid = content_id.strip('<>')
+                    if cid in referenced_cids:
+                        continue
                 
                 # Collect attachments
                 if "attachment" in content_disposition:

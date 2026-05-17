@@ -1372,10 +1372,22 @@ function renderEmailContent(email, context = null) {
     // Body
     const bodyDiv = document.getElementById('viewerBody');
     
-    if (email.html_body) {
+    // Detect visually-empty bodies. A Gmail mobile picture-message arrives
+    // with html_body = "<div dir=\"auto\"></div>" and text_body = "\r\n" \u2014
+    // technically truthy, but they render as nothing. Strip tags and
+    // whitespace and check whether there\'s any visible content.
+    const stripHtml = (s) => (s || '').replace(/<[^>]*>/g, '').replace(/\s+/g, '').trim();
+    const stripText = (s) => (s || '').replace(/\s+/g, '').trim();
+    const htmlHasContent = email.html_body && stripHtml(email.html_body).length > 0;
+    const textHasContent = email.text_body && stripText(email.text_body).length > 0;
+    const hasAttachments = Array.isArray(email.attachments) && email.attachments.length > 0;
+
+    if (htmlHasContent) {
         renderHtmlBody(bodyDiv, email.html_body, false);
-    } else if (email.text_body) {
+    } else if (textHasContent) {
         bodyDiv.innerHTML = `<div class="email-text-body">${plainTextToHtml(email.text_body)}</div>`;
+    } else if (hasAttachments) {
+        bodyDiv.innerHTML = '<div class="email-text-body">(This message has no text \u2014 see attachments above.)</div>';
     } else {
         bodyDiv.innerHTML = '<div class="email-text-body">(No content)</div>';
     }
