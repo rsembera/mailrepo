@@ -4,6 +4,81 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## May 17, 2026 — Stage Thread feature: build and test
+
+**Participants:** Rick, Claude (Opus 4.7) — back on the MacBook (primary dev machine).
+
+Built and verified the "Stage thread to..." feature designed in `docs/Stage_Thread_Plan.md`. Found and fixed three collateral bugs along the way.
+
+### Build order
+
+Deviated from the design doc's phasing in one place: built header-walk FIRST and skipped the IMAP THREAD extension entirely for Phase 1, rather than building THREAD with header-walk as fallback. Reasoning: header-walk works on every RFC 3501 server (including NCF's mystery setup), so it's the safer universal path to prove first. THREAD optimization can be added later if header-walk turns out slow on real workloads.
+
+### What got built
+
+**Backend (commit `20b2337`):**
+- `core/imap.py`: `get_special_folder()` extended with `'sent'`. Verified against Rick's real accounts — NCF returns `'Sent'`, both Gmail accounts return `'[Gmail]/Sent Mail'`.
+- `core/imap.py`: new `fetch_thread_headers(uid)` — light fetch of MESSAGE-ID, IN-REPLY-TO, REFERENCES, FROM, SUBJECT, DATE.
+- `core/imap.py`: new `find_thread(source_folder, source_uid, also_search_folders, max_messages=100, max_iterations=5, deadline_seconds=10)`. Bidirectional walk via IN-REPLY-TO and REFERENCES. Returns sorted-by-date list with `truncated` and `timed_out` flags.
+- `web/blueprints/api/threads.py` (new): `POST /api/threads/find` endpoint. Auto-includes Sent folder + INBOX (if source is elsewhere) in the search. Handles IMAPError → 502, unexpected → 500.
+
+**Frontend (commit `93cdf4d`):**
+- New `messages-square` icon in the email viewer's action bar, hidden by default. `_updateStageThreadButton(context)` shows it only when `context.type === 'account'` (live IMAP).
+- `web/static/js/components/thread-stage.js` (new, lazy-loaded): opens the existing folder-tree picker (`openChangeDestinationModal`), POSTs to `/api/threads/find`, then writes each thread member into `state.staged` with the same shape the existing staging code produces.
+
+**Polish during end-to-end testing:**
+- `991f58d` — modal z-index bumped to 1050 so the folder picker sits above the email viewer overlay (both were at 1000; viewer won the DOM-order tie). Latent bug; would have hit any modal opened from the viewer.
+- `7f61164` — `openChangeDestinationModal` accepts `confirmLabel`; Stage Thread passes `'Stage'` instead of the default `'Move'`. Also removed a redundant pre-stage confirmation modal — the Review screen IS the audit step, an extra confirm is friction without value.
+- `22bb64c` — staged entries keyed by UID (not `message_id`) to match the existing `email-list.js` renderer convention, so rows gray out correctly.
+- `18b4273` — call `renderEmailList()` after staging so the visual indicator updates without requiring a manual refresh.
+
+### Collateral bugs found and fixed
+
+Three pre-existing bugs surfaced while testing against Rick's real "Swarna" two-message exchange (a Gmail-mobile picture message with no body text, two attached images):
+
+1. **Live email viewer dropped image-only emails entirely (`8c4696c`, regression fix in `9f98d17`):** Gmail mobile attaches images with BOTH `Content-Disposition: attachment` AND `Content-ID`. The old `fetch_full` logic treated any image part with a Content-ID as inline and skipped it from the attachments list — even when the html body had no `cid:` references. Result: invisible to the user.
+
+   Fix: pre-scan the html for actually-referenced cids, only treat a part as inline if its Content-ID is in that set. Also added a visually-empty-body detector in `renderEmailContent` that falls through to a placeholder when the html is just `<div dir="auto"></div>` and attachments are present.
+
+   The `9f98d17` follow-up removed a redundant `import re` inside `fetch_full` that was triggering `UnboundLocalError` — Python compile-time scoping promoted all `re` references in the function to local, the new pre-scan code used `re` before the inner import statement, hit unbound local. Module already imports `re` at the top, so the inner imports were pure cruft.
+
+2. **Archived email viewer had the same bug (`1a0c639`):** `web/blueprints/api/emails.py` has its own parsing logic (separate from `fetch_full`) for the `/api/folders/<folder_id>/emails/<message_id>` route. Same too-eager Content-ID handling. Fixed with the same approach, factored into a `_collect_referenced_cids(msg)` helper used by both `get_archived_email` and `download_archived_attachment` (must match filtering so indices line up).
+
+### Verified end-to-end
+
+Real two-message exchange on NCF: header-walk finds both ends (INBOX uid=129995 + Sent uid=129993) in 0.88s, no truncation, no timeout. Stage Thread button → folder picker → "Stage" → both messages staged with correct `sourceFolder`. Review screen groups them under destination. Commit succeeds. Both messages decrypt cleanly from disk with full MIME tree intact (both image/jpeg parts preserved at original byte counts).
+
+### Today's commit chain
+
+| Commit | What |
+|---|---|
+| `c3ee80f` | (May 16, Apollo) Stage Thread design doc |
+| `20b2337` | Stage Thread: backend |
+| `93cdf4d` | Stage Thread: frontend |
+| `8c4696c` | Live viewer: fix image-only emails appearing blank |
+| `9f98d17` | Fix UnboundLocalError regression from 8c4696c |
+| `991f58d` | Modal z-index above email viewer overlay |
+| `7f61164` | Stage Thread polish: confirm button label, drop redundant confirmation |
+| `22bb64c` | Stage Thread: key staged entries by UID for visual indicator |
+| `18b4273` | Stage Thread: re-render list after staging so rows gray out |
+| `1a0c639` | Archive viewer: same image-only fix as the live viewer |
+
+### Deferred
+
+- IMAP THREAD extension optimization (Phase 2 per design doc). Worth measuring on real workloads first to see if header-walk is actually slow enough to need it.
+- Account-level "also search Inbox when threading from other folders" setting (Phase 2).
+- Pre-stage thread visualization (Phase 3 — Rick's call was that the Review screen is enough).
+- Archived viewer's "(No content)" string could be updated to match the live viewer's friendlier "(This message has no text — see attachments above.)" — minor consistency polish, not a bug.
+- Dev probe scripts (`scripts/probe_*.py`) — keep for now while the feature is fresh; clean up post-1.0.
+
+---
+
+## May 16, 2026 — Stage Thread design doc (Apollo)
+
+Drafted `docs/Stage_Thread_Plan.md` (242 lines) on Apollo: a "Stage thread to..." action for the live email viewer. One-click filing of an entire conversation across Inbox and Sent. Scope intentionally narrow — live IMAP only, no archive-side threading, no schema changes, no recipient-based bulk pull. Pushed as `c3ee80f`. Build slated for the next session.
+
+---
+
 ## May 11, 2026 — Remove dead legacy commit routes
 
 **Participants:** Rick, Claude (Opus 4.7) — back on the MacBook.
