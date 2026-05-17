@@ -4,6 +4,54 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## May 17, 2026 — Polish: Delete→Trash rename, prev/next nav, Flagging design doc
+
+Three polish items after Stage Thread shipped this morning.
+
+### Archive folder right-click: "Delete" → "Trash" (commit `5fd688a`)
+
+The action soft-deletes a folder (sets `deleted_at`) — folders go to Trash where they can be restored. The flow always said "Move to Trash" on the confirm button and in the body, but the menu label and modal title said "Delete", which was misleading. Renamed both. Kept the danger styling and trash icon — still a destructive action even if reversible. Internal function name `deleteFolder` left unchanged; renaming would touch a dozen call sites for no user-facing benefit. Trash view permanent-delete and Settings account-delete still correctly say "Delete" (those are genuinely destructive).
+
+### Flagging feature design doc (commit `1810a5b`)
+
+Drafted `docs/Flagging_Plan.md` (225 lines) for a single-color star/flag feature on archived emails. Scope decisions made during the conversation:
+
+- Archive-only. Rick: "I would not flag emails on the IMAP server by the way, that's mail client territory."
+- Single color, not multiple. Solo-practitioner workflow doesn't need a taxonomy; that's what folders are for.
+- Theme-aware via `--color-star` CSS variable, defaulting to `--color-primary` per theme. If any theme reads poorly, override per-theme.
+- Toggle in the viewer action bar only, NOT in list rows. Rationale: list rows are visually busy already, and the decision to flag happens after reading, not while scanning.
+- Read-only star indicator on flagged list rows so users can see what they've flagged without opening each email.
+- "Starred" pseudo-folder in sidebar (near Trash) showing all flagged emails across the archive, sorted by `flagged_at DESC`.
+- Schema: `flagged_at INTEGER` column (null = unflagged). Storing a timestamp instead of a boolean costs the same and gains free sortability for the pseudo-folder.
+- Keyboard shortcut: `s` in the viewer.
+
+Build slated for next session, 6-8 hour estimate.
+
+### Prev/Next navigation for archived emails (commit `eb7fede`)
+
+Chevron-up (previous, newer) and chevron-down (next, older) buttons in the viewer action bar. Scope decisions:
+
+- Archive folder views only. Rick: "I had thought of the prev/next only being active within archive folders, not search results." Buttons hidden (not disabled) for live IMAP, search results, and import previews — absence is intentional rather than broken.
+- Disabled at list boundaries, no wraparound.
+- Placement: end of the action row, after existing action icons, before the close-X. Read order: actions on this email → navigate to a different email → close.
+- Keyboard shortcuts: `j` (next/older), `k` (previous/newer), `Escape` (close). Chose `j`/`k` over arrow keys because arrows would conflict with scrolling the email body. Skipped when an input has focus or modifier keys are held.
+
+Verified end-to-end against Rick's real archive.
+
+### Today's commit chain (this afternoon)
+
+| Commit | What |
+|---|---|
+| `5fd688a` | Rename archive-folder 'Delete' action to 'Trash' |
+| `1810a5b` | Add Flagging Plan design doc |
+| `eb7fede` | Add prev/next navigation for archived emails |
+
+### What's pending for next session
+
+- Build the flagging feature per `docs/Flagging_Plan.md`. Sized for a single session.
+
+---
+
 ## May 17, 2026 — Stage Thread feature: build and test
 
 **Participants:** Rick, Claude (Opus 4.7) — back on the MacBook (primary dev machine).
