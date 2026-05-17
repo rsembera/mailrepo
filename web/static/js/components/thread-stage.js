@@ -18,6 +18,7 @@
 import { state, updateStagedBadge } from '../state.js';
 import { showAlert } from '../modals.js';
 import { openChangeDestinationModal } from './staging.js';
+import { renderEmailList } from './email-list.js';
 
 /**
  * Open the Stage Thread flow.
@@ -138,6 +139,7 @@ async function _findAndStageThread({ accountId, folder, uid, subject, destinatio
     }
 
     updateStagedBadge();
+    renderEmailList();
 
     // Light status feedback. Skip the modal for the common case (no
     // duplicates, no truncation, no timeout) — the badge update is
