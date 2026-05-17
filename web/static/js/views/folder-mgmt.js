@@ -301,9 +301,14 @@ export async function deleteFolder(folderId) {
     const descendantCount = countDescendants(folderId);
     const deletedFolderIds = collectDescendantIds(folderId);
     
-    // Check if we're currently viewing any of the folders being deleted
-    const viewingDeletedFolder = state.currentView?.type === 'folder' && 
-        deletedFolderIds.includes(state.currentView?.id);
+    // Check if we're currently viewing any of the folders being deleted.
+    // Use loose equality (==) via .some() because state.currentView.id can
+    // arrive as a string (from sidebar row's dataset.id) while
+    // deletedFolderIds holds numbers from state.folders[].id. Array
+    // .includes() would silently fail this comparison.
+    const currentId = state.currentView?.id;
+    const viewingDeletedFolder = state.currentView?.type === 'folder' &&
+        deletedFolderIds.some(fid => fid == currentId);
     
     let message = `Move "${folder.name}" to trash?`;
     if (descendantCount > 0) {

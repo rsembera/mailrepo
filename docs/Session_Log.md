@@ -67,9 +67,15 @@ The `empty_trash` endpoint required no logic change — it already scoped to `fo
 | `dbb1e81` | Flagging: 's' keyboard shortcut |
 | `581d17e` | Decouple individually-trashed emails from their folder |
 
-### What's pending
+### Trash decoupling tested + a string/number bug surfaced
 
-- **Manual test of the trash decoupling.** The flagging feature was tested end-to-end against real data. The trash fix shipped without Rick walking through the failing scenario again; the logic is sound but a real-world walkthrough would confirm. Worth doing before 1.0.
+Rick tested the decoupling fix and reported a separate bug: trashing a folder didn't update the main view — the Testing folder vanished from the sidebar but the main pane still showed its contents and email count.
+
+Tracked it to a string-vs-number mismatch in `deleteFolder`. The sidebar passes `row.dataset.id` (always a string) through `onFolderSelect(id)` → `selectView({ type: 'folder', id })`, so `state.currentView.id` is a string when set from a sidebar click. But `deletedFolderIds` is built from `state.folders[].id` (numbers from the backend). Array `.includes()` is strict equality, so `[33].includes("33")` was silently false — the view-clearing branch never fired.
+
+Fix in `eaba6ed` (one-liner in folder-mgmt.js): use `.some(fid => fid == currentId)` instead of `.includes`, matching the loose-equality pattern used elsewhere in the codebase for folder ID comparisons. Verified working.
+
+### What's pending
 - **Apollo pull.** That machine is now several commits behind; pull before next session there.
 - **Probe scripts cleanup post-1.0:** `/tmp/add_flagged_at.py`, `/tmp/decouple_trash.py` aren't checked into the repo (one-off migrations only Rick runs), but worth noting they exist and what they did for any future archeology.
 
