@@ -467,7 +467,13 @@ function handleImportUnmount(importId) {
             railBtns.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             
-            // Switch view
+            // Switch view. Clear starred context if leaving it.
+            if (view !== 'starred') {
+                try {
+                    const m = await import('./views/starred.js');
+                    m.clearStarredContext();
+                } catch (e) {}
+            }
             switch(view) {
                 case 'mail':
                     showMailView();

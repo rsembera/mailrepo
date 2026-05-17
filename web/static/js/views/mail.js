@@ -2141,17 +2141,33 @@ window.toggleStarFromViewer = async function() {
         // Refresh the viewer's star icon
         _updateStarButton(ctx);
 
-        // Refresh the email list rows so the indicator updates immediately
-        if (typeof renderEmailList === 'function') {
-            renderEmailList();
-        }
-
-        // Refresh the Starred rail badge count
+        // Decide which renderer to call based on context. Calling
+        // renderEmailList() while the user is in the Starred view would
+        // overwrite the Starred template with the regular folder-list
+        // template, which we very much do not want.
+        let inStarredCtx = false;
         try {
             const starredModule = await import('./starred.js');
+            inStarredCtx = starredModule.isInStarredContext();
             starredModule.updateStarredBadge();
+            if (inStarredCtx) {
+                // Starred view: if we just unstarred, drop the row (and
+                // re-render via the Starred renderer). If we just starred
+                // — possible after a previous unstar that left the row,
+                // though we drop on unstar so this shouldn't actually
+                // happen — do nothing.
+                if (!newFlagged) {
+                    starredModule.dropFromStarredList(ctx.messageId);
+                }
+            }
         } catch (e) {
             // Non-critical; badge will refresh on next view load
+        }
+
+        // For non-starred views, refresh the regular email list so the
+        // indicator updates immediately on the visible rows.
+        if (!inStarredCtx && typeof renderEmailList === 'function') {
+            renderEmailList();
         }
     } catch (e) {
         console.error('Star toggle failed:', e);

@@ -20,6 +20,7 @@ let contextMeta = null;
 let emailList = null;
 let starredEmails = [];
 let searchQuery = '';
+let inStarredContext = false;
 
 /**
  * Initialize starred view. Called once at app startup with the DOM
@@ -53,6 +54,7 @@ export async function showStarredView() {
     // a folder/account/search context. Using 'starred' as a distinct type;
     // openEmailViewer treats it like a folder view (archive context).
     state.currentView = { type: 'starred' };
+    inStarredContext = true;
 
     await loadStarredEmails();
     renderStarredView();
@@ -188,6 +190,7 @@ window.openStarredEmail = async function(emailId, folderId) {
         date: e.date,
         flagged_at: e.flagged_at,
     }));
+    inStarredContext = true;
     if (typeof window.openEmailViewer === 'function') {
         await window.openEmailViewer(emailId);
     }
@@ -224,4 +227,44 @@ export async function updateStarredBadge() {
     } catch (e) {
         // Badge stays as-is on error; not critical.
     }
+}
+
+
+/**
+ * Remove an email from the in-memory starred list and re-render.
+ * Called by toggleStarFromViewer when the user unstars an email while
+ * viewing it from within the Starred context — without this, the row
+ * would stay in the list visually contradicting its new (unflagged)
+ * state.
+ *
+ * Safe to call when not in starred context; it just no-ops if the id
+ * isn\'t in the list.
+ */
+export function dropFromStarredList(emailId) {
+    if (!inStarredContext) return;
+    const idx = starredEmails.findIndex(e => (e.id == emailId));
+    if (idx < 0) return;
+    starredEmails.splice(idx, 1);
+    // Also drop from state.emails so prev/next walks the updated set.
+    if (state.emails && Array.isArray(state.emails)) {
+        const sidx = state.emails.findIndex(e => (e.id == emailId));
+        if (sidx >= 0) state.emails.splice(sidx, 1);
+    }
+    // Re-render the view so the list under the viewer updates immediately.
+    // Without this, the row stays visible until the user navigates away
+    // and back. emailList might not be available if we got here via some
+    // unexpected path \u2014 guard accordingly.
+    if (emailList) {
+        renderStarredView();
+    }
+}
+
+/** Returns true if the user opened an email from the Starred view. */
+export function isInStarredContext() {
+    return inStarredContext;
+}
+
+/** Called when the user navigates away from the starred context. */
+export function clearStarredContext() {
+    inStarredContext = false;
 }
