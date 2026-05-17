@@ -359,14 +359,31 @@ def get_archived_email(folder_id, message_id):
 
 @api_bp.route("/messages/<int:message_id>", methods=["DELETE"])
 def delete_message(message_id):
-    """Soft-delete a message (move to trash)."""
-    message = Database.fetchone("SELECT id FROM messages WHERE id = ?", (message_id,))
+    """Soft-delete a message (move to trash).
+
+    Detaches the message from its folder by moving folder_id ->
+    original_folder_id, then setting folder_id to NULL. This ensures
+    that if the original folder is later permanently deleted, the
+    cascade won't take this individually-trashed message with it.
+    The user sees the email's original location preserved via
+    original_folder_id; restore reads from that.
+    """
+    message = Database.fetchone(
+        "SELECT id, folder_id FROM messages WHERE id = ?",
+        (message_id,)
+    )
     if not message:
         return jsonify({"error": "Message not found"}), 404
-    
+
     now = int(time.time())
     Database.execute(
-        "UPDATE messages SET deleted_at = ? WHERE id = ?",
+        """
+        UPDATE messages
+        SET deleted_at = ?,
+            original_folder_id = folder_id,
+            folder_id = NULL
+        WHERE id = ?
+        """,
         (now, message_id)
     )
     Database.commit()
@@ -375,22 +392,69 @@ def delete_message(message_id):
 
 @api_bp.route("/messages/<int:message_id>/restore", methods=["POST"])
 def restore_message(message_id):
-    """Restore a message from trash."""
+    """Restore a message from trash.
+
+    Re-attaches the message to its original folder by moving
+    original_folder_id -> folder_id, then clearing original_folder_id
+    and deleted_at.
+
+    If the original folder no longer exists or is itself trashed, the
+    caller can pass {"folder_id": N} in the body to specify an alternate
+    destination. If neither is available, returns 409 so the frontend
+    can prompt the user.
+    """
     message = Database.fetchone(
-        "SELECT id, deleted_at FROM messages WHERE id = ?",
+        "SELECT id, deleted_at, original_folder_id FROM messages WHERE id = ?",
         (message_id,)
     )
     if not message:
         return jsonify({"error": "Message not found"}), 404
     if not message["deleted_at"]:
         return jsonify({"error": "Message is not in trash"}), 400
-    
+
+    # Caller may override the destination (used when the original folder
+    # is gone or trashed and the user picks elsewhere from a modal).
+    data = request.get_json(silent=True) or {}
+    requested_dest = data.get("folder_id")
+
+    destination_id = None
+    if requested_dest is not None:
+        dest = Database.fetchone(
+            "SELECT id FROM folders WHERE id = ? AND deleted_at IS NULL",
+            (requested_dest,)
+        )
+        if not dest:
+            return jsonify({"error": "Destination folder not found or in trash"}), 400
+        destination_id = dest["id"]
+    elif message["original_folder_id"] is not None:
+        # Try the original folder; only use it if it still exists and is alive
+        dest = Database.fetchone(
+            "SELECT id FROM folders WHERE id = ? AND deleted_at IS NULL",
+            (message["original_folder_id"],)
+        )
+        if dest:
+            destination_id = dest["id"]
+
+    if destination_id is None:
+        # Original is gone (or trashed) and caller didn't pick. Frontend
+        # should present a folder picker.
+        return jsonify({
+            "error": "Original folder is unavailable. Please choose a destination.",
+            "needs_destination": True,
+        }), 409
+
     Database.execute(
-        "UPDATE messages SET deleted_at = NULL WHERE id = ?",
-        (message_id,)
+        """
+        UPDATE messages
+        SET deleted_at = NULL,
+            folder_id = ?,
+            original_folder_id = NULL
+        WHERE id = ?
+        """,
+        (destination_id, message_id)
     )
     Database.commit()
-    return jsonify({"success": True})
+    return jsonify({"success": True, "folder_id": destination_id})
 
 
 @api_bp.route("/messages/<int:message_id>/permanent", methods=["DELETE"])
@@ -541,18 +605,28 @@ def update_message(message_id):
 
 @api_bp.route("/trash/emails", methods=["GET"])
 def get_trashed_emails():
-    """Get all trashed emails."""
+    """Get all trashed emails.
+
+    Individually-trashed emails are now detached from their folder
+    (folder_id IS NULL, original_folder_id holds the previous location).
+    We expose the original location as folder_name/folder_id so the
+    frontend can show 'Originally in: X' without knowing about the
+    rename. The original folder may itself be trashed or deleted — the
+    LEFT JOIN handles that by leaving folder_name as NULL.
+    """
     messages = Database.fetchall(
         """
-        SELECT m.id, m.subject, m.sender, m.date, m.deleted_at, m.folder_id, m.flagged_at, f.name as folder_name
+        SELECT m.id, m.subject, m.sender, m.date, m.deleted_at,
+               m.original_folder_id AS folder_id, m.flagged_at,
+               f.name AS folder_name, f.deleted_at AS folder_deleted_at
         FROM messages m
-        LEFT JOIN folders f ON m.folder_id = f.id
+        LEFT JOIN folders f ON m.original_folder_id = f.id
         WHERE m.deleted_at IS NOT NULL
         ORDER BY m.deleted_at DESC
         """,
         ()
     )
-    
+
     emails = [{
         "id": m["id"],
         "subject": m["subject"],
@@ -561,9 +635,14 @@ def get_trashed_emails():
         "deleted_at": m["deleted_at"],
         "folder_id": m["folder_id"],
         "folder_name": m["folder_name"],
+        # True if the original folder is itself in trash or gone, which
+        # affects the restore flow (user will need to pick a destination)
+        "original_folder_unavailable": (
+            m["folder_id"] is None or m["folder_deleted_at"] is not None
+        ),
         "flagged_at": m["flagged_at"],
     } for m in messages]
-    
+
     return jsonify({"emails": emails})
 
 

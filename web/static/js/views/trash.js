@@ -433,7 +433,17 @@ window.toggleTrashSortDropdown = toggleTrashSortDropdown;
  */
 function renderTrashEmailItem(email) {
     const deletedDate = new Date(email.deleted_at * 1000);
-    
+
+    // Show 'Originally in: X' when the original folder still exists and
+    // is alive. If the original is gone or in trash, the backend marks
+    // original_folder_unavailable; we surface that subtly so the user
+    // knows a destination prompt will appear on restore.
+    const originLine = email.folder_name
+        ? `<span class="trash-email-origin">Originally in: ${escapeHtml(email.folder_name)}</span>`
+        : (email.original_folder_unavailable
+            ? `<span class="trash-email-origin trash-email-origin-missing">Original folder is gone</span>`
+            : '');
+
     return `
         <div class="trash-management-item trash-email-item" data-id="${email.id}">
             <div class="trash-management-name">
@@ -441,6 +451,7 @@ function renderTrashEmailItem(email) {
                 <div class="trash-email-info">
                     <span class="email-sender">${escapeHtml(extractName(email.sender || ''))}</span>
                     <span class="email-subject">${escapeHtml(email.subject || '(no subject)')}</span>
+                    ${originLine}
                 </div>
             </div>
             <div class="trash-management-date">
@@ -652,18 +663,52 @@ window.switchTrashTab = switchTrashTab;
 /**
  * Restore an email from trash.
  */
-async function restoreEmail(emailId) {
+async function restoreEmail(emailId, destinationFolderId) {
+    /**
+     * Restore an email from trash.
+     *
+     * If destinationFolderId is omitted, the backend tries to restore
+     * to the email's original folder. If that folder is gone or in
+     * trash, the backend returns 409 with needs_destination=true; we
+     * then open the folder-tree picker so the user can choose where
+     * to restore the email, and call this function again with the
+     * picked destination.
+     */
     try {
+        const body = destinationFolderId
+            ? JSON.stringify({ folder_id: destinationFolderId })
+            : JSON.stringify({});
         const response = await fetch(`/api/messages/${emailId}/restore`, {
             method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body,
         });
-        
+
+        if (response.status === 409) {
+            // Original folder is gone/trashed — prompt for a destination
+            const data = await response.json();
+            if (data.needs_destination) {
+                const { openChangeDestinationModal } = await import('../components/staging.js');
+                openChangeDestinationModal({
+                    title: 'Restore email to folder',
+                    confirmLabel: 'Restore',
+                    currentDestId: null,
+                    onConfirm: async (folderId) => {
+                        await restoreEmail(emailId, folderId);
+                    },
+                });
+                return;
+            }
+            showAlert('Error', data.error || 'Failed to restore email');
+            return;
+        }
+
         if (!response.ok) {
             const data = await response.json();
             showAlert('Error', data.error || 'Failed to restore email');
             return;
         }
-        
+
         // Remove from trashed emails and re-render
         trashedEmails = trashedEmails.filter(e => e.id != emailId);
         renderTrashView();

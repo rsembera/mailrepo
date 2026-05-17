@@ -538,3 +538,19 @@
     color: var(--color-text-muted);
     margin-top: 2px;
 }
+
+/* Trash view: "Originally in: X" subtitle on email rows.
+   Helps the user remember which folder a trashed email came from.
+   Muted gray; uses the dotted-warning variant when the original folder
+   is gone (restoring will prompt for a destination). */
+.trash-email-origin {
+    display: block;
+    font-size: 0.8em;
+    color: var(--color-text-muted);
+    margin-top: 2px;
+    font-style: italic;
+}
+
+.trash-email-origin-missing {
+    color: var(--color-text-light);
+}

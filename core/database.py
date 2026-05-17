@@ -249,7 +249,8 @@ CREATE TABLE IF NOT EXISTS folders (
 -- Archived email messages
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    folder_id INTEGER NOT NULL,
+    folder_id INTEGER,
+    original_folder_id INTEGER,
     source_account_id INTEGER,
     message_id TEXT NOT NULL,
     subject TEXT,
@@ -262,6 +263,7 @@ CREATE TABLE IF NOT EXISTS messages (
     flagged_at INTEGER,
     filed_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
     FOREIGN KEY (folder_id) REFERENCES folders(id) ON DELETE CASCADE,
+    FOREIGN KEY (original_folder_id) REFERENCES folders(id) ON DELETE SET NULL,
     FOREIGN KEY (source_account_id) REFERENCES accounts(id) ON DELETE SET NULL
 );
 
