@@ -34,6 +34,39 @@ function _updateStageThreadButton(context) {
     btn.style.display = showIt ? '' : 'none';
 }
 
+/**
+ * Show, hide, and enable/disable the prev/next buttons based on context.
+ * Visible only when viewing an archived email (context.type === 'folder').
+ * Hidden for search-result, live IMAP, and import contexts — those are
+ * either result sets users don\'t browse sequentially, or live mail
+ * which the user said doesn\'t need this.
+ *
+ * When visible, the buttons are disabled at list boundaries (no wrap-around).
+ */
+function _updatePrevNextButtons(context) {
+    const prevBtn = document.getElementById('viewerPrevBtn');
+    const nextBtn = document.getElementById('viewerNextBtn');
+    if (!prevBtn || !nextBtn) return;
+
+    const isArchiveFolder = context && context.type === 'folder' && context.messageId;
+    if (!isArchiveFolder) {
+        prevBtn.style.display = 'none';
+        nextBtn.style.display = 'none';
+        return;
+    }
+
+    prevBtn.style.display = '';
+    nextBtn.style.display = '';
+
+    // Find current email's position in state.emails (the list backing
+    // the current view). state.emails is sorted by date DESC, so the
+    // entry above is newer (prev) and the one below is older (next).
+    const emails = state.emails || [];
+    const idx = emails.findIndex(e => (e.id == context.messageId));
+    prevBtn.disabled = idx <= 0;
+    nextBtn.disabled = idx < 0 || idx >= emails.length - 1;
+}
+
 // Callbacks
 let onButtonStatesUpdate = null;
 
@@ -1124,6 +1157,7 @@ export async function openEmailViewer(emailId, options = {}) {
         // Store context for download/print functions
         currentViewerContext = context;
         _updateStageThreadButton(context);
+        _updatePrevNextButtons(context);
         renderEmailContent(data.email, context);
         
     } catch (error) {
@@ -1592,6 +1626,7 @@ export function closeEmailViewer() {
     document.getElementById('emailViewerOverlay').classList.remove('active');
     currentViewerContext = null;
     _updateStageThreadButton(null);
+    _updatePrevNextButtons(null);
 }
 
 /**
@@ -1952,3 +1987,74 @@ window.stageThreadFromViewer = async function() {
         console.error('Failed to load thread-stage module:', e);
     }
 };
+
+
+/**
+ * Click handler for the viewer prev/next buttons. Also called by
+ * keyboard shortcut handler.
+ *
+ * @param {number} direction - -1 for previous (newer), +1 for next (older)
+ */
+window.viewerNavigate = function(direction) {
+    const ctx = currentViewerContext;
+    if (!ctx || ctx.type !== 'folder' || !ctx.messageId) return;
+
+    const emails = state.emails || [];
+    const idx = emails.findIndex(e => (e.id == ctx.messageId));
+    if (idx < 0) return;
+
+    const newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= emails.length) return;
+
+    const nextEmail = emails[newIdx];
+    const nextId = nextEmail.id || nextEmail.uid;
+    if (nextId == null) return;
+
+    // Reopen the viewer with the new email. openEmailViewer handles all
+    // the loading, context-update, and button-state work.
+    openEmailViewer(nextId);
+};
+
+/**
+ * Keyboard shortcuts for the email viewer:
+ *   j  - next email (older, down the list)
+ *   k  - previous email (newer, up the list)
+ *   Esc - close viewer
+ *
+ * Only active when the viewer is open. Skipped when an input/textarea
+ * has focus so the user can still type freely.
+ *
+ * j/k chosen over arrow keys because arrows would conflict with scrolling
+ * the email body. j/k is Gmail and vim convention. Escape is the universal
+ * modal-close shortcut.
+ */
+document.addEventListener('keydown', (e) => {
+    const overlay = document.getElementById('emailViewerOverlay');
+    if (!overlay || !overlay.classList.contains('active')) return;
+
+    // Don\'t steal keys when the user is typing
+    const tag = (e.target?.tagName || '').toUpperCase();
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return;
+
+    // Ignore when modifier keys are held — those are browser shortcuts
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        if (typeof window.closeEmailViewer === 'function') {
+            window.closeEmailViewer();
+        }
+        return;
+    }
+
+    // Prev/next only when viewing an archive email
+    if (!currentViewerContext || currentViewerContext.type !== 'folder') return;
+
+    if (e.key === 'j') {
+        e.preventDefault();
+        window.viewerNavigate(1);
+    } else if (e.key === 'k') {
+        e.preventDefault();
+        window.viewerNavigate(-1);
+    }
+});

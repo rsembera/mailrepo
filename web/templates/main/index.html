@@ -257,6 +257,12 @@
                 <button class="btn btn-secondary btn-icon" id="loadRemoteBtn" onclick="loadRemoteContent()" title="Load remote images" style="display: none;">
                     <i data-lucide="image"></i>
                 </button>
+                <button class="btn btn-secondary btn-icon" id="viewerPrevBtn" onclick="viewerNavigate(-1)" title="Previous (newer) — press k" style="display: none;">
+                    <i data-lucide="chevron-up"></i>
+                </button>
+                <button class="btn btn-secondary btn-icon" id="viewerNextBtn" onclick="viewerNavigate(1)" title="Next (older) — press j" style="display: none;">
+                    <i data-lucide="chevron-down"></i>
+                </button>
             </div>
             <button class="btn btn-secondary btn-icon" onclick="closeEmailViewer()">
                 <i data-lucide="x"></i>
