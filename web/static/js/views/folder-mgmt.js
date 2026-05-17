@@ -310,7 +310,7 @@ export async function deleteFolder(folderId) {
         message = `Move "${folder.name}" and ${descendantCount} subfolder${descendantCount > 1 ? 's' : ''} to trash?`;
     }
     
-    const confirmed = await showConfirm('Delete Folder', message, { okText: 'Move to Trash' });
+    const confirmed = await showConfirm('Trash Folder', message, { okText: 'Move to Trash' });
     if (!confirmed) return;
     
     try {

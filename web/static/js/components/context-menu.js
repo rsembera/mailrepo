@@ -97,7 +97,7 @@ function _showFolderMenu(folderId, folder) {
         { icon: 'archive', label: 'Move to Retention Vault', action: 'vault' },
         { icon: 'download', label: 'Export\u2026', action: 'export' },
         { divider: true },
-        { icon: 'trash-2', label: 'Delete', action: 'delete', danger: true },
+        { icon: 'trash-2', label: 'Trash', action: 'delete', danger: true },
     ];
     
     let html = '';
