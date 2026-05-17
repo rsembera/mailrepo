@@ -2102,6 +2102,11 @@ document.addEventListener('keydown', (e) => {
     } else if (e.key === 'k') {
         e.preventDefault();
         window.viewerNavigate(-1);
+    } else if (e.key === 's') {
+        e.preventDefault();
+        if (typeof window.toggleStarFromViewer === 'function') {
+            window.toggleStarFromViewer();
+        }
     }
 });
 
