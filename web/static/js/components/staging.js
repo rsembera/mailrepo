@@ -59,7 +59,7 @@ export function openChangeDestinationModal(opts) {
     if (desc) desc.textContent = 'Select a new destination folder:';
 
     const confirmBtn = document.getElementById('confirmStageBtn');
-    if (confirmBtn) confirmBtn.textContent = 'Move';
+    if (confirmBtn) confirmBtn.textContent = opts.confirmLabel || 'Move';
 
     // Pre-select the current destination so the tree highlights it.
     // 'unassigned' isn't a real folder ID — fall through to null in that case.

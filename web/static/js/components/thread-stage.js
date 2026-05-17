@@ -40,6 +40,7 @@ export async function openStageThreadModal(opts) {
     // a callback rather than letting it run staging logic itself.
     openChangeDestinationModal({
         title: 'Stage thread to folder',
+        confirmLabel: 'Stage',
         // No current destination to pre-highlight; user is making a fresh pick
         currentDestId: null,
         onConfirm: async (destinationFolderId) => {
@@ -88,18 +89,6 @@ async function _findAndStageThread({ accountId, folder, uid, subject, destinatio
         );
         return;
     }
-
-    // Build a confirmation message. For typical 2–6 message threads this
-    // is just a "stage N to Folder" sanity check. For unusually large
-    // threads (mailing-list style), reframe it as a question rather than
-    // a confirmation.
-    const confirmed = await _confirmStageCount({
-        count: messages.length,
-        destinationFolderId,
-        truncated: result.truncated,
-        timedOut: result.timed_out,
-    });
-    if (!confirmed) return;
 
     // Stage each message. Mirror the shape that staging.js produces for
     // IMAP-sourced emails: state.staged is a Map keyed by email id, value
@@ -163,42 +152,6 @@ async function _findAndStageThread({ accountId, folder, uid, subject, destinatio
         }
         await showAlert('Thread staged', notes.join(' '));
     }
-}
-
-/**
- * Confirmation step between thread-find and the actual stage write.
- *
- * For small threads (≤ 10 messages) the confirm is reassurance ("about
- * to stage 4 to ClientName — go?"). For large threads it reframes
- * as caution ("47 messages — unusually large, continue?").
- */
-async function _confirmStageCount({ count, destinationFolderId, truncated, timedOut }) {
-    // Find the destination folder's name for the confirmation text
-    const folder = (state.folders || []).find(f => String(f.id) === String(destinationFolderId));
-    const destName = folder?.name || 'the chosen folder';
-
-    let title;
-    let body;
-    if (count > 25 || truncated) {
-        title = 'Stage large thread?';
-        body = `Found ${count} message${count === 1 ? '' : 's'}`
-            + (truncated ? ' (and stopped at the limit)' : '')
-            + `. That's unusually large for a single conversation — `
-            + `mailing-list threads can look like this. Continue staging them to ${destName}?`;
-    } else {
-        title = 'Stage thread';
-        body = `Found ${count} message${count === 1 ? '' : 's'} in this thread. `
-            + `Stage them to ${destName}?`;
-    }
-    if (timedOut) {
-        body += ' (The search timed out, so some messages may be missing.)';
-    }
-
-    // Use a small inline confirm. showAlert returns void; we need a
-    // proper yes/no, so use the same modal helper the rest of the app
-    // uses for confirmations.
-    const { showConfirm } = await import('../modals.js');
-    return await showConfirm(title, body);
 }
 
 // Expose for inline onclick wiring from the viewer template
