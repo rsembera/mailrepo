@@ -505,3 +505,26 @@
 .sort-option:last-child {
     border-radius: 0 0 var(--radius-md) var(--radius-md);
 }
+
+/* ============================================
+   STAR / FLAG INDICATOR ON EMAIL LIST ROWS
+   Read-only indicator showing flagged status. Toggle happens in
+   the email viewer. Rows where flagged_at is null show nothing —
+   no empty-star placeholder, to keep unflagged rows visually clean.
+   ============================================ */
+
+.email-list-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    flex-shrink: 0;
+}
+
+.email-list-star {
+    width: 14px;
+    height: 14px;
+    color: var(--color-star);
+    fill: var(--color-star);
+    stroke: var(--color-star);
+    flex-shrink: 0;
+}
