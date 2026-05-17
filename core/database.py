@@ -259,6 +259,7 @@ CREATE TABLE IF NOT EXISTS messages (
     filepath TEXT NOT NULL,
     body_text TEXT,
     deleted_at INTEGER,
+    flagged_at INTEGER,
     filed_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
     FOREIGN KEY (folder_id) REFERENCES folders(id) ON DELETE CASCADE,
     FOREIGN KEY (source_account_id) REFERENCES accounts(id) ON DELETE SET NULL

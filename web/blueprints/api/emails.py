@@ -138,7 +138,7 @@ def search_emails():
         placeholders = ",".join("?" * len(folder_ids))
         results = Database.fetchall(
             f"""
-            SELECT m.id, m.folder_id, m.subject, m.sender, m.date, f.name as folder_name
+            SELECT m.id, m.folder_id, m.subject, m.sender, m.date, m.flagged_at, f.name as folder_name
             FROM messages m
             JOIN messages_fts fts ON m.id = fts.rowid
             JOIN folders f ON m.folder_id = f.id
@@ -151,7 +151,7 @@ def search_emails():
     else:
         results = Database.fetchall(
             """
-            SELECT m.id, m.folder_id, m.subject, m.sender, m.date, f.name as folder_name
+            SELECT m.id, m.folder_id, m.subject, m.sender, m.date, m.flagged_at, f.name as folder_name
             FROM messages m
             JOIN messages_fts fts ON m.id = fts.rowid
             JOIN folders f ON m.folder_id = f.id
@@ -190,6 +190,7 @@ def search_emails():
         "subject": r["subject"],
         "sender": r["sender"],
         "date": r["date"],
+        "flagged_at": r["flagged_at"],
     } for r in results]
     
     return jsonify({"query": query, "count": len(emails), "emails": emails})
@@ -204,7 +205,7 @@ def get_folder_emails(folder_id):
     
     messages = Database.fetchall(
         """
-        SELECT id, subject, sender, date, filepath
+        SELECT id, subject, sender, date, filepath, flagged_at
         FROM messages WHERE folder_id = ? AND deleted_at IS NULL
         ORDER BY date DESC
         """,
@@ -216,6 +217,7 @@ def get_folder_emails(folder_id):
         "subject": m["subject"],
         "sender": m["sender"],
         "date": m["date"],
+        "flagged_at": m["flagged_at"],
     } for m in messages]
     
     return jsonify({"emails": emails})
@@ -231,7 +233,7 @@ def get_archived_email(folder_id, message_id):
     """Get a single archived email with full content."""
     message = Database.fetchone(
         """
-        SELECT id, folder_id, subject, sender, date, filepath
+        SELECT id, folder_id, subject, sender, date, filepath, flagged_at
         FROM messages WHERE id = ? AND folder_id = ?
         """,
         (message_id, folder_id)
@@ -255,6 +257,7 @@ def get_archived_email(folder_id, message_id):
             "to": _decode_header(msg.get("To", "")),
             "cc": _decode_header(msg.get("Cc", "")),
             "date": msg.get("Date", ""),
+            "flagged_at": message["flagged_at"],
             "text_body": None,
             "html_body": None,
             "attachments": [],
@@ -451,7 +454,7 @@ def get_trashed_emails():
     """Get all trashed emails."""
     messages = Database.fetchall(
         """
-        SELECT m.id, m.subject, m.sender, m.date, m.deleted_at, m.folder_id, f.name as folder_name
+        SELECT m.id, m.subject, m.sender, m.date, m.deleted_at, m.folder_id, m.flagged_at, f.name as folder_name
         FROM messages m
         LEFT JOIN folders f ON m.folder_id = f.id
         WHERE m.deleted_at IS NOT NULL
@@ -468,6 +471,7 @@ def get_trashed_emails():
         "deleted_at": m["deleted_at"],
         "folder_id": m["folder_id"],
         "folder_name": m["folder_name"],
+        "flagged_at": m["flagged_at"],
     } for m in messages]
     
     return jsonify({"emails": emails})
