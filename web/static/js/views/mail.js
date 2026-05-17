@@ -20,6 +20,20 @@ let emailList = null;
 // Current email viewer context (for download/print functions)
 let currentViewerContext = null;
 
+/**
+ * Show or hide the "Stage thread to..." button based on the viewer context.
+ * The button only makes sense for live IMAP mail (context.type === 'account').
+ * Archived folder views and import previews don't have an IMAP UID to
+ * thread from, so the button is hidden.
+ */
+function _updateStageThreadButton(context) {
+    const btn = document.getElementById('stageThreadBtn');
+    if (!btn) return;
+    const showIt = context && context.type === 'account'
+        && context.accountId && context.folder && context.uid;
+    btn.style.display = showIt ? '' : 'none';
+}
+
 // Callbacks
 let onButtonStatesUpdate = null;
 
@@ -1109,6 +1123,7 @@ export async function openEmailViewer(emailId, options = {}) {
         
         // Store context for download/print functions
         currentViewerContext = context;
+        _updateStageThreadButton(context);
         renderEmailContent(data.email, context);
         
     } catch (error) {
@@ -1564,6 +1579,7 @@ function getAttachmentDownloadUrl(context, index) {
 export function closeEmailViewer() {
     document.getElementById('emailViewerOverlay').classList.remove('active');
     currentViewerContext = null;
+    _updateStageThreadButton(null);
 }
 
 /**
@@ -1898,3 +1914,29 @@ function initEmailViewerListeners() {
 // Expose to window for inline onclick handlers
 window.openEmailViewer = openEmailViewer;
 window.closeEmailViewer = closeEmailViewer;
+
+
+/**
+ * Click handler for the "Stage thread to..." button in the email viewer.
+ * Reads the current viewer context (which only contains the IMAP account
+ * and UID details when type === 'account') and lazy-loads the thread-stage
+ * module. The module owns the folder-picker / find / confirm / stage flow.
+ */
+window.stageThreadFromViewer = async function() {
+    const ctx = currentViewerContext;
+    if (!ctx || ctx.type !== 'account') {
+        console.warn('stageThreadFromViewer called outside a live IMAP context');
+        return;
+    }
+    try {
+        const mod = await import('../components/thread-stage.js');
+        await mod.openStageThreadModal({
+            accountId: ctx.accountId,
+            folder: ctx.folder,
+            uid: String(ctx.uid),
+            subject: currentViewerContext?.emailData?.subject || '',
+        });
+    } catch (e) {
+        console.error('Failed to load thread-stage module:', e);
+    }
+};
