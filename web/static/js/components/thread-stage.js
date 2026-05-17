@@ -98,10 +98,12 @@ async function _findAndStageThread({ accountId, folder, uid, subject, destinatio
     let added = 0;
     let skipped = 0;
     for (const m of messages) {
-        // Use the message_id as the staged-map key when available; fall
-        // back to a synthetic key combining folder+uid. The Review screen
-        // doesn't care about the key, only that it's stable and unique.
-        const key = m.message_id || `${m.folder}::${m.uid}`;
+        // Key by UID to match the existing staging convention (see
+        // staging.js line ~466: state.staged.set(emailId, ...) where
+        // emailId is email.uid || email.id). This is what the email-list
+        // renderer checks via state.staged.has(emailId) to gray out
+        // staged rows.
+        const key = m.uid;
         if (state.staged.has(key)) {
             skipped += 1;
             continue;
