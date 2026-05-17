@@ -4,6 +4,78 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## May 18, 2026 — Flagging feature build + trash decoupling
+
+**Participants:** Rick, Claude (Opus 4.7) on the MacBook.
+
+Two pieces of work today: built the flagging feature spec'd in `docs/Flagging_Plan.md`, then found and fixed a real data-model bug in the Trash that had been latent since launch.
+
+### Flagging feature: built and shipped
+
+Followed the design doc closely. Five checkpoints, each landed as its own commit so each step was independently testable:
+
+1. **`dea0f0d`** — schema column (`flagged_at INTEGER` on messages) + threaded the field through the four existing endpoints (search, folder emails, single email, trashed emails). Foundation, nothing user-visible yet.
+
+2. **`93e195c`** — `PATCH /api/messages/<id>/flag` endpoint, star toggle button in the viewer's action bar (archive-only, hidden otherwise), theme-aware via a new `--color-star` CSS variable defaulting to `--color-primary` per theme. End-to-end toggle path works: click → server update → icon swap.
+
+3. **`b713fd5`** — read-only star indicator on flagged email-list rows. Placed next to the date so the row layout stays consistent across flagged/unflagged rows. Unflagged rows show nothing — no empty-star placeholders.
+
+4. **`72933aa`** — Starred pseudo-folder in the sidebar with its own view: `GET /api/messages/flagged` returns all flagged emails sorted by `flagged_at DESC`, each row shows the folder path so the user knows where each starred email lives. Clicking opens the standard viewer; prev/next walks the starred set.
+
+5. **`dbb1e81`** — `s` keyboard shortcut to toggle the star from the viewer. Verified `s` was unbound before claiming it.
+
+**Polish along the way (`7ad1102`):** context-aware unstar. Unstarring from within the Starred view drops the row immediately rather than leaving a stale entry behind. Required a small dance: `inStarredContext` flag in `starred.js`, exported `dropFromStarredList` for the mail.js toggle handler to call, and avoiding `renderEmailList()` in that context (which would have overwritten the Starred template with the regular folder-list template — that produced a clear "rows lose folder paths and gain action buttons" bug during testing).
+
+Rick noted during testing that unstarring from a regular folder view should NOT remove the row (the list isn't filtered by star status); only the Starred view filters that way. The context check honors that.
+
+### Trash decoupling: data model fix
+
+Rick reported a bug: trash one email individually, then trash the folder containing another email, then click "Delete Folders" on the Folders tab → both emails disappear. The Folders tab and Emails tab implied independent collections but the FK cascade (`messages.folder_id REFERENCES folders(id) ON DELETE CASCADE`) made them coupled. Individually-trashed emails whose folder happened to also be in trash were cascade-deleted along with the folder.
+
+Diagnosed and discussed two fix tiers:
+- **"V1" fix:** clearer messaging on the Delete Folders button. Rick called this out as papering over the problem: "you wouldn't necessarily know, clicking the Delete Folders button, that it will also delete emails that are listed separately in the Emails tab."
+- **The right fix:** decouple individually-trashed emails from their folder entirely, so the cascade can't reach them.
+
+Took the right fix. Schema change (`581d17e`):
+- `messages.folder_id` is now nullable (was `NOT NULL`)
+- New `messages.original_folder_id INTEGER` with `FK ON DELETE SET NULL`
+
+When an email is individually trashed, `folder_id` moves to `original_folder_id` and `folder_id` is set to `NULL`. The cascade can no longer reach it. Restore reverses the move; if the original folder is gone or itself trashed, the backend returns 409 with `needs_destination=true` and the frontend opens the folder picker.
+
+Pre-release direct schema edit, applied to Rick's existing DB via `/tmp/decouple_trash.py` (table rebuild — SQLite can't `ALTER` nullability in place). Idempotent. 1634 messages preserved across the migration with zero detached (Rick had no individually-trashed emails at migration time).
+
+Endpoint changes in `web/blueprints/api/emails.py`:
+- `delete_message` sets `original_folder_id = folder_id`, `folder_id = NULL`
+- `restore_message` re-attaches via `original_folder_id`; returns 409 with `needs_destination` flag if the original is gone or trashed
+- `get_trashed_emails` reads from `original_folder_id` (now where the source folder lives for trashed emails). Adds `original_folder_unavailable` flag
+
+Frontend (`trash.js`):
+- Trash email rows now show "Originally in: <folder>" beneath the subject. Falls back to "Original folder is gone" (muted) when the source folder is unavailable.
+- `restoreEmail` handles the 409 by opening the existing folder-tree picker with `confirmLabel: 'Restore'`, then re-calls itself with the chosen folder_id.
+
+The `empty_trash` endpoint required no logic change — it already scoped to `folder_id IN (trashed_folders)`, which now correctly excludes individually-trashed emails since they have `folder_id IS NULL`. The two Trash tabs are now genuinely independent.
+
+### Commit chain (today)
+
+| Commit | What |
+|---|---|
+| `dea0f0d` | Flagging: schema column + thread flagged_at through existing endpoints |
+| `93e195c` | Flagging: PATCH /flag endpoint + viewer star toggle |
+| `b713fd5` | Flagging: read-only star indicator on flagged list rows |
+| `72933aa` | Flagging: Starred pseudo-folder view |
+| `7ad1102` | Flagging: context-aware unstar in Starred view |
+| `dbb1e81` | Flagging: 's' keyboard shortcut |
+| `581d17e` | Decouple individually-trashed emails from their folder |
+
+### What's pending
+
+- **Manual test of the trash decoupling.** The flagging feature was tested end-to-end against real data. The trash fix shipped without Rick walking through the failing scenario again; the logic is sound but a real-world walkthrough would confirm. Worth doing before 1.0.
+- **Apollo pull.** That machine is now several commits behind; pull before next session there.
+- **Probe scripts cleanup post-1.0:** `/tmp/add_flagged_at.py`, `/tmp/decouple_trash.py` aren't checked into the repo (one-off migrations only Rick runs), but worth noting they exist and what they did for any future archeology.
+
+---
+
+
 ## May 17, 2026 — Polish: Delete→Trash rename, prev/next nav, Flagging design doc
 
 Three polish items after Stage Thread shipped this morning.
