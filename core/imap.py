@@ -446,7 +446,6 @@ class IMAP:
         
         # Replace cid: references in HTML body with data URLs
         if result["html_body"] and inline_images:
-            import re
             def replace_cid(match):
                 cid = match.group(1)
                 return inline_images.get(cid, match.group(0))
@@ -795,7 +794,6 @@ class IMAP:
         Convert plain text URLs and email addresses in HTML to clickable links.
         Skips content that's already inside anchor tags or other HTML attributes.
         """
-        import re
         # Split HTML into parts: inside tags vs text content
         parts = re.split(r'(<a\s[^>]*>.*?</a>|<[^>]+>)', html, flags=re.IGNORECASE | re.DOTALL)
         
