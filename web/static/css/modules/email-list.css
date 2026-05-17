@@ -528,3 +528,13 @@
     stroke: var(--color-star);
     flex-shrink: 0;
 }
+
+/* Folder path shown beneath the subject in the Starred pseudo-folder view.
+   Lets the user see where each starred email lives across the archive
+   without opening it. */
+.email-folder-path {
+    display: block;
+    font-size: 0.85em;
+    color: var(--color-text-muted);
+    margin-top: 2px;
+}

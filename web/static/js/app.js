@@ -25,6 +25,7 @@ import { initStaging, openStageModal, renderFolderSelectTree, handleFolderSelect
 import { initFolderMgmt, renameFolder, createSubfolder, openMoveFolder, confirmMoveFolder, deleteFolder, openColorPicker } from './views/folder-mgmt.js';
 import { initFolderSelection, showFolderSelectionView, showImportFolderSelectionView, stageSelectedFolders } from './views/folder-selection.js';
 import { initTrashView, showTrashView, updateTrashBadge, restoreFolder, permanentlyDeleteFolder, emptyTrash } from './views/trash.js';
+import { initStarredView, showStarredView, updateStarredBadge } from './views/starred.js';
 import { initVault, showVaultView, updateVaultBadge, checkOverdueFolders, hideOverdueAlert } from './views/vault.js';
 import { initSettingsView, showSettingsView } from './views/settings.js';
 import { initBackupsView, showBackupsView } from './views/backups.js';
@@ -126,6 +127,14 @@ document.addEventListener('DOMContentLoaded', () => {
         emailList: elements.emailList,
     });
     
+    // Initialize starred view
+    initStarredView({
+        contextTitle: elements.contextTitle,
+        contextMeta: elements.contextMeta,
+        emailList: elements.emailList,
+    });
+
+    
     // Initialize vault view
     initVault({
         contextTitle: elements.contextTitle,
@@ -172,6 +181,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initModalListeners();
     loadFolders().then(() => {
         updateTrashBadge();
+        updateStarredBadge();
         checkOverdueFolders(true); // Update badge AND show alert on initial load (mail view)
         refreshSidebarFolders();
     });
@@ -465,6 +475,10 @@ function handleImportUnmount(importId) {
                 case 'staged':
                     hideOverdueAlert();
                     showReviewView();
+                    break;
+                case 'starred':
+                    hideOverdueAlert();
+                    showStarredView();
                     break;
                 case 'trash':
                     hideOverdueAlert();

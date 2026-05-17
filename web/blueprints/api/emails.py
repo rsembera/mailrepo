@@ -453,6 +453,61 @@ def flag_message(message_id):
         return jsonify({"flagged_at": None})
 
 
+@api_bp.route("/messages/flagged", methods=["GET"])
+def get_flagged_emails():
+    """Return all flagged messages across the archive.
+
+    Excludes trashed messages (deleted_at IS NULL). Sorted by flagged_at DESC
+    so the most-recently-flagged appear first. Each result includes the
+    folder_name and a computed folder_path so the user can see where
+    in the archive each flagged email lives."""
+    messages = Database.fetchall(
+        """
+        SELECT m.id, m.subject, m.sender, m.date, m.flagged_at, m.folder_id,
+               f.name AS folder_name
+        FROM messages m
+        JOIN folders f ON m.folder_id = f.id
+        WHERE m.flagged_at IS NOT NULL
+          AND m.deleted_at IS NULL
+          AND f.deleted_at IS NULL
+        ORDER BY m.flagged_at DESC
+        """,
+        ()
+    )
+
+    # Build a folder-path map once (avoid N+1 per result)
+    all_folders = Database.fetchall(
+        "SELECT id, name, parent_id FROM folders WHERE deleted_at IS NULL"
+    )
+    folder_map = {f["id"]: f for f in all_folders}
+
+    def get_folder_path(fid):
+        path_parts = []
+        current_id = fid
+        seen = set()
+        while current_id and current_id not in seen:
+            seen.add(current_id)
+            folder = folder_map.get(current_id)
+            if not folder:
+                break
+            path_parts.insert(0, folder["name"])
+            current_id = folder["parent_id"]
+        return " › ".join(path_parts) if path_parts else ""
+
+    emails = [{
+        "id": m["id"],
+        "subject": m["subject"],
+        "sender": m["sender"],
+        "date": m["date"],
+        "flagged_at": m["flagged_at"],
+        "folder_id": m["folder_id"],
+        "folder_name": m["folder_name"],
+        "folder_path": get_folder_path(m["folder_id"]),
+    } for m in messages]
+
+    return jsonify({"emails": emails})
+
+
 @api_bp.route("/messages/<int:message_id>", methods=["PATCH"])
 def update_message(message_id):
     """Update message properties (move to different folder)."""

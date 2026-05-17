@@ -2145,6 +2145,14 @@ window.toggleStarFromViewer = async function() {
         if (typeof renderEmailList === 'function') {
             renderEmailList();
         }
+
+        // Refresh the Starred rail badge count
+        try {
+            const starredModule = await import('./starred.js');
+            starredModule.updateStarredBadge();
+        } catch (e) {
+            // Non-critical; badge will refresh on next view load
+        }
     } catch (e) {
         console.error('Star toggle failed:', e);
     }
