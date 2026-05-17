@@ -431,6 +431,316 @@ class IMAP:
         
         return result
     
+    def fetch_thread_headers(self, uid: str) -> dict:
+        """Fetch just the thread-related headers for a message.
+
+        Lighter than fetch_headers (which fetches FROM/TO/SUBJECT/DATE/MESSAGE-ID)
+        and adds In-Reply-To and References. Used by find_thread().
+
+        Returns dict with: message_id, in_reply_to, references (list), subject,
+        from, date. Empty strings / empty list if a header is missing.
+        """
+        if not self.connection:
+            raise IMAPError("Not connected")
+
+        try:
+            status, data = self.connection.uid(
+                "FETCH", uid,
+                "(BODY.PEEK[HEADER.FIELDS (MESSAGE-ID IN-REPLY-TO REFERENCES "
+                "FROM SUBJECT DATE)])"
+            )
+            if status != "OK" or not data or not data[0]:
+                raise IMAPError(f"Failed to fetch thread headers for {uid}")
+
+            header_data = data[0][1]
+            if isinstance(header_data, bytes):
+                header_data = header_data.decode("utf-8", errors="replace")
+
+            msg = email.message_from_string(header_data)
+
+            # References is a space-separated list of <id> tokens; parse all
+            references_raw = msg.get("References", "") or ""
+            references = re.findall(r'<[^>]+>', references_raw)
+
+            in_reply_to_raw = (msg.get("In-Reply-To", "") or "").strip()
+            # In-Reply-To should be a single id but some clients put more
+            in_reply_to = ''
+            ir_match = re.search(r'<[^>]+>', in_reply_to_raw)
+            if ir_match:
+                in_reply_to = ir_match.group(0)
+
+            return {
+                "uid": uid,
+                "message_id": (msg.get("Message-ID", "") or "").strip(),
+                "in_reply_to": in_reply_to,
+                "references": references,
+                "subject": self._decode_header(msg.get("Subject", "")),
+                "from": self._decode_header(msg.get("From", "")),
+                "date": msg.get("Date", ""),
+            }
+        except IMAPError:
+            raise
+        except Exception as e:
+            raise IMAPError(f"Failed to fetch thread headers for {uid}: {e}")
+
+    def find_thread(
+        self,
+        source_folder: str,
+        source_uid: str,
+        *,
+        also_search_folders: list[str] | None = None,
+        max_messages: int = 100,
+        max_iterations: int = 5,
+        deadline_seconds: float = 10.0,
+    ) -> dict:
+        """Find all messages in the same thread as (source_folder, source_uid).
+
+        Walks the In-Reply-To and References headers across the source folder
+        and any folders in ``also_search_folders`` (typically the account's
+        Sent folder). Pure header-walk \u2014 does not use the IMAP THREAD
+        extension. This is the universal path that works on any RFC-3501 server.
+
+        Args:
+            source_folder: IMAP folder containing the message the user clicked.
+            source_uid: UID of that message within source_folder.
+            also_search_folders: Additional folders to search (Sent, typically).
+                The source folder is always searched; pass extras here.
+            max_messages: Hard cap on thread size. If we hit this we stop
+                expanding and mark the result truncated.
+            max_iterations: Max passes through the search loop. Mailing-list
+                threads can ping-pong; this caps depth.
+            deadline_seconds: Total wall-clock budget for the operation. If
+                exceeded we return whatever we\'ve found and mark the result
+                timed_out.
+
+        Returns:
+            {
+              "thread": [ {folder, uid, message_id, subject, from, date}, ... ],
+              "truncated": bool,
+              "timed_out": bool,
+              "method": "header_walk",
+            }
+            The list includes the source message itself, ordered by date ascending
+            where the Date header is parseable (others append at the end).
+        """
+        import time
+
+        if not self.connection:
+            raise IMAPError("Not connected")
+
+        start = time.monotonic()
+        deadline = start + deadline_seconds
+
+        # Build the search-folder list: source first, then extras minus duplicates
+        search_folders = [source_folder]
+        if also_search_folders:
+            for f in also_search_folders:
+                if f and f != source_folder and f not in search_folders:
+                    search_folders.append(f)
+
+        # First, select the source folder and fetch the starting message's headers
+        self.select_folder(source_folder)
+        source_headers = self.fetch_thread_headers(source_uid)
+        source_mid = source_headers["message_id"]
+
+        if not source_mid:
+            # No Message-ID means we can\'t thread. Return just this message.
+            return {
+                "thread": [{
+                    "folder": source_folder,
+                    "uid": source_uid,
+                    "message_id": "",
+                    "subject": source_headers["subject"],
+                    "from": source_headers["from"],
+                    "date": source_headers["date"],
+                }],
+                "truncated": False,
+                "timed_out": False,
+                "method": "header_walk",
+                "note": "source message has no Message-ID; cannot thread",
+            }
+
+        # Track messages we\'ve already added to the result keyed by message-id.
+        # Each value: {folder, uid, message_id, subject, from, date}
+        found: dict[str, dict] = {
+            source_mid: {
+                "folder": source_folder,
+                "uid": source_uid,
+                "message_id": source_mid,
+                "subject": source_headers["subject"],
+                "from": source_headers["from"],
+                "date": source_headers["date"],
+            }
+        }
+
+        # Set of message-ids we know about but haven\'t located in IMAP yet.
+        # Seeded from the source's In-Reply-To + References.
+        wanted: set[str] = set()
+        if source_headers["in_reply_to"]:
+            wanted.add(source_headers["in_reply_to"])
+        for ref in source_headers["references"]:
+            wanted.add(ref)
+        wanted.discard(source_mid)
+
+        truncated = False
+        timed_out = False
+
+        def _imap_escape(value: str) -> str:
+            """IMAP SEARCH string literal: escape backslash and double-quote."""
+            return value.replace("\\", "\\\\").replace('"', '\\"')
+
+        iteration = 0
+        while iteration < max_iterations:
+            iteration += 1
+
+            if time.monotonic() >= deadline:
+                timed_out = True
+                break
+            if len(found) >= max_messages:
+                truncated = True
+                break
+
+            new_messages_this_iteration = 0
+
+            for folder in search_folders:
+                if time.monotonic() >= deadline:
+                    timed_out = True
+                    break
+                if len(found) >= max_messages:
+                    truncated = True
+                    break
+
+                # Selecting a folder can fail (folder vanished, permissions);
+                # log and skip rather than abort the whole operation.
+                try:
+                    self.select_folder(folder)
+                except IMAPError as e:
+                    log.debug(f"find_thread: skipping folder {folder}: {e}")
+                    continue
+
+                # Pass 1: locate any wanted IDs that are present in this folder.
+                # Each wanted id is one SEARCH command \u2014 cheap, but bounded.
+                for wid in list(wanted):
+                    if time.monotonic() >= deadline:
+                        timed_out = True
+                        break
+                    if len(found) >= max_messages:
+                        truncated = True
+                        break
+                    if wid in found:
+                        wanted.discard(wid)
+                        continue
+                    try:
+                        status, data = self.connection.uid(
+                            "SEARCH", None,
+                            f'HEADER Message-ID "{_imap_escape(wid)}"',
+                        )
+                    except Exception as e:
+                        log.debug(f"find_thread: search failed for {wid} in {folder}: {e}")
+                        continue
+                    if status != "OK" or not data or not data[0]:
+                        continue
+                    uids = data[0].split()
+                    if not uids:
+                        continue
+                    # Take the first match (Message-ID is meant to be unique)
+                    match_uid = uids[0].decode() if isinstance(uids[0], bytes) else uids[0]
+                    try:
+                        hdrs = self.fetch_thread_headers(match_uid)
+                    except IMAPError:
+                        continue
+                    found[wid] = {
+                        "folder": folder,
+                        "uid": match_uid,
+                        "message_id": wid,
+                        "subject": hdrs["subject"],
+                        "from": hdrs["from"],
+                        "date": hdrs["date"],
+                    }
+                    wanted.discard(wid)
+                    new_messages_this_iteration += 1
+                    # Any new references from this message are also wanted
+                    if hdrs["in_reply_to"] and hdrs["in_reply_to"] not in found:
+                        wanted.add(hdrs["in_reply_to"])
+                    for ref in hdrs["references"]:
+                        if ref and ref not in found:
+                            wanted.add(ref)
+
+                if time.monotonic() >= deadline:
+                    timed_out = True
+                    break
+                if len(found) >= max_messages:
+                    truncated = True
+                    break
+
+                # Pass 2: find replies that point at messages already in `found`.
+                # One SEARCH per known id, returning UIDs of messages whose
+                # In-Reply-To points at it.
+                for known_id in list(found.keys()):
+                    if time.monotonic() >= deadline:
+                        timed_out = True
+                        break
+                    if len(found) >= max_messages:
+                        truncated = True
+                        break
+                    try:
+                        status, data = self.connection.uid(
+                            "SEARCH", None,
+                            f'HEADER In-Reply-To "{_imap_escape(known_id)}"',
+                        )
+                    except Exception as e:
+                        log.debug(f"find_thread: reply-search failed for {known_id} in {folder}: {e}")
+                        continue
+                    if status != "OK" or not data or not data[0]:
+                        continue
+                    reply_uids = data[0].split()
+                    for ruid_raw in reply_uids:
+                        if len(found) >= max_messages:
+                            truncated = True
+                            break
+                        ruid = ruid_raw.decode() if isinstance(ruid_raw, bytes) else ruid_raw
+                        try:
+                            hdrs = self.fetch_thread_headers(ruid)
+                        except IMAPError:
+                            continue
+                        rmid = hdrs["message_id"]
+                        if not rmid or rmid in found:
+                            continue
+                        found[rmid] = {
+                            "folder": folder,
+                            "uid": ruid,
+                            "message_id": rmid,
+                            "subject": hdrs["subject"],
+                            "from": hdrs["from"],
+                            "date": hdrs["date"],
+                        }
+                        new_messages_this_iteration += 1
+                        if hdrs["in_reply_to"] and hdrs["in_reply_to"] not in found:
+                            wanted.add(hdrs["in_reply_to"])
+                        for ref in hdrs["references"]:
+                            if ref and ref not in found:
+                                wanted.add(ref)
+
+            # If a full pass through all folders found nothing new, we're done.
+            if new_messages_this_iteration == 0:
+                break
+
+        # Sort the thread by date when parseable; unparseable dates go to the end.
+        from email.utils import parsedate_to_datetime
+        def _date_key(item):
+            try:
+                return (0, parsedate_to_datetime(item["date"]))
+            except Exception:
+                return (1, None)
+        sorted_thread = sorted(found.values(), key=_date_key)
+
+        return {
+            "thread": sorted_thread,
+            "truncated": truncated,
+            "timed_out": timed_out,
+            "method": "header_walk",
+        }
+
     def _decode_header(self, header: str) -> str:
         """Decode RFC 2047 encoded header."""
         if not header:
@@ -602,38 +912,56 @@ class IMAP:
     
     def get_special_folder(self, folder_type: str) -> str | None:
         """
-        Find special folder name (Archive, Trash) for this IMAP server.
-        
+        Find special folder name (Archive, Trash, Sent) for this IMAP server.
+
         Args:
-            folder_type: 'archive' or 'trash'
-            
+            folder_type: 'archive', 'trash', or 'sent'
+
         Returns:
             Folder name or None if not found.
         """
         if not self.connection:
             raise IMAPError("Not connected")
-        
-        # Common folder names by type
+
+        # Common folder names by type. Order matters slightly — provider-specific
+        # names go first so we match (e.g.) "[Gmail]/Sent Mail" before the
+        # generic "Sent" if both somehow exist.
         archive_names = ['Archive', '[Gmail]/All Mail', 'Archives', 'INBOX.Archive']
         trash_names = ['Trash', '[Gmail]/Trash', 'Deleted Items', 'Deleted Messages', 'INBOX.Trash']
-        
-        search_names = archive_names if folder_type == 'archive' else trash_names
-        
+        sent_names = [
+            '[Gmail]/Sent Mail',  # Gmail
+            'Sent Mail',          # some clients
+            'Sent Items',         # Outlook / Exchange
+            'Sent Messages',      # Apple Mail (older)
+            'INBOX.Sent',         # cPanel / Courier-style nested
+            'Sent',               # most everything else (Fastmail, generic IMAP, NCF)
+        ]
+
+        if folder_type == 'archive':
+            search_names = archive_names
+        elif folder_type == 'trash':
+            search_names = trash_names
+        elif folder_type == 'sent':
+            search_names = sent_names
+        else:
+            log.warning(f"Unknown folder_type: {folder_type}")
+            return None
+
         try:
             folders = self.list_folders()
             folder_names = [f['name'] for f in folders]
-            
+
             # Try to find matching folder
             for name in search_names:
                 if name in folder_names:
                     return name
-            
+
             # Case-insensitive fallback
             for name in search_names:
                 for folder_name in folder_names:
                     if folder_name.lower() == name.lower():
                         return folder_name
-            
+
             return None
         except Exception as e:
             log.debug(f"Could not find {folder_type} folder: {e}")
