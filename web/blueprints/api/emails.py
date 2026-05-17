@@ -79,6 +79,40 @@ def _get_folder_and_descendants(folder_id: int) -> list[int]:
     return result
 
 
+def _collect_referenced_cids(msg) -> set:
+    """Return the set of cid: tokens referenced in any text/html body of
+    the given email message. Used by the archive viewer routes to decide
+    which Content-ID parts are truly inline (referenced) vs. which are
+    really just attachments that happen to carry a Content-ID."""
+    referenced = set()
+    if not msg.is_multipart():
+        if msg.get_content_type() == "text/html":
+            payload = msg.get_payload(decode=True)
+            if payload:
+                charset = msg.get_content_charset() or "utf-8"
+                try:
+                    html = payload.decode(charset, errors="replace")
+                except Exception:
+                    return referenced
+                for m in re.finditer(r'cid:([^"\'\s>]+)', html):
+                    referenced.add(m.group(1))
+        return referenced
+    for part in msg.walk():
+        if part.get_content_type() != "text/html":
+            continue
+        payload = part.get_payload(decode=True)
+        if not payload:
+            continue
+        charset = part.get_content_charset() or "utf-8"
+        try:
+            html = payload.decode(charset, errors="replace")
+        except Exception:
+            continue
+        for m in re.finditer(r'cid:([^"\'\s>]+)', html):
+            referenced.add(m.group(1))
+    return referenced
+
+
 @api_bp.route("/search", methods=["GET"])
 def search_emails():
     """Search archived emails using full-text search."""
@@ -226,22 +260,34 @@ def get_archived_email(folder_id, message_id):
             "attachments": [],
         }
         
-        # First pass: collect inline images (parts with Content-ID) for cid: replacement
-        import base64
-        inline_images = {}  # cid -> data URL
-        
+        # Pre-scan: find every cid: reference that appears in the html
+        # body(ies). A part with a Content-ID is only truly "inline" if
+        # its id is actually referenced by the html. Without this,
+        # Gmail-mobile picture messages (Content-Disposition: attachment
+        # AND Content-ID, but html doesn't reference the cid) lose their
+        # attachments completely \u2014 the part is registered for cid
+        # replacement that never happens, AND skipped from the
+        # attachments list. Same fix as core/imap.py fetch_full.
+        referenced_cids = _collect_referenced_cids(msg)
+
+        # First pass: collect inline images for cid: replacement. Only
+        # parts whose Content-ID is actually referenced in the html.
+        inline_images = {}
         if msg.is_multipart():
             for part in msg.walk():
                 content_id = part.get("Content-ID")
-                if content_id:
-                    payload = part.get_payload(decode=True)
-                    if payload:
-                        content_type = part.get_content_type()
-                        # Strip angle brackets: <image001.png@...> -> image001.png@...
-                        cid = content_id.strip('<>')
-                        b64_data = base64.b64encode(payload).decode('ascii')
-                        inline_images[cid] = f"data:{content_type};base64,{b64_data}"
-        
+                if not content_id:
+                    continue
+                cid = content_id.strip('<>')
+                if cid not in referenced_cids:
+                    continue
+                payload = part.get_payload(decode=True)
+                if not payload:
+                    continue
+                content_type = part.get_content_type()
+                b64_data = base64.b64encode(payload).decode('ascii')
+                inline_images[cid] = f"data:{content_type};base64,{b64_data}"
+
         # Second pass: collect body and attachments
         if msg.is_multipart():
             for part in msg.walk():
@@ -249,12 +295,13 @@ def get_archived_email(folder_id, message_id):
                 content_disposition = str(part.get("Content-Disposition", ""))
                 filename = part.get_filename()
                 content_id = part.get("Content-ID")
-                
-                # Skip inline images - they're handled via cid: replacement
-                # Only skip if it's an image with Content-ID (actual inline embedded image)
+
+                # Skip only the inline images registered above
                 if content_id and content_type.startswith("image/"):
-                    continue
-                
+                    cid = content_id.strip('<>')
+                    if cid in referenced_cids:
+                        continue
+
                 # Treat as attachment if explicitly marked as attachment,
                 # OR if it has a filename (even if inline) and isn't text
                 if "attachment" in content_disposition or (filename and part.get_content_maintype() != "text"):
@@ -287,7 +334,6 @@ def get_archived_email(folder_id, message_id):
         
         # Replace cid: references in HTML body with data URLs
         if result["html_body"] and inline_images:
-            import re
             def replace_cid(match):
                 cid = match.group(1)
                 return inline_images.get(cid, match.group(0))
@@ -484,7 +530,10 @@ def download_archived_attachment(folder_id, message_id, index):
         raw_bytes = Encryption.decrypt(raw_bytes)
         msg = email_lib.message_from_bytes(raw_bytes)
         
-        # Find attachments (must match filtering in get_archived_email)
+        # Find attachments. Must match the filtering in get_archived_email
+        # exactly, or attachment indices in the JSON response won\'t line
+        # up with what this route returns when the user clicks Download.
+        referenced_cids = _collect_referenced_cids(msg)
         attachments = []
         if msg.is_multipart():
             for part in msg.walk():
@@ -492,14 +541,14 @@ def download_archived_attachment(folder_id, message_id, index):
                 filename = part.get_filename()
                 content_id = part.get("Content-ID")
                 content_type = part.get_content_type()
-                
-                # Skip inline images - they're handled via cid: replacement in HTML
-                # Only skip if it's an image with Content-ID (actual inline embedded image)
+
+                # Skip only the inline images that are actually referenced
+                # via cid: in the html body \u2014 same logic as the viewer route.
                 if content_id and content_type.startswith("image/"):
-                    continue
-                
-                # Treat as attachment if explicitly marked as attachment,
-                # OR if it has a filename (even if inline) and isn't text
+                    cid = content_id.strip('<>')
+                    if cid in referenced_cids:
+                        continue
+
                 if "attachment" in content_disposition or (filename and part.get_content_maintype() != "text"):
                     if filename:
                         attachments.append({
