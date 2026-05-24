@@ -23,6 +23,18 @@ function parseDateToMs(val) {
     }
     return new Date(val).getTime() || 0;
 }
+
+/**
+ * Extract the four-digit year from an email's date.
+ * Returns null if the date is missing or unparseable, so callers can
+ * skip dividers for rows we can't place on a timeline.
+ */
+function getEmailYear(email) {
+    const ms = parseDateToMs(email.date || email.internal_date || '');
+    if (!ms) return null;
+    const year = new Date(ms).getFullYear();
+    return isNaN(year) ? null : year;
+}
 let onSelectionChange = null;
 let onFilterChange = null;
 
@@ -299,11 +311,34 @@ export function renderEmailList() {
             </div>
         `;
     } else {
+        // Year dividers: a labelled rule between rows when the year
+        // changes. Only shown in the archive folder view, only when
+        // sorted by date (the grouping is meaningless under sender/
+        // subject sorts), and only when the folder actually spans more
+        // than one year (a divider for a single year is just noise).
+        const sortedByDate = currentSort.startsWith('date');
+        const distinctYears = new Set(
+            filteredEmails.map(getEmailYear).filter(y => y !== null)
+        );
+        const showYearDividers = isArchiveView && sortedByDate && distinctYears.size > 1;
+
+        let lastYear = null;
+
         html += filteredEmails.map(email => {
         const emailId = email.uid || email.id;
         const isStaged = state.staged.has(emailId);
         const isSelected = state.selectedEmails.has(emailId);
         const isArchivedSelected = selectedArchivedEmails.has(emailId);
+
+        // Emit a year divider before this row if the year just changed.
+        let dividerHtml = '';
+        if (showYearDividers) {
+            const year = getEmailYear(email);
+            if (year !== null && year !== lastYear) {
+                dividerHtml = `<div class="email-year-divider"><span>${year}</span></div>`;
+                lastYear = year;
+            }
+        }
         
         let rowClass = 'folder-management-item email-list-item';
         if (isArchiveView) {
@@ -366,6 +401,7 @@ export function renderEmailList() {
         }
         
         return `
+            ${dividerHtml}
             <div class="${rowClass}" data-id="${emailId}" onclick="openEmailViewer('${emailId}')">
                 <div class="email-list-content">
                     <div class="email-list-main">

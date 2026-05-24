@@ -4,6 +4,37 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## May 24, 2026 — Year dividers in the archive folder list
+
+**Participants:** Rick, Claude (Opus 4.7) on the MacBook.
+
+Rick's idea: archive folders with a year or two of correspondence would read better with a year divider between rows. Discussed two designs — simple labelled rules vs. collapsible per-year sections. Went with simple rules. Rationale: an archive is a reference tool you scroll to scan; collapsible sections add a click between the user and "show me everything" and the "current year always open" heuristic misfires in archive folders where the most recent email might be from a year ago. A labelled rule is passive wayfinding — visible while scrolling, never traps content.
+
+### What got built
+
+Pure render-layer feature in `web/static/js/components/email-list.js` — no schema change, no API change, no migration. The `date` field is already in the list payload.
+
+- New `getEmailYear(email)` helper next to the existing `parseDateToMs` — returns the four-digit year or null for unparseable dates.
+- In `renderEmailList`, the row-rendering map tracks the previous row's year and emits a `<div class="email-year-divider">` before a row when the year changes.
+- Three guards, per the agreed scope: archive folder view only (`isArchiveView`), date sort only (`currentSort` starts with `date` — the grouping is meaningless under sender/subject sorts), and only when the folder spans more than one year (a single-year divider is just noise).
+
+CSS in `web/static/css/modules/email-list.css`: a `.email-year-divider` block. First pass was a muted-gray hairline — Rick correctly called it too faint. Restyled to be theme-aware via `--color-primary` (every theme defines it): a bold year label in the theme accent colour inside a soft accent-tinted pill, with a 2px accent-tinted rule beside it. Left-aligned — discussed centering the pill with a line on each side and decided against it; centering pulls the scan target off the left edge where the sender names align, and reads as a section header rather than a quiet tick.
+
+### Scope discipline
+
+Considered and declined: collapsible sections, centered pill treatment. Both rejected for good reasons rather than effort — the simple left-aligned rule is the correct silhouette for a passive wayfinding marker.
+
+### Website
+
+No website update needed. The docs never mentioned year dividers (the feature didn't exist at the last docs pass), so there's no inaccuracy to fix. A one-line mention could fold into the "Browsing Your Archive" section on the next real website pass — not worth a dedicated trip.
+
+### What's pending
+
+- **Apollo pull.** Still several commits behind from the May 18 session plus this one.
+- Manual theme check across all five themes for the divider — Obsidian especially (light-blue accent on dark background; the 12%-opacity pill should be checked for visibility there).
+
+---
+
 ## May 18, 2026 — Flagging feature build + trash decoupling
 
 **Participants:** Rick, Claude (Opus 4.7) on the MacBook.

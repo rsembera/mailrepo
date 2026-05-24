@@ -554,3 +554,46 @@
 .trash-email-origin-missing {
     color: var(--color-text-light);
 }
+
+/* ============================================
+   YEAR DIVIDER
+   A labelled horizontal rule between email rows when the year
+   changes. Rendered only in the archive folder view, only under a
+   date sort, and only when the folder spans more than one year.
+   Purely a visual wayfinding cue — not interactive, not selectable.
+   ============================================ */
+.email-year-divider {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-lg) var(--space-lg) var(--space-sm);
+    /* Span both columns of the email-list grid so the rule runs the
+       full width rather than being confined to the first column. */
+    grid-column: 1 / -1;
+    user-select: none;
+    pointer-events: none;
+}
+
+/* The rule beside the label: a 2px band tinted with the theme accent
+   colour so it reads as a deliberate separator, not a hairline. */
+.email-year-divider::after {
+    content: '';
+    flex: 1;
+    height: 2px;
+    border-radius: 1px;
+    background: color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+
+/* The year label: larger and bolder than before, set in the theme
+   accent colour, inside a soft accent-tinted pill. Theme-aware because
+   every theme defines --color-primary. */
+.email-year-divider span {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    padding: 3px 12px;
+    border-radius: var(--radius-md);
+    flex-shrink: 0;
+}
