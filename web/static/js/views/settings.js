@@ -144,6 +144,7 @@ function renderSettingsView() {
     initAppearanceHandlers();
     initSecurityHandlers();
     initTrashHandlers();
+    initThreadStagingHandlers();
     loadCurrentSettings();
 }
 
@@ -229,6 +230,20 @@ function renderAccountsSection() {
             <strong>Note:</strong> For Gmail, iCloud, and other providers with 2FA, 
             you'll need to use an <strong>app-specific password</strong> instead of your regular password.
             <a href="javascript:void(0);" onclick="showAppPasswordInfo()">What's this?</a>
+        </div>
+
+        <hr class="settings-divider">
+
+        <div class="form-group">
+            <label class="setting-label">Maximum thread size when staging</label>
+            <div class="custom-select" id="threadMaxMessagesSelect" data-name="threadMaxMessages" data-value="500">
+                <div class="custom-select-option" data-value="100">100 messages</div>
+                <div class="custom-select-option" data-value="250">250 messages</div>
+                <div class="custom-select-option" data-value="500">500 messages (default)</div>
+                <div class="custom-select-option" data-value="1000">1,000 messages</div>
+                <div class="custom-select-option" data-value="2000">2,000 messages</div>
+            </div>
+            <p class="setting-hint">When you use "Stage thread", MailRepo walks the conversation on the mail server. This caps how many messages it will gather — a safety limit against very large mailing-list threads. Most correspondence is well under 500.</p>
         </div>
     `;
 }
@@ -662,6 +677,20 @@ async function loadCurrentSettings() {
     } catch (err) {
         console.error('Failed to load session timeout setting:', err);
     }
+
+    // Load thread-max-messages setting from server
+    try {
+        const response = await fetch('/api/settings/thread-max-messages');
+        if (response.ok) {
+            const data = await response.json();
+            const selectEl = document.getElementById('threadMaxMessagesSelect');
+            if (selectEl && selectEl._customSelect) {
+                selectEl._customSelect.setValue(data.value || '500');
+            }
+        }
+    } catch (err) {
+        console.error('Failed to load thread max messages setting:', err);
+    }
     
     // Mark settings as loaded - changes after this are user-initiated
     // Use setTimeout to ensure change events from setValue() have been processed
@@ -684,6 +713,27 @@ function initTrashHandlers() {
                 });
             } catch (err) {
                 console.error('Failed to save trash retention setting:', err);
+            }
+        });
+    }
+}
+
+/**
+ * Initialize the thread-staging settings handler (maximum thread size).
+ */
+function initThreadStagingHandlers() {
+    const select = document.getElementById('threadMaxMessagesSelect');
+    if (select) {
+        select.addEventListener('change', async (e) => {
+            if (!settingsLoaded) return; // Skip during initialization
+            try {
+                await fetch('/api/settings/thread-max-messages', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ value: e.detail.value }),
+                });
+            } catch (err) {
+                console.error('Failed to save thread max messages setting:', err);
             }
         });
     }

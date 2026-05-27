@@ -105,6 +105,43 @@ def session_status():
     })
 
 
+# ============================================================================
+# THREAD STAGING SETTINGS
+# ============================================================================
+
+# Allowed values for the maximum thread size when using Stage Thread.
+# This is the user-facing choice list; the POST handler rejects anything
+# outside it. find_thread additionally clamps to its own hard ceiling, so
+# these two layers together mean no input path can make a thread walk run
+# unbounded against the mail server.
+THREAD_MAX_MESSAGES_CHOICES = ("100", "250", "500", "1000", "2000")
+THREAD_MAX_MESSAGES_DEFAULT = "500"
+
+
+@api_bp.route("/settings/thread-max-messages", methods=["GET"])
+def get_thread_max_messages():
+    """Get the maximum-thread-size setting for Stage Thread."""
+    value = get_setting("thread_max_messages", THREAD_MAX_MESSAGES_DEFAULT)
+    return jsonify({"value": value})
+
+
+@api_bp.route("/settings/thread-max-messages", methods=["POST"])
+def set_thread_max_messages():
+    """Set the maximum-thread-size setting for Stage Thread."""
+    data = request.get_json()
+    value = str(data.get("value", THREAD_MAX_MESSAGES_DEFAULT))
+
+    # Validate against the fixed allowed set — protects the mail server
+    # from a hand-crafted POST with an absurd value.
+    if value not in THREAD_MAX_MESSAGES_CHOICES:
+        return jsonify({"error": "Invalid thread size value"}), 400
+
+    set_setting("thread_max_messages", value)
+    Database.commit()
+
+    return jsonify({"success": True, "value": value})
+
+
 @api_bp.route("/keepalive", methods=["POST"])
 def keepalive():
     """Extend session when user clicks 'Stay Logged In'."""

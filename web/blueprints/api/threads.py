@@ -12,6 +12,8 @@ See docs/Stage_Thread_Plan.md for the design rationale.
 from flask import request, jsonify
 from core import Database
 from core import IMAP, IMAPError
+from core.database import get_setting
+from core.imap import THREAD_MAX_MESSAGES_DEFAULT
 from utils.log import get_logger
 from . import api_bp
 
@@ -103,10 +105,21 @@ def find_thread():
         if folder != "INBOX":
             also_search.append("INBOX")
 
+        # Read the user's configured thread-size cap. find_thread clamps
+        # this into its own safe range regardless, so a bad stored value
+        # cannot cause harm — this just honours the user's choice.
+        try:
+            max_messages = int(get_setting(
+                "thread_max_messages", str(THREAD_MAX_MESSAGES_DEFAULT)
+            ))
+        except (TypeError, ValueError):
+            max_messages = THREAD_MAX_MESSAGES_DEFAULT
+
         result = client.find_thread(
             source_folder=folder,
             source_uid=uid,
             also_search_folders=also_search,
+            max_messages=max_messages,
         )
         # Surface the Sent folder name for the frontend's status text
         result["sent_folder"] = sent_folder
