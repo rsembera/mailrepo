@@ -36,6 +36,19 @@ IMAP_SERVERS = {
 }
 
 
+# Thread-discovery bounds (used by IMAP.find_thread).
+#
+# DEFAULT is the out-of-the-box cap and the value used when no explicit
+# max is passed. CEILING is an absolute hard limit: find_thread clamps
+# whatever it is given to at most this, so no setting, API payload, or
+# stale database value can make a thread walk run unbounded against the
+# mail server. FLOOR keeps a misconfigured tiny value from making the
+# feature useless.
+THREAD_MAX_MESSAGES_DEFAULT = 500
+THREAD_MAX_MESSAGES_CEILING = 2000
+THREAD_MAX_MESSAGES_FLOOR = 10
+
+
 class IMAPError(Exception):
     """Raised when IMAP operations fail."""
     pass
@@ -520,7 +533,7 @@ class IMAP:
         source_uid: str,
         *,
         also_search_folders: list[str] | None = None,
-        max_messages: int = 100,
+        max_messages: int = THREAD_MAX_MESSAGES_DEFAULT,
         max_iterations: int = 5,
         deadline_seconds: float = 10.0,
     ) -> dict:
@@ -536,8 +549,10 @@ class IMAP:
             source_uid: UID of that message within source_folder.
             also_search_folders: Additional folders to search (Sent, typically).
                 The source folder is always searched; pass extras here.
-            max_messages: Hard cap on thread size. If we hit this we stop
-                expanding and mark the result truncated.
+            max_messages: Cap on thread size. If we hit this we stop
+                expanding and mark the result truncated. Clamped to
+                [THREAD_MAX_MESSAGES_FLOOR, THREAD_MAX_MESSAGES_CEILING]
+                regardless of the value passed.
             max_iterations: Max passes through the search loop. Mailing-list
                 threads can ping-pong; this caps depth.
             deadline_seconds: Total wall-clock budget for the operation. If
@@ -558,6 +573,15 @@ class IMAP:
 
         if not self.connection:
             raise IMAPError("Not connected")
+
+        # Defence in depth: clamp max_messages into [FLOOR, CEILING]
+        # regardless of caller input. The settings endpoint validates the
+        # user-facing value too, but this guarantees that even a bad value
+        # arriving by any other path cannot make the walk run unbounded.
+        max_messages = max(
+            THREAD_MAX_MESSAGES_FLOOR,
+            min(int(max_messages), THREAD_MAX_MESSAGES_CEILING),
+        )
 
         start = time.monotonic()
         deadline = start + deadline_seconds
