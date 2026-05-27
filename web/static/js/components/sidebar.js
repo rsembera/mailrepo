@@ -92,8 +92,12 @@ export async function handleTreeItemClick(e, row) {
                         chevron.style.transform = 'rotate(0deg)';
                     });
                 } else {
-                    // When expanding, load IMAP folders (uses cache if available)
-                    await loadAccountLabels(id);
+                    // When expanding, load IMAP folders. refreshInBackground
+                    // renders the cache instantly, then re-fetches live and
+                    // only re-renders if the folder list actually changed —
+                    // so the user gets an immediate sidebar and server-side
+                    // folder additions/renames catch up automatically.
+                    await loadAccountLabels(id, { refreshInBackground: true });
                     
                     // When expanding, auto-load INBOX
                     if (!await confirmNavigation()) {
@@ -457,59 +461,125 @@ function createFolderTreeItem(folder, children, depth) {
 }
 
 /**
- * Load IMAP folders for an account.
- * @param {string} accountId - Account ID
- * @param {boolean} forceRefresh - Force live fetch from server
+ * Render the loaded folder data into a sidebar container and wire its
+ * click/expand handlers. Extracted from loadAccountLabels so that both
+ * the initial cached render and the background-refreshed re-render can
+ * share the exact same DOM-building logic.
  */
-export async function loadAccountLabels(accountId, forceRefresh = false) {
+function _renderAccountFolders(container, accountId, folders) {
+    const tree = buildImapFolderTree(folders);
+    // Cache IMAP folders in state for use by mail view
+    state.imapFolders.set(accountId, { folders, tree });
+
+    const html = renderImapFolderTree(tree, accountId, 0);
+    container.innerHTML = html || '<div class="tree-loading">No folders</div>';
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+
+    container.querySelectorAll('.tree-item-row[data-type="imap-folder"]').forEach(row => {
+        row.addEventListener('click', (e) => {
+            e.stopPropagation();
+            handleTreeItemClick(e, row);
+        });
+    });
+
+    container.querySelectorAll('.imap-folder-chevron').forEach(chevron => {
+        chevron.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const treeItem = chevron.closest('.imap-tree-item');
+            const children = treeItem.querySelector('.imap-tree-children');
+            if (children) {
+                const isExpanded = children.style.display !== 'none';
+                children.style.display = isExpanded ? 'none' : 'block';
+                chevron.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(90deg)';
+            }
+        });
+    });
+}
+
+/**
+ * Load IMAP folders for an account.
+ *
+ * Three modes:
+ * - default              — uses the server-side cache if present
+ *                          (renders immediately, no re-fetch)
+ * - forceRefresh: true   — bypasses the cache, always live-fetches
+ *                          (renders only after the fetch completes)
+ * - refreshInBackground: true — renders the cache instantly, then
+ *                          re-fetches in the background and re-renders
+ *                          only if the folder list actually changed.
+ *                          Used by account-expand: the user sees their
+ *                          folders immediately and new/removed/renamed
+ *                          folders catch up a second or two later. If
+ *                          the cache is empty, this mode falls through
+ *                          to a normal wait-for-fetch render.
+ *
+ * @param {string} accountId
+ * @param {boolean|object} options - legacy boolean (forceRefresh) or
+ *        an options object {forceRefresh?, refreshInBackground?}.
+ */
+export async function loadAccountLabels(accountId, options = false) {
+    // Back-compat: boolean argument means forceRefresh
+    const opts = (typeof options === 'boolean')
+        ? { forceRefresh: options, refreshInBackground: false }
+        : { forceRefresh: !!options.forceRefresh,
+            refreshInBackground: !!options.refreshInBackground };
+
     const container = document.getElementById(`labels-${accountId}`);
     if (!container) return;
-    
-    try {
-        const url = forceRefresh
+
+    // Helper: fetch the folder list. Returns { ok, folders, raw } where
+    // raw is the response JSON object so callers can read flags like
+    // .cached. The endpoint returns the cached list when refresh=0, the
+    // live list when refresh=1.
+    const fetchFolders = async (refresh) => {
+        const url = refresh
             ? `/api/accounts/${accountId}/folders?refresh=1`
             : `/api/accounts/${accountId}/folders`;
         const response = await fetch(url);
-        
         if (!response.ok) {
-            const data = await response.json();
-            container.innerHTML = `<div class="tree-loading">${data.error || 'Failed to load'}</div>`;
+            let err = {};
+            try { err = await response.json(); } catch (e) {}
+            return { ok: false, error: err.error || `Server returned ${response.status}`, raw: err };
+        }
+        const data = await response.json();
+        return { ok: true, folders: data.folders || [], raw: data };
+    };
+
+    try {
+        if (opts.refreshInBackground) {
+            // Pass 1: render the cache immediately (no perceived latency).
+            const cached = await fetchFolders(false);
+            if (cached.ok) {
+                _renderAccountFolders(container, accountId, cached.folders);
+            } else {
+                container.innerHTML = `<div class="tree-loading">${cached.error}</div>`;
+            }
+
+            // Pass 2: re-fetch live in the background. Only re-render if
+            // the folder list actually changed — avoids a pointless flash
+            // in the common case where nothing changed on the server.
+            // Don't await this; let it run to completion on its own.
+            (async () => {
+                const live = await fetchFolders(true);
+                if (!live.ok) return; // Keep showing cached on transient failure
+                const before = JSON.stringify((cached.folders || []).map(f => f.name).sort());
+                const after = JSON.stringify((live.folders || []).map(f => f.name).sort());
+                if (before !== after) {
+                    _renderAccountFolders(container, accountId, live.folders);
+                }
+            })();
             return;
         }
-        
-        const data = await response.json();
-        const folders = data.folders || [];
-        const tree = buildImapFolderTree(folders);
-        
-        // Cache IMAP folders in state for use by mail view
-        state.imapFolders.set(accountId, { folders, tree });
-        
-        const html = renderImapFolderTree(tree, accountId, 0);
-        container.innerHTML = html || '<div class="tree-loading">No folders</div>';
-        
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-        
-        // Add click handlers
-        container.querySelectorAll('.tree-item-row[data-type="imap-folder"]').forEach(row => {
-            row.addEventListener('click', (e) => {
-                e.stopPropagation();
-                handleTreeItemClick(e, row);
-            });
-        });
-        
-        container.querySelectorAll('.imap-folder-chevron').forEach(chevron => {
-            chevron.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const treeItem = chevron.closest('.imap-tree-item');
-                const children = treeItem.querySelector('.imap-tree-children');
-                if (children) {
-                    const isExpanded = children.style.display !== 'none';
-                    children.style.display = isExpanded ? 'none' : 'block';
-                    chevron.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(90deg)';
-                }
-            });
-        });
-        
+
+        // Single-fetch path: forceRefresh or default cached read.
+        const result = await fetchFolders(opts.forceRefresh);
+        if (!result.ok) {
+            container.innerHTML = `<div class="tree-loading">${result.error}</div>`;
+            return;
+        }
+        _renderAccountFolders(container, accountId, result.folders);
+
     } catch (error) {
         console.error('Error loading folders:', error);
         container.innerHTML = '<div class="tree-loading">Error loading folders</div>';
