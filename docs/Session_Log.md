@@ -4,6 +4,80 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## May 27, 2026 — Stage Thread feedback + max-thread setting + sidebar auto-refresh
+
+**Participants:** Rick, Claude (Opus 4.7) on the MacBook.
+
+Three related improvements after Rick noticed a multi-second silence between clicking "Stage" on a thread and the email actually greying out. Question about the perceived lag turned into a discussion of three real issues, all addressed.
+
+### Stage Thread: pending-state feedback (`15f50e8`)
+
+The `find_thread` server call is genuinely slow — it issues 15-25 sequential IMAP commands (one SEARCH per wanted message-id in each direction, fetch_thread_headers on each match, repeat across the source folder + Sent + INBOX for up to 5 iterations). On NCF that's the few seconds Rick was seeing. The work is inherently sequential against a single IMAP connection; we can't safely parallelize.
+
+What was missing wasn't speed but feedback. After the folder picker closed there was no visible indication anything was happening, which read as a glitch even though it was working.
+
+Fix: while the request is in flight, the Staged Items rail button (#stagedRailBtn) shows a busy state — icon pulses, small spinner ring in the corner (same corner as the count badge, hidden during the pending phase so no collision). Clears the instant the request resolves, before any error alert, so the spinner's lifetime matches the actual network work rather than the time an error modal sits open.
+
+Implementation in `web/static/js/components/thread-stage.js`: `_setStagedRailBusy(true/false)` helper toggles a `.busy` class and adds/removes the spinner element. CSS in `web/static/css/modules/layout.css` adds the pulse keyframe + spinner, both using `--rail-text-active` so they read correctly on the dark rail across all five themes.
+
+### Stage Thread: thread-size cap raised + validated setting (`0583a4f`, `efe3ab1`)
+
+Rick raised a sharper question while we were here: the `max_messages=100` cap in `find_thread` had been silently truncating long client matters and there was no way for the user to know or tweak it. Discussed three options:
+
+- Remove the cap — rejected. Without a bound, a pathological mailing-list thread could hammer the IMAP server with thousands of sequential commands and trip provider rate-limiting. NCF is a small community ISP; that matters.
+- Raise the default and call it done — partial. Better, but still no user control for the rare big-thread case.
+- **Make it a setting with belt-and-braces server-side validation** — the right answer, taken.
+
+Two commits to ship it cleanly:
+
+**Commit `0583a4f`** — raised default to 500, added `THREAD_MAX_MESSAGES_DEFAULT/CEILING/FLOOR` constants in `core/imap.py`, and made `find_thread` self-clamp into `[FLOOR=10, CEILING=2000]` regardless of caller input. This is the defence-in-depth layer: even if a bad value reaches the function by some path other than the settings UI (manual DB edit, future bug, crafted API call), the server still can't be made to run an unbounded walk.
+
+**Commit `efe3ab1`** — added the user-facing setting:
+- `GET/POST /api/settings/thread-max-messages` endpoint with allowed-set validation (100/250/500/1000/2000). Anything outside that set returns 400. Mirrors the trash-retention / session-timeout pattern exactly.
+- Dropdown in Settings → Email Accounts using the existing `custom-select` component. Defaults to 500. A fixed option list is self-validating — there's no free-text field to type a stupid number into.
+- `/api/threads/find` now reads the stored setting and passes it through to `find_thread`. Falls back to the module default if missing/unparseable; `find_thread` clamps regardless.
+
+Two validation layers — UI dropdown + server allowed-set check + `find_thread` clamp — mean no input path can make a thread walk run unbounded.
+
+While diagnosing the original report I also confirmed something Rick had asked about: starting Stage Thread from the middle or end of a thread does correctly stage the whole exchange. `find_thread` walks both directions (backwards via References/In-Reply-To headers, forwards by searching for messages that reply to each known id), with each newly-found message contributing its own headers back into the wanted set. Five iterations of fan-out until no new messages turn up. The ordering in the result is normalized to date-ascending. No bug here, working as designed; only caveat is that broken/missing References headers on some intermediate message can clip a branch.
+
+### Sidebar: auto-refresh IMAP folder list on expand (`e26636e`)
+
+Rick noticed his NCF Mail sidebar in MailRepo didn't show "Mortgage 2026" — a folder he'd created on the server weeks ago. Compared MailRepo's tree against Apple Mail's view of the same NCF account; several folders were missing or stale (Ethics Complaint 2 absent, Taxes 2024 still showing as Taxes).
+
+Diagnosed: the IMAP folder list is cached in `accounts.cached_folders` with no time-based expiry. The backend comment was explicit: *"no time-based expiry — folders rarely change. Only refresh on explicit request or when cache is missing."* The endpoint honoured `?refresh=1` and `loadAccountLabels(accountId, forceRefresh)` accepted the flag — but **no UI path ever passed forceRefresh=true**. Capability built at function and endpoint level, never given a trigger. Effectively cached forever.
+
+I initially called this a "missing feature" and proposed adding a manual right-click refresh. Rick correctly pushed back twice: first that I shouldn't have implied a refresh button existed when I wasn't sure, and second that the user shouldn't have to think about this at all — expanding an account should be the refresh trigger.
+
+I then over-complicated by proposing a TTL-based design. Rick reframed simply: *"Expanding an account should trigger a check to see if the folder structure has changed."* That was the right answer — folder lists rarely change so the network cost lands cleanly at a deliberate user action, not background polling.
+
+Concern with the naive "always force-refresh on expand": a multi-second IMAP round-trip stalls every chevron click. Solution, same pattern as Apple Mail and Thunderbird: **render from cache instantly so the sidebar appears with zero perceived latency, then re-fetch live in the background and only re-render if the folder list actually changed.** New/renamed folders catch up within a second or two; if nothing changed, no flash.
+
+Implementation:
+- Extracted the render-and-wire-handlers logic from `loadAccountLabels` into a private `_renderAccountFolders` helper so the cached pass and the background re-render share the exact same DOM code path.
+- Added a third mode to `loadAccountLabels`: `{ refreshInBackground: true }`. Renders the cache first, then fires a `?refresh=1` request without awaiting it, comparing sorted folder-name lists and only re-rendering on change. Sorted-name comparison catches every user-producible case: additions, removals, renames.
+- The account-expand handler in `handleTreeItemClick` now calls with `refreshInBackground: true`.
+- Backward-compatible signature: legacy boolean argument (`forceRefresh`) still works.
+
+Rick tested by collapsing and re-expanding NCF Mail; the missing folders appeared after the background refresh. Working as intended.
+
+### Today's commit chain
+
+| Commit | What |
+|---|---|
+| `15f50e8` | Stage Thread: pending-state feedback on the rail button |
+| `0583a4f` | Stage Thread: raise thread-size default to 500, add hard ceiling |
+| `efe3ab1` | Stage Thread: make max thread size a validated setting |
+| `e26636e` | Sidebar: auto-refresh IMAP folder list on account expand |
+
+### What's pending
+
+- **Apollo pull.** Still behind from May 18 onward; now also today's four commits.
+- **Probe scripts cleanup post-1.0.** `/tmp/add_flagged_at.py`, `/tmp/decouple_trash.py` still sitting in /tmp.
+- **`find_thread` performance optimization (optional).** The function re-`select_folder`s on every iteration even when the folder hasn't changed, and issues one SEARCH per id rather than batching with IMAP `OR` criteria. Would genuinely reduce the thread-find wait time. Out of scope for today since the feedback indicator + the setting cover the user-visible issue.
+
+---
+
 ## May 24, 2026 — Year dividers in the archive folder list
 
 **Participants:** Rick, Claude (Opus 4.7) on the MacBook.
