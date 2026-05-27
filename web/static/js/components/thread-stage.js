@@ -21,6 +21,32 @@ import { openChangeDestinationModal } from './staging.js';
 import { renderEmailList } from './email-list.js';
 
 /**
+ * Toggle the busy state on the Staged Items rail button.
+ *
+ * Stage Thread's server call (POST /api/threads/find) is a multi-second
+ * IMAP round-trip. Without feedback, the UI sits silent until it
+ * returns — which reads as a glitch. While busy, the rail button's icon
+ * pulses and a spinner ring shows in the corner, so the click clearly
+ * registered and the eventual badge bump reads as completion.
+ *
+ * @param {boolean} busy - true to show the busy state, false to clear it
+ */
+function _setStagedRailBusy(busy) {
+    const btn = document.getElementById('stagedRailBtn');
+    if (!btn) return;
+    btn.classList.toggle('busy', busy);
+
+    let spinner = btn.querySelector('.rail-btn-spinner');
+    if (busy && !spinner) {
+        spinner = document.createElement('span');
+        spinner.className = 'rail-btn-spinner';
+        btn.appendChild(spinner);
+    } else if (!busy && spinner) {
+        spinner.remove();
+    }
+}
+
+/**
  * Open the Stage Thread flow.
  *
  * @param {Object} opts
@@ -56,6 +82,12 @@ export async function openStageThreadModal(opts) {
  */
 async function _findAndStageThread({ accountId, folder, uid, subject, destinationFolderId }) {
     let result;
+    // Show the busy state on the Staged Items rail button while the
+    // server round-trip is in flight. We clear it the moment the request
+    // resolves — before any error alert — so the spinner's lifetime
+    // matches the actual network work, not the time an error modal sits
+    // open waiting to be dismissed.
+    _setStagedRailBusy(true);
     try {
         const response = await fetch('/api/threads/find', {
             method: 'POST',
@@ -69,6 +101,7 @@ async function _findAndStageThread({ accountId, folder, uid, subject, destinatio
             }),
         });
         if (!response.ok) {
+            _setStagedRailBusy(false);
             const err = await response.json().catch(() => ({}));
             await showAlert(
                 'Could not find thread',
@@ -78,9 +111,12 @@ async function _findAndStageThread({ accountId, folder, uid, subject, destinatio
         }
         result = await response.json();
     } catch (e) {
+        _setStagedRailBusy(false);
         await showAlert('Could not find thread', `Network error: ${e.message}`);
         return;
     }
+    // Request succeeded — staging the results is fast, synchronous work.
+    _setStagedRailBusy(false);
 
     const messages = result.thread || [];
     if (messages.length === 0) {
