@@ -11,6 +11,7 @@ except ImportError:
     import sqlite3
     SQLCIPHER_AVAILABLE = False
 
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Generator, Optional
@@ -28,10 +29,53 @@ class Database:
     
     Provides connection management, schema creation, and query helpers.
     The entire database is encrypted at rest using the master password.
+    
+    Thread safety: every public method acquires _lock (an RLock, so a
+    single thread can re-acquire across nested calls). During the crypto
+    migration's Phase 2, the migration thread acquires the lock once,
+    sets _migration_active with its thread id, performs the rekey, then
+    releases. Concurrent calls from other threads block on the lock; on
+    acquiring, they see the flag set by a different thread and raise
+    immediately. The migration's own DB calls bypass the flag check by
+    matching thread id.
     """
     
     _connection: Optional[sqlite3.Connection] = None
     _db_key: Optional[str] = None
+    
+    # Threading primitives (added in the crypto refactor; see
+    # docs/Crypto_Refactor_Plan.md scope item 5).
+    _lock: threading.RLock = threading.RLock()
+    _migration_active: bool = False
+    _migration_thread_id: Optional[int] = None
+    
+    @classmethod
+    def _check_migration(cls) -> None:
+        """Raise if Phase 2 of the crypto migration is active in a different
+        thread. The migration thread itself bypasses this check, so it can
+        still perform DB operations during the rekey window."""
+        if cls._migration_active and threading.get_ident() != cls._migration_thread_id:
+            raise RuntimeError(
+                "Database access blocked: crypto migration Phase 2 in progress. "
+                "All other DB operations are paused until the rekey completes."
+            )
+    
+    @classmethod
+    def acquire_for_migration(cls) -> None:
+        """Take exclusive ownership of the database for Phase 2 of the crypto
+        migration. Acquires the lock and sets the migration flag with the
+        caller's thread id. Must be paired with release_after_migration()."""
+        cls._lock.acquire()
+        cls._migration_active = True
+        cls._migration_thread_id = threading.get_ident()
+    
+    @classmethod
+    def release_after_migration(cls) -> None:
+        """Release exclusive ownership taken by acquire_for_migration(). Clears
+        the flag and releases the lock so other threads can proceed."""
+        cls._migration_thread_id = None
+        cls._migration_active = False
+        cls._lock.release()
     
     @classmethod
     def set_key(cls, key: str) -> None:
@@ -44,10 +88,12 @@ class Database:
         Args:
             key: Hex-encoded encryption key.
         """
-        cls._db_key = key
-        # Close existing connection if key changes
-        if cls._connection is not None:
-            cls.close()
+        with cls._lock:
+            cls._check_migration()
+            cls._db_key = key
+            # Close existing connection if key changes
+            if cls._connection is not None:
+                cls.close()
     
     @classmethod
     def get_connection(cls) -> sqlite3.Connection:
@@ -57,30 +103,32 @@ class Database:
         Returns:
             SQLite/SQLCipher connection with row factory set.
         """
-        if cls._connection is None:
-            if cls._db_key is None:
-                raise RuntimeError("Database key not set. Call set_key() first.")
+        with cls._lock:
+            cls._check_migration()
+            if cls._connection is None:
+                if cls._db_key is None:
+                    raise RuntimeError("Database key not set. Call set_key() first.")
+                
+                db_path = Config.get_database_path()
+                db_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                cls._connection = sqlite3.connect(
+                    str(db_path),
+                    check_same_thread=False,
+                )
+                cls._connection.row_factory = sqlite3.Row
+                
+                # Set encryption key (SQLCipher)
+                if SQLCIPHER_AVAILABLE:
+                    cls._connection.execute(f"PRAGMA key = \"x'{cls._db_key}'\"")
+                
+                # Enable foreign keys
+                cls._connection.execute("PRAGMA foreign_keys = ON")
+                
+                # Enable WAL mode for better concurrency
+                cls._connection.execute("PRAGMA journal_mode = WAL")
             
-            db_path = Config.get_database_path()
-            db_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            cls._connection = sqlite3.connect(
-                str(db_path),
-                check_same_thread=False,
-            )
-            cls._connection.row_factory = sqlite3.Row
-            
-            # Set encryption key (SQLCipher)
-            if SQLCIPHER_AVAILABLE:
-                cls._connection.execute(f"PRAGMA key = \"x'{cls._db_key}'\"")
-            
-            # Enable foreign keys
-            cls._connection.execute("PRAGMA foreign_keys = ON")
-            
-            # Enable WAL mode for better concurrency
-            cls._connection.execute("PRAGMA journal_mode = WAL")
-        
-        return cls._connection
+            return cls._connection
     
     @classmethod
     @contextmanager
@@ -89,46 +137,63 @@ class Database:
         Context manager for database transactions.
         
         Automatically commits on success, rolls back on exception.
+        Holds the database lock for the full transaction so nested DB
+        operations all execute under the same critical section.
         """
-        conn = cls.get_connection()
-        try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
+        with cls._lock:
+            cls._check_migration()
+            conn = cls.get_connection()
+            try:
+                yield conn
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
     
     @classmethod
     def execute(cls, sql: str, params: tuple = ()) -> sqlite3.Cursor:
         """Execute a SQL statement and return the cursor."""
-        return cls.get_connection().execute(sql, params)
+        with cls._lock:
+            cls._check_migration()
+            return cls.get_connection().execute(sql, params)
     
     @classmethod
     def executemany(cls, sql: str, params_list: list[tuple]) -> sqlite3.Cursor:
         """Execute a SQL statement with multiple parameter sets."""
-        return cls.get_connection().executemany(sql, params_list)
+        with cls._lock:
+            cls._check_migration()
+            return cls.get_connection().executemany(sql, params_list)
     
     @classmethod
     def fetchone(cls, sql: str, params: tuple = ()) -> Optional[sqlite3.Row]:
         """Execute a query and return the first row."""
-        return cls.execute(sql, params).fetchone()
+        with cls._lock:
+            cls._check_migration()
+            return cls.execute(sql, params).fetchone()
     
     @classmethod
     def fetchall(cls, sql: str, params: tuple = ()) -> list[sqlite3.Row]:
         """Execute a query and return all rows."""
-        return cls.execute(sql, params).fetchall()
+        with cls._lock:
+            cls._check_migration()
+            return cls.execute(sql, params).fetchall()
     
     @classmethod
     def commit(cls) -> None:
         """Commit the current transaction."""
-        cls.get_connection().commit()
+        with cls._lock:
+            cls._check_migration()
+            cls.get_connection().commit()
     
     @classmethod
     def close(cls) -> None:
         """Close the database connection."""
-        if cls._connection is not None:
-            cls._connection.close()
-            cls._connection = None
+        with cls._lock:
+            # No _check_migration here: close() is part of the migration's own
+            # teardown path and must always be allowed to run.
+            if cls._connection is not None:
+                cls._connection.close()
+                cls._connection = None
     
     @classmethod
     def checkpoint(cls) -> None:
@@ -137,8 +202,10 @@ class Database:
         
         Important to call before backup to ensure backup includes all data.
         """
-        conn = cls.get_connection()
-        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        with cls._lock:
+            cls._check_migration()
+            conn = cls.get_connection()
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     
     @classmethod
     def initialize(cls) -> None:
