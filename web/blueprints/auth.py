@@ -367,7 +367,18 @@ def change_password_progress():
         if not current_password or not new_password:
             yield f"data: {json.dumps({'error': 'Missing password data'})}\n\n"
             return
-        
+
+        # Post-migration password change uses different primitives
+        # (AES-256-GCM + Argon2id) than the v1 flow below. The v2 path is
+        # tracked as a follow-up; for now we refuse cleanly rather than
+        # silently corrupt a v2 archive.
+        try:
+            if Encryption.get_crypto_version() == 2:
+                yield f"data: {json.dumps({'status': 'error', 'message': 'Password change is not yet implemented for v2 (AES-256-GCM) archives. This will be added in a follow-up release.'})}\n\n"
+                return
+        except Exception:
+            pass
+
         try:
             # Step 1: Count encrypted files
             yield f"data: {json.dumps({'status': 'counting', 'message': 'Counting encrypted files...'})}\n\n"

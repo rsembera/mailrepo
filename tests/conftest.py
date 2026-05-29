@@ -43,9 +43,7 @@ def reset_singletons(temp_data_dir, monkeypatch):
     
     # Reset Encryption state
     from core.encryption import Encryption
-    Encryption._fernet = None
-    Encryption._salt = None
-    Encryption._db_key = None
+    Encryption.lock()
     
     # Reset Database state
     from core.database import Database
@@ -67,9 +65,7 @@ def reset_singletons(temp_data_dir, monkeypatch):
             pass
     Database._connection = None
     Database._db_key = None
-    Encryption._fernet = None
-    Encryption._salt = None
-    Encryption._db_key = None
+    Encryption.lock()
     Config._base_path = None
 
 
