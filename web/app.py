@@ -47,15 +47,23 @@ def create_app(test_config: dict = None) -> Flask:
     from .blueprints.main import main_bp
     from .blueprints.api import api_bp
     from .blueprints.backups import backups_bp
+    from .blueprints.migration import migration_bp
     
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(backups_bp)
+    app.register_blueprint(migration_bp)
     
-    # Helper to check if request is an API call
+    # Helper to check if request is an API call.
+    # Matches both: endpoints in the 'api' blueprint, and any request whose
+    # URL path contains /api/ regardless of which blueprint hosts it. The
+    # latter catches /backups/api/..., /migration/api/..., etc. so those
+    # blueprints get JSON 401s instead of HTML redirects on auth failure.
     def is_api_request():
-        return request.endpoint and request.endpoint.startswith("api.")
+        if request.endpoint and request.endpoint.startswith("api."):
+            return True
+        return "/api/" in (request.path or "")
     
     # Before request: check authentication and session timeout
     @app.before_request

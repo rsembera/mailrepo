@@ -4,6 +4,117 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## May 29, 2026 — Crypto refactor implementation: Encryption v2, DB lock, Migration module, SSE endpoint
+
+**Participants:** Rick, Claude (Opus 4.7) on the MacBook.
+
+A focused multi-session day implementing the v1 → v2 crypto migration designed yesterday. By end of day: the backend is complete and tested; frontend trigger UI and Apollo testing remain for next session. Production migration on Rick\'s real archive is held until Apollo testing passes.
+
+### Morning: backup investigation (no commit)
+
+Started with a backup investigation, not crypto. Rick clicked "Backup Now" in the Backup & Restore screen and saw no visible change — `Last backup` didn\'t update, history didn\'t update. Tracing the code path showed the backup system is working correctly: `create_backup()` falls through to `create_incremental_backup()` → `has_file_changes()` returns False when mtime/size match the baseline → returns None → endpoint returns `{success: True, message: "No changes since last backup"}`. The frontend does call `showMessage('No changes...', 'info')` but the message auto-dismisses after 5 seconds. Plus the 300px backup history is invisible-scrollbar territory on macOS.
+
+So three real UX bugs (info message disappears too fast, status card doesn\'t update on no-op click, history is hard to scroll), but the system is working. Verified yesterday\'s `incr_2026-05-28_075654.zip` is intact (11.7 MiB, integrity OK) and its chain root `full_2026-05-27_104941.zip` (211.4 MiB, 1644 files, OK). The UX bugs are deferred until after the migration is done — modifying backup code immediately before depending on backup for recovery is wrong sequencing.
+
+To get a today-dated recovery point, invoked `create_full_backup()` directly from a Python shell, bypassing the change-detection. Wrote `full_2026-05-29_091216.zip` (211.6 MiB, 1651 files, integrity verified end-to-end). Manifest now has 102 backups, fresh chain root for the day.
+
+### Encryption class refactor (`e59ca2b`)
+
+Rewrote `core/encryption.py` to support both v1 (PBKDF2 + Fernet, legacy) and v2 (Argon2id + HKDF-Expand + AES-256-GCM, current) side by side. Auto-detect on decrypt via the leading byte (0x02 = v2, anything else = v1 Fernet). During migration, both key sets can live in memory simultaneously so mid-walk archives keep working: v1 files decrypt via Fernet, v2 files via AES-256-GCM, new writes go out as v2.
+
+Argon2id parameters: m=256MiB, t=6, p=1. Measured ~750ms per derivation on the M4 — t was tuned upward from the planning placeholder of t=4 because t=4 landed at ~516ms, below the target window.
+
+Atomic salt file replacement uses the textbook fsync + os.replace + directory fsync pattern. The directory fsync is the step usually missed; without it, the rename can vanish on power loss even though the file data was synced.
+
+Added a v2-archive guard at the top of `change_password_progress` in `auth.py` so the existing Fernet-based password change refuses cleanly on v2 archives rather than silently corrupting. v2-native password change is a tracked follow-up.
+
+Tests: 17 new in `test_encryption_v2.py` covering salt file format, wire format (version byte placement, random nonces), AAD binding (tampered byte/nonce/ciphertext/truncation all fail loud), lock/unlock roundtrip, and the critical mid-migration dual-decode scenario (v1 archive built by hand, v2 keys injected, decrypt() correctly routes both).
+
+All 52 tests green. Real-world unlock verified on Rick\'s live v1 archive before commit.
+
+### Plan doc reconciliation (`cdd5229`)
+
+After the Encryption commit, Rick asked whether the migration would address all the issues we\'d found. Honest answer was "mostly, not entirely" — and he wanted both the scope clarifications written down AND the broader DB threading concern folded in.
+
+Updated `docs/Crypto_Refactor_Plan.md` to:
+- Add scope item 5: general DB threading lock (was previously in "Out of scope" with only the narrow `_migration_active` flag in scope).
+- Add a new "What this work does NOT address" section: backup UX bugs, v2 password change, v1 cleanup pass.
+- Add a "Road to 1.0" section listing the 5 remaining pre-1.0 items in priority order.
+- Reconcile Argon2 parameters with what shipped (t=6, measured).
+- Update concurrent-access risk/failure rows to reflect the lock-based mechanism rather than flag-only.
+
+Doc-only change. 126 insertions, 27 deletions.
+
+### Database threading lock (`076f3db`)
+
+Added `threading.RLock()` at the class level on `Database`, plus `_migration_active` bool + `_migration_thread_id` for the rekey exclusivity window. Every public DB method (`execute`, `executemany`, `fetchone`, `fetchall`, `commit`, `checkpoint`, `get_connection`, `set_key`, `transaction`) now wraps its body in `with cls._lock:` + `cls._check_migration()`. RLock (reentrant) because methods call each other (`fetchone` → `execute`, `transaction` → `get_connection`); a non-reentrant lock would deadlock on the same thread re-acquiring.
+
+`_check_migration()` matches `threading.get_ident()` against the stored migration thread ID and bypasses for the migration\'s own calls. That\'s how Phase 2 can still call `Database.execute` during its exclusive window (which it needs to: WAL checkpoint, the actual rekey).
+
+Public `acquire_for_migration()` / `release_after_migration()` methods bracket the Phase 2 window. Explicit pair (not context manager) because the migration spans non-Python boundaries — PRAGMA rekey, salt file write, in-memory key swap — and unambiguous ownership transfer is clearer than scope-based.
+
+Tests: 6 new in `test_database_threading.py`: concurrent inserts from two threads (no deadlock, correct final count), acquire blocks query in another thread (worker alive but not progressing), migration thread can still query during its own window, release unblocks waiting threads, reentrant lock works for `fetchone` → `execute` and nested `transaction` calls.
+
+All 58 tests green. Verified real-world unlock again before commit.
+
+### Migration module (`b7db944`)
+
+`core/migration.py` (577 lines) — the heart of the day\'s work. Two-phase structure with the per-file 0x02 version byte as the resumability hook.
+
+**Phase 1 (file layer):** walks every `.eml.enc` in the archive, decrypts with v1 Fernet, encrypts with v2 AES-256-GCM, atomically replaces. Re-encrypts IMAP credentials. Verification step counts that every archive file starts with 0x02 and random-sample-decrypts to confirm v2 keys produce sensible plaintext. Then writes the durable `.migration_phase_1_complete` marker.
+
+**Phase 2 (database layer):** refuses to start if backup is older than 24h (non-overridable — Phase 2 isn\'t resumable, backup IS the recovery path). Acquires `Database.acquire_for_migration()`, WAL checkpoint, `PRAGMA rekey` to v2 db_key, atomic v2 salt file write with MRC2 magic, `swap_v1_to_v2()` to clear v1 in-memory state, delete marker.
+
+**Halt-loud on corruption:** `_migrate_file` raises `MigrationCorruptionError` naming the specific filepath if v1 decrypt fails. Does not silently skip — a v1 decrypt failure means real disk damage or a real bug, both of which the user wants to see clearly.
+
+**Atomic file replacement** is the textbook `_atomic_write_file` helper: temp + fsync(file) + os.replace + fsync(directory). Used for both per-file Phase 1 writes and the salt file write in Phase 2.
+
+**Pre-flight checks:** `run_preflight()` returns `{ok, checks}` dict covering: unlocked, v1-decrypt-sample, argon2-cffi live derivation (catches missing dep + OOM in one shot), disk space ≥2× archive, backup age (overridable for Phase 1 only).
+
+**Progress streaming:** both phases take an optional `progress_cb` invoked with status dicts. The SSE endpoint (next commit) plugs this callback into the SSE stream.
+
+Tests: 12 new in `test_migration.py`. State detection across all four classifications (`not_needed` / `fresh` / `phase_1_interrupted` / `phase_2_pending`). Atomic write correctness. `_migrate_file` content equivalence (decrypt of v2 == original plaintext), skip already-v2 (resumability), halt-loud on corrupted v1. End-to-end Phase 1 happy path (tiny archive built by hand → all v2 → marker written → runtime decrypt still works → progress events received). Resumability: simulate partial run, lock + re-unlock, resume cleanly.
+
+All 70 tests green. The unit tests cover the core logic; the plan\'s Apollo Tests 1-8 (interrupt/resume/corruption/concurrent-access under real conditions) are the next layer.
+
+Notable implementation detail: the migration module had to be written via a chunked Python REPL because heredoc with the full 577-line content was being blocked by the shell layer. Several chunks of ~50-80 lines each via `interact_with_process`. One f-string quote-escape bug (over-escaped `row[\\"id\\"]` inside a subscripted f-string expression, which is invalid in Python) — fixed with a single byte replacement.
+
+### SSE endpoint + integration polish (this commit)
+
+`web/blueprints/migration.py` (262 lines) — the HTTP/SSE wrapper. Five endpoints:
+- `GET  /migration/api/state` — returns Migration state + pre-flight checks
+- `POST /migration/api/start-phase-1` — validates password, stashes in session
+- `GET  /migration/api/phase-1-progress` — SSE stream of Phase 1
+- `POST /migration/api/start-phase-2` — validates marker + v2 keys + backup ≤24h
+- `GET  /migration/api/phase-2-progress` — SSE stream of Phase 2
+
+Phase 2 doesn\'t need the password (v2 keys are already loaded from Phase 1 or from a mid-migration unlock). The two-step authorize-then-stream pattern mirrors `change_password_progress` in auth.py.
+
+A small but important `_stream_migration()` helper bridges Migration\'s synchronous `progress_cb` into an SSE stream via a thread + queue. The worker thread runs the actual migration and pushes events through the queue; the generator consumes them and yields `data: {json}\\n\\n`. Three error categories handled with distinct status codes: `corruption` (filepath named), generic `MigrationError`, and `unexpected`.
+
+Updated `Encryption.is_migration_in_progress()` to also detect the Phase 1 interrupted case — previously it only checked the marker, but if Phase 1 crashes before writing the marker there are v2 files on disk without one. The updated check is: salt is v1 AND (marker exists OR any v2 file exists in the archive). Walks short-circuit on the first 0x02 byte. After migration to v2 the early-return on version check means this scan never runs.
+
+Updated `is_api_request()` in `web/app.py` to also match URL paths containing `/api/`, not just endpoints under the `api.` blueprint. This was a latent issue affecting backup endpoints too: previously, unauthenticated AJAX calls to `/backups/api/...` or `/migration/api/...` would get HTML 302 redirects instead of JSON 401, which frontend code can\'t handle gracefully. Now properly returns JSON 401 for any `/api/` path.
+
+Blueprint registered in `web/app.py`. Endpoint smoke-tested via curl (unauthenticated → `HTTP 401 {"error": "Authentication required"}` — correct). Real-world unlock verified again with all changes in place.
+
+All 70 tests still green. The SSE flow itself isn\'t unit-tested (it depends on Flask app context + session state); Apollo testing will exercise it end-to-end through the browser.
+
+### Where we are at end of day
+
+Committed and pushed: `e59ca2b` → `cdd5229` → `076f3db` → `b7db944` → (this commit).
+
+**Backend is feature-complete.** Encryption class supports both versions. Database is thread-safe and migration-aware. Migration module handles both phases with halt-loud-on-corruption, atomic file replacement, full verification, and resumability. SSE endpoints stream progress to the browser. Unlock-resume detection handles all three mid-migration states.
+
+**Not yet built:**
+1. Frontend trigger UI — banner detection on unlock, password confirmation modal, progress UI consuming the SSE streams. This is the next session\'s opening work.
+2. Apollo testing — copy archive aside, run Tests 1-8 from the plan (dry-run, interrupt-mid-Phase-1, power-loss, content equivalence, app function, unlock-time, corrupted-file, concurrent-access).
+3. Production migration on Rick\'s archive — held until Apollo testing passes.
+
+The backup UX bugs from this morning, v2-native password change, and v1 cleanup pass are tracked in the plan\'s "What this work does NOT address" section — all pre-1.0 but post-migration work.
+
+---
+
 ## May 27, 2026 — Stage Thread feedback + max-thread setting + sidebar auto-refresh
 
 **Participants:** Rick, Claude (Opus 4.7) on the MacBook.

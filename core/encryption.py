@@ -170,11 +170,19 @@ class Encryption:
     @classmethod
     def is_migration_in_progress(cls) -> bool:
         """
-        True if the archive is in a Phase-1-complete-but-Phase-2-pending state.
+        True if the archive is in any mid-migration state.
 
-        Detected by: salt file is still v1 (no MRC2 magic) AND the marker
-        file exists. In this state, unlock() derives both v1 keys (for the
-        still-v1 SQLCipher DB) and v2 keys (for the already-v2 archive files).
+        Two cases qualify:
+        - Phase 1 complete, Phase 2 pending: v1 salt + marker file present.
+        - Phase 1 interrupted: v1 salt, no marker, but some v2 files exist
+          on disk (a previous run died mid-walk).
+
+        In either case, unlock() needs to derive BOTH the v1 keys (for the
+        still-v1 SQLCipher DB or for the remaining v1 files) and the v2
+        keys (for the already-v2 files / DB). The scan short-circuits on
+        the first v2 file found, so it's cheap even on large archives.
+        After migration to v2, this returns False immediately on the
+        version check without scanning.
         """
         try:
             version = cls.get_crypto_version()
@@ -182,7 +190,24 @@ class Encryption:
             return False
         if version == 2:
             return False
-        return cls.get_migration_marker_path().exists()
+        if cls.get_migration_marker_path().exists():
+            return True
+        # Phase 1 interrupted? Walk for any v2-format archive file.
+        try:
+            archive_root = Config.get_archive_path()
+        except Exception:
+            return False
+        if not archive_root.exists():
+            return False
+        for path in archive_root.rglob("*.eml.enc"):
+            try:
+                with open(path, "rb") as f:
+                    first = f.read(1)
+                if first and first[0] == VERSION_BYTE_V2:
+                    return True
+            except Exception:
+                continue
+        return False
 
     # ----------------------------------------------------------
     # Initialize (new install) — always creates v2
