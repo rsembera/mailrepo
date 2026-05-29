@@ -20,9 +20,19 @@ pre-1.0 codebase:
 4. **Crypto-version field in the salt file** — store a magic+version
    identifier alongside the salt so future cipher/KDF changes can be
    detected and migrated cleanly without breaking existing archives.
+5. **Database thread-safety.** Wrap every `Database` entry point in a
+   reentrant lock so concurrent DB access is properly serialized — both
+   in everyday use and during the `PRAGMA rekey` in Phase 2 of the
+   migration. The narrow `_migration_active` flag still exists as
+   defense-in-depth, but the general lock means we're not relying on
+   "single-user app + light contention" anymore; the shared connection
+   becomes safe by construction.
 
-All four ride on a single one-time migration so we re-walk every
-`.eml.enc` only once.
+All five ride on a single one-time migration so we re-walk every
+`.eml.enc` only once. The threading fix isn't strictly *required* for
+the crypto refactor, but the rekey window makes it the right moment to
+address it — the migration depends on knowing exactly which threads
+can touch the DB and when, and the lock gives us that cleanly.
 
 ## Why one migration (the load-bearing reason)
 
@@ -99,7 +109,7 @@ db_key     = PBKDF2(password, salt + DBSUFFIX, iterations=480_000, length=32)
 master_key = argon2id.derive(
     password,
     salt=salt,
-    time_cost=4,             # iterations
+    time_cost=6,             # iterations (measured: ~750ms on M4)
     memory_cost=262144,      # 256 MiB (in KiB; 256 * 1024)
     parallelism=1,
     length=32,
@@ -111,8 +121,10 @@ db_key   = HKDFExpand(master_key, info=b"mailrepo.db.v2",   length=32)
 # Total unlock cost: 1 × Argon2id (~750ms–1s on MacBook Air M4)
 ```
 
-**Argon2id parameters.** m=256 MiB, t=4, p=1, targeting ~750ms–1s on
-the MacBook Air M4. The mental model: time is the security knob,
+**Argon2id parameters.** m=256 MiB, t=6, p=1, landing at ~750ms on
+the MacBook Air M4 (measured during implementation; t was tuned upward
+from the t=4 starting value because the M4 is fast enough that t=4
+came in at ~516ms, comfortably under the 750ms-1s target window). The mental model: time is the security knob,
 memory is what kills GPU/ASIC parallelism. Bumping memory from 64 MiB
 to 256 MiB raises offline-cracking cost meaningfully and is invisible
 to the user on machines that have 8+ GiB of RAM. p=1 is cleaner than
@@ -191,6 +203,43 @@ The public API stays nearly identical:
   unchanged base64 encoding around the new payload.
 - New: `Encryption.get_crypto_version() -> int` — reports whether the
   current archive is on v1 (needs migration) or v2 (current).
+
+### 6. Database thread-safety
+
+The current `Database` class holds a single class-level `sqlite3`
+connection opened with `check_same_thread=False`, with no
+application-level lock. For a single-user local app the contention is
+genuinely low, so this hasn't bitten in practice — but it's the
+structural source of any "database is locked" or weird cursor-state
+bugs that might appear, and it's the most dangerous surface to share
+across `PRAGMA rekey`.
+
+**Approach.** Add a class-level `threading.RLock()` to `Database`,
+acquired around every public method that touches the connection
+(`execute`, `executemany`, `fetchone`, `fetchall`, `commit`,
+`rollback`, `checkpoint`). RLock (reentrant) is the right primitive
+because some methods may call each other in nested contexts.
+
+The `_migration_active` flag now lives inside the lock: when the
+migration enters Phase 2 it acquires the lock, sets the flag, does
+the WAL checkpoint and the rekey, writes the new salt file, clears
+the flag, and releases the lock. Other callers waiting on the lock
+either find the flag clear (proceed normally) or, if the migration
+hasn't cleared it for some pathological reason, raise immediately.
+
+**Cost.** Serialized DB access across threads. SQLite is fast and
+this is a single-user local app; the lock contention is essentially
+free in normal use. The one case it matters is during a long-running
+SSE stream (commit, migration progress) where another thread waits
+for an in-progress query — that's a few-millisecond hit at worst.
+Worth it for correctness; not worth a more complex per-thread
+connection architecture.
+
+**Not addressed by the lock**: a per-thread connection pool. SQLite
+allows multiple readers in parallel when each has its own
+connection; the lock serializes everything. For MailRepo's workload
+that's fine. If we ever need read parallelism, that's a later
+refactor.
 
 ## Migration design
 
@@ -280,14 +329,13 @@ recovery path, not a nice-to-have.
 **Phase 2 (database layer):**
 11. **Re-check backup is ≤24h old. This check is not overridable.**
     Phase 2 is not resumable; backup is the recovery path.
-12. Quiesce all other DB access. The single shared `Database._connection`
-    is the most dangerous concurrency surface in the codebase, and
-    `PRAGMA rekey` is the most dangerous operation to share it
-    against. For the duration of the rekey, no other code path may
-    touch the connection. The migration takes exclusive ownership
-    by setting a class-level `_migration_active` flag that every DB
-    access method checks; concurrent calls raise immediately rather
-    than racing the rekey.
+12. Quiesce all other DB access. The migration acquires
+    `Database._lock` (the new RLock added in scope item 5) and sets
+    `_migration_active = True` inside that critical section. While the
+    lock is held, all other DB access blocks; the flag is a
+    defense-in-depth check inside the lock so an erroneous re-entry
+    raises immediately rather than racing the rekey. The lock is held
+    through the rest of Phase 2 (steps 13–17) and released at step 18.
 13. `WAL checkpoint(TRUNCATE)` to flush pending writes before rekey.
 14. `PRAGMA rekey = "x'<v2_db_key_hex>'"`. This rewrites every page
     of the DB in place under the new key.
@@ -342,7 +390,7 @@ rename can vanish.
 | Power loss during atomic rename of salt file | 2 | `os.replace` + dir fsync; either old or new file present. | None needed if rename was synced; otherwise behaves like "salt file write fails" above. |
 | Argon2 OOM during derivation | Pre-flight | Pre-flight test catches this before any file is touched. | Lower memory parameter; re-run. |
 | `argon2-cffi` import fails | Pre-flight | Migration refuses to start. Archive untouched. | Install dependency; re-run. |
-| Concurrent DB access during rekey | 2 | `_migration_active` flag raises in concurrent callers. | None needed — the protection works by construction. |
+| Concurrent DB access during rekey | 2 | Other threads block on `Database._lock` until Phase 2 releases it. `_migration_active` flag is defense-in-depth check inside the lock. | None needed — the protection works by construction. |
 
 ### Pre-flight checks
 
@@ -401,7 +449,7 @@ encrypted data exercised.
 ### Test 6: Unlock-time measurement on the MacBook
 
 Before the production migration, measure Argon2id with the proposed
-parameters (m=256 MiB, t=4, p=1) on the actual M4. Target window:
+parameters (m=256 MiB, t=6, p=1) on the actual M4. Target window:
 ~750ms–1s. If measurement is significantly under (say <400ms), raise
 `time_cost`. If significantly over (say >1.5s), the UX hit is real
 but probably still acceptable for a once-per-session unlock — flag
@@ -427,7 +475,7 @@ Only after Tests 1-8 pass on Apollo do we touch the MacBook.
 | Bug in v2 encrypt/decrypt corrupts data | Low | High | Tests 1-7; per-file verification step before Phase 2; backup ≤24h |
 | Mid-Phase-1 crash leaves archive unreadable | Very low | Medium | Per-file version byte + atomic rename + directory fsync + resumable walk |
 | Phase 2 interrupt (the genuinely scary one) | Very low | High | Non-overridable backup check; Phase 2 is short; concurrent-access protection |
-| Concurrent DB access during rekey | Low (single-user app) | High | `_migration_active` flag enforced at every DB entry point |
+| Concurrent DB access during rekey | Eliminated by design | High | `Database._lock` RLock serializes all DB access; `_migration_active` flag is defense-in-depth inside the lock |
 | Argon2 parameter choice too slow on slower hardware | Medium | Low | Test 6 measures actual time; tunable |
 | Argon2 parameter choice too fast (under-securing) | Low | Medium | Memory at 256MiB is conservative; if hardware is fast, we land safely above the security threshold |
 | HKDF expansion produces a key collision with v1 db_key | Effectively zero | High | Domain separation via `info=` strings; different KDF altogether |
@@ -444,20 +492,20 @@ Explicitly **not** part of this refactor:
   product surface; not 1.0 territory.
 - **Iteration-count tuning post-launch** — the version byte gives us
   the migration hook to bump parameters later if/when hardware moves on.
-- **General fix for the shared DB connection across threads.** The
-  threading concern is now handled *specifically during the rekey*
-  via the `_migration_active` flag, but the broader architectural
-  question (one connection vs per-thread connections) remains open
-  for post-1.0. The narrow protection during the migration is a hard
-  requirement; the broader fix is a latent improvement.
+- **Per-thread connection pool.** The threading fix in scope item 5
+  adds a lock around the single shared connection. A more sophisticated
+  per-thread pool (where reads can parallelize against each other) is
+  not part of this work. MailRepo's single-user workload doesn't
+  benefit enough from it to justify the complexity now.
 
 ## Open questions for review
 
 These were the open questions in the prior draft. Each is now
 resolved by 4.8's review:
 
-1. **Argon2id parameters.** Resolved: m=256 MiB, t=4, p=1, target
-   ~750ms–1s. Tunable per Test 6.
+1. **Argon2id parameters.** Resolved: m=256 MiB, t=6, p=1, measured
+   ~750ms on the M4. t was tuned upward from the t=4 planning value
+   because t=4 landed at ~516ms, below the target window.
 2. **HKDF salt reuse.** Resolved: use HKDF-Expand (not full HKDF),
    no salt parameter needed; domain separation comes from `info=`.
 3. **Nonce strategy.** Resolved: random 96-bit per file via
@@ -501,6 +549,56 @@ If something goes wrong on the MacBook:
    for new encryption. Worst case is: revert the commit, restore the
    backup, app boots on v1 again.
 
+## What this work does NOT address
+
+Three known issues that are explicitly **not** in scope for this
+refactor. Each has its own follow-up tracked below.
+
+- **Backup UX bugs.** The "no changes since last backup" message
+  disappears too quickly to register; the status card doesn't update
+  a last-checked timestamp on no-op clicks; the 300px-tall backup
+  history is invisible-scrollbar territory on macOS. These are
+  pre-existing issues found this morning while investigating an
+  apparent backup failure (which turned out to be working correctly
+  but communicated poorly). Deferred because modifying backup code
+  immediately before depending on it for migration recovery is the
+  wrong sequencing.
+
+- **v2-native password change.** The existing `change_password_progress`
+  SSE endpoint uses Fernet primitives directly. We added a guard so it
+  refuses cleanly on v2 archives rather than silently corrupting, but
+  the actual v2 flow (Argon2id re-derivation, AES-256-GCM
+  re-encryption of every file) hasn't been written yet. This **must**
+  be done before 1.0 — otherwise post-migration users can never change
+  their passphrase.
+
+- **v1 code cleanup.** Once migration is done and verified, there's a
+  satisfying cleanup commit that strips the dual-decode logic, the v1
+  KDF, the Fernet import, the backward-compat `_derive_db_key` alias,
+  and the v2-archive guard in `change_password_progress`. Probably
+  200–300 lines removed, ~50 lines simplified. We keep the version
+  byte and `MRC2` magic — those are forward-facing infrastructure for
+  any future v3 crypto migration.
+
+## Road to 1.0
+
+In priority order, the remaining pre-1.0 work after this refactor:
+
+1. **Finish today's migration work.** Backend module
+   (`core/migration.py`), SSE endpoint, frontend trigger, unlock-resume
+   detection, and run the migration on Rick's archive.
+2. **v2-native password change.** Rewrite `change_password_progress` to
+   work against v2 archives using `derive_v2_file_key_for_password()`
+   and `derive_v2_db_key_for_password()` plus an AES-256-GCM
+   re-encryption walk that mirrors the migration's Phase 1 mechanically.
+3. **Backup UX fixes.** Persistent "no changes" message, last-checked
+   timestamp update on the status card, native or always-visible
+   scrollbar on the backup history list.
+4. **v1 cleanup pass.** Remove the v1 code paths now that no v1 archive
+   exists anywhere. Single, focused diff.
+5. **Final 1.0 polish.** Whatever's left when the four items above are
+   done.
+
 ## Acknowledgments
 
 This plan integrates substantive review from Claude Opus 4.8. The
@@ -510,5 +608,6 @@ non-overridable backup check before Phase 2, the two-phase
 restructure with verification checkpoint, the halt-loud-on-corruption
 behavior, the GCM AAD binding, the Argon2 parameter bump to 256 MiB,
 and the use of HKDF-Expand rather than full HKDF all come from that
-review. Errors that remain are Opus 4.7's (and Rick's, if he agrees
-with this plan).
+review. The expansion of scope to include the broader DB threading
+lock came from Rick's "fix everything" directive in the May 29 morning
+session. Errors that remain are Opus 4.7's.
