@@ -6,16 +6,16 @@ A single, coordinated migration that addresses four things at once on the
 pre-1.0 codebase:
 
 1. **Argon2id replaces PBKDF2 as the password KDF** — memory-hard
-   derivation, resistant to GPU/ASIC attack. Tuned to ~500ms on the
-   MacBook (the slowest target machine) at recommended OWASP parameters.
-2. **HKDF subkey expansion** — replace the current dual-PBKDF2 derivation
-   (running 480,000 iterations independently for file key and DB key)
-   with a single Argon2id derivation of a master key, followed by two
-   HKDF expansions into the file subkey and the DB subkey. Subkey
-   derivation becomes essentially free.
-3. **AES-128 → AES-256 file encryption** — replace Fernet (AES-128-CBC +
-   HMAC) with AES-256-GCM for all archived email files (`*.eml.enc`)
-   and encrypted IMAP credentials. Brings file encryption to parity with
+   derivation, resistant to GPU/ASIC attack. Tuned to ~750ms–1s on the
+   MacBook Air M4 with 256 MiB memory cost.
+2. **HKDF subkey expansion** — replace the current dual-PBKDF2
+   derivation (running 480k iterations independently for file key and
+   DB key) with a single Argon2id derivation of a master key, followed
+   by two HKDF-Expand calls into the file subkey and the DB subkey.
+   Subkey derivation becomes essentially free.
+3. **AES-128 → AES-256 file encryption** — replace Fernet (AES-128-CBC
+   + HMAC) with AES-256-GCM for archived email files (`*.eml.enc`) and
+   encrypted IMAP credentials. Brings file encryption to parity with
    SQLCipher and pyzipper.
 4. **Crypto-version field in the salt file** — store a magic+version
    identifier alongside the salt so future cipher/KDF changes can be
@@ -24,26 +24,40 @@ pre-1.0 codebase:
 All four ride on a single one-time migration so we re-walk every
 `.eml.enc` only once.
 
-## Why one migration
+## Why one migration (the load-bearing reason)
 
-Doing these as separate migrations would mean walking every encrypted
-file on disk multiple times. Combining them is safer (fewer rewrite
-passes = fewer windows for corruption) and faster (one migration, one
-verification). The four changes also reinforce each other: Argon2id
-without AES-256 would feel incomplete, AES-256 without the version byte
-would lock us into v2 forever, HKDF without Argon2id would lower unlock
-cost in a direction we don't actually want.
+Changing the KDF forces a full re-walk of every `.eml.enc` file
+regardless: the file key bytes change, so every Fernet token would need
+to be decrypted under the old key and re-encrypted under the new key
+even if we kept Fernet itself. Once that re-walk is forced by the
+Argon2id change, the AES-128 → AES-256 upgrade and the version-byte
+addition cost essentially nothing extra — they ride as free passengers
+on a walk that's happening anyway.
 
-## Why now
+Stated plainly: if the KDF weren't changing, AES-256-for-files would
+**not** be worth a dedicated migration. "Documentation asymmetry" and
+"256 > 128" are real annoyances but not reasons to rewrite 1,634 files
+on their own. It's the forced KDF re-walk that converts the cipher
+upgrade from "not worth it alone" to "free rider on a forced walk."
+This is the right reason to bundle the four changes; the wrong reason
+would be "they're all crypto, let's just do them together."
 
-These are pre-1.0 changes. After 1.0 ships, the v1 cipher and KDF
-choices become a permanent floor — every subsequent change is a
-migration with real users on real data. Doing the cleanup now means
-1.0 ships with the mature crypto rather than the in-progress crypto.
-For Argon2id specifically: it's strictly better than PBKDF2-SHA256 for
-the threat model (laptop theft → offline GPU cracking attempt), and
-swapping the KDF after launch is the kind of breaking change that
-makes users distrust subsequent updates.
+## Why now (and where the risk actually is)
+
+These are pre-1.0 changes. The motivation is **not** security urgency
+— the current crypto is not weak. PBKDF2-SHA256 at 480k iterations is
+above OWASP's PBKDF2 floor and resists offline cracking adequately for
+the threat model. AES-128 has no practical break and won't for
+decades. The framing is engineering-cost: doing this now is cheaper
+than after real users have real data on disk. Post-1.0, every crypto
+change becomes a migration with users on the other side.
+
+The single largest risk in this whole exercise is the migration
+itself corrupting or losing the only copy of 1,634 personal emails.
+That risk dwarfs the marginal security delta between PBKDF2-at-480k
+and Argon2id. So the care budget flows accordingly: less energy on
+exact Argon2 parameters (any reasonable choice is safe), more on the
+rekey/backup/atomicity machinery. The plan reflects this.
 
 ## What stays the same
 
@@ -65,17 +79,17 @@ makes users distrust subsequent updates.
 
 The 4-byte `MRC2` magic ("MailRepo Crypto v2") lets us cleanly detect
 old-format salt files for migration. v1 has no magic; the absence of
-`MRC2` at byte 0 means "this is a pre-migration file, run migration".
-The v2 verification token is encrypted under the new Argon2id-derived
-file subkey, so being able to decrypt it proves the user knows the
+`MRC2` at byte 0 means "this is a pre-migration file." The v2
+verification token is encrypted under the new Argon2id-derived file
+subkey, so being able to decrypt it proves the user knows the
 passphrase AND that we're on the right crypto version.
 
 ### 2. Key derivation
 
 **Before** (`encryption.py`):
 ```python
-fernet_key = PBKDF2(password, salt,             iterations=480_000, length=32)
-db_key     = PBKDF2(password, salt + DBSUFFIX,  iterations=480_000, length=32)
+fernet_key = PBKDF2(password, salt,            iterations=480_000, length=32)
+db_key     = PBKDF2(password, salt + DBSUFFIX, iterations=480_000, length=32)
 # Total unlock cost: 2 × PBKDF2-SHA256
 ```
 
@@ -85,30 +99,41 @@ db_key     = PBKDF2(password, salt + DBSUFFIX,  iterations=480_000, length=32)
 master_key = argon2id.derive(
     password,
     salt=salt,
-    time_cost=4,           # iterations
-    memory_cost=64 * 1024, # 64 MiB
-    parallelism=2,
+    time_cost=4,             # iterations
+    memory_cost=262144,      # 256 MiB (in KiB; 256 * 1024)
+    parallelism=1,
     length=32,
 )
-# HKDF expansions for subkeys (essentially free)
-file_key = HKDF(master_key, salt, info=b"mailrepo.file.v2", length=32)
-db_key   = HKDF(master_key, salt, info=b"mailrepo.db.v2",   length=32)
-# Total unlock cost: 1 × Argon2id (~500ms on MacBook Air M4)
+# HKDF-Expand for subkeys (Argon2id output is already uniform 32 bytes,
+# so we use Expand rather than Extract-and-Expand)
+file_key = HKDFExpand(master_key, info=b"mailrepo.file.v2", length=32)
+db_key   = HKDFExpand(master_key, info=b"mailrepo.db.v2",   length=32)
+# Total unlock cost: 1 × Argon2id (~750ms–1s on MacBook Air M4)
 ```
 
-**Argon2id parameters.** I'm proposing OWASP's current "second" preset:
-m=64MiB, t=4, p=2. This targets roughly 500ms of unlock time on the
-MacBook Air M4 (the slowest current target), produces strong GPU
-resistance, and uses memory that's available even on modest hardware.
-We measure and adjust during implementation — if 500ms is wildly off on
-the actual machine, we tune `time_cost` to land near the target.
+**Argon2id parameters.** m=256 MiB, t=4, p=1, targeting ~750ms–1s on
+the MacBook Air M4. The mental model: time is the security knob,
+memory is what kills GPU/ASIC parallelism. Bumping memory from 64 MiB
+to 256 MiB raises offline-cracking cost meaningfully and is invisible
+to the user on machines that have 8+ GiB of RAM. p=1 is cleaner than
+p=2 for a single latency-bound unlock; higher parallelism would split
+the memory across lanes, slightly reducing memory-hardness per lane.
 
-The `info` strings include `.v2` so the KDF identity is part of the
-domain separation. A v3 KDF would use `.v3` info strings, making the
-keys cryptographically distinct from v2 even if the master key happens
+These parameters are measured against the actual target during
+implementation (Test 6 below). If we land far from ~1s on the M4, we
+tune `time_cost` to hit the target.
+
+**Why HKDF-Expand, not full HKDF.** Argon2id already outputs a
+uniform 32-byte key. HKDF-Extract is for concentrating entropy from
+non-uniform input, which we don't have. HKDF-Expand alone is the
+honest expression of what we're doing. (Full HKDF with a salt would
+be harmless and conventional; HKDFExpand is just more accurate.) The
+`info` strings include `.v2` so the KDF identity is part of the
+domain separation — a v3 KDF would use `.v3` info strings, making
+keys cryptographically distinct from v2 even if the master happened
 to land on the same bytes.
 
-**Dependency change.** We add `argon2-cffi` to `requirements.txt`. The
+**Dependency change.** Add `argon2-cffi` to `requirements.txt`. The
 library wraps the reference Argon2 implementation, is widely used
 (Django, Flask-Security, others), and ships precompiled wheels for
 Linux/macOS on Python 3.9+. No new system dependency on Linux.
@@ -120,27 +145,40 @@ Linux/macOS on Python 3.9+. No new system dependency on Linux.
 **After:** AES-256-GCM (256-bit key, 96-bit nonce, 128-bit auth tag).
 Same primitives library (`cryptography.hazmat.primitives.ciphers.aead`),
 authenticated encryption (GCM provides confidentiality + integrity in
-one operation), comparable performance.
+one operation), comparable performance with hardware acceleration on
+both targets (AES instructions on M4, AES-NI on x86).
 
 **Wire format on disk** for each `.eml.enc` file:
 ```
 [1 byte: version (0x02 for v2)]
-[12 bytes: random nonce]
+[12 bytes: random nonce, from os.urandom(12)]
 [N bytes: ciphertext]
 [16 bytes: GCM auth tag]
 ```
 
-The leading version byte means each file knows how to decrypt itself.
-v1 (existing Fernet) files have no such byte; we detect them by the
-Fernet token's signature (a Fernet token starts with `0x80` followed by
-an 8-byte timestamp). The migration's per-file walk skips any file that
-already starts with `0x02` (resumability).
+The leading version byte is **bound into GCM's AAD** (additional
+authenticated data) at encryption time and verified on decryption.
+This authenticates the version byte itself, so a tampered version
+byte breaks the auth check — cheap defense in depth against
+ciphertext-shape manipulation.
+
+v1 (existing Fernet) files have no version byte; we detect them by
+the Fernet token's signature (starts with `0x80` followed by an
+8-byte timestamp). The migration's per-file walk skips any file
+that already starts with `0x02` (resumability).
+
+**Why random nonces, not deterministic.** A deterministic nonce
+derived from the file path would be a trap: if a file's content ever
+changes while its path stays the same, we'd reuse a nonce under the
+same key — and GCM nonce reuse is catastrophic (leaks the auth key,
+enables forgery). At our scale (thousands of files, far below the
+~2^32 random-nonce bound), random 96-bit nonces are completely safe.
 
 ### 4. Stored credentials
 
 `accounts.credentials_encrypted` currently holds a Fernet token. The
-migration re-encrypts these to AES-256-GCM with the same wire format as
-the file payloads.
+migration re-encrypts these to AES-256-GCM with the same wire format
+as the file payloads.
 
 ### 5. Encryption class API
 
@@ -156,144 +194,203 @@ The public API stays nearly identical:
 
 ## Migration design
 
-### Resumability is non-negotiable
+### Two-phase structure
 
-The migration walks every `.eml.enc` file on disk (~1,634 on the
-MacBook). Each file is read, decrypted with the v1 (Fernet) key, then
-encrypted with the v2 (AES-256-GCM) key, then atomically replaced.
+The file walk and the DB rekey have fundamentally different risk
+profiles: the file walk is granular, atomic per file, and
+version-byte-resumable. The DB rekey is monolithic, not
+version-byte-resumable, and dependent on quiescent DB access. The
+migration is therefore split into two phases with a durable checkpoint
+between them.
 
-If the process is interrupted (sleep, crash, kill, power) partway
-through, we MUST be able to resume cleanly. The mechanism:
+**Phase 1: file layer.** Walks every `.eml.enc`, re-encrypts to v2.
+Re-encrypts IMAP credentials. Verifies by counting all files start
+with `0x02` and randomly sampling decrypts.
 
-1. The **per-file version byte** means every file self-identifies. A
-   half-migrated archive has some v1 files and some v2 files; the runtime
-   `decrypt()` handles both, so the app keeps working. The migration
-   simply picks up where it left off by skipping any file that already
-   starts with `0x02`.
-2. The **salt file** is rewritten **last**, after every file and every
-   credential record has been successfully migrated. Until that final
-   write, the archive is still on v1 from the unlock-token's
-   perspective. The salt file rewrite is atomic via temp-file + rename.
-3. **Progress is streamed** via SSE just like the password-change flow
-   already does, so the user has live feedback and can see where they
-   are in the process.
+**Phase 2: database layer.** Only begins after Phase 1 has fully
+completed and verified. Quiesces all other DB access. `PRAGMA rekey`
+to v2 db_key. Atomically writes new salt file with `MRC2` magic.
+Swaps in-memory keys. Deletes the Phase 1 completion marker.
+
+The benefit: by the time we touch the DB at all, the file layer is
+already fully v2 and verified. The scary, non-resumable rekey window
+is narrowed to exactly the operations that need to be in it.
+
+### Resumability
+
+Within Phase 1, every file self-identifies via its leading byte. A
+half-migrated archive has some v1 files and some v2 files; the runtime
+`decrypt()` handles both. The migration picks up by skipping any file
+that already starts with `0x02`.
+
+If Phase 1 is interrupted, the salt file is untouched (still v1, no
+`MRC2` magic), but a `.migration_phase_1_complete` marker has not yet
+been written. On next launch, the unlock logic detects v2 files in the
+archive without the marker and prompts the user to resume the
+migration before normal use. The resume derives both v1 keys (PBKDF2
+path, for the still-v1 DB) and v2 keys (Argon2id path, for the
+already-v2 files), and continues the walk.
+
+Phase 2 is **not** version-byte-resumable — there's no equivalent of
+the per-file version byte for SQLCipher pages. An interrupted Phase 2
+is recovered by restoring from the verified ≤24h backup. The backup
+check before Phase 2 is therefore **not user-overridable**: it's the
+recovery path, not a nice-to-have.
 
 ### Migration steps (live order)
 
-1. **Verify backup is current.** Refuse to run if the most recent backup
-   is older than 24 hours, unless the user explicitly confirms an
-   over-ride checkbox in the migration UI. (Cheap safety net; users
-   should have a known-good backup before any crypto change.)
-2. **Acquire the v1 Fernet** from the current unlocked session.
-3. **Derive the v2 keys.** Run Argon2id on the password+salt to get the
-   master key, then HKDF-expand into the v2 file subkey and v2 db
-   subkey. The v2 db_key will be different from the current v1 db_key.
-   SQLCipher must be rekeyed.
-4. **Walk archive and re-encrypt** every `.eml.enc`. For each file:
+**Pre-flight:**
+1. The current Fernet key successfully decrypts a known-good file
+   (sanity check that the user's session is healthy).
+2. `argon2-cffi` imports cleanly and a throwaway Argon2id derivation
+   with the chosen parameters completes successfully. This catches
+   missing dependency, hostile environment, and OOM together — more
+   reliably than a separate RAM-math check.
+3. Free disk space ≥ 2× the size of all `.eml.enc` files combined.
+4. Most recent backup is ≤24h old (override allowed for Phase 1
+   only — see Phase 2 below).
+
+**Phase 1 (file layer):**
+5. Acquire the v1 Fernet from the current unlocked session.
+6. Derive the v2 keys. Run Argon2id on password+salt to get the
+   master key, then HKDF-Expand into the v2 file subkey and v2 db
+   subkey. (The v2 db_key is derived now but not used until Phase 2.)
+7. Walk archive and re-encrypt every `.eml.enc`. For each file:
    - Read.
    - If first byte is `0x02`, already v2 → skip (resumability).
-   - Else decrypt with v1 Fernet, encrypt with v2 GCM, atomically
-     replace via temp-file + rename in the same directory (same
-     filesystem, so rename is atomic).
+   - Else decrypt with v1 Fernet, encrypt with v2 GCM (version byte in
+     AAD), atomically replace via temp-file + rename + directory
+     fsync.
+   - **On Fernet decrypt failure: halt the migration, name the
+     specific file, present the failure clearly. Do not silently
+     skip.** A decrypt failure means real disk damage or a bug; both
+     are loud problems, not paper-overable. Collecting multiple
+     failures and reporting at the end is acceptable; silent skip is
+     not.
    - Stream progress every 10 files.
-5. **Re-encrypt IMAP credentials** in the `accounts` table.
-6. **SQLCipher rekey** to the v2 db_key (`PRAGMA rekey`).
-7. **Write the new salt file** with the `MRC2` magic, 32-byte salt, and
-   v2-format verification token. Atomic write via temp file + rename.
-8. **In-memory swap.** Replace the Encryption class's keys with v2 keys
-   for the remainder of the session.
+8. Re-encrypt IMAP credentials in the `accounts` table.
+9. **Verification step.** Count: every file in the archive starts
+   with `0x02`. Random sample: pick 50 files (or all if fewer),
+   decrypt each with the v2 file_key, confirm the plaintext starts
+   with a valid email header. Refuse to proceed to Phase 2 if any
+   check fails.
+10. Write the `.migration_phase_1_complete` marker file. This is the
+    durable checkpoint between phases.
 
-If step 4 or 5 is interrupted, restarting the migration finds the same
-salt file (still no `MRC2` magic), the same v1 db_key works, and the
-loop resumes from the first non-v2 file.
-
-If step 6 succeeds but 7 fails, the DB is rekeyed to v2 but the salt
-file still says v1 — on next launch, unlock would derive v1 keys and
-SQLCipher would reject the open. Mitigation: step 6 and 7 happen back
-to back with no I/O in between except the salt file write, and the
-salt file write is to a temp file that's been pre-created and
-pre-`fsync`-ed.
+**Phase 2 (database layer):**
+11. **Re-check backup is ≤24h old. This check is not overridable.**
+    Phase 2 is not resumable; backup is the recovery path.
+12. Quiesce all other DB access. The single shared `Database._connection`
+    is the most dangerous concurrency surface in the codebase, and
+    `PRAGMA rekey` is the most dangerous operation to share it
+    against. For the duration of the rekey, no other code path may
+    touch the connection. The migration takes exclusive ownership
+    by setting a class-level `_migration_active` flag that every DB
+    access method checks; concurrent calls raise immediately rather
+    than racing the rekey.
+13. `WAL checkpoint(TRUNCATE)` to flush pending writes before rekey.
+14. `PRAGMA rekey = "x'<v2_db_key_hex>'"`. This rewrites every page
+    of the DB in place under the new key.
+15. Write the new salt file with `MRC2` magic, 32-byte salt, and
+    v2-format verification token. Atomic: write to temp file in the
+    same directory, `fsync` the temp file, `os.replace`, then
+    `fsync` the containing directory.
+16. Swap the in-memory `Encryption` keys to v2 for the rest of the
+    session.
+17. Delete the `.migration_phase_1_complete` marker.
+18. Release the `_migration_active` flag.
 
 ### Atomic file replacement
 
-For each migrated file, the pattern is:
+For every replaced file (per-file in Phase 1 and the salt file in
+Phase 2), the pattern is:
 
 ```python
-# Same directory = same filesystem = atomic rename on POSIX
 tmp = filepath + ".v2tmp"
 with open(tmp, "wb") as f:
-    f.write(b"\x02" + nonce + ciphertext + tag)
+    f.write(payload)
     f.flush()
-    os.fsync(f.fileno())
-os.replace(tmp, filepath)  # atomic on POSIX
+    os.fsync(f.fileno())             # file contents durable
+os.replace(tmp, filepath)            # atomic on POSIX
+# Directory fsync — durability of the rename itself
+dir_fd = os.open(os.path.dirname(filepath), os.O_RDONLY)
+try:
+    os.fsync(dir_fd)
+finally:
+    os.close(dir_fd)
 ```
 
-`os.replace` is atomic on the same filesystem on POSIX (Linux, macOS).
-We never have a window where the file is missing or partially written —
-either the v1 file is there, or the v2 file is there, never neither.
+The directory `fsync` is the step that's usually missed. Without it,
+a power loss after the `os.replace` returns can lose the rename even
+though the file contents were synced — leaving either the old file or
+a stray temp file behind. With it, we never have a window where the
+rename can vanish.
 
 ### Failure modes considered
 
-| Failure | Effect | Recovery |
-|---|---|---|
-| Process killed mid-file (after fsync, before rename) | Stray `.v2tmp` file alongside original `.eml.enc`. Original is intact. | Resume: tmp files are detected and cleaned up at the start of the next migration run. |
-| Process killed during file walk | Some files v1, some v2, salt file still v1. Runtime decrypt handles mixed state. App works. | Resume: re-run migration, skip files already at v2. |
-| SQLCipher rekey succeeds, salt file write fails | DB encrypted with v2 key, salt file says v1. Next unlock fails. | Recovery script: use last backup, OR re-run migration end-to-end (re-derives the v2 key deterministically and re-attempts the salt file write). |
-| Salt file write succeeds, in-memory swap fails | Disk is v2, memory is v1. Session is broken. | User restarts app → fresh unlock → derives v2 from salt magic → works. |
-| Power loss during atomic rename | `os.replace` is atomic; either old or new file exists, never both, never neither. | None needed. |
-| Disk full during migration | First write to `.v2tmp` fails. Original `.eml.enc` untouched. | Free up space, re-run. |
-| Argon2 parameters too aggressive for available RAM (OOM during derivation) | Migration aborts cleanly before any file is touched (Argon2id runs before step 4). Archive untouched. | Fall back to lower memory parameters; re-run. |
-| `argon2-cffi` import fails on user's Python install | Migration refuses to start. Archive untouched. | Pre-flight check refuses to launch; clear error message. |
+| Failure | Phase | Effect | Recovery |
+|---|---|---|---|
+| Process killed mid-file (after fsync, before rename) | 1 | Stray `.v2tmp` alongside original. Original intact. | Resume: tmp files detected and cleaned at next migration run start. |
+| Process killed during file walk | 1 | Mixed-state archive. Runtime decrypt handles both. App still launches but warns user. | Resume from where Phase 1 stopped (skip v2 files). |
+| Power loss after rename but before directory fsync | 1 | On some filesystems, rename can be lost. Either old or new file visible; never partial. | Resume; whichever file is present is intact. |
+| Decrypt failure on a v1 file mid-walk | 1 | Real disk damage or a bug. | Halt loud, name the file, do not skip. User decides whether to restore from backup or investigate the specific file. |
+| Verification step finds a v2 file that won't decrypt | 1 | A bug in v2 encrypt (highly unlikely after testing) or disk corruption. | Halt before Phase 2; restore from backup. |
+| Process killed during Phase 1 verification | 1 | All files v2 but marker not yet written. | Resume: verification re-runs and writes marker. |
+| Process killed during DB rekey | 2 | DB in indeterminate state. **Not version-byte-resumable.** | Restore from the verified ≤24h backup. |
+| Salt file write fails after successful rekey | 2 | DB encrypted with v2 key, salt file says v1. Next unlock fails. | Restore from backup, OR re-run migration end to end (re-derives v2 deterministically, re-attempts salt file write). |
+| Salt file write succeeds, in-memory swap fails | 2 | Disk v2, memory v1. Session broken. | Restart app; fresh unlock derives v2 from salt magic; works. |
+| Power loss during atomic rename of salt file | 2 | `os.replace` + dir fsync; either old or new file present. | None needed if rename was synced; otherwise behaves like "salt file write fails" above. |
+| Argon2 OOM during derivation | Pre-flight | Pre-flight test catches this before any file is touched. | Lower memory parameter; re-run. |
+| `argon2-cffi` import fails | Pre-flight | Migration refuses to start. Archive untouched. | Install dependency; re-run. |
+| Concurrent DB access during rekey | 2 | `_migration_active` flag raises in concurrent callers. | None needed — the protection works by construction. |
 
 ### Pre-flight checks
 
 Before any file is touched:
 
-1. The current Fernet key successfully decrypts a known-good file
-   (sanity check that the user's session is healthy).
-2. `argon2-cffi` imports cleanly and an Argon2id derivation with the
-   chosen parameters completes successfully on a throwaway input. This
-   catches missing dependency / hostile environment before any file is
-   touched.
-3. Free disk space ≥ 2× the size of all `.eml.enc` files combined.
-   (Worst case: every file is duplicated via `.v2tmp` momentarily.)
-4. The archive directory is on the same filesystem as `/tmp`-equivalent
-   space we'd be using. (Actually, we keep `.v2tmp` files in the same
-   directory as the source file, so this is automatic.)
-5. Most recent backup is ≤24h old (or user override).
-6. Available RAM is at least 2× the Argon2id memory parameter (so we
-   don't trigger swap-thrash during derivation).
+1. Current Fernet key decrypts a known-good file.
+2. `argon2-cffi` imports AND a live derivation with the chosen
+   parameters completes — catches missing dependency and OOM in one
+   shot.
+3. Free disk space ≥ 2× total `.eml.enc` size.
+4. Most recent backup is ≤24h old (Phase 1 override allowed;
+   Phase 2 not overridable — see step 11).
+
+The previous draft included a "available RAM ≥ 2× Argon2 memory"
+check; that's been dropped as redundant with the live Argon2
+derivation test, which catches OOM directly and more reliably.
 
 ## Testing plan
 
-### Test 1: Dry run on a copy of Apollo's archive
+### Test 1: Dry run on Apollo
 
-Apollo's archive is small (small handful of test messages). Copy it
-aside, run the full migration end to end on the copy with the
-production code path, verify every file decrypts cleanly with v2 keys
-and the contents byte-match what v1 produced.
+Apollo's archive is small (a handful of test messages). Copy it
+aside, run the full two-phase migration end to end on the copy with
+the production code path, verify every file decrypts cleanly with v2
+keys and the contents byte-match what v1 produced.
 
-### Test 2: Interrupt mid-migration on the copy
+### Test 2: Interrupt mid-Phase-1 on Apollo
 
-Kill the migration partway through. Verify:
-- Some files are v1, some are v2.
-- App still launches and reads all files correctly (auto-detect works).
+Kill the migration partway through the file walk. Verify:
+- Some files v1, some v2.
+- App launches in resume-required mode (detects v2 files without marker).
 - Resume completes successfully.
-- After resume, every file is v2 and decrypts identically to the
-  pre-migration content.
+- After resume, every file is v2; Phase 2 runs cleanly.
+- Post-migration content byte-matches pre-migration.
 
-### Test 3: Power-loss simulation on the copy
+### Test 3: Power-loss simulation on Apollo
 
-Run migration under a process killer that SIGKILLs the migration at
-random points. Repeat several times, verifying each time that the
-archive is recoverable.
+Run the migration under a process killer that SIGKILLs at random
+points. Verify recovery from each phase:
+- Phase 1 interrupt → resume.
+- Phase 2 interrupt → restore from backup, re-run.
 
 ### Test 4: Full content equivalence
 
 After migration, walk every file and verify:
 - v2 decrypt output byte-equals what v1 decrypt would have produced.
 - File counts match.
-- DB queries return identical results (subjects, senders, etc).
+- DB queries return identical results (subjects, senders, etc.).
 
 ### Test 5: Run the actual app
 
@@ -301,103 +398,117 @@ Stage an email, commit it, archive it, search it, export it, restore
 from a backup taken before migration. Every code path that touches
 encrypted data exercised.
 
-### Test 6: Unlock-time measurement
+### Test 6: Unlock-time measurement on the MacBook
 
-Measure Argon2id unlock time on the MacBook Air M4. If it's wildly off
-from the ~500ms target (say, >2s or <100ms), tune parameters before
-running the production migration.
+Before the production migration, measure Argon2id with the proposed
+parameters (m=256 MiB, t=4, p=1) on the actual M4. Target window:
+~750ms–1s. If measurement is significantly under (say <400ms), raise
+`time_cost`. If significantly over (say >1.5s), the UX hit is real
+but probably still acceptable for a once-per-session unlock — flag
+for review rather than auto-adjust.
 
-Only after Tests 1-6 pass on the Apollo copy do we touch the MacBook.
+### Test 7: Corrupted-file behavior
+
+Plant a deliberately corrupted v1 file in the Apollo copy and run
+Phase 1. Verify the migration halts, names the file, and produces a
+clear error rather than skipping silently.
+
+### Test 8: Concurrent DB access during rekey
+
+Attempt a concurrent DB query during the simulated rekey window.
+Verify the `_migration_active` flag raises cleanly rather than racing.
+
+Only after Tests 1-8 pass on Apollo do we touch the MacBook.
 
 ## Risks and mitigations
 
 | Risk | Likelihood | Severity | Mitigation |
 |---|---|---|---|
-| Bug in v2 encrypt or decrypt corrupts data | Low | High | Tests 1-5; resumability means partial migration is recoverable; backup taken before run |
-| Mid-migration crash leaves archive unreadable | Very low | High | Per-file version byte + atomic rename + resumable walk |
-| Argon2 parameter choice is too slow on slower hardware | Medium | Low | Test 6 measures actual time; parameters tunable; we can set conservatively and tune up later |
-| Argon2 parameter choice is too fast (under-securing) | Low | Medium | OWASP-recommended baseline; if hardware is fast, we land safely above the security threshold |
-| User loses passphrase between migration and verification | Same as today | Same as today | No change |
-| HKDF expansion produces a key that collides with v1 db_key | Effectively zero | High | Domain separation via `info=` parameter; different by construction; different KDF anyway |
+| Bug in v2 encrypt/decrypt corrupts data | Low | High | Tests 1-7; per-file verification step before Phase 2; backup ≤24h |
+| Mid-Phase-1 crash leaves archive unreadable | Very low | Medium | Per-file version byte + atomic rename + directory fsync + resumable walk |
+| Phase 2 interrupt (the genuinely scary one) | Very low | High | Non-overridable backup check; Phase 2 is short; concurrent-access protection |
+| Concurrent DB access during rekey | Low (single-user app) | High | `_migration_active` flag enforced at every DB entry point |
+| Argon2 parameter choice too slow on slower hardware | Medium | Low | Test 6 measures actual time; tunable |
+| Argon2 parameter choice too fast (under-securing) | Low | Medium | Memory at 256MiB is conservative; if hardware is fast, we land safely above the security threshold |
+| HKDF expansion produces a key collision with v1 db_key | Effectively zero | High | Domain separation via `info=` strings; different KDF altogether |
+| Silent skip of corrupt file leaves stranded v1 file | Eliminated by design | High | Halt-loud behavior; no silent skip |
 | pyzipper exports break | None (separate keying) | N/A | Exports use per-export password, not master key |
-| `argon2-cffi` introduces a regression vs Fernet on some Python version | Low | High | Pre-flight check exercises Argon2id derivation before any file touched |
-| Tests pass, production fails | Low | High | Migration is run with last good backup verified ≤24h before |
+| `argon2-cffi` regression on some Python version | Low | High | Pre-flight derivation test |
+| Tests pass on Apollo, production fails on MacBook | Low | High | Backup verified ≤24h before; Phase 1 fully resumable; Phase 2 falls back to backup |
 
 ## Out of scope
 
-These are explicitly **not** part of this refactor:
+Explicitly **not** part of this refactor:
 
-- **Database connection threading** (the shared connection issue). Latent;
-  fix when a real bug surfaces.
-- **Hardware-backed key storage** (macOS Keychain, etc). Different
+- **Hardware-backed key storage** (macOS Keychain, etc.) — different
   product surface; not 1.0 territory.
 - **Iteration-count tuning post-launch** — the version byte gives us
   the migration hook to bump parameters later if/when hardware moves on.
+- **General fix for the shared DB connection across threads.** The
+  threading concern is now handled *specifically during the rekey*
+  via the `_migration_active` flag, but the broader architectural
+  question (one connection vs per-thread connections) remains open
+  for post-1.0. The narrow protection during the migration is a hard
+  requirement; the broader fix is a latent improvement.
 
 ## Open questions for review
 
-1. **Argon2id parameter choice.** I'm proposing m=64MiB, t=4, p=2 as
-   the starting point, targeting ~500ms on the MacBook Air M4. Is
-   this in the right ballpark for the threat model (offline cracking
-   of a stolen laptop with private correspondence)? Should we set
-   memory higher (128MiB, 256MiB) given the data sensitivity?
+These were the open questions in the prior draft. Each is now
+resolved by 4.8's review:
 
-2. **HKDF salt parameter.** I'm using the same 32-byte salt for both
-   Argon2id and HKDF, which is acceptable per RFC 5869 (HKDF's salt
-   is not security-critical when the input keying material is already
-   high-entropy, which Argon2id output is). But should HKDF use a
-   separate salt? My read: no — the `info` parameter provides the
-   domain separation, the salt is just a non-secret randomizer.
-
-3. **Nonce strategy for AES-GCM.** I'm using a fresh random 96-bit
-   nonce per file. NIST SP 800-38D allows up to 2^32 random nonces per
-   key before collision probability becomes meaningful; we'll never
-   approach that. Alternative: deterministic nonce from file path. I
-   chose random because it's simpler and the file count we'd need to
-   hit the limit is astronomical.
-
-4. **Should the version byte be on every file or just on the salt file?**
-   Current plan: every file. Pro: each file self-identifies, resumability
-   trivial. Con: 1 byte of overhead per file. Marginal but worth
-   confirming.
-
-5. **`os.replace` cross-platform behaviour.** Atomic on Linux/macOS for
-   same-filesystem replacements. Less guaranteed on Windows. MailRepo
-   targets Linux + macOS today, so this is fine. Worth flagging if
-   Windows is ever in scope.
-
-6. **What if a Fernet token in the archive is corrupted?** Today's
-   `decrypt()` raises; we'd hit an exception mid-migration and skip
-   that file. Probably right behaviour but worth confirming we want
-   that vs. aborting the whole migration on the first corruption.
-
-7. **Single-cipher option.** Should we consider XChaCha20-Poly1305
-   instead of AES-256-GCM? It's arguably more robust against nonce
-   misuse and equally fast in software, but it's less standard for
-   stored data and the `cryptography` library exposes it via a
-   slightly different API. Default position: stick with AES-256-GCM
-   for consistency with SQLCipher and pyzipper.
+1. **Argon2id parameters.** Resolved: m=256 MiB, t=4, p=1, target
+   ~750ms–1s. Tunable per Test 6.
+2. **HKDF salt reuse.** Resolved: use HKDF-Expand (not full HKDF),
+   no salt parameter needed; domain separation comes from `info=`.
+3. **Nonce strategy.** Resolved: random 96-bit per file via
+   `os.urandom(12)`. Deterministic nonces would be a trap.
+4. **Version byte per file vs salt-only.** Resolved: per file, AND
+   bound into GCM's AAD for authentication.
+5. **`os.replace` cross-platform.** Resolved: fine for Linux/macOS;
+   not a Windows-supported codebase today. Comment for future-you.
+6. **Corrupt Fernet token mid-migration.** Resolved: halt loud, do
+   not skip.
+7. **Cipher choice (AES-256-GCM vs XChaCha20-Poly1305).** Resolved:
+   stick with AES-256-GCM. Hardware-accelerated on both targets,
+   consistent with SQLCipher/pyzipper, nonce-reuse risk handled by
+   random 96-bit nonces.
 
 ## Estimated execution time
 
-- Implementation: 3-4 hours (Argon2id adds tuning + a new dependency
-  vs the original PBKDF2-only plan; everything else is the same).
-- Apollo testing (Tests 1-6): 1-2 hours.
-- MacBook migration (with backup verification): 30 minutes including
-  the actual run.
+- Implementation: 3-4 hours (the new Encryption class methods, two-phase
+  migration SSE endpoint with marker file, unlock-resume detection,
+  concurrent-access protection).
+- Apollo testing (Tests 1-8): 2 hours.
+- MacBook migration with backup verification: 30 minutes.
 - Total: a focused day's work.
 
 ## Rollback plan
 
 If something goes wrong on the MacBook:
 
-1. The migration writes the salt file last. If we never reach step 7,
-   the archive is still v1 from the unlock perspective.
-2. If we did reach step 7 and something failed after, restore from the
-   ≤24h-old backup.
-3. Per-file `.v2tmp` files are cleaned up by the next migration run's
-   pre-flight; they're harmless if left behind.
-4. The original v1 code (Fernet + dual-PBKDF2) stays compileable
-   through this refactor — we don't delete it, we just stop using it
-   for new encryption. So a worst-case is: revert the commit, restore
-   the backup, app boots on v1 again.
+1. **Mid-Phase-1.** Salt file untouched. Worst case is mixed-state
+   archive plus the marker not yet written. Re-run resumes from where
+   it stopped. If we lose confidence entirely, restore from the
+   ≤24h backup.
+2. **Between phases (Phase 1 complete, Phase 2 not started).** Marker
+   file is present. Unlock detects this state and prompts for
+   resume — but the user can choose "restore from backup" instead.
+3. **Mid-Phase-2.** Restore from the ≤24h backup. (This is exactly
+   why the backup check is non-overridable at step 11.)
+4. **Post-migration.** Per-file `.v2tmp` cleaned up by next migration
+   pre-flight. The v1 code (Fernet + dual-PBKDF2) stays compileable
+   through this refactor — we don't delete it, just stop using it
+   for new encryption. Worst case is: revert the commit, restore the
+   backup, app boots on v1 again.
+
+## Acknowledgments
+
+This plan integrates substantive review from Claude Opus 4.8. The
+load-bearing argument for bundling ("KDF change forces a re-walk; the
+others ride free"), the directory-fsync requirement, the
+non-overridable backup check before Phase 2, the two-phase
+restructure with verification checkpoint, the halt-loud-on-corruption
+behavior, the GCM AAD binding, the Argon2 parameter bump to 256 MiB,
+and the use of HKDF-Expand rather than full HKDF all come from that
+review. Errors that remain are Opus 4.7's (and Rick's, if he agrees
+with this plan).
