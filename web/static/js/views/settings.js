@@ -500,12 +500,29 @@ async function handleChangePassword() {
                     break;
                 case 'complete':
                     progressBar.style.width = '100%';
+                    progressMsg.textContent = 'Password changed. Saving backup and logging out...';
                     eventSource.close();
-                    // Success - show modal and redirect on confirm
+                    // Skip the click-to-dismiss alert and go straight into the
+                    // logout flow. The auto-backup at logout runs against
+                    // every-file-modified, which can take 30-60 seconds with
+                    // no feedback otherwise. The existing logoutModal gives
+                    // the user something to look at during the wait.
                     setTimeout(async () => {
-                        const { showAlert } = await import('../modals.js');
-                        await showAlert('Password Changed', 'Your password has been changed. Please log in with your new password.');
-                        window.location.href = '/auth/logout';
+                        const modal = document.getElementById('logoutModal');
+                        const status = document.getElementById('logoutStatus');
+                        if (modal) modal.classList.add('active');
+                        if (status) status.textContent = 'Saving backup of your re-encrypted archive. This may take up to a minute.';
+                        if (typeof lucide !== 'undefined') lucide.createIcons();
+                        try {
+                            const response = await fetch('/auth/logout', { method: 'POST' });
+                            if (response.redirected) {
+                                window.location.href = response.url;
+                            } else {
+                                window.location.href = '/auth/login';
+                            }
+                        } catch (e) {
+                            window.location.href = '/auth/login';
+                        }
                     }, 500);
                     break;
             }

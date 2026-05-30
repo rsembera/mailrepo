@@ -368,17 +368,55 @@ def change_password_progress():
             yield f"data: {json.dumps({'error': 'Missing password data'})}\n\n"
             return
 
-        # Post-migration password change uses different primitives
-        # (AES-256-GCM + Argon2id) than the v1 flow below. The v2 path is
-        # tracked as a follow-up; for now we refuse cleanly rather than
-        # silently corrupt a v2 archive.
+        # Route to v1 or v2 path based on crypto version.
+        # v2 path uses core/password_change.change_master_password which
+        # handles Argon2id + AES-256-GCM + the backup-<=24h non-overridable
+        # check + the file-walk-with-resumability + DB rekey + salt file
+        # rewrite, all under the existing settings.js SSE event vocabulary.
         try:
-            if Encryption.get_crypto_version() == 2:
-                yield f"data: {json.dumps({'status': 'error', 'message': 'Password change is not yet implemented for v2 (AES-256-GCM) archives. This will be added in a follow-up release.'})}\n\n"
-                return
+            crypto_version = Encryption.get_crypto_version()
         except Exception:
-            pass
+            crypto_version = 1
 
+        if crypto_version == 2:
+            from core.password_change import (
+                change_master_password,
+                PasswordChangeError,
+                PasswordChangeCorruptionError,
+            )
+            import queue
+            import threading
+            q = queue.Queue()
+            SENTINEL = object()
+            def cb(event):
+                q.put(event)
+            def worker():
+                try:
+                    result = change_master_password(current_password, new_password, progress_cb=cb)
+                    q.put({'status': 'complete', 'message': 'Password changed successfully', 'result': result})
+                except InvalidPasswordError as e:
+                    q.put({'status': 'error', 'message': str(e)})
+                except PasswordChangeCorruptionError as e:
+                    q.put({'status': 'error', 'message': str(e), 'kind': 'corruption', 'filepath': e.filepath})
+                except PasswordChangeError as e:
+                    q.put({'status': 'error', 'message': str(e)})
+                except Exception as e:
+                    q.put({'status': 'error', 'message': f'{type(e).__name__}: {e}'})
+                finally:
+                    q.put(SENTINEL)
+            t = threading.Thread(target=worker, daemon=True)
+            t.start()
+            while True:
+                ev = q.get()
+                if ev is SENTINEL:
+                    break
+                yield f"data: {json.dumps(ev)}\n\n"
+            t.join(timeout=1.0)
+            return
+
+        # --- Legacy v1 path (Fernet) -----------------------------
+        # Kept for completeness but never reached on a v2 archive.
+        # Will be removed in the post-migration v1 cleanup commit.
         try:
             # Step 1: Count encrypted files
             yield f"data: {json.dumps({'status': 'counting', 'message': 'Counting encrypted files...'})}\n\n"
