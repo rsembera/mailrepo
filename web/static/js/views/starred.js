@@ -10,10 +10,15 @@
  * since there's only one list and no tabs.
  *
  * See docs/Flagging_Plan.md.
+ *
+ * Click/input handling uses delegate.js (event delegation with
+ * data-action / data-input attributes) -- no inline handlers, no window
+ * exports.
  */
 
 import { escapeHtml, formatDate, extractName } from '../utils.js';
 import { state } from '../state.js';
+import { bindActions } from '../delegate.js';
 
 let contextTitle = null;
 let contextMeta = null;
@@ -21,6 +26,7 @@ let emailList = null;
 let starredEmails = [];
 let searchQuery = '';
 let inStarredContext = false;
+let actionsBound = false;
 
 /**
  * Initialize starred view. Called once at app startup with the DOM
@@ -30,6 +36,22 @@ export function initStarredView(config) {
     contextTitle = config.contextTitle;
     contextMeta = config.contextMeta;
     emailList = config.emailList;
+
+    // Bind delegated click + input handlers once. Safe to call on the
+    // shared emailList container -- closest([data-action]) only fires for
+    // descendants that currently have the data-* attribute, which our
+    // own renderStarredView is the only thing setting in this view.
+    if (emailList && !actionsBound) {
+        bindActions(emailList, {
+            openEmail: (el) => openStarredEmail(
+                Number(el.dataset.emailId),
+                Number(el.dataset.folderId),
+            ),
+            clearSearch: () => clearStarredSearch(),
+            searchInput: (el) => handleStarredSearch(el.value),
+        }, ['click', 'input']);
+        actionsBound = true;
+    }
 }
 
 /**
@@ -77,30 +99,26 @@ async function loadStarredEmails() {
     }
 }
 
+/**
+ * Render the starred view.
+ *
+ * Two-phase render to avoid replacing the search input on every keystroke:
+ *   1. renderShell() builds the toolbar (search input, clear button) and
+ *      an empty list container. Called only on first render or after a
+ *      transition out of the "no starred emails" empty state.
+ *   2. renderList() updates ONLY the list container. The search input is
+ *      never touched during normal filter operation, so focus and cursor
+ *      position are naturally preserved -- no manual focus restoration
+ *      needed.
+ *
+ * If there are zero starred emails total, renderStarredView shows a
+ * standalone empty state instead of the shell + list pair. Transitioning
+ * back to a non-empty state will rebuild the shell on demand.
+ */
 function renderStarredView() {
     const total = starredEmails.length;
 
-    // Filter by search if active
-    let emails = starredEmails;
-    if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        emails = emails.filter(e =>
-            (e.subject || '').toLowerCase().includes(q) ||
-            (e.sender || '').toLowerCase().includes(q) ||
-            (e.folder_path || '').toLowerCase().includes(q)
-        );
-    }
-
-    // Context meta count
-    if (contextMeta) {
-        const showingFiltered = searchQuery && emails.length !== total;
-        if (showingFiltered) {
-            contextMeta.textContent = `${emails.length} of ${total} starred emails`;
-        } else {
-            contextMeta.textContent = `${total} starred email${total !== 1 ? 's' : ''}`;
-        }
-    }
-
+    // Whole-view empty state when nothing is starred at all.
     if (total === 0) {
         emailList.innerHTML = `
             <div class="empty-state">
@@ -110,10 +128,28 @@ function renderStarredView() {
             </div>
         `;
         if (typeof lucide !== 'undefined') lucide.createIcons();
+        if (contextMeta) contextMeta.textContent = '';
         return;
     }
 
-    let html = `
+    // Build the shell if it isn't present (first render, or just
+    // transitioned out of the empty state). Idempotent: cheap to check,
+    // no-op if already built.
+    if (!document.getElementById('starred-list-container')) {
+        renderShell();
+    }
+
+    renderList();
+    updateStarredMeta();
+}
+
+/**
+ * Build the shell: toolbar with search input + clear button + empty list
+ * container. Done once per view-show; not touched by filter changes.
+ */
+function renderShell() {
+    const clearHidden = searchQuery ? '' : 'hidden';
+    emailList.innerHTML = `
         <div class="trash-management-list">
             <div class="trash-management-toolbar">
                 <div class="trash-toolbar-left">
@@ -121,30 +157,79 @@ function renderStarredView() {
                         <i data-lucide="search" class="search-icon"></i>
                         <input type="text"
                                id="starredSearch"
-                               placeholder="Filter starred emails…"
+                               placeholder="Filter starred emails\u2026"
                                value="${escapeHtml(searchQuery)}"
-                               oninput="handleStarredSearch(this.value)">
-                        ${searchQuery ? '<button class="search-clear" onclick="clearStarredSearch()"><i data-lucide="x"></i></button>' : ''}
+                               data-input="searchInput">
+                        <button class="search-clear ${clearHidden}"
+                                id="starredClearBtn"
+                                data-action="clearSearch">
+                            <i data-lucide="x"></i>
+                        </button>
                     </div>
                 </div>
             </div>
+            <div id="starred-list-container"></div>
+        </div>
     `;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
 
-    if (emails.length === 0) {
-        html += `
+/**
+ * Render just the email rows into the persistent list container.
+ * Toggles the clear-button visibility based on whether a filter is active.
+ */
+function renderList() {
+    const listEl = document.getElementById('starred-list-container');
+    if (!listEl) return;
+
+    const emails = filteredStarredEmails();
+
+    if (emails.length === 0 && searchQuery) {
+        listEl.innerHTML = `
             <div class="empty-state" style="padding: var(--space-xl);">
                 <p>No starred emails match "${escapeHtml(searchQuery)}"</p>
             </div>
         `;
     } else {
-        emails.forEach(email => {
-            html += renderStarredEmailRow(email);
-        });
+        listEl.innerHTML = emails.map(renderStarredEmailRow).join('');
     }
 
-    html += '</div>';
-    emailList.innerHTML = html;
+    // Sync clear button visibility with the current filter state.
+    const clearBtn = document.getElementById('starredClearBtn');
+    if (clearBtn) {
+        clearBtn.classList.toggle('hidden', !searchQuery);
+    }
+
     if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+/**
+ * Apply the current searchQuery to the in-memory starredEmails list.
+ * Subject, sender, and folder_path are matched as case-insensitive
+ * substrings. Body text is NOT searched here -- use the global archive
+ * search (FTS5) for body-text search.
+ */
+function filteredStarredEmails() {
+    if (!searchQuery) return starredEmails;
+    const q = searchQuery.toLowerCase();
+    return starredEmails.filter(e =>
+        (e.subject || '').toLowerCase().includes(q) ||
+        (e.sender || '').toLowerCase().includes(q) ||
+        (e.folder_path || '').toLowerCase().includes(q)
+    );
+}
+
+/** Update the meta count line above the list. */
+function updateStarredMeta() {
+    if (!contextMeta) return;
+    const total = starredEmails.length;
+    const filtered = filteredStarredEmails();
+    const showingFiltered = searchQuery && filtered.length !== total;
+    if (showingFiltered) {
+        contextMeta.textContent = `${filtered.length} of ${total} starred emails`;
+    } else {
+        contextMeta.textContent = `${total} starred email${total !== 1 ? 's' : ''}`;
+    }
 }
 
 function renderStarredEmailRow(email) {
@@ -153,7 +238,9 @@ function renderStarredEmailRow(email) {
     const subject = email.subject || '(no subject)';
     return `
         <div class="folder-management-item email-list-item"
-             onclick="openStarredEmail(${email.id}, ${email.folder_id})">
+             data-action="openEmail"
+             data-email-id="${email.id}"
+             data-folder-id="${email.folder_id}">
             <div class="email-list-content">
                 <div class="email-list-main">
                     <div class="email-list-header-row">
@@ -175,13 +262,14 @@ function renderStarredEmailRow(email) {
  * Open an email from the starred view. Delegates to the standard
  * archive viewer, but we need to set up the folder context first so
  * prev/next and the star button know which list they're in.
+ *
+ * Module-local now (was window.openStarredEmail). Wired via the
+ * delegated click handler set up in initStarredView.
  */
-window.openStarredEmail = async function(emailId, folderId) {
-    // Synthesize a minimal state.emails containing just this email so the
-    // viewer's context and current-position logic work. The user can use
-    // the star button to unstar, but prev/next would have nowhere to go —
-    // we'll set state.emails to the starred list so navigation walks the
-    // starred set.
+async function openStarredEmail(emailId, folderId) {
+    // Synthesize a minimal state.emails containing just the starred list
+    // so the viewer's context and current-position logic work. prev/next
+    // walks the starred set; the star button can unstar within this view.
     state.currentView = { type: 'folder', id: folderId };
     state.emails = starredEmails.map(e => ({
         id: e.id,
@@ -194,17 +282,21 @@ window.openStarredEmail = async function(emailId, folderId) {
     if (typeof window.openEmailViewer === 'function') {
         await window.openEmailViewer(emailId);
     }
-};
+}
 
-window.handleStarredSearch = function(value) {
+function handleStarredSearch(value) {
     searchQuery = value || '';
     renderStarredView();
-};
+}
 
-window.clearStarredSearch = function() {
+function clearStarredSearch() {
     searchQuery = '';
+    // Shell isn't re-rendered on filter changes, so the input's DOM value
+    // doesn't reset by itself -- clear it explicitly.
+    const input = document.getElementById('starredSearch');
+    if (input) input.value = '';
     renderStarredView();
-};
+}
 
 /**
  * Update the badge count on the Starred rail button. Called after
@@ -233,12 +325,12 @@ export async function updateStarredBadge() {
 /**
  * Remove an email from the in-memory starred list and re-render.
  * Called by toggleStarFromViewer when the user unstars an email while
- * viewing it from within the Starred context — without this, the row
+ * viewing it from within the Starred context -- without this, the row
  * would stay in the list visually contradicting its new (unflagged)
  * state.
  *
  * Safe to call when not in starred context; it just no-ops if the id
- * isn\'t in the list.
+ * isn't in the list.
  */
 export function dropFromStarredList(emailId) {
     if (!inStarredContext) return;
@@ -253,7 +345,7 @@ export function dropFromStarredList(emailId) {
     // Re-render the view so the list under the viewer updates immediately.
     // Without this, the row stays visible until the user navigates away
     // and back. emailList might not be available if we got here via some
-    // unexpected path \u2014 guard accordingly.
+    // unexpected path -- guard accordingly.
     if (emailList) {
         renderStarredView();
     }
