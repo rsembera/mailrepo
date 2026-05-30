@@ -115,11 +115,15 @@ To import Outlook .pst files, you need `libpst` installed at the system level:
 | Data | Protection |
 |------|------------|
 | Database | SQLCipher (AES-256) |
-| Archived emails | Fernet (AES-128-CBC + HMAC) |
-| IMAP credentials | Fernet encryption |
-| Master password | PBKDF2-HMAC-SHA256, 480,000 iterations |
+| Archived emails | AES-256-GCM with per-file random nonce |
+| IMAP credentials | AES-256-GCM |
+| Master password | Argon2id (m=256 MiB, t=6, p=1) → HKDF-Expand into file & DB keys |
+| File format | `[0x02][12-byte nonce][ciphertext][16-byte GCM tag]` |
+| Salt file | `MRC2` magic + 32-byte salt + GCM-encrypted verification token |
 
-The master password is never stored. On startup, MailRepo attempts to decrypt a verification token — if it succeeds, the session proceeds. If not, access is denied.
+The master password is never stored. On startup, MailRepo attempts to decrypt a verification token with keys derived from the entered password — if the GCM authentication succeeds, the session proceeds. If not, access is denied.
+
+The 0x02 per-file version byte and `MRC2` salt magic are forward infrastructure: a future crypto migration can identify v2 archives and act accordingly. The version byte is bound into GCM AAD, so tampering with it breaks the auth check.
 
 MailRepo runs on `127.0.0.1` (localhost only) and does not accept connections from other machines on your network by default. For remote access from your own devices, [Tailscale](https://tailscale.com) works well.
 
