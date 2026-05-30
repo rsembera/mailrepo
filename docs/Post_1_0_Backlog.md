@@ -128,10 +128,6 @@ until measurements justify it.
 
 ## Future major work (separately documented)
 
-### `docs/Future_Backup_Refactor.md`
-Aligning MailRepo\'s backup state management with the Libram approach.
-Spec exists; implementation deferred. Read that doc for details.
-
 ### Future crypto migration (hypothetical v2 → v3)
 If/when AES-256-GCM or Argon2id need replacing (post-quantum, some
 hypothetical weakness), the migration would follow the same pattern
