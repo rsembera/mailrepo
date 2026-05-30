@@ -33,7 +33,7 @@ htmlcov/
 
 # User data (not tracked in repo)
 data/
-archive/
+/archive/
 config/credentials.json
 backups/
 

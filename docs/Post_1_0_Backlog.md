@@ -57,6 +57,14 @@ Several plan docs are now historical artifacts of completed work:
 Could be moved to `docs/archive/` or annotated with completion status.
 Low priority but tidiness has its own value when the repo is FOSS.
 
+### `docs/Navigation_Map.md` refresh
+Last updated Feb 4, 2026 with status "Pre-Release Testing — all features
+built." Predates the May 2026 crypto refactor and a lot of post-Feb UX
+work. Either refresh to reflect the 1.0 codebase (preferred) or move to
+`docs/archive/` if no longer worth maintaining. Left in place during the
+May 30 docs cleanup pass because removing a navigation map without
+replacement would leave a hole.
+
 ---
 
 ## Test coverage gaps
