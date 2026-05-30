@@ -2,11 +2,10 @@
    BACKUPS VIEW
    ============================================ */
 
-/* Prevent double scrollbar - email-list becomes non-scrolling container */
-.email-list:has(.backups-view) {
-    overflow: visible;
-}
-
+/* Let the parent .email-list handle page scroll (same as .settings-view).
+   The backup-list inside has its own internal scroll for the history
+   chain; the two scrolls don't conflict because they're at different
+   levels. */
 .backups-view {
     max-width: 700px;
     margin: 0 auto;
@@ -225,8 +224,33 @@
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     max-height: 300px;
-    overflow-y: auto;
+    overflow-y: scroll; /* 'scroll' over 'auto' so macOS reserves scrollbar space */
     background: var(--color-background-secondary);
+    /* Firefox: thin scrollbar with theme-aware colors */
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+}
+
+/* WebKit/Blink (Chrome, Safari): always-visible scrollbar so users on
+   macOS -- where system default is to hide scrollbars until scrolling --
+   can see this list is scrollable without having to discover it. */
+.backup-list::-webkit-scrollbar {
+    width: 10px;
+    background: transparent;
+}
+.backup-list::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 5px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+}
+.backup-list::-webkit-scrollbar-thumb:hover {
+    background: var(--color-text-muted);
+    background-clip: content-box;
+    border: 2px solid transparent;
+}
+.backup-list::-webkit-scrollbar-track {
+    background: transparent;
 }
 
 .backup-list-empty {

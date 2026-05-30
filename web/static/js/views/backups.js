@@ -77,6 +77,10 @@ function renderBackupsView() {
                             <span class="status-label">Total Backups</span>
                             <span class="status-value" id="backup-count">-</span>
                         </div>
+                        <div class="status-item">
+                            <span class="status-label">Last Checked</span>
+                            <span class="status-value" id="last-checked-display">—</span>
+                        </div>
                     </div>
                     <button class="btn btn-primary" id="backup-now-btn">
                         <span class="btn-text">Backup Now</span>
@@ -621,6 +625,14 @@ async function performBackup() {
             } else {
                 showMessage('No changes since last backup', 'info');
             }
+            // Persistent feedback that the check happened, even when no
+            // backup was created. Local clock time so it's unambiguous.
+            const now = new Date();
+            const hh = now.getHours();
+            const mm = String(now.getMinutes()).padStart(2, '0');
+            const ampm = hh >= 12 ? 'PM' : 'AM';
+            const h12 = hh % 12 || 12;
+            document.getElementById('last-checked-display').textContent = `${h12}:${mm} ${ampm}`;
             settingsLoaded = false;
             loadBackupStatus();
             loadRestorePoints();
@@ -809,10 +821,12 @@ function showMessage(text, type) {
     messageEl.className = `backup-message ${type}`;
     messageEl.classList.remove('hidden');
     
+    // 10s for info/success (5s was too fast to read). Error messages stay
+    // until the user takes another action that calls showMessage again.
     if (type !== 'error') {
         setTimeout(() => {
             messageEl.classList.add('hidden');
-        }, 5000);
+        }, 10000);
     }
 }
 

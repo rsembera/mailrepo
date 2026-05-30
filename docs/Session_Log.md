@@ -4,6 +4,74 @@ Running record of planning sessions and decisions. Most recent first.
 
 ---
 
+## May 30, 2026 — Road to 1.0: v1 cleanup pass + backup UX fixes (SHIPPED)
+
+**Participants:** Rick, Claude (Opus 4.7) on the MacBook.
+
+The day the road-to-1.0 list emptied. Two focused sessions:
+
+### v1 cleanup pass (commit `9337954`)
+
+The "satisfying diff" pass we had earmarked at the end of yesterday's plan, with one scope expansion. Discovered that `core/migration.py` references v1 primitives (`Encryption._fernet_v1`, `Encryption.swap_v1_to_v2`) — so removing the v1 code from `encryption.py` necessarily breaks the migration module. Discussed three options (half-cleanup that leaves dead primitives, stub the migration, full cleanup including deleting the migration module + UI) and Rick made the right call: nuke it. The migration was a one-time event that already ran; future v3 migration will be different code anyway. Git history preserves the pattern for reference.
+
+Net diff: **126 insertions, 2,460 deletions across 12 files.**
+
+Files deleted entirely (1,797 lines):
+- `core/migration.py` (577 lines)
+- `tests/test_migration.py` (262 lines)
+- `web/blueprints/migration.py` (262 lines)
+- `web/static/js/views/migration.js` (527 lines)
+- `web/static/css/modules/migration.css` (169 lines)
+
+`core/encryption.py` shrank from 697 → 373 lines: removed v1 PBKDF2 + Fernet (`_derive_fernet_v1`, `_derive_db_key_v1`, the `_derive_db_key` backward-compat alias), the `cryptography.fernet` import, the v1 PBKDF2 constants, the `_fernet_v1` / `_db_key_v1` class attributes, `_unlock_v1`, `_derive_and_set_v2_keys`, `get_crypto_version`, `get_migration_marker_path`, `is_migration_in_progress`, `get_db_key_v2`, `swap_v1_to_v2`, `derive_fernet_for_password`, and `update_password` (the wrapper that branched between v1/v2 paths). The dual-decode branch in `decrypt()` collapsed to "expect 0x02 prefix or error."
+
+What stays as forward infrastructure for any hypothetical v3 migration: `SALT_MAGIC_V2` (the MRC2 magic), `VERSION_BYTE_V2` (0x02), and the `.v2` suffix in HKDF info strings. A v3 KDF would use `mailrepo.file.v3` etc. and derive cryptographically distinct keys even if the master collided.
+
+`web/blueprints/auth.py` shrank from 505 → 413 lines: `change_password_progress` now just calls `change_master_password` directly. No version branching. The 90-line legacy Fernet path (count files, walk decrypt-with-old + encrypt-with-new, walk credentials, PRAGMA rekey, `update_password`) all removed.
+
+`tests/test_encryption_v2.py` shrank from 241 → 149 lines: removed `test_get_crypto_version_returns_2_for_new_install`, the entire `TestDualDecode` class (it manually built a v1 archive to test the mid-migration scenario that can no longer exist), the entire `TestMigrationHelpers` class, and the outdated comment in `test_tampered_version_byte_fails` about routing to v1.
+
+Test suite: 70 → 53 (the 17 removed are exactly the 12 migration tests + 1 get_crypto_version + 1 dual-decode + 3 migration helpers).
+
+Production smoke-tested after the changes: logged in, browsed emails, confirmed decrypt works. Zero errors logged.
+
+Backup recovery note: v1 backups (the ~100 from before yesterday\'s migration) age out under the 6-month retention by November 29, 2026. Until then, restoring a v1 backup is theoretically possible by checking out commit `353ae2f` (the pre-cleanup state), running the migration against the v1 backup to bring it forward, then returning to current.
+
+### Backup UX fixes (commit not yet pushed at log-write time)
+
+The three known bugs from May 29 morning\'s investigation, plus one bonus fix that surfaced during testing.
+
+1. **"No changes since last backup" message auto-dismisses too fast.** `showMessage` had a 5s timeout for non-error messages. Doubled to 10s. Enough time to register and read comfortably.
+
+2. **Status card doesn\'t update last-checked timestamp on no-op Backup Now click.** Added a third `.status-item` to the status card: "Last Checked" with id `last-checked-display`. `performBackup()` now writes the current wall-clock time (h:mm AM/PM) to it on every successful POST to `/api/backup/now` — regardless of whether a backup was actually created. Persistent feedback that the check happened.
+
+3. **300px backup history scrollbar invisible on macOS.** The `.backup-list` had `overflow-y: auto`, which on macOS only shows the scrollbar during active scrolling — making the list look static unless the user happens to hover and try. Changed to `overflow-y: scroll` and added explicit `::-webkit-scrollbar` styling (10px width, theme-aware thumb color, hover state) plus Firefox\'s `scrollbar-width: thin` + `scrollbar-color`. Always-visible scrollbar.
+
+**Bonus fix surfaced during testing:** the entire Backup & Restore page wasn\'t scrolling — Rick couldn\'t reach the Backup History section below the viewport. Traced to a CSS rule in `backups-view.css`:
+
+```css
+.email-list:has(.backups-view) {
+    overflow: visible;  /* intent: prevent double scrollbar */
+}
+```
+
+The original author meant for `.backups-view` to be its own scrolling container, but never added `overflow-y: auto` to `.backups-view` itself — so neither the parent `.email-list` (now disabled by this rule) nor `.backups-view` was scrolling. The fix: remove the `:has()` override entirely. Settings view doesn\'t have this override and scrolls fine via its parent `.email-list`, so backups should follow the same pattern. The nested scroll concern (page scroll + backup-list internal scroll) is fine — they\'re at different levels of the DOM and don\'t conflict.
+
+### Road to 1.0: complete
+
+All five items shipped:
+1. ✓ Frontend trigger UI (May 29 evening)
+2. ✓ Production migration on the real archive (May 29 evening, ran clean end-to-end on 1,648 files)
+3. ✓ v2-native password change flow (May 29 late evening, production-tested)
+4. ✓ Backup UX fixes (today)
+5. ✓ v1 cleanup pass (today)
+
+**MailRepo is at 1.0.**
+
+The version string in `main.py` was already `1.0.0` — Rick spotted it in the server startup banner this morning. So the bump happened ahead of the actual feature completion, which is the right order for a project where you tag-then-confirm rather than confirm-then-tag.
+
+---
+
 ## May 29, 2026 — Crypto refactor implementation: Encryption v2, DB lock, Migration module, SSE endpoint
 
 **Participants:** Rick, Claude (Opus 4.7) on the MacBook.
