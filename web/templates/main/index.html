@@ -5,15 +5,6 @@
 {% block body_class %}main-page{% endblock %}
 
 {% block content %}
-<div class="migration-banner" id="migrationBanner">
-    <div class="migration-banner-icon"><i data-lucide="shield-alert"></i></div>
-    <div class="migration-banner-content">
-        <div class="migration-banner-title">Crypto upgrade available</div>
-        <div class="migration-banner-subtitle">Upgrade your archive to AES-256-GCM + Argon2id.</div>
-    </div>
-    <button class="migration-banner-action btn btn-primary">Migrate</button>
-</div>
-
 <div class="app-container">
     <!-- Pane 1: Left Rail -->
     <nav class="left-rail">
@@ -695,19 +686,6 @@
         </div>
     </div>
 </div>
-
-<!-- Crypto Migration Modal -->
-<div class="modal-overlay" id="migrationModal">
-    <div class="modal-content" style="max-width: 600px;">
-        <div class="modal-header">
-            <h2>Crypto migration</h2>
-            <button class="modal-close" onclick="window.__migrationCancel()" aria-label="Close">×</button>
-        </div>
-        <div class="modal-body" id="migrationModalBody"></div>
-        <div class="modal-actions" id="migrationModalActions"></div>
-    </div>
-</div>
-
 {% endblock %}
 
 {% block scripts %}

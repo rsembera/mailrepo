@@ -1,40 +1,31 @@
 """
-MailRepo - Encryption utilities (Crypto Refactor 2026-05).
+MailRepo - Encryption utilities.
 
-Supports two crypto versions side by side so a migration from v1 to v2 can
-proceed incrementally without ever leaving the archive unreadable.
+  KDF:          Argon2id (m=256 MiB, t=6, p=1) -> 32-byte master key,
+                then HKDF-Expand with domain-separated info strings
+                into the file key and the SQLCipher DB key. Memory-hard,
+                GPU/ASIC-resistant.
+  File cipher:  AES-256-GCM with a 12-byte random nonce per file and
+                the version byte bound into GCM AAD.
+  File format:  [0x02][12-byte nonce][ciphertext][16-byte GCM tag]
+  Salt file:    "MRC2"[32-byte salt][AES-256-GCM verification token]
 
-  v1 (legacy)
-    KDF:           PBKDF2-HMAC-SHA256, 480,000 iterations, run twice
-                   (once for file_key, once with a suffixed salt for db_key)
-    File cipher:   Fernet (AES-128-CBC + HMAC-SHA256)
-    Salt file:     [32-byte salt][Fernet-encrypted verification token]
-
-  v2 (current, post-migration)
-    KDF:           Argon2id (m=256MiB, t=6, p=1) -> 32-byte master key, then
-                   HKDF-Expand with domain-separated info strings into
-                   file_key and db_key. Memory-hard, GPU/ASIC-resistant.
-    File cipher:   AES-256-GCM with a 12-byte random nonce per file and the
-                   version byte bound into GCM AAD.
-    File format:   [0x02][12-byte nonce][ciphertext][16-byte GCM tag]
-    Salt file:     "MRC2"[32-byte salt][AES-256-GCM verification token]
-
-The single-byte version prefix on every encrypted file means decrypt() can
-auto-detect v1 (Fernet tokens start with 0x80) versus v2 (starts with 0x02),
-so during migration files can be in mixed state and the runtime keeps working.
-
-See docs/Crypto_Refactor_Plan.md for the full migration design.
+The 0x02 version byte and "MRC2" magic are forward infrastructure: a
+future v3 crypto migration can detect "this archive is on v2" and act
+accordingly. They are NOT used to disambiguate from a legacy v1 format -
+no such format exists in this codebase anymore. The v1 (PBKDF2 + Fernet)
+era and its migration code were removed after every archive reached v2.
+See docs/Session_Log.md for the May 29, 2026 migration; the migration
+itself lives in git history as commits b7db944 / 39e0ce2 / 944b0aa /
+3f0e67a if it ever needs to be referenced for pattern.
 """
 
 import os
 import secrets
 import base64
-from pathlib import Path
 from typing import Optional
 
-from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.kdf.hkdf import HKDFExpand
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from argon2.low_level import hash_secret_raw, Type as Argon2Type
@@ -60,29 +51,23 @@ class InvalidPasswordError(Exception):
 # CONSTANTS
 # ============================================================
 
-# Shared
 SALT_LENGTH = 32
 VERIFICATION_TOKEN = b"MAILREPO_PASSWORD_OK"
 
-# v1 (legacy, used to read existing archives during/before migration)
-PBKDF2_ITERATIONS_V1 = 480_000
-DB_SALT_SUFFIX_V1 = b"_MAILREPO_DB_KEY"
-
-# v2 (current)
 # Argon2id parameters measured on the MacBook Air M4: ~750ms at t=6.
-# Memory is the GPU-resistance knob; 256MiB is invisible on machines
-# with >=8GB RAM and meaningfully raises offline cracking cost.
+# Memory is the GPU-resistance knob; 256 MiB is invisible on machines with
+# >=8 GB RAM and meaningfully raises offline cracking cost.
 ARGON2_TIME_COST = 6           # iterations
 ARGON2_MEMORY_COST = 262_144   # 256 MiB, in KiB
-ARGON2_PARALLELISM = 1         # cleaner than p=2 for latency-bound single derivation
+ARGON2_PARALLELISM = 1         # cleaner than p=2 for a latency-bound single derivation
 ARGON2_KEY_LENGTH = 32
 
-# HKDF-Expand info strings. The .v2 suffix means a future v3 KDF would derive
-# cryptographically distinct keys even if the master key happens to collide.
+# HKDF-Expand info strings. The .v2 suffix means a future v3 KDF would
+# derive cryptographically distinct keys even if the master collided.
 HKDF_INFO_FILE_V2 = b"mailrepo.file.v2"
 HKDF_INFO_DB_V2 = b"mailrepo.db.v2"
 
-# v2 wire format
+# Wire format
 SALT_MAGIC_V2 = b"MRC2"
 VERSION_BYTE_V2 = 0x02
 GCM_NONCE_LENGTH = 12
@@ -97,23 +82,12 @@ class Encryption:
     """
     Master encryption manager.
 
-    State is held at class level so the rest of the app can call
-    `Encryption.encrypt(...)` and `Encryption.decrypt(...)` without
-    threading an instance through every call site.
-
-    During migration BOTH v1 and v2 in-memory keys may be loaded at once
-    so that v1-format archive files (no version byte) can still be read
-    while new writes go out as v2.
+    Class-level state so the rest of the app can call Encryption.encrypt()
+    and Encryption.decrypt() without threading an instance through every
+    call site.
     """
 
-    # Shared
     _salt: Optional[bytes] = None
-
-    # v1 state (legacy)
-    _fernet_v1: Optional[Fernet] = None
-    _db_key_v1: Optional[str] = None
-
-    # v2 state (current)
     _file_key_v2: Optional[bytes] = None
     _db_key_v2: Optional[str] = None
 
@@ -123,110 +97,37 @@ class Encryption:
 
     @classmethod
     def is_initialized(cls) -> bool:
-        """True if a salt file exists on disk (encryption has been set up)."""
+        """True if a salt file exists on disk."""
         return Config.get_salt_path().exists()
 
     @classmethod
     def is_unlocked(cls) -> bool:
-        """True if either v1 or v2 keys are currently loaded in memory."""
-        return cls._fernet_v1 is not None or cls._file_key_v2 is not None
+        """True if keys are loaded in memory."""
+        return cls._file_key_v2 is not None
 
     @classmethod
     def lock(cls) -> None:
         """Clear all in-memory keys."""
         cls._salt = None
-        cls._fernet_v1 = None
-        cls._db_key_v1 = None
         cls._file_key_v2 = None
         cls._db_key_v2 = None
 
     # ----------------------------------------------------------
-    # Crypto-version detection
-    # ----------------------------------------------------------
-
-    @classmethod
-    def get_crypto_version(cls) -> int:
-        """
-        Detect the on-disk crypto version by reading the salt file's first 4 bytes.
-
-        Returns:
-            2 if the salt file starts with the MRC2 magic.
-            1 otherwise (legacy format, no magic).
-
-        Raises:
-            EncryptionError: If encryption is not yet initialized.
-        """
-        if not cls.is_initialized():
-            raise EncryptionError("Encryption not initialized.")
-        with open(Config.get_salt_path(), "rb") as f:
-            head = f.read(4)
-        return 2 if head == SALT_MAGIC_V2 else 1
-
-    @classmethod
-    def get_migration_marker_path(cls) -> Path:
-        """Path to the Phase 1 completion marker file."""
-        return Config.get_data_path() / ".migration_phase_1_complete"
-
-    @classmethod
-    def is_migration_in_progress(cls) -> bool:
-        """
-        True if the archive is in any mid-migration state.
-
-        Two cases qualify:
-        - Phase 1 complete, Phase 2 pending: v1 salt + marker file present.
-        - Phase 1 interrupted: v1 salt, no marker, but some v2 files exist
-          on disk (a previous run died mid-walk).
-
-        In either case, unlock() needs to derive BOTH the v1 keys (for the
-        still-v1 SQLCipher DB or for the remaining v1 files) and the v2
-        keys (for the already-v2 files / DB). The scan short-circuits on
-        the first v2 file found, so it's cheap even on large archives.
-        After migration to v2, this returns False immediately on the
-        version check without scanning.
-        """
-        try:
-            version = cls.get_crypto_version()
-        except EncryptionError:
-            return False
-        if version == 2:
-            return False
-        if cls.get_migration_marker_path().exists():
-            return True
-        # Phase 1 interrupted? Walk for any v2-format archive file.
-        try:
-            archive_root = Config.get_archive_path()
-        except Exception:
-            return False
-        if not archive_root.exists():
-            return False
-        for path in archive_root.rglob("*.eml.enc"):
-            try:
-                with open(path, "rb") as f:
-                    first = f.read(1)
-                if first and first[0] == VERSION_BYTE_V2:
-                    return True
-            except Exception:
-                continue
-        return False
-
-    # ----------------------------------------------------------
-    # Initialize (new install) — always creates v2
+    # Initialize / unlock
     # ----------------------------------------------------------
 
     @classmethod
     def initialize(cls, password: str) -> None:
         """
-        Initialize encryption for a brand-new install. Always creates v2.
+        Initialize encryption for a brand-new install.
 
-        Generates a fresh salt, derives v2 keys, writes the v2-format salt
-        file with the MRC2 magic and a v2 verification token.
-
-        Raises:
-            EncryptionError: If encryption is already initialized.
+        Generates a fresh salt, derives keys via Argon2id + HKDF, writes the
+        salt file with the MRC2 magic and a verification token encrypted
+        under the file key.
         """
         if cls.is_initialized():
             raise EncryptionError(
-                "Encryption already initialized. Use update_password() instead."
+                "Encryption already initialized. Use the password-change flow instead."
             )
 
         salt = secrets.token_bytes(SALT_LENGTH)
@@ -234,10 +135,8 @@ class Encryption:
         file_key = cls._derive_subkey_v2(master, HKDF_INFO_FILE_V2)
         db_key = cls._derive_subkey_v2(master, HKDF_INFO_DB_V2)
 
-        # Encrypt the verification token with the v2 file_key.
         verification = cls._encrypt_v2_with_key(VERIFICATION_TOKEN, file_key)
 
-        # Atomic write of the v2 salt file.
         Config.get_data_path().mkdir(parents=True, exist_ok=True)
         cls._atomic_write_salt_file(SALT_MAGIC_V2 + salt + verification)
 
@@ -245,66 +144,20 @@ class Encryption:
         cls._file_key_v2 = file_key
         cls._db_key_v2 = db_key.hex()
 
-    # ----------------------------------------------------------
-    # Unlock
-    # ----------------------------------------------------------
-
     @classmethod
     def unlock(cls, password: str) -> bool:
-        """
-        Unlock with the master password. Routes to v1 or v2 based on salt file.
-
-        - v2 salt → derive v2 keys only.
-        - v1 salt, no migration marker → derive v1 keys only.
-        - v1 salt, marker exists (mid-migration) → derive both v1 and v2 keys.
-
-        Returns:
-            True on success.
-
-        Raises:
-            EncryptionError: If encryption is not initialized.
-            InvalidPasswordError: If the password is wrong.
-        """
+        """Unlock with the master password. Raises InvalidPasswordError on mismatch."""
         if not cls.is_initialized():
             raise EncryptionError("Encryption not initialized. Call initialize() first.")
 
-        version = cls.get_crypto_version()
-        if version == 2:
-            cls._unlock_v2(password)
-        else:
-            cls._unlock_v1(password)
-            # Mid-migration: also derive v2 keys so v2 files can be read.
-            if cls.is_migration_in_progress():
-                cls._derive_and_set_v2_keys(password)
-        return True
-
-    @classmethod
-    def _unlock_v1(cls, password: str) -> None:
-        """Unlock a v1 archive (salt file: <salt><Fernet-encrypted token>)."""
-        with open(Config.get_salt_path(), "rb") as f:
-            data = f.read()
-        salt = data[:SALT_LENGTH]
-        encrypted_verification = data[SALT_LENGTH:]
-
-        fernet = cls._derive_fernet_v1(password, salt)
-        try:
-            decrypted = fernet.decrypt(encrypted_verification)
-        except InvalidToken:
-            raise InvalidPasswordError("Invalid master password.")
-        if decrypted != VERIFICATION_TOKEN:
-            raise InvalidPasswordError("Invalid master password.")
-
-        cls._salt = salt
-        cls._fernet_v1 = fernet
-        cls._db_key_v1 = cls._derive_db_key_v1(password, salt)
-
-    @classmethod
-    def _unlock_v2(cls, password: str) -> None:
-        """Unlock a v2 archive (salt file: MRC2<salt><GCM-encrypted token>)."""
         with open(Config.get_salt_path(), "rb") as f:
             data = f.read()
         if data[:4] != SALT_MAGIC_V2:
-            raise EncryptionError("Salt file is missing the MRC2 magic.")
+            raise EncryptionError(
+                "Salt file is missing the MRC2 magic. This archive may have been "
+                "created by an incompatible version of MailRepo, or the salt file "
+                "may be corrupt."
+            )
 
         salt = data[4:4 + SALT_LENGTH]
         encrypted_verification = data[4 + SALT_LENGTH:]
@@ -323,102 +176,44 @@ class Encryption:
         cls._salt = salt
         cls._file_key_v2 = file_key
         cls._db_key_v2 = db_key.hex()
-
-    @classmethod
-    def _derive_and_set_v2_keys(cls, password: str) -> None:
-        """
-        Derive v2 keys using the already-loaded salt.
-
-        Called during mid-migration unlock when the salt file is still v1 but
-        v2 files exist (marker is present). Requires _salt to be set, which
-        _unlock_v1 will have done immediately before this is called.
-        """
-        if cls._salt is None:
-            raise EncryptionError("Salt not loaded; cannot derive v2 keys.")
-        master = cls._derive_master_v2(password, cls._salt)
-        cls._file_key_v2 = cls._derive_subkey_v2(master, HKDF_INFO_FILE_V2)
-        cls._db_key_v2 = cls._derive_subkey_v2(master, HKDF_INFO_DB_V2).hex()
+        return True
 
     # ----------------------------------------------------------
-    # DB key access (whichever version is current)
+    # DB key access
     # ----------------------------------------------------------
 
     @classmethod
     def get_db_key(cls) -> str:
-        """
-        Return the hex-encoded DB key for SQLCipher.
-
-        - Pure v1 archive → returns v1 db_key.
-        - Pure v2 archive → returns v2 db_key.
-        - Mid-migration (Phase 1 done, Phase 2 not yet run) → returns v1 db_key,
-          because the DB hasn't been rekeyed yet. The migration code calls
-          get_db_key_v2() explicitly when it's ready to rekey.
-        """
-        if cls._db_key_v1 is not None:
-            return cls._db_key_v1
-        if cls._db_key_v2 is not None:
-            return cls._db_key_v2
-        raise EncryptionError("Encryption is locked.")
-
-    @classmethod
-    def get_db_key_v2(cls) -> str:
-        """Return the v2 DB key. Used by the migration to rekey SQLCipher."""
+        """Hex-encoded DB key for SQLCipher."""
         if cls._db_key_v2 is None:
-            raise EncryptionError("v2 keys are not derived.")
+            raise EncryptionError("Encryption is locked.")
         return cls._db_key_v2
 
     # ----------------------------------------------------------
-    # Encrypt / decrypt (with auto-detection on decrypt)
+    # Encrypt / decrypt
     # ----------------------------------------------------------
 
     @classmethod
     def encrypt(cls, data: bytes) -> bytes:
-        """
-        Encrypt data.
-
-        Prefers v2 (AES-256-GCM) if available. Falls back to v1 (Fernet) if
-        only v1 keys are loaded — meaning a pre-migration archive. After Phase 1
-        of the migration, v2 keys are loaded and all new writes are v2.
-        """
-        if cls._file_key_v2 is not None:
-            return cls._encrypt_v2_with_key(data, cls._file_key_v2)
-        if cls._fernet_v1 is not None:
-            return cls._fernet_v1.encrypt(data)
-        raise EncryptionError("Encryption is locked.")
+        """AES-256-GCM encrypt with a fresh random nonce per call."""
+        if cls._file_key_v2 is None:
+            raise EncryptionError("Encryption is locked.")
+        return cls._encrypt_v2_with_key(data, cls._file_key_v2)
 
     @classmethod
     def decrypt(cls, data: bytes) -> bytes:
-        """
-        Decrypt data, auto-detecting v1 vs v2 by the first byte.
-
-        - 0x02 → v2 (AES-256-GCM); requires v2 file_key in memory.
-        - anything else (Fernet tokens start with 0x80) → v1.
-
-        Raises:
-            EncryptionError: If the relevant key isn't loaded or decryption fails.
-        """
-        if not cls.is_unlocked():
+        """AES-256-GCM decrypt. Expects the 0x02 version byte prefix."""
+        if cls._file_key_v2 is None:
             raise EncryptionError("Encryption is locked.")
-
-        if len(data) > 0 and data[0] == VERSION_BYTE_V2:
-            if cls._file_key_v2 is None:
-                raise EncryptionError(
-                    "v2-format ciphertext encountered but v2 key is not loaded."
-                )
-            try:
-                return cls._decrypt_v2_with_key(data, cls._file_key_v2)
-            except Exception as e:
-                raise EncryptionError(f"v2 decryption failed: {e}")
-
-        # v1 / Fernet path
-        if cls._fernet_v1 is None:
+        if len(data) < 1 or data[0] != VERSION_BYTE_V2:
+            got = f"0x{data[0]:02x}" if len(data) > 0 else "empty"
             raise EncryptionError(
-                "v1-format ciphertext encountered but v1 key is not loaded."
+                f"Unexpected version byte: {got} (expected 0x02)."
             )
         try:
-            return cls._fernet_v1.decrypt(data)
-        except InvalidToken as e:
-            raise EncryptionError(f"v1 decryption failed: {e}")
+            return cls._decrypt_v2_with_key(data, cls._file_key_v2)
+        except Exception as e:
+            raise EncryptionError(f"Decryption failed: {e}")
 
     @classmethod
     def encrypt_string(cls, text: str) -> str:
@@ -433,54 +228,12 @@ class Encryption:
         return cls.decrypt(encrypted).decode("utf-8")
 
     # ----------------------------------------------------------
-    # v1 primitives (legacy)
-    # ----------------------------------------------------------
-
-    @classmethod
-    def _derive_fernet_v1(cls, password: str, salt: bytes) -> Fernet:
-        """PBKDF2 → 32-byte key → Fernet (AES-128-CBC + HMAC)."""
-        kdf = PBKDF2HMAC(
-            algorithm=hashes.SHA256(),
-            length=32,
-            salt=salt,
-            iterations=PBKDF2_ITERATIONS_V1,
-        )
-        key = base64.urlsafe_b64encode(kdf.derive(password.encode("utf-8")))
-        return Fernet(key)
-
-    @classmethod
-    def _derive_db_key_v1(cls, password: str, salt: bytes) -> str:
-        """PBKDF2 with suffixed salt → 32-byte key → hex for SQLCipher."""
-        db_salt = salt + DB_SALT_SUFFIX_V1
-        kdf = PBKDF2HMAC(
-            algorithm=hashes.SHA256(),
-            length=32,
-            salt=db_salt,
-            iterations=PBKDF2_ITERATIONS_V1,
-        )
-        return kdf.derive(password.encode("utf-8")).hex()
-
-    # Backward-compat alias for callers from before the v1/v2 split.
-    # Always routes to the v1 derivation. The post-migration password
-    # change flow uses derive_v2_db_key_for_password() instead and never
-    # calls this name.
-    @classmethod
-    def _derive_db_key(cls, password: str, salt: bytes) -> str:
-        return cls._derive_db_key_v1(password, salt)
-
-    # ----------------------------------------------------------
-    # v2 primitives
+    # KDF primitives
     # ----------------------------------------------------------
 
     @classmethod
     def _derive_master_v2(cls, password: str, salt: bytes) -> bytes:
-        """
-        Argon2id derivation of the master key.
-
-        At the configured parameters (m=256MiB, t=6, p=1) this takes ~750ms
-        on the MacBook Air M4. Memory cost is what kills GPU/ASIC parallelism;
-        time cost is the wall-clock knob.
-        """
+        """Argon2id derivation of the master key."""
         return hash_secret_raw(
             secret=password.encode("utf-8"),
             salt=salt,
@@ -493,31 +246,22 @@ class Encryption:
 
     @classmethod
     def _derive_subkey_v2(cls, master: bytes, info: bytes) -> bytes:
-        """
-        HKDF-Expand to derive a domain-separated subkey from the master.
-
-        Argon2id output is already a uniform 32-byte key, so HKDF-Expand alone
-        is the right primitive (HKDF-Extract is for concentrating entropy from
-        non-uniform input, which we don't have here).
-        """
+        """HKDF-Expand: derive a domain-separated subkey from the master."""
         hkdf = HKDFExpand(algorithm=hashes.SHA256(), length=32, info=info)
         return hkdf.derive(master)
 
     @classmethod
     def _encrypt_v2_with_key(cls, data: bytes, key: bytes) -> bytes:
-        """
-        AES-256-GCM encrypt with a fresh random 96-bit nonce.
+        """AES-256-GCM encrypt with a fresh random 96-bit nonce.
 
         Wire format: [version=0x02][12-byte nonce][ciphertext][16-byte GCM tag]
 
-        The version byte is bound into GCM's AAD, so a tampered version byte
-        causes the auth check to fail — cheap defense in depth against
-        ciphertext-shape manipulation.
+        The version byte is bound into GCM AAD so a tampered version byte
+        breaks the auth check.
         """
         nonce = os.urandom(GCM_NONCE_LENGTH)
         aesgcm = AESGCM(key)
         version_byte = bytes([VERSION_BYTE_V2])
-        # AESGCM.encrypt returns ciphertext || tag, concatenated.
         ct_and_tag = aesgcm.encrypt(nonce, data, associated_data=version_byte)
         return version_byte + nonce + ct_and_tag
 
@@ -537,25 +281,12 @@ class Encryption:
         return aesgcm.decrypt(nonce, ct_and_tag, associated_data=version_byte)
 
     # ----------------------------------------------------------
-    # Password change (operates on whichever version is current)
+    # Password change helpers (used by core/password_change.py)
     # ----------------------------------------------------------
 
     @classmethod
-    def derive_fernet_for_password(cls, password: str) -> Fernet:
-        """
-        Legacy helper: derive a Fernet from an arbitrary password using the
-        currently-loaded salt. Used by the v1 password-change flow.
-
-        Will not be useful for v2 archives once migration completes; v2 password
-        change should use derive_v2_file_key_for_password() instead.
-        """
-        if cls._salt is None:
-            raise EncryptionError("Encryption is not unlocked.")
-        return cls._derive_fernet_v1(password, cls._salt)
-
-    @classmethod
     def derive_v2_file_key_for_password(cls, password: str) -> bytes:
-        """Derive a v2 file_key from an arbitrary password using the current salt."""
+        """Derive a file_key from an arbitrary password using the current salt."""
         if cls._salt is None:
             raise EncryptionError("Encryption is not unlocked.")
         master = cls._derive_master_v2(password, cls._salt)
@@ -563,86 +294,31 @@ class Encryption:
 
     @classmethod
     def derive_v2_db_key_for_password(cls, password: str) -> str:
-        """Derive a v2 db_key (hex) from an arbitrary password using the current salt."""
+        """Derive a db_key (hex) from an arbitrary password using the current salt."""
         if cls._salt is None:
             raise EncryptionError("Encryption is not unlocked.")
         master = cls._derive_master_v2(password, cls._salt)
         return cls._derive_subkey_v2(master, HKDF_INFO_DB_V2).hex()
 
     @classmethod
-    def update_password(cls, new_password: str) -> None:
-        """
-        Update the master password.
-
-        The caller is responsible for re-encrypting archive files with the new
-        key BEFORE calling this — this method only rewrites the salt file's
-        verification token and updates in-memory keys.
-
-        Branches on the on-disk crypto version. The v1 branch keeps existing
-        behavior for unmigrated archives. The v2 branch uses Argon2id + HKDF.
-        """
-        if cls._salt is None:
-            raise EncryptionError("Encryption is not unlocked.")
-        version = cls.get_crypto_version()
-        if version == 2:
-            cls._update_password_v2(new_password)
-        else:
-            cls._update_password_v1(new_password)
-
-    @classmethod
-    def _update_password_v1(cls, new_password: str) -> None:
-        new_fernet = cls._derive_fernet_v1(new_password, cls._salt)
-        new_db_key = cls._derive_db_key_v1(new_password, cls._salt)
-        encrypted_verification = new_fernet.encrypt(VERIFICATION_TOKEN)
-        cls._atomic_write_salt_file(cls._salt + encrypted_verification)
-        cls._fernet_v1 = new_fernet
-        cls._db_key_v1 = new_db_key
-
-    @classmethod
-    def _update_password_v2(cls, new_password: str) -> None:
-        master = cls._derive_master_v2(new_password, cls._salt)
-        new_file_key = cls._derive_subkey_v2(master, HKDF_INFO_FILE_V2)
-        new_db_key = cls._derive_subkey_v2(master, HKDF_INFO_DB_V2).hex()
-        encrypted_verification = cls._encrypt_v2_with_key(
-            VERIFICATION_TOKEN, new_file_key
-        )
-        cls._atomic_write_salt_file(SALT_MAGIC_V2 + cls._salt + encrypted_verification)
-        cls._file_key_v2 = new_file_key
-        cls._db_key_v2 = new_db_key
-
-    # ----------------------------------------------------------
-    # Migration-specific operations (called by the migration endpoint)
-    # ----------------------------------------------------------
-
-    @classmethod
     def write_v2_salt_file(cls) -> None:
         """
-        Phase 2 finalize step: write the new v2 salt file with MRC2 magic.
+        Rewrite the salt file with the current in-memory keys.
 
-        Atomic via temp-file + fsync + replace + directory fsync. Requires
-        _salt and _file_key_v2 to be set.
+        Used by the password change flow after deriving new keys and
+        rekeying SQLCipher: this writes a salt file whose verification
+        token decrypts with the new file_key. Atomic write pattern (temp +
+        fsync + os.replace + dir fsync) protects against torn writes on
+        power loss.
         """
         if cls._salt is None or cls._file_key_v2 is None:
-            raise EncryptionError(
-                "v2 keys not available; cannot write v2 salt file."
-            )
+            raise EncryptionError("Keys not available; cannot write salt file.")
         encrypted_verification = cls._encrypt_v2_with_key(
             VERIFICATION_TOKEN, cls._file_key_v2
         )
         cls._atomic_write_salt_file(
             SALT_MAGIC_V2 + cls._salt + encrypted_verification
         )
-
-    @classmethod
-    def swap_v1_to_v2(cls) -> None:
-        """
-        Phase 2 finalize step: clear v1 in-memory state.
-
-        Called after the v2 salt file is written and SQLCipher has been rekeyed.
-        The v2 keys remain loaded.
-        """
-        cls._fernet_v1 = None
-        cls._db_key_v1 = None
 
     # ----------------------------------------------------------
     # Atomic file replacement
@@ -658,8 +334,8 @@ class Encryption:
           3. os.replace (atomic on POSIX for same-filesystem rename).
           4. fsync the containing directory (durability of the rename itself).
 
-        Step 4 is the one usually missed: without it, the rename can vanish on
-        power loss even though the data was synced.
+        Step 4 is the one usually missed: without it, the rename can vanish
+        on power loss even though the data was synced.
         """
         salt_path = Config.get_salt_path()
         tmp_path = salt_path.with_suffix(salt_path.suffix + ".v2tmp")
@@ -676,15 +352,15 @@ class Encryption:
 
 
 # ============================================================
-# FLASK SECRET KEY (unchanged from v1)
+# FLASK SECRET KEY (independent of master password)
 # ============================================================
 
 def generate_flask_secret_key() -> str:
     """
     Generate or load the Flask secret key.
 
-    This is independent of the user's master password and lives in
-    data/.secret_key with 0600 permissions.
+    Independent of the user's master password. Lives in data/.secret_key
+    with 0600 permissions.
     """
     secret_key_path = Config.get_secret_key_path()
     if secret_key_path.exists():

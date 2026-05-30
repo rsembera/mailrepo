@@ -47,13 +47,11 @@ def create_app(test_config: dict = None) -> Flask:
     from .blueprints.main import main_bp
     from .blueprints.api import api_bp
     from .blueprints.backups import backups_bp
-    from .blueprints.migration import migration_bp
     
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(backups_bp)
-    app.register_blueprint(migration_bp)
     
     # Helper to check if request is an API call.
     # Matches both: endpoints in the 'api' blueprint, and any request whose

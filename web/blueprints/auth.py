@@ -368,138 +368,46 @@ def change_password_progress():
             yield f"data: {json.dumps({'error': 'Missing password data'})}\n\n"
             return
 
-        # Route to v1 or v2 path based on crypto version.
-        # v2 path uses core/password_change.change_master_password which
-        # handles Argon2id + AES-256-GCM + the backup-<=24h non-overridable
-        # check + the file-walk-with-resumability + DB rekey + salt file
-        # rewrite, all under the existing settings.js SSE event vocabulary.
-        try:
-            crypto_version = Encryption.get_crypto_version()
-        except Exception:
-            crypto_version = 1
-
-        if crypto_version == 2:
-            from core.password_change import (
-                change_master_password,
-                PasswordChangeError,
-                PasswordChangeCorruptionError,
-            )
-            import queue
-            import threading
-            q = queue.Queue()
-            SENTINEL = object()
-            def cb(event):
-                q.put(event)
-            def worker():
-                try:
-                    result = change_master_password(current_password, new_password, progress_cb=cb)
-                    q.put({'status': 'complete', 'message': 'Password changed successfully', 'result': result})
-                except InvalidPasswordError as e:
-                    q.put({'status': 'error', 'message': str(e)})
-                except PasswordChangeCorruptionError as e:
-                    q.put({'status': 'error', 'message': str(e), 'kind': 'corruption', 'filepath': e.filepath})
-                except PasswordChangeError as e:
-                    q.put({'status': 'error', 'message': str(e)})
-                except Exception as e:
-                    q.put({'status': 'error', 'message': f'{type(e).__name__}: {e}'})
-                finally:
-                    q.put(SENTINEL)
-            t = threading.Thread(target=worker, daemon=True)
-            t.start()
-            while True:
-                ev = q.get()
-                if ev is SENTINEL:
-                    break
-                yield f"data: {json.dumps(ev)}\n\n"
-            t.join(timeout=1.0)
-            return
-
-        # --- Legacy v1 path (Fernet) -----------------------------
-        # Kept for completeness but never reached on a v2 archive.
-        # Will be removed in the post-migration v1 cleanup commit.
-        try:
-            # Step 1: Count encrypted files
-            yield f"data: {json.dumps({'status': 'counting', 'message': 'Counting encrypted files...'})}\n\n"
-            
-            archive_dir = Config.get_archive_path()
-            enc_files = []
-            for root, dirs, files in os.walk(archive_dir):
-                for f in files:
-                    if f.endswith(".eml.enc"):
-                        enc_files.append(os.path.join(root, f))
-            
-            total_files = len(enc_files)
-            yield f"data: {json.dumps({'status': 'counted', 'total': total_files, 'message': f'Found {total_files} encrypted files'})}\n\n"
-            
-            # Step 2: Re-encrypt all files
-            if total_files > 0:
-                yield f"data: {json.dumps({'status': 'encrypting', 'total': total_files, 'current': 0, 'message': 'Re-encrypting files...'})}\n\n"
-                
-                old_fernet = Encryption.derive_fernet_for_password(current_password)
-                new_fernet = Encryption.derive_fernet_for_password(new_password)
-                
-                failed_files = []
-                for i, filepath in enumerate(enc_files):
-                    try:
-                        # Read and decrypt with old password
-                        with open(filepath, "rb") as f:
-                            encrypted_data = f.read()
-                        decrypted_data = old_fernet.decrypt(encrypted_data)
-                        
-                        # Re-encrypt with new password
-                        new_encrypted = new_fernet.encrypt(decrypted_data)
-                        
-                        # Write back
-                        with open(filepath, "wb") as f:
-                            f.write(new_encrypted)
-                        
-                    except Exception as e:
-                        failed_files.append({"file": os.path.basename(filepath), "error": str(e)})
-                    
-                    # Progress update every 10 files or on last file
-                    if (i + 1) % 10 == 0 or i == total_files - 1:
-                        yield f"data: {json.dumps({'status': 'encrypting', 'total': total_files, 'current': i + 1, 'message': f'Re-encrypting {i + 1} of {total_files}...'})}\n\n"
-                
-                if failed_files:
-                    yield f"data: {json.dumps({'status': 'warning', 'message': f'{len(failed_files)} files failed to re-encrypt', 'failed': failed_files})}\n\n"
-            
-            # Step 3: Re-encrypt IMAP credentials
-            yield f"data: {json.dumps({'status': 'credentials', 'message': 'Re-encrypting account credentials...'})}\n\n"
-            
+        # All archives are on v2 (AES-256-GCM + Argon2id). The actual work
+        # lives in core/password_change.change_master_password as a pure
+        # function with a progress_cb; here we just bridge that callback
+        # into the SSE stream via a worker thread + queue. The event
+        # vocabulary matches settings.js (counting / counted / encrypting
+        # with current+total / credentials / database / finalizing /
+        # complete + error) so the frontend works without changes.
+        from core.password_change import (
+            change_master_password,
+            PasswordChangeError,
+            PasswordChangeCorruptionError,
+        )
+        import queue
+        import threading
+        q = queue.Queue()
+        SENTINEL = object()
+        def cb(event):
+            q.put(event)
+        def worker():
             try:
-                accounts = Database.fetchall("SELECT id, credentials_encrypted FROM accounts WHERE credentials_encrypted IS NOT NULL")
-                for account in accounts:
-                    try:
-                        # Decrypt with old key, re-encrypt with new key
-                        old_creds = old_fernet.decrypt(account["credentials_encrypted"].encode() if isinstance(account["credentials_encrypted"], str) else account["credentials_encrypted"])
-                        new_creds = new_fernet.encrypt(old_creds)
-                        Database.execute(
-                            "UPDATE accounts SET credentials_encrypted = ? WHERE id = ?",
-                            (new_creds.decode() if isinstance(new_creds, bytes) else new_creds, account["id"])
-                        )
-                    except Exception as e:
-                        account_id = account["id"]
-                        yield f"data: {json.dumps({'status': 'warning', 'message': f'Failed to re-encrypt credentials for account {account_id}: {e}'})}\n\n"
-                Database.commit()
+                result = change_master_password(current_password, new_password, progress_cb=cb)
+                q.put({'status': 'complete', 'message': 'Password changed successfully', 'result': result})
+            except InvalidPasswordError as e:
+                q.put({'status': 'error', 'message': str(e)})
+            except PasswordChangeCorruptionError as e:
+                q.put({'status': 'error', 'message': str(e), 'kind': 'corruption', 'filepath': e.filepath})
+            except PasswordChangeError as e:
+                q.put({'status': 'error', 'message': str(e)})
             except Exception as e:
-                yield f"data: {json.dumps({'status': 'warning', 'message': f'Error re-encrypting credentials: {e}'})}\n\n"
-            
-            # Step 4: Rekey the database
-            yield f"data: {json.dumps({'status': 'database', 'message': 'Updating database encryption...'})}\n\n"
-            
-            new_db_key = Encryption._derive_db_key(new_password, Encryption._salt)
-            conn = Database._connection
-            conn.execute(f"PRAGMA rekey = \"x'{new_db_key}'\"")
-            
-            # Step 5: Update the verification token
-            yield f"data: {json.dumps({'status': 'finalizing', 'message': 'Updating password verification...'})}\n\n"
-            
-            Encryption.update_password(new_password)
-            
-            # Success
-            yield f"data: {json.dumps({'status': 'complete', 'message': 'Password changed successfully!'})}\n\n"
-            
-        except Exception as e:
-            yield f"data: {json.dumps({'status': 'error', 'message': str(e)})}\n\n"
-    
+                q.put({'status': 'error', 'message': f'{type(e).__name__}: {e}'})
+            finally:
+                q.put(SENTINEL)
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+        while True:
+            ev = q.get()
+            if ev is SENTINEL:
+                break
+            yield f"data: {json.dumps(ev)}\n\n"
+        t.join(timeout=1.0)
+
+
     return Response(generate(), mimetype="text/event-stream")

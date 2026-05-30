@@ -29,7 +29,6 @@ import { initStarredView, showStarredView, updateStarredBadge } from './views/st
 import { initVault, showVaultView, updateVaultBadge, checkOverdueFolders, hideOverdueAlert } from './views/vault.js';
 import { initSettingsView, showSettingsView } from './views/settings.js';
 import { initBackupsView, showBackupsView } from './views/backups.js';
-import { initMigrationBanner } from './views/migration.js';
 import { initReviewView, showReviewView } from './views/review.js';
 import { initImports, getImportEmails, getMountedImports, renderImportsSection } from './components/imports.js';
 
@@ -177,9 +176,6 @@ document.addEventListener('DOMContentLoaded', () => {
         onImportFolderSelect: (importId, folder) => loadImportEmails(importId, folder),
         onImportUnmount: (importId) => handleImportUnmount(importId),
     });
-    
-    // Check whether a crypto migration is needed (passive — fails quiet)
-    initMigrationBanner();
     
     initEventListeners();
     initModalListeners();

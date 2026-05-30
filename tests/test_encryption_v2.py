@@ -1,9 +1,9 @@
 """
-Tests for the v2 crypto path (Argon2id + AES-256-GCM + version byte).
+Tests for the v2 crypto specifics (Argon2id + AES-256-GCM + version byte).
 
-These tests verify the v2-specific properties that the existing test suite
-in test_encryption.py doesn\'t cover: salt file format, on-disk wire format,
-version byte handling, AAD binding, and dual v1/v2 decode behavior.
+Verifies properties beyond what test_encryption.py covers: salt file format
+(MRC2 magic), on-disk wire format ([version][nonce][ct][tag]), version byte
+AAD binding (tampered version byte breaks auth), and lock+unlock roundtrip.
 
 Argon2id at production parameters (m=256MiB, t=6) is slow (~750ms per
 derivation), so tests share initialized state where possible.
@@ -46,11 +46,6 @@ class TestV2SaltFile:
         assert len(salt_data) >= 4 + SALT_LENGTH + 1
         # The 32 bytes immediately after the magic should be the salt.
         # We confirm this indirectly by checking that re-unlock succeeds.
-
-    def test_get_crypto_version_returns_2_for_new_install(self):
-        Encryption.initialize("TestPassword123!")
-        assert Encryption.get_crypto_version() == 2
-
 
 # ============================================================
 # V2 ON-DISK WIRE FORMAT
@@ -99,9 +94,7 @@ class TestVersionByteAAD:
         ct = Encryption.encrypt(b"original data")
         # Flip the version byte
         tampered = bytes([VERSION_BYTE_V2 ^ 0x01]) + ct[1:]
-        # decrypt() routes by version byte. 0x03 isn\'t v2, so it routes to v1.
-        # And v1 key isn\'t available in a fresh v2 install, so we get a
-        # specific error about v1 key not loaded.
+        # decrypt() rejects any byte that isn\'t 0x02 with a clear error.
         with pytest.raises(EncryptionError):
             Encryption.decrypt(tampered)
 
@@ -154,88 +147,3 @@ class TestV2Unlock:
         Encryption.lock()
         with pytest.raises(InvalidPasswordError):
             Encryption.unlock("WrongPassword!")
-
-
-# ============================================================
-# DUAL-DECODE (mid-migration simulation)
-# ============================================================
-
-class TestDualDecode:
-    """
-    Simulate the mid-migration state where v1 and v2 keys coexist in memory.
-
-    We do this by manually constructing a v1 archive (writing a v1-format
-    salt file directly), then forcing v2 keys into the in-memory state, and
-    verifying both v1 and v2 ciphertexts can be decrypted.
-    """
-
-    def test_decrypt_auto_detects_v1_and_v2(self):
-        # Step 1: build a real v1 archive by writing the v1 salt format manually.
-        # This mimics an existing pre-migration install.
-        from cryptography.fernet import Fernet
-        from core.encryption import (
-            PBKDF2_ITERATIONS_V1, DB_SALT_SUFFIX_V1
-        )
-        from cryptography.hazmat.primitives import hashes
-        from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-        import base64, secrets
-
-        password = "DualDecodeTest123!"
-        salt = secrets.token_bytes(SALT_LENGTH)
-
-        # Derive v1 Fernet by hand
-        kdf = PBKDF2HMAC(
-            algorithm=hashes.SHA256(), length=32, salt=salt,
-            iterations=PBKDF2_ITERATIONS_V1,
-        )
-        fernet_key = base64.urlsafe_b64encode(kdf.derive(password.encode()))
-        fernet = Fernet(fernet_key)
-
-        # Write a v1 salt file (no MRC2 magic)
-        Config.get_data_path().mkdir(parents=True, exist_ok=True)
-        salt_path = Config.get_salt_path()
-        salt_path.write_bytes(salt + fernet.encrypt(VERIFICATION_TOKEN))
-
-        # Create a v1-format ciphertext (just a Fernet token).
-        v1_ct = fernet.encrypt(b"v1 payload")
-
-        # Step 2: unlock as v1, confirm version detection.
-        assert Encryption.get_crypto_version() == 1
-        Encryption.unlock(password)
-        assert Encryption.is_unlocked()
-
-        # The v1 ciphertext we made by hand decrypts via the unlocked v1 path.
-        assert Encryption.decrypt(v1_ct) == b"v1 payload"
-
-        # Step 3: manually derive v2 keys and inject them, simulating the
-        # "Phase 1 complete, v2 keys loaded for file access" state.
-        Encryption._derive_and_set_v2_keys(password)
-
-        # Now create a v2 ciphertext using the in-memory v2 key
-        v2_ct = Encryption._encrypt_v2_with_key(b"v2 payload", Encryption._file_key_v2)
-        assert v2_ct[0] == VERSION_BYTE_V2
-
-        # Both should decrypt correctly via the auto-detecting decrypt().
-        assert Encryption.decrypt(v1_ct) == b"v1 payload"
-        assert Encryption.decrypt(v2_ct) == b"v2 payload"
-
-
-# ============================================================
-# MIGRATION HELPERS
-# ============================================================
-
-class TestMigrationHelpers:
-    """Sanity checks on the migration-specific public methods."""
-
-    def test_migration_marker_path_is_in_data_dir(self):
-        marker = Encryption.get_migration_marker_path()
-        assert marker.parent == Config.get_data_path()
-        assert marker.name == ".migration_phase_1_complete"
-
-    def test_is_migration_in_progress_false_for_fresh_v2_install(self):
-        Encryption.initialize("TestPassword123!")
-        assert Encryption.is_migration_in_progress() is False
-
-    def test_is_migration_in_progress_false_when_uninitialized(self):
-        # No salt file at all.
-        assert Encryption.is_migration_in_progress() is False
