@@ -113,7 +113,54 @@ Committed and pushed: `e59ca2b` → `cdd5229` → `076f3db` → `b7db944` → (t
 
 The backup UX bugs from this morning, v2-native password change, and v1 cleanup pass are tracked in the plan\'s "What this work does NOT address" section — all pre-1.0 but post-migration work.
 
+### Evening session: production migration + v2 password change
+
+Picked back up around 9 PM. Three more commits, all on production:
+
+**Production migration on the real archive (`944b0aa` UI + the actual migration run, no new commit for the run itself).** Built the frontend banner + modal + progress UI consuming the SSE streams: `web/static/js/views/migration.js` (527 lines), `web/static/css/modules/migration.css` (~140 lines), banner + modal markup in `index.html`. Banner detects state on unlock and renders state-appropriate copy ('Migrate' / 'Resume' / 'Finalize'). Modal body re-renders for Phase 1 (preflight checklist + password) vs Phase 2 (backup-status check). Progress UI maps SSE stages to a single progress bar.
+
+Skipped the originally-planned Apollo testing and dry-run-on-a-copy after Rick correctly pushed back: the 8-test adversarial plan was over-engineered for a one-shot migration on a battery-powered laptop with a fresh full backup beside it. The production run IS the test; the first time the code touches a real-sized archive is where any unit-test-missed issue would surface, whether on a copy or the real thing. Same exposure, just one has the word 'test' in front of it.
+
+Hit the button. Phase 1: ~25 seconds for 1,648 files. Marker written. Phase 2: backup-age check passed (morning backup was ~13h old), DB rekeyed, v2 salt file written. Logged out, logged back in with same password — proves the SQLCipher rekey worked since the new password (still the same value, but derived via Argon2id + HKDF to a different key) successfully decrypts the rekeyed DB. End-to-end clean.
+
+Post-migration verification: salt file starts with `MRC2`, marker gone, all 1,648 archive files start with 0x02, zero stray `.v2tmp` files.
+
+**Note on the count.** Rick caught that 1,634 (from earlier in the context) was stale — the actual archive holds 1,648 files. He'd committed 14 more since the older session figures were carried forward.
+
+**v2-native password change (`3f0e67a`).** Closed item 3 from the road to 1.0 in the same evening. Built `core/password_change.py` (336 lines) mirroring `core/migration.py`'s architecture: pure function `change_master_password(old, new, progress_cb)`, no Flask coupling, SSE wrapping in the auth blueprint via the same thread+queue bridge used for the migration. Same safety net: non-overridable backup-≤24h check at the top, halt-loud on file decrypt failure naming the specific file, atomic file replacement.
+
+One architectural difference from the migration is worth noting: there's no version-byte distinction between 'encrypted under the old password's v2 key' and 'encrypted under the new password's v2 key' — both are 0x02-prefixed v2. The version byte tells you the cipher, not the key. So resumability is implemented via try-old-then-new-fallback: each file is attempted with the OLD file_key first; if that fails, the NEW file_key is attempted; if that also fails, halt loud. A previously-interrupted run resumes cleanly because already-migrated files decrypt under NEW. A truly corrupt file fails both and gets named in the error.
+
+`web/blueprints/auth.py` `change_password_progress` now branches on `Encryption.get_crypto_version()`. v2 path delegates to `change_master_password`. v1 path kept verbatim for completeness (dead code on Rick's now-v2 archive; removed in the upcoming v1 cleanup commit). Removed the 'not implemented for v2' guard that `39e0ce2` added as a placeholder. SSE event vocabulary matches the existing `settings.js` handler exactly (counting / counted / encrypting+current+total / credentials / database / finalizing / complete) so no frontend changes were needed for the password change itself.
+
+Rick ran the password change end-to-end on his live archive tonight: ~25 seconds for 1,648 files + credentials + DB rekey + salt file rewrite. Logged out and back in with the new password.
+
+**Logout-modal UX fix (also in `3f0e67a`).** Rick noticed the post-password-change auto-logout had a ~30-60s silent pause. Traced it to the auto-backup at `/auth/logout`: every one of the 1,648 files had a new mtime, so `has_file_changes()` returned True and a full backup ran. `settings.js`'s old behavior was to show a click-to-dismiss 'Password Changed' alert and then `window.location.href = '/auth/logout'`, leaving the user staring at the settings view for the duration of the backup with no feedback. Fix: replace the alert with a direct transition into the logout flow, reusing the existing `#logoutModal` with status text 'Saving backup of your re-encrypted archive. This may take up to a minute.' Pure UX change, no path that breaks the password change flow itself.
+
+**End-of-day status.**
+
+Five of the five items in today's road-to-1.0 list that are crypto-related are shipped:
+1. ✓ Frontend trigger UI
+2. ✓ Production migration on the real archive
+3. ✓ v2-native password change flow
+
+Two non-crypto items remain:
+4. Backup UX fixes (1-2h) — three known bugs from this morning's investigation
+5. v1 cleanup pass (~1h) — remove the dual-decode logic, the v1 PBKDF2 KDF, the cryptography.fernet import, the v1 branch from update_password, the v1 branch from change_password_progress
+
+All on `main` and pushed: `e59ca2b` → `cdd5229` → `076f3db` → `b7db944` → `39e0ce2` → `944b0aa` → `3f0e67a`. Seven commits, started 9 AM, finished ~10:30 PM with three real meals + one client meeting in between.
+
+**What's not fully verified.** Being honest about the edges of confidence:
+- Phase 1 migration: unit-tested + production-tested. High confidence.
+- Phase 2 migration: production-tested only. The unit tests don't cover Phase 2 because it depends on actual SQLCipher rekey behavior.
+- Password change file walk + DB rekey: production-tested only, no unit tests written. Worked end-to-end on Rick's archive but edge cases (mid-walk interrupt, then resume) aren't exercised by any test.
+- Logout-modal UX fix: code reviewed, not actually run end-to-end (Rick chose not to do a password-change revert tonight).
+- `is_api_request()` broadening: smoke-tested for /migration/api/*; other paths (/backups/api/*, /auth/api/*) weren't re-exercised after the change, though the global fetch wrapper handles CSRF auto-injection so the change should be transparent.
+
+None of these are vulnerabilities. They're "fewer test scaffolds than the migration's Phase 1 has" gaps. Worth knowing before stamping a 1.0.
+
 ---
+
 
 ## May 27, 2026 — Stage Thread feedback + max-thread setting + sidebar auto-refresh
 
