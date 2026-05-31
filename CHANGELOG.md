@@ -39,6 +39,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-modal cleanup (used by `settings.js` for the Add Account form
   reset).
 
+### Security
+- **Master passwords no longer transit the session cookie.** The
+  change-password flow previously stashed the current and new master
+  password in the Flask session — a signed-but-unencrypted client
+  cookie. They are now held only in server-side memory keyed by an
+  opaque one-time job id (the same model the export pipeline uses) and
+  consumed exactly once by the progress stream.
+- **Folder color is validated server-side.** The folder-update endpoint
+  accepts only a null/empty value or a `#rgb` / `#rrggbb` hex string,
+  since the color is interpolated into a `style` attribute on render.
+
+### Fixed
+- **Atomic backup-state and manifest writes.** `data/.backup_state.json`
+  and `backups/manifest.json` are now written via the same crash-safe
+  `temp + fsync + os.replace + fsync(dir)` pattern as the salt file, so
+  an interrupted write can't truncate the change-detection baseline.
+- **JSON error responses on API failures.** Uncaught exceptions on
+  `/api/` paths now return a JSON 500 instead of Flask's HTML error
+  page, so the frontend always receives a parseable response. Non-API
+  routes are unaffected.
+- **Modal pickers no longer stack click listeners.** The Move-Email and
+  Restore-destination pickers re-bound a delegated listener on every
+  modal open; they now bind exactly once.
+
 ---
 
 ## [1.0.0] — Unreleased (dogfooding)
@@ -115,10 +139,12 @@ is; the date and tag will land when dogfooding settles.
   short-circuit + CONDSTORE/HIGHESTMODSEQ) and a manual refresh button.
 
 #### Tooling
-- **68 unit tests** across encryption (v2 wire format + AAD binding),
-  database (thread safety), email parser, API folders, and password
-  change (15 tests covering happy path, refusal cases, resumability,
-  and corruption-halt behavior).
+- **85 unit tests** across encryption (v2 wire format + AAD binding),
+  database (thread safety), email parser, API folders, password change
+  (15 tests covering happy path, refusal cases, resumability, and
+  corruption-halt behavior), and the backup system (17 tests covering
+  change detection, the WAL-checkpoint no-op case, and interrupted-
+  backup baseline safety).
 
 [Unreleased]: https://github.com/rsembera/mailrepo/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/rsembera/mailrepo/releases/tag/v1.0.0

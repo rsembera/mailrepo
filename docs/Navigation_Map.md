@@ -228,18 +228,24 @@ even if the master password collides across versions.
 ## Database Schema (v5)
 
 ```sql
-accounts        (id, name, email, provider, server, port, credentials_encrypted,
-                 cached_folders, cached_folders_at, created_at, last_sync, is_gmail)
-folders         (id, name, parent_id, color, retention_date, created_at,
-                 deleted_at, original_parent_id)
-messages        (id, folder_id, source_account_id, message_id, subject, sender,
-                 recipients, date, filepath, filed_at, body_text, deleted_at,
-                 flagged_at)
+accounts        (id, name, email, provider, credentials_encrypted,
+                 cached_folders, cached_folders_at, created_at, last_sync,
+                 UNIQUE(email, provider))
+                 -- IMAP server/port live inside credentials_encrypted (JSON),
+                 -- not as columns; is_gmail is derived at runtime from the
+                 -- decrypted creds host (see api/accounts.py).
+folders         (id, name, parent_id, retention_days, retention_date, color,
+                 deleted_at, created_at)
+messages        (id, folder_id, original_folder_id, source_account_id,
+                 message_id, subject, sender, recipients, date, filepath,
+                 body_text, deleted_at, flagged_at, filed_at)
 messages_fts    -- FTS5 virtual table over (subject, sender, recipients, body_text)
 settings        (key, value)
-pending_commit  (commit_id, batch_id, item_type, item_data, destination_folder_id,
+pending_commit  (id, commit_id, item_type, item_data, destination_folder_id,
                  source_action, status, created_at, updated_at)
-email_cache     (account_id, folder_name, uidvalidity, uid_data, cached_at)
+email_cache     (id, account_id, folder_name, uid, uidvalidity, subject, sender,
+                 recipients, date, message_id, cached_at,
+                 UNIQUE(account_id, folder_name, uid, uidvalidity))
 ```
 
 Notable indexes: `idx_folders_retention` (vault queries),
@@ -277,7 +283,7 @@ python main.py
 
 | File | Coverage |
 |------|----------|
-| `tests/test_encryption.py` | v1 encryption (preserved for migration test reference) |
+| `tests/test_encryption.py` | v2 `Encryption` lifecycle: init / unlock / lock / wrong-password (no v1 code remains) |
 | `tests/test_encryption_v2.py` | v2 encryption: Argon2id, HKDF, AES-256-GCM, file/DB round-trip |
 | `tests/test_password_change.py` | v2-native password change (15 tests added Session 37) |
 | `tests/test_database.py` | Schema, migrations, FTS5 |
