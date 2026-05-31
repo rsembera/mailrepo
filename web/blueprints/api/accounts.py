@@ -54,7 +54,7 @@ def list_accounts():
                 creds = IMAP.load_credentials(a["credentials_encrypted"])
                 if creds and creds.get("host", "").lower() == "imap.gmail.com":
                     account_dict["is_gmail"] = True
-            except:
+            except Exception:
                 pass  # If decryption fails, default to False
         result.append(account_dict)
     

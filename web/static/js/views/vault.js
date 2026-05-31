@@ -629,12 +629,17 @@ function bindVaultActions() {
 function bindRestorePickerActions() {
     const container = document.getElementById('restoreDestinationList');
     if (!container) return;
+    // Persistent element (the restore modal is reused). Bind exactly once;
+    // the delegated listener resolves clicks against the rows re-rendered on
+    // each open. Re-binding per open would stack duplicate listeners.
+    if (container.dataset.actionsBound) return;
     bindActions(container, {
         selectDest: (el) => {
             const destId = el.dataset.destId;
             selectRestoreDestination(destId === '' ? null : Number(destId));
         },
     });
+    container.dataset.actionsBound = '1';
 }
 
 function renderRestoreDestinations() {

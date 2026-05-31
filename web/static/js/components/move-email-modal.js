@@ -74,9 +74,17 @@ export async function renderMoveEmailFolderTree() {
     // Delegated click handler for the per-row folder selection. Replaces
     // the previous inline onclick="selectMoveEmailFolder(N)" pattern and
     // the window.selectMoveEmailFolder global it required.
-    bindActions(listEl, {
-        selectFolder: (el) => selectMoveEmailFolder(Number(el.dataset.folderId)),
-    });
+    //
+    // moveEmailFolderList is a persistent element (the modal is reused), so
+    // bind exactly once — the delegated listener resolves clicks against the
+    // freshly-rendered rows on every open. Re-binding per open would stack
+    // duplicate listeners.
+    if (!listEl.dataset.actionsBound) {
+        bindActions(listEl, {
+            selectFolder: (el) => selectMoveEmailFolder(Number(el.dataset.folderId)),
+        });
+        listEl.dataset.actionsBound = '1';
+    }
 }
 
 /**
