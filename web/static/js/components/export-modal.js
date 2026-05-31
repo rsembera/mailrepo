@@ -20,7 +20,7 @@
  * 5. On `error`, we surface the message and let the user retry or close.
  *
  * Per-session preferences (format/sort/cover/subfolders) live on
- * window._export. Last-chosen destination path persists across sessions
+ * _exportPrefs. Last-chosen destination path persists across sessions
  * in localStorage under the `mailrepo.exportDir` key.
  */
 
@@ -38,8 +38,11 @@ let _currentDir = null;        // the destination directory the user has chosen
 let _pickerCwd = null;         // path currently shown in the picker view
 let _pickerSelectedDir = null; // directory selected within the picker (if any)
 
-// Per-session preferences
-window._export = window._export || {
+// Per-session preferences. Lives at module scope so it survives across
+// modal opens (user's last-used format / sort / include-subfolders /
+// include-cover / load-remote-content choices are remembered for the
+// next export in the same browser session). Not persisted to disk.
+const _exportPrefs = {
     format: 'pdf',
     sort_order: 'chronological',
     include_subfolders: true,
@@ -124,7 +127,6 @@ function _renderFirstUseWarning() {
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-window.openExportModal = openExportModal;
 
 // ---------------------------------------------------------------------------
 // Destination dir helpers
@@ -180,7 +182,7 @@ function _renderFormView() {
     const src = _currentSource;
     const scopeText = _scopeDescription(src);
     const showSubfolderToggle = src.source === 'folder';
-    const prefs = window._export;
+    const prefs = _exportPrefs;
 
     _modalEl.innerHTML = `
         <div class="modal-content export-modal">
@@ -317,7 +319,7 @@ function _renderFormView() {
     });
     updatePdfOptionsVisibility();
 
-    // Persist every form change into window._export so view switches
+    // Persist every form change into _exportPrefs so view switches
     // (e.g. opening the destination picker) don\'t lose the user\'s choices.
     const formInputs = _modalEl.querySelectorAll(
         'input[name="export-format"], input[name="export-sort"], '
@@ -375,7 +377,7 @@ function _renderFormView() {
 }
 
 /**
- * Read the current form values into window._export so they survive any
+ * Read the current form values into _exportPrefs so they survive any
  * subsequent _renderFormView() call. Called on every form input change
  * AND right before switching to the picker view, so coming back to the
  * form view never silently resets the user\'s choices.
@@ -391,11 +393,11 @@ function _captureFormState() {
     const subs = _modalEl.querySelector('#export-include-subfolders');
     const loadRemote = _modalEl.querySelector('#export-load-remote');
 
-    if (fmt) window._export.format = fmt;
-    if (sort) window._export.sort_order = sort;
-    if (cover) window._export.include_cover = cover.checked;
-    if (subs) window._export.include_subfolders = subs.checked;
-    if (loadRemote) window._export.load_remote_content = loadRemote.checked;
+    if (fmt) _exportPrefs.format = fmt;
+    if (sort) _exportPrefs.sort_order = sort;
+    if (cover) _exportPrefs.include_cover = cover.checked;
+    if (subs) _exportPrefs.include_subfolders = subs.checked;
+    if (loadRemote) _exportPrefs.load_remote_content = loadRemote.checked;
 }
 
 function _scopeDescription(src) {
@@ -582,7 +584,7 @@ async function _startExport() {
     }
 
     // Persist non-secret prefs only. Never persist the password.
-    window._export = {
+    _exportPrefs = {
         format: fmt,
         sort_order: sort,
         include_subfolders: subs,

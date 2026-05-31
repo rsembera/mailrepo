@@ -741,16 +741,13 @@ function exportSelectedArchivedEmails() {
         message_ids: ids,
         label,
     };
-    if (typeof window.openExportModal === 'function') {
-        window.openExportModal(opts);
-    } else {
-        // Lazy-load on first use \u2014 same pattern as context-menu.js.
-        // The module registers window.openExportModal on import.
-        import('./export-modal.js').then((m) => {
-            (m.openExportModal || window.openExportModal)?.(opts);
-        }).catch((err) => {
-            console.error('Failed to load export modal:', err);
-        });
-    }
+    // Export modal is lazily loaded -- the module is ~865 lines and
+    // most users go a long time between exports, so it doesn't earn
+    // its bytes at app startup.
+    import('./export-modal.js').then((m) => {
+        m.openExportModal(opts);
+    }).catch((err) => {
+        console.error('Failed to load export modal:', err);
+    });
 }
 window.exportSelectedArchivedEmails = exportSelectedArchivedEmails;

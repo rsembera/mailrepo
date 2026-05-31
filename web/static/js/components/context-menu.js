@@ -230,21 +230,15 @@ async function handleAction(action, folderId, folder) {
             
         case 'export': {
             // Open the bulk-export modal with this folder as the source.
+            // Modal is lazily loaded -- it's a large module and rarely the
+            // first thing a user reaches for.
             const folderName = folder?.name || 'Folder';
-            if (typeof window.openExportModal === 'function') {
-                window.openExportModal({
-                    source: 'folder',
-                    folder_id: folderId,
-                    folder_name: folderName,
-                });
-            } else {
-                const { openExportModal } = await import('./export-modal.js');
-                openExportModal({
-                    source: 'folder',
-                    folder_id: folderId,
-                    folder_name: folderName,
-                });
-            }
+            const { openExportModal } = await import('./export-modal.js');
+            openExportModal({
+                source: 'folder',
+                folder_id: folderId,
+                folder_name: folderName,
+            });
             break;
         }
             
