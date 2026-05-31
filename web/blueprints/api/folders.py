@@ -4,6 +4,7 @@ MailRepo API - Folder Routes
 Handles all /api/folders/* endpoints for managing archive folders.
 """
 
+import re
 import time
 from flask import request, jsonify
 from core import Database
@@ -12,6 +13,11 @@ from utils.log import get_logger
 from . import api_bp
 
 log = get_logger()
+
+# A folder color is either "no color" (null) or a #rgb / #rrggbb hex value.
+# It is interpolated into a style="background: ..." attribute on render, so
+# the endpoint rejects anything else to avoid CSS/style injection.
+_HEX_COLOR_RE = re.compile(r"#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$")
 
 
 @api_bp.route("/folders", methods=["GET"])
@@ -132,8 +138,13 @@ def update_folder(folder_id):
         params.append(name)
     
     if "color" in data:
+        color = data["color"]
+        if color in (None, ""):
+            color = None
+        elif not (isinstance(color, str) and _HEX_COLOR_RE.fullmatch(color)):
+            return jsonify({"error": "Invalid color"}), 400
         updates.append("color = ?")
-        params.append(data["color"])
+        params.append(color)
     
     if "parent_id" in data:
         new_parent_id = data["parent_id"]
