@@ -7,6 +7,7 @@ Handles master password setup, login, logout, and password change.
 import json
 import os
 import secrets
+import threading
 import time
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, Response, current_app, make_response
 
@@ -27,6 +28,26 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 _login_attempts = {}  # IP -> list of attempt timestamps
 _MAX_ATTEMPTS = 5
 _LOCKOUT_SECONDS = 60
+
+
+# Pending password-change jobs. The plaintext current/new passwords are held
+# here in server-process memory ONLY — never in the Flask session, which is a
+# signed-but-unencrypted client cookie and would expose them to the browser.
+# The POST endpoint mints an opaque one-time job id; the SSE endpoint consumes
+# it exactly once. Mirrors the job model in web/blueprints/api/exports.py.
+_pw_change_jobs = {}            # job_id -> {"current", "new", "created_at"}
+_pw_change_lock = threading.Lock()
+_PW_CHANGE_TTL = 300            # seconds; abandoned (never-consumed) jobs purged
+
+
+def _gc_pw_change_jobs():
+    """Drop password-change jobs older than the TTL so abandoned requests
+    don't leave plaintext passwords sitting in memory indefinitely."""
+    cutoff = time.time() - _PW_CHANGE_TTL
+    with _pw_change_lock:
+        stale = [jid for jid, j in _pw_change_jobs.items() if j["created_at"] < cutoff]
+        for jid in stale:
+            _pw_change_jobs.pop(jid, None)
 
 
 def _check_rate_limit(ip: str) -> tuple[bool, int]:
@@ -340,32 +361,40 @@ def change_password_start():
     except InvalidPasswordError:
         return {"error": "Current password is incorrect"}, 400
     
-    # Store in session for SSE endpoint
-    session["password_change_current"] = current_password
-    session["password_change_new"] = new_password
-    session.modified = True
-    
-    return {"success": True}
+    # Hold the passwords in server-side memory keyed by an opaque one-time
+    # job id. They never touch the session cookie. The SSE progress endpoint
+    # consumes this job exactly once.
+    _gc_pw_change_jobs()
+    job_id = secrets.token_urlsafe(32)
+    with _pw_change_lock:
+        _pw_change_jobs[job_id] = {
+            "current": current_password,
+            "new": new_password,
+            "created_at": time.time(),
+        }
+
+    return {"success": True, "job_id": job_id}
 
 
-@auth_bp.route("/api/change-password-progress")
-def change_password_progress():
-    """SSE endpoint for password change progress."""
+@auth_bp.route("/api/change-password-progress/<job_id>")
+def change_password_progress(job_id):
+    """SSE endpoint for password change progress.
+
+    Consumes the one-time job created by change_password_start. The plaintext
+    passwords live only in server memory (keyed by the opaque job id) and are
+    popped here exactly once — they are never placed in the session cookie."""
     if not session.get("authenticated"):
         return {"error": "Not authenticated"}, 401
-    
-    # Get passwords from session
-    current_password = session.get("password_change_current")
-    new_password = session.get("password_change_new")
-    
-    # Clear from session immediately
-    session.pop("password_change_current", None)
-    session.pop("password_change_new", None)
-    session.modified = True
-    
+
+    # Consume the job exactly once.
+    with _pw_change_lock:
+        job = _pw_change_jobs.pop(job_id, None)
+    current_password = job["current"] if job else None
+    new_password = job["new"] if job else None
+
     def generate():
         if not current_password or not new_password:
-            yield f"data: {json.dumps({'error': 'Missing password data'})}\n\n"
+            yield f"data: {json.dumps({'error': 'Missing or expired password-change request'})}\n\n"
             return
 
         # All archives are on v2 (AES-256-GCM + Argon2id). The actual work

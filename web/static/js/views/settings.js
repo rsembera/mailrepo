@@ -492,8 +492,9 @@ async function handleChangePassword() {
         progressBar.style.width = '0%';
         progressMsg.textContent = 'Starting...';
         
-        // Connect to SSE for progress
-        const eventSource = new EventSource('/auth/api/change-password-progress');
+        // Connect to SSE for progress. The job id keeps the passwords
+        // server-side; they are never stored in the session cookie.
+        const eventSource = new EventSource(`/auth/api/change-password-progress/${data.job_id}`);
         
         eventSource.onmessage = (event) => {
             const progress = JSON.parse(event.data);
