@@ -8,11 +8,28 @@ let confirmResolver = null;
 let alertResolver = null;
 
 /**
- * Close a modal by ID.
- * @param {string} modalId - ID of modal element
+ * Close a modal by ID. The canonical implementation -- this is what
+ * window.closeModal points to, and what all other modules import when
+ * they need to close a modal.
+ *
+ * Per-modal cleanup callbacks can be registered via
+ * registerModalCloseHandler(modalId, callback). The callback fires
+ * after the modal's 'active' class is removed. This replaces the
+ * previous pattern where each module that needed cleanup logic for a
+ * specific modal would shadow window.closeModal with its own
+ * implementation -- a fragile setup that depended on script load order
+ * and made the actual close behavior non-obvious.
  */
+const _modalCloseHandlers = new Map();
+
+export function registerModalCloseHandler(modalId, callback) {
+    _modalCloseHandlers.set(modalId, callback);
+}
+
 export function closeModal(modalId) {
     document.getElementById(modalId)?.classList.remove('active');
+    const cb = _modalCloseHandlers.get(modalId);
+    if (cb) cb();
 }
 
 /**

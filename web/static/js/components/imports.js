@@ -7,6 +7,7 @@
 
 import { escapeHtml } from '../utils.js';
 import { confirmNavigation } from '../state.js';
+import { closeModal } from '../modals.js';
 import { initFilePicker, openFilePicker } from './file-picker.js';
 
 // Mounted imports stored in memory (session-only)
@@ -120,16 +121,10 @@ function showImportModal() {
 }
 window.openImportModal = showImportModal;
 
-/**
- * Close a modal by ID.
- */
-function closeModal(id) {
-    const modal = document.getElementById(id);
-    if (modal) modal.classList.remove('active');
-}
+// closeModal is now imported from ../modals.js (canonical implementation).
+// The template still uses inline onclicks via window.closeModal, which is
+// set by modals.js -- imports.js no longer needs to shadow it.
 
-// Make closeModal available globally for onclick handlers
-window.closeModal = closeModal;
 // MOUNTING IMPORTS
 // ============================================
 

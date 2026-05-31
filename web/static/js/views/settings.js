@@ -7,6 +7,7 @@
 
 import { initCustomSelects, CustomSelect } from '../components/custom-select.js';
 import { bindActions } from '../delegate.js';
+import { closeModal, registerModalCloseHandler } from '../modals.js';
 
 let contextTitle = null;
 let contextMeta = null;
@@ -22,6 +23,12 @@ export function initSettingsView(config) {
     contextTitle = config.contextTitle;
     contextMeta = config.contextMeta;
     emailList = config.emailList;
+    // Register the addAccountModal cleanup so closing it (from anywhere --
+    // inline onclick in template, internal call, etc.) resets the form
+    // state. Previously this was done by shadowing window.closeModal with
+    // a settings-specific version, which broke if any other module
+    // assigned window.closeModal later.
+    registerModalCloseHandler('addAccountModal', resetAccountModal);
 }
 
 /**
@@ -1100,20 +1107,12 @@ async function saveAccount() {
 }
 
 /**
- * Close a modal by ID.
+ * Close a modal by ID. NOTE: This local definition has been REMOVED.
+ * closeModal is now imported from ../modals.js (canonical version),
+ * and the addAccountModal cleanup is registered via
+ * registerModalCloseHandler() in initSettingsView. The template still
+ * uses inline onclicks via window.closeModal -- modals.js owns that.
  */
-function closeModal(id) {
-    const modal = document.getElementById(id);
-    if (modal) modal.classList.remove('active');
-    
-    // Reset account modal when closing
-    if (id === 'addAccountModal') {
-        resetAccountModal();
-    }
-}
-
-// Make closeModal available globally
-window.closeModal = closeModal;
 
 // ============================================
 // RESET DATABASE
