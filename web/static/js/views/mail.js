@@ -1041,12 +1041,17 @@ window.navigateToImapFolder = function(accountId, folderPath) {
 /**
  * Refresh the current IMAP folder, bypassing cache.
  */
-window.refreshImapFolder = function() {
+// Preemptively exported as an ES function (in addition to the legacy
+// window.refreshImapFolder assignment below) so that email-list.js can
+// receive it as a callback via app.js's initEmailList config. Both forms
+// stay until mail.js itself is converted; the window one gets removed then.
+export function refreshImapFolder() {
     if (state.currentView?.type !== 'account') return;
     const accountId = state.currentView.id;
     const folder = state.currentView.folder || 'INBOX';
     loadAccountEmails(accountId, folder, { forceRefresh: true });
-};
+}
+window.refreshImapFolder = refreshImapFolder;
 
 /**
  * Show loading state in email list.

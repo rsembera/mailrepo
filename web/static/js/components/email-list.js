@@ -6,6 +6,7 @@
 
 import { escapeHtml, extractName, formatDate } from '../utils.js';
 import { state } from '../state.js';
+import { bindActions } from '../delegate.js';
 
 // Reference to DOM elements (set via init)
 let emailListEl = null;
@@ -37,6 +38,8 @@ function getEmailYear(email) {
 }
 let onSelectionChange = null;
 let onFilterChange = null;
+let onOpenEmail = null;
+let onRefresh = null;
 
 // Filter state
 let emailFilter = '';
@@ -58,6 +61,11 @@ export function initEmailList(config) {
     emailListEl = config.emailList;
     onSelectionChange = config.onSelectionChange;
     onFilterChange = config.onFilterChange;
+    // Cross-module callbacks: opening an email and refreshing an IMAP
+    // folder live in mail.js. App.js wires them up here so this component
+    // can dispatch through the config rather than reaching for window.X.
+    onOpenEmail = config.onOpenEmail;
+    onRefresh = config.onRefresh;
 }
 
 /**
@@ -136,7 +144,7 @@ function renderSortSelect() {
     
     return `
         <div class="sort-dropdown-wrapper">
-            <button class="btn btn-icon sort-btn" onclick="toggleSortDropdown(event)" title="Sort: ${currentLabel}">
+            <button class="btn btn-icon sort-btn" data-action="toggleSort" title="Sort: ${currentLabel}">
                 <i data-lucide="arrow-up-down"></i>
             </button>
             <div class="sort-dropdown" id="sortDropdown">
@@ -153,7 +161,6 @@ function changeEmailSort(value) {
     currentSort = value;
     renderEmailList();
 }
-window.changeEmailSort = changeEmailSort;
 
 function toggleSortDropdown(e) {
     e.stopPropagation();
@@ -180,7 +187,6 @@ function toggleSortDropdown(e) {
         });
     }
 }
-window.toggleSortDropdown = toggleSortDropdown;
 
 /**
  * Render the email list.
@@ -219,7 +225,7 @@ export function renderEmailList() {
     }
     
     // Build table-style layout
-    let html = `<div class="folder-management-list">`;
+    let html = `<div class="folder-management-list email-list-root">`;
     
     if (isArchiveView) {
         // Archive view - filter + selection buttons
@@ -233,25 +239,25 @@ export function renderEmailList() {
                                id="emailFilterInput" 
                                placeholder="Filter by sender or subject..." 
                                value="${escapeHtml(emailFilter)}"
-                               oninput="handleEmailFilter(this.value)">
-                        ${emailFilter ? '<button class="search-clear" onclick="clearEmailFilterInput()"><i data-lucide="x"></i></button>' : ''}
+                               data-input="emailFilter">
+                        ${emailFilter ? '<button class="search-clear" data-action="clearFilter"><i data-lucide="x"></i></button>' : ''}
                     </div>
                     ${renderSortSelect()}
                 </div>
                 <div class="toolbar-actions">
-                    <button class="btn btn-secondary btn-icon-only" onclick="selectAllArchivedEmails()" title="Select all">
+                    <button class="btn btn-secondary btn-icon-only" data-action="selectAllArchived" title="Select all">
                         <i data-lucide="check-square"></i>
                     </button>
-                    <button class="btn btn-secondary btn-icon-only" onclick="clearSelectedArchivedEmails()" ${archiveSelectedCount === 0 ? 'disabled' : ''} title="Clear selection">
+                    <button class="btn btn-secondary btn-icon-only" data-action="clearArchived" ${archiveSelectedCount === 0 ? 'disabled' : ''} title="Clear selection">
                         <i data-lucide="x"></i>
                     </button>
-                    <button class="btn btn-secondary btn-icon-only" onclick="moveSelectedArchivedEmails()" ${archiveSelectedCount === 0 ? 'disabled' : ''} title="Move selected emails">
+                    <button class="btn btn-secondary btn-icon-only" data-action="moveArchived" ${archiveSelectedCount === 0 ? 'disabled' : ''} title="Move selected emails">
                         <i data-lucide="folder-input"></i>
                     </button>
-                    <button class="btn btn-secondary btn-icon-only" onclick="exportSelectedArchivedEmails()" ${archiveSelectedCount === 0 ? 'disabled' : ''} title="Export selected emails as PDF">
+                    <button class="btn btn-secondary btn-icon-only" data-action="exportArchived" ${archiveSelectedCount === 0 ? 'disabled' : ''} title="Export selected emails as PDF">
                         <i data-lucide="download"></i>
                     </button>
-                    <button class="btn btn-danger btn-icon-only" onclick="deleteSelectedArchivedEmails()" ${archiveSelectedCount === 0 ? 'disabled' : ''} title="Move to Trash">
+                    <button class="btn btn-danger btn-icon-only" data-action="deleteArchived" ${archiveSelectedCount === 0 ? 'disabled' : ''} title="Move to Trash">
                         <i data-lucide="trash-2"></i>
                     </button>
                 </div>
@@ -272,26 +278,26 @@ export function renderEmailList() {
                                id="emailFilterInput" 
                                placeholder="Filter by sender or subject..." 
                                value="${escapeHtml(emailFilter)}"
-                               oninput="handleEmailFilter(this.value)">
-                        ${emailFilter ? '<button class="search-clear" onclick="clearEmailFilterInput()"><i data-lucide="x"></i></button>' : ''}
+                               data-input="emailFilter">
+                        ${emailFilter ? '<button class="search-clear" data-action="clearFilter"><i data-lucide="x"></i></button>' : ''}
                     </div>
                     ${renderSortSelect()}
                 </div>
                 <div class="toolbar-actions">
                     ${state.currentView?.type === 'account' ? `
-                    <button class="btn btn-secondary btn-icon-only" onclick="refreshImapFolder()" title="Refresh folder">
+                    <button class="btn btn-secondary btn-icon-only" data-action="refresh" title="Refresh folder">
                         <i data-lucide="refresh-cw"></i>
                     </button>
                     ` : ''}
-                    <button class="btn btn-secondary" onclick="selectAllEmails()">
+                    <button class="btn btn-secondary" data-action="selectAll">
                         <i data-lucide="check-square"></i>
                         All
                     </button>
-                    <button class="btn btn-secondary" onclick="clearSelectedEmails()" ${selectedCount === 0 ? 'disabled' : ''}>
+                    <button class="btn btn-secondary" data-action="clearSelected" ${selectedCount === 0 ? 'disabled' : ''}>
                         <i data-lucide="x"></i>
                         Clear
                     </button>
-                    <button class="btn btn-primary" id="stageSelectedEmailsBtn" onclick="openStageModalForSelected()" ${selectedCount === 0 ? 'disabled' : ''}>
+                    <button class="btn btn-primary" id="stageSelectedEmailsBtn" data-action="openStage" ${selectedCount === 0 ? 'disabled' : ''}>
                         <i data-lucide="archive"></i>
                         Stage${selectedCount > 0 ? ` (${selectedCount})` : ''}
                     </button>
@@ -357,13 +363,13 @@ export function renderEmailList() {
                     <button class="btn btn-sm btn-icon btn-selected" disabled title="Selected">
                         <i data-lucide="check"></i>
                     </button>
-                    <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); toggleArchivedEmailSelection(${emailId})" title="Deselect">
+                    <button class="btn btn-sm btn-icon" data-action="toggleArchSel" data-email-id="${emailId}" title="Deselect">
                         <i data-lucide="x"></i>
                     </button>
                 `;
             } else {
                 actionsHtml = `
-                    <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); toggleArchivedEmailSelection(${emailId})" title="Select">
+                    <button class="btn btn-sm btn-icon" data-action="toggleArchSel" data-email-id="${emailId}" title="Select">
                         <i data-lucide="circle"></i>
                     </button>
                     <button class="btn btn-sm btn-icon" disabled title="Not selected">
@@ -376,7 +382,7 @@ export function renderEmailList() {
                 <button class="btn btn-sm btn-icon" disabled title="Already staged">
                     <i data-lucide="circle"></i>
                 </button>
-                <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); clearEmail('${emailId}')" title="Unstage">
+                <button class="btn btn-sm btn-icon" data-action="clearOne" data-email-id="${emailId}" title="Unstage">
                     <i data-lucide="x"></i>
                 </button>
             `;
@@ -385,13 +391,13 @@ export function renderEmailList() {
                 <button class="btn btn-sm btn-icon btn-selected" disabled title="Selected">
                     <i data-lucide="check"></i>
                 </button>
-                <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); clearEmail('${emailId}')" title="Deselect">
+                <button class="btn btn-sm btn-icon" data-action="clearOne" data-email-id="${emailId}" title="Deselect">
                     <i data-lucide="x"></i>
                 </button>
             `;
         } else {
             actionsHtml = `
-                <button class="btn btn-sm btn-icon" onclick="event.stopPropagation(); selectEmail('${emailId}')" title="Select">
+                <button class="btn btn-sm btn-icon" data-action="selectOne" data-email-id="${emailId}" title="Select">
                     <i data-lucide="circle"></i>
                 </button>
                 <button class="btn btn-sm btn-icon" disabled title="Not selected">
@@ -402,7 +408,7 @@ export function renderEmailList() {
         
         return `
             ${dividerHtml}
-            <div class="${rowClass}" data-id="${emailId}" onclick="openEmailViewer('${emailId}')">
+            <div class="${rowClass}" data-id="${emailId}" data-action="openEmail" data-email-id="${emailId}">
                 <div class="email-list-content">
                     <div class="email-list-main">
                         <div class="email-list-header-row">
@@ -415,7 +421,7 @@ export function renderEmailList() {
                         <span class="email-subject">${escapeHtml(email.subject || '(no subject)')}</span>
                     </div>
                 </div>
-                <div class="folder-management-actions" onclick="event.stopPropagation()">${actionsHtml}</div>
+                <div class="folder-management-actions">${actionsHtml}</div>
             </div>
         `;
         }).join('');
@@ -425,6 +431,41 @@ export function renderEmailList() {
     
     emailListEl.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
+
+    // Bind delegated handlers on the email-list-specific root. Listener
+    // dies with the view when another view's render replaces emailListEl.
+    // See delegate.js docs.
+    const root = emailListEl.querySelector('.email-list-root');
+    if (root) {
+        bindActions(root, {
+            // Toolbar (shared archive + account paths)
+            toggleSort:        (el, ev) => toggleSortDropdown(ev),
+            clearFilter:       () => clearEmailFilterInput(),
+            emailFilter:       (el) => handleEmailFilter(el.value),
+            // Archive-view toolbar
+            selectAllArchived: () => selectAllArchivedEmails(),
+            clearArchived:     () => clearSelectedArchivedEmails(),
+            moveArchived:      () => moveSelectedArchivedEmails(),
+            exportArchived:    () => exportSelectedArchivedEmails(),
+            deleteArchived:    () => deleteSelectedArchivedEmails(),
+            // Account-view toolbar
+            refresh:           () => onRefresh && onRefresh(),
+            selectAll:         () => selectAllEmails(),
+            clearSelected:     () => clearSelectedEmails(),
+            openStage:         () => openStageModalForSelected(),
+            // Row-level action buttons
+            toggleArchSel:     (el) => toggleArchivedEmailSelection(Number(el.dataset.emailId)),
+            clearOne:          (el) => clearEmail(el.dataset.emailId),
+            selectOne:         (el) => selectEmail(el.dataset.emailId),
+            // Row click -> open email viewer
+            openEmail:         (el, ev) => {
+                // Skip if click was inside the actions wrapper (replaces the
+                // legacy onclick='event.stopPropagation()' on the actions div).
+                if (ev.target.closest('.folder-management-actions')) return;
+                if (onOpenEmail) onOpenEmail(el.dataset.emailId);
+            },
+        }, ['click', 'input']);
+    }
 }
 
 /**
@@ -436,7 +477,6 @@ export function selectEmail(emailId) {
     renderEmailList();
     if (onSelectionChange) onSelectionChange();
 }
-window.selectEmail = selectEmail;
 
 /**
  * Clear an email - deselects if selected, unstages if staged.
@@ -458,7 +498,6 @@ export function clearEmail(emailId) {
         import('./staging.js').then(m => m.updateStagedBadge());
     }
 }
-window.clearEmail = clearEmail;
 
 /**
  * Select all unstaged emails.
@@ -492,7 +531,6 @@ export function openStageModalForSelected() {
     if (state.selectedEmails.size === 0) return;
     import('./staging.js').then(m => m.openStageModal());
 }
-window.openStageModalForSelected = openStageModalForSelected;
 
 /**
  * Update toolbar button states.
@@ -521,7 +559,6 @@ export function toggleEmailSelection(emailId) {
     renderEmailList();
     if (onSelectionChange) onSelectionChange();
 }
-window.toggleEmailSelection = toggleEmailSelection;
 
 // Legacy - keep for compatibility but no longer used
 export function handleSelectAll(e) {
@@ -549,7 +586,6 @@ function handleEmailFilter(query) {
         input.setSelectionRange(query.length, query.length);
     }
 }
-window.handleEmailFilter = handleEmailFilter;
 
 /**
  * Clear email filter.
@@ -560,7 +596,6 @@ function clearEmailFilterInput() {
     const input = document.getElementById('emailFilterInput');
     if (input) input.focus();
 }
-window.clearEmailFilterInput = clearEmailFilterInput;
 
 /**
  * Delete an archived email (move to trash).
@@ -593,7 +628,6 @@ async function deleteArchivedEmail(emailId) {
         showAlert('Error', 'Failed to delete email');
     }
 }
-window.deleteArchivedEmail = deleteArchivedEmail;
 
 /**
  * Move an archived email to a different folder.
@@ -614,7 +648,6 @@ async function moveArchivedEmail(emailId) {
         modal.classList.add('active');
     }
 }
-window.moveArchivedEmail = moveArchivedEmail;
 
 /**
  * Toggle selection of an archived email.
@@ -627,7 +660,6 @@ function toggleArchivedEmailSelection(emailId) {
     }
     renderEmailList();
 }
-window.toggleArchivedEmailSelection = toggleArchivedEmailSelection;
 
 /**
  * Select all archived emails.
@@ -639,7 +671,6 @@ function selectAllArchivedEmails() {
     });
     renderEmailList();
 }
-window.selectAllArchivedEmails = selectAllArchivedEmails;
 
 /**
  * Clear all archived email selections.
@@ -648,7 +679,6 @@ function clearSelectedArchivedEmails() {
     selectedArchivedEmails.clear();
     renderEmailList();
 }
-window.clearSelectedArchivedEmails = clearSelectedArchivedEmails;
 
 /**
  * Clear archived selection when switching views.
@@ -674,7 +704,6 @@ async function moveSelectedArchivedEmails() {
         modal.classList.add('active');
     }
 }
-window.moveSelectedArchivedEmails = moveSelectedArchivedEmails;
 
 /**
  * Delete selected archived emails.
@@ -713,7 +742,6 @@ async function deleteSelectedArchivedEmails() {
         showAlert('Error', 'Failed to delete some emails');
     }
 }
-window.deleteSelectedArchivedEmails = deleteSelectedArchivedEmails;
 
 /**
  * Export selected archived emails via the bulk-export modal (Phase 2).
@@ -750,4 +778,3 @@ function exportSelectedArchivedEmails() {
         console.error('Failed to load export modal:', err);
     });
 }
-window.exportSelectedArchivedEmails = exportSelectedArchivedEmails;

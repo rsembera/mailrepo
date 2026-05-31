@@ -20,7 +20,7 @@ import { closeModal, showPrompt, showConfirm, showAlert, initModalListeners } fr
 import { renderFolderTree } from './components/folder-tree.js';
 import { initEmailList, renderEmailList, toggleEmailSelection, updateSelectAllState } from './components/email-list.js';
 import { initSidebar, toggleSection, handleTreeItemClick, refreshSidebarFolders, refreshSidebarAccounts, loadAccountLabels, buildImapFolderTree, getFolderIcon } from './components/sidebar.js';
-import { initMailView, selectView, loadAccountEmails, loadFolderEmails, openEmailViewer, closeEmailViewer, showLoading, showError, restoreDefaultHeaderActions } from './views/mail.js';
+import { initMailView, selectView, loadAccountEmails, loadFolderEmails, openEmailViewer, closeEmailViewer, showLoading, showError, restoreDefaultHeaderActions, refreshImapFolder } from './views/mail.js';
 import { initStaging, openStageModal, renderFolderSelectTree, handleFolderSelect, confirmStage, updateStagedBadge, updateButtonStates, setSelectedDestinationFolder } from './components/staging.js';
 import { initFolderMgmt, renameFolder, createSubfolder, openMoveFolder, confirmMoveFolder, deleteFolder, openColorPicker } from './views/folder-mgmt.js';
 import { initFolderSelection, showFolderSelectionView, showImportFolderSelectionView, stageSelectedFolders } from './views/folder-selection.js';
@@ -72,6 +72,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initEmailList({
         emailList: elements.emailList,
         onSelectionChange: updateButtonStates,
+        onOpenEmail: openEmailViewer,
+        onRefresh: refreshImapFolder,
         onFilterChange: (filteredCount, totalCount, selectedCount = 0) => {
             if (!elements.contextMeta) return;
             const isArchiveView = state.currentView?.type === 'folder';
