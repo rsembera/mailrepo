@@ -38,50 +38,6 @@ own task; will be done outside of these working sessions.
 
 ---
 
-## Documentation
-
-### docs/ cleanup
-Several plan docs are now historical artifacts of completed work:
-- `Crypto_Refactor_Plan.md` — work shipped, plan superseded
-- `Bulk_Export_Plan.md` — feature shipped
-- `Stage_Thread_Plan.md` — old plan, status unclear
-- `Refactoring_Plan.md` and `Refactoring_Plan_V2.md` — appears legacy
-
-Could be moved to `docs/archive/` or annotated with completion status.
-Low priority but tidiness has its own value when the repo is FOSS.
-
-### `docs/Navigation_Map.md` refresh
-Last updated Feb 4, 2026 with status "Pre-Release Testing — all features
-built." Predates the May 2026 crypto refactor and a lot of post-Feb UX
-work. Either refresh to reflect the 1.0 codebase (preferred) or move to
-`docs/archive/` if no longer worth maintaining. Left in place during the
-May 30 docs cleanup pass because removing a navigation map without
-replacement would leave a hole.
-
----
-
-## Test coverage gaps
-
-### Unit tests for `core/password_change.py`
-The v2-native password change was production-tested on Rick\'s archive
-but never got the unit test scaffolding that `core/migration.py` had
-(before deletion). The function `change_master_password()` works the
-same shape as `Migration.run_phase_1` and could be tested the same
-way: build a v2 archive, change password, verify new unlocks + old
-doesn\'t, verify content equivalence across files.
-
-Not urgent — the production path works. But future maintenance is
-safer with the test scaffold in place.
-
-### `is_api_request()` regression check
-The broadening of `is_api_request()` in commit `39e0ce2` was smoke-
-tested for `/migration/api/*` only. Other endpoints (`/backups/api/*`,
-`/auth/api/*`) weren\'t re-exercised. The global CSRF auto-injection
-in `base.html` should make this transparent, but worth confirming the
-backup flow specifically after the change.
-
----
-
 ## Performance items (only act on if symptoms appear)
 
 ### Per-thread DB connection pool
@@ -165,3 +121,36 @@ or were closed out during a working session:
   for template-level actions. Eleven files converted plus a final
   template pass. See Session 38 for the full file list and the
   `template-bindings.js` design.
+
+- **`is_api_request()` regression check.** Verified May 31, 2026. The
+  broadening from `request.endpoint.startswith("api.")` to also accept
+  `"/api/" in request.path` correctly handles all three blueprint
+  patterns currently in use: standard `api_bp` at `/api/*`
+  (endpoint-based check), `backups_bp` exposing routes at
+  `/api/backup/*` with no url_prefix (path-based check), and `auth_bp`
+  with `url_prefix="/auth"` exposing `/auth/api/*` (path-based check).
+  Unauthenticated requests against representative paths in each
+  category all return JSON 401 with `application/json` content-type,
+  not HTML redirects.
+
+- **`docs/Navigation_Map.md` refresh.** Done May 31, 2026. Was 3.5
+  months stale (Feb 4 snapshot). Refreshed to reflect the 1.0
+  codebase: status updated from "Pre-Release Testing" to
+  "1.0 / Dogfooding", all file line counts and listings refreshed
+  against current `wc -l`, new files added
+  (`pdf_export.py`, `exports.py`, `password_change.py`, `sync_cache.py`,
+  `delegate.js`, `template-bindings.js`, `vault.js`, `starred.js`,
+  `thread-stage.js`, `date-picker.js`, `context-menu.js`, and the
+  matching CSS modules), encryption description updated from
+  Fernet/PBKDF2 to Argon2id/AES-256-GCM/HKDF, schema version updated
+  from v3 to v5, data layout updated with the MRC2 salt format and
+  the external `.backup_state.json`, frontend dispatch model section
+  added.
+
+- **docs/ cleanup.** Done in two passes. Session 37 (May 30) moved
+  `Crypto_Refactor_Plan.md`, `Bulk_Export_Plan.md`,
+  `Refactoring_Plan.md`, `Refactoring_Plan_V2.md`, and
+  `Retention_Vault_Plan.md` to `docs/archive/`. Session 38 (May 31)
+  also moved `Stage_Thread_Plan.md` and `Flagging_Plan.md` — both
+  documented features that have since shipped (thread-stage modal
+  and starring/flagged-at, respectively).

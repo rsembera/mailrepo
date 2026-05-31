@@ -1,12 +1,20 @@
 # MailRepo — Navigation Map
 
-**Last Updated:** February 4, 2026
+**Last Updated:** May 31, 2026
 
 ---
 
-## Project Status: Pre-Release Testing
+## Project Status: 1.0 / Dogfooding
 
-All features built. Security audit passed (see Security_Audit.md). Ready for manual testing per TESTING_CHECKLIST.md.
+Feature-complete. Encryption refactor (v1 → v2) shipped May 29. v1
+cleanup + 1.0 declaration on May 30. Frontend dispatch model unified
+May 30–31 (zero inline onclicks, zero cross-module window dispatch
+remaining). Currently in the dogfooding window before `git tag v1.0.0`
+and the packaging milestone (.dmg / .deb).
+
+See `docs/Session_Log.md` (Sessions 36–38) for the road-to-1.0 details
+and `CHANGELOG.md` for the user-facing changelog under
+`[1.0.0] — Unreleased (dogfooding)`.
 
 ---
 
@@ -15,146 +23,159 @@ All features built. Security audit passed (see Security_Audit.md). Ready for man
 | Document | Purpose |
 |----------|---------|
 | `docs/Navigation_Map.md` | This file — codebase overview and context recovery |
-| `docs/Session_Log.md` | Chronological record of all sessions and decisions |
-| `docs/SESSION_NOTES.md` | Quick-reference notes for current/recent sessions |
-| `docs/Security_Audit.md` | Feb 4, 2026 pre-release security review |
+| `docs/Session_Log.md` | Chronological record of sessions and decisions |
+| `docs/Post_1_0_Backlog.md` | Post-1.0 items: packaging, tag, website, deferred work |
+| `CHANGELOG.md` | User-facing changelog (Keep a Changelog format) |
 | `docs/TESTING_CHECKLIST.md` | Manual testing checklist for release |
-| `docs/Code_Quality_Review.md` | Jan 26 code quality findings (historical) |
-| `docs/Refactoring_Plan.md` | Phase 1 refactoring — ✅ Complete |
-| `docs/Refactoring_Plan_V2.md` | Phase 2 refactoring — ✅ Complete |
-| `docs/MailRepo_Project_Plan.md` | Original planning document (Jan 2026) |
+| `docs/Security_Audit.md` | Feb 4, 2026 pre-release security review |
+| `docs/Backup_State_Management.md` | Backup state file design (Libram-style external state) |
+| `docs/Code_Quality_Review.md` | Jan 26 / Feb 17 code quality findings (most items closed) |
+| `docs/Flagging_Plan.md` | Star/flag feature design |
+| `docs/Stage_Thread_Plan.md` | Thread staging design |
+| `docs/MailRepo_Project_Plan.md` | Original planning document (Jan 2026, historical) |
+| `docs/archive/` | Completed plan docs: crypto refactor, bulk export, retention vault, V1 refactoring plans |
 
 ---
 
-## Codebase Overview (~20,100 lines of code)
+## Codebase Overview (~38,200 lines)
 
-Per `cloc` (excluding blanks, comments, markdown, and vendored libraries):
+| Language | Files | Lines |
+|----------|-------|-------|
+| Python | 33 | 12,964 |
+| JavaScript | 29 | 16,422 |
+| CSS | 23 | 7,469 |
+| HTML | 5 | 1,331 |
+| **Total** | **90** | **38,186** |
 
-| Language | Files | Code | Blank | Comment |
-|----------|-------|------|-------|---------|
-| JavaScript | 20 | 7,828 | 1,463 | 1,551 |
-| Python | 29 | 5,551 | 1,629 | 1,745 |
-| CSS | 19 | 4,404 | 847 | 357 |
-| HTML | 5 | 1,033 | 105 | 48 |
-| **Total** | **76** | **20,113** | | |
+Roughly doubled since the Feb 4, 2026 snapshot (was ~20,100 lines).
+Largest growth: encryption refactor (Sessions 36–37), retention vault
+(Session 35), PDF export pipeline (`core/pdf_export.py`), bulk export
+(`api/exports.py`), and the frontend dispatch unification
+(Sessions 37–38).
 
-## Backend (Python)
+---
+
+## Backend (Python — 12,964 lines)
 
 ### Core (`/core/`)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `config.py` | 113 | Paths, constants, Flask config |
-| `database.py` | 391 | SQLCipher connection, schema v3, FTS5, migrations |
-| `encryption.py` | 339 | Fernet encryption, PBKDF2 key derivation, password management |
-| `imap.py` | 623 | IMAP client: connect, auth, folders, email fetch, SSL/TLS |
+| `imap.py` | 1,112 | IMAP client: connect, auth, folders, email fetch, SSL/TLS, CONDSTORE |
+| `pdf_export.py` | 1,020 | PDF export: per-email PDFs, attachment merging, WeasyPrint |
+| `database.py` | 434 | SQLCipher connection, schema v5, FTS5, migrations, threading lock |
+| `encryption.py` | 373 | Argon2id KDF + HKDF + AES-256-GCM file/DB encryption (v2) |
+| `password_change.py` | 336 | v2-native password change with full file/DB re-encryption |
 | `importer.py` | 274 | mbox, Apple mbox, EML, PST import handling |
-| `pending_commit.py` | 214 | Commit resume: save/restore interrupted commits |
+| `pending_commit.py` | 222 | Commit resume: save/restore interrupted commits |
+| `config.py` | 114 | Paths, constants, Flask config |
+| `sync_cache.py` | 109 | Two-layer IMAP folder cache (TTL + CONDSTORE/HIGHESTMODSEQ) |
 | `__init__.py` | 30 | Module exports |
 
 ### Web App (`/web/`)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `app.py` | 149 | Flask factory, blueprint registration, auth/CSRF middleware |
+| `app.py` | 156 | Flask factory, blueprint registration, auth/CSRF middleware |
 
 ### Blueprints (`/web/blueprints/`)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `auth.py` | 396 | Setup, login, logout, rate limiting, session management |
-| `main.py` | 83 | Page routes: index, create_archive, review, settings |
-| `backups.py` | 276 | Backup/restore endpoints, folder picker |
+| `auth.py` | 413 | Setup, login, logout, rate limiting, session management |
+| `backups.py` | 280 | Backup/restore endpoints, folder picker |
+| `main.py` | 83 | Page routes: index, create_archive, settings |
 
 ### API (`/web/blueprints/api/`)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `accounts.py` | 394 | IMAP account CRUD, folder listing, email fetching |
-| `commit.py` | 580 | Email/folder commit workflow, SSE progress |
-| `email_parser.py` | 314 | Email parsing: headers, body, attachments, body text extraction |
-| `emails.py` | 442 | Archived email operations: view, move, delete, batch, download |
-| `filesystem.py` | 796 | File browser for imports, path validation, PST conversion |
-| `folders.py` | 352 | Archive folder CRUD, trash, restore, permanent delete |
-| `imports.py` | 616 | Mount/unmount imports, browse imported emails/folders |
-| `progress.py` | 624 | SSE streaming for commit, import, and folder operations |
-| `settings.py` | 189 | App settings: timeout, retention, keepalive |
-| `staging.py` | 324 | Stage/unstage emails and folders, review data |
-| `streaming.py` | 156 | SSE helpers, heartbeat, connection management |
+| `exports.py` | 954 | Bulk PDF/encrypted-ZIP export pipeline + SSE progress |
+| `emails.py` | 822 | Archived email operations: view, move, delete, batch, download |
+| `filesystem.py` | 769 | File browser for imports, path validation, PST conversion |
+| `imports.py` | 718 | Mount/unmount imports, browse imported emails/folders |
+| `folders.py` | 706 | Archive folder CRUD, trash, restore, vault, retention |
+| `commit.py` | 541 | Email/folder commit workflow |
+| `progress_commit.py` | 494 | SSE streaming for commit operations |
+| `accounts.py` | 493 | IMAP account CRUD, Gmail auto-detection, folder listing |
+| `email_parser.py` | 336 | Email parsing: headers, body, attachments, body text extraction |
+| `progress_emails.py` | 266 | SSE streaming for email operations |
+| `settings.py` | 236 | App settings: timeout, retention, keepalive |
+| `streaming.py` | 160 | SSE helpers, heartbeat, connection management |
+| `threads.py` | 139 | Thread search and staging endpoints |
+| `progress.py` | 61 | Progress entry point (split into streams/state/handlers in Session 37) |
 
 ### Utilities (`/utils/`)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `backup.py` | 987 | Full/incremental backup, restore, retention, manifest |
+| `backup.py` | 1,179 | Full/incremental backup, restore, retention, external state file (Libram-style) |
 | `log.py` | 51 | Logging setup, polling filter |
-| `__init__.py` | 48 | Shell command runner, path utilities |
+| `__init__.py` | 38 | Shell command runner, path utilities |
 
-## Frontend (JavaScript)
+---
+
+## Frontend (JavaScript — 16,422 lines)
 
 ### Entry Point & Shared
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `app.js` | 643 | Initialization, event listeners, rail navigation, nav guards |
-| `state.js` | 106 | Central state object, session persistence |
-| `utils.js` | 82 | escapeHtml, formatDate, debounce, extractName |
-| `modals.js` | 131 | Alert, confirm, prompt modal helpers |
-
-### Components (`/js/components/`)
-
-| File | Lines | What It Does |
-|------|-------|--------------|
-| `sidebar.js` | 576 | Sidebar: archive folders, IMAP folders, imports, resize |
-| `email-list.js` | 543 | Email list rendering, selection, toolbar |
-| `staging.js` | 509 | Staging workflow, destination picker, stage/unstage |
-| `imports.js` | 647 | Import mount/unmount, browse, folder/email display |
-| `file-picker.js` | 438 | Filesystem browser modal for import file selection |
-| `progress.js` | 338 | SSE progress modal for commit/import operations |
-| `folder-tree.js` | 255 | Reusable folder tree renderer (configurable) |
-| `custom-select.js` | 212 | Custom dropdown select component |
-| `move-email-modal.js` | 126 | Modal for moving archived emails between folders |
+| `app.js` | 732 | Init, event listeners, rail nav, nav guards, template-bindings wiring |
+| `template-bindings.js` | 143 | Single delegated handler for index.html data-tpl-action attrs (Session 38) |
+| `delegate.js` | 116 | `bindActions(container, handlers)` helper for per-view delegation |
+| `state.js` | 124 | Central state object, session persistence |
+| `utils.js` | 90 | escapeHtml, formatDate, debounce, extractName |
+| `modals.js` | 144 | Alert/confirm/prompt + canonical closeModal + registerModalCloseHandler |
 
 ### Views (`/js/views/`)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `mail.js` | 1,108 | Email viewing: IMAP, archive, import, viewer panel |
-| `settings.js` | 1,030 | Settings page: appearance, accounts, security, backup |
-| `review.js` | 970 | Review staged items, destination editing, commit |
-| `backups.js` | 924 | Backup/restore UI, restore points, settings |
-| `folder-selection.js` | 855 | Bulk folder staging from IMAP/imports |
-| `trash.js` | 694 | Trash view: deleted folders, emails, restore, purge |
-| `folder-mgmt.js` | 655 | Manage folders: rename, color, create, delete, ZIP export |
+| `mail.js` | 2,284 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
+| `settings.js` | 1,216 | Settings: appearance, accounts, security, backup, reset |
+| `review.js` | 1,055 | Review staged items, destination editing, commit |
+| `backups.js` | 952 | Backup/restore UI, restore points, settings |
+| `folder-selection.js` | 895 | Bulk folder staging from IMAP/imports |
+| `vault.js` | 884 | Retention vault: move to vault, restore, permanent delete |
+| `trash.js` | 774 | Trash view: deleted folders, emails, restore, purge |
+| `folder-mgmt.js` | 667 | Manage folders: rename, color, create, delete |
+| `starred.js` | 368 | Starred email view |
 
-## CSS
+### Components (`/js/components/`)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `shared.css` | 601 | Design tokens, buttons, forms, utilities |
-| `themes.css` | 308 | Lagoon, Graphite, Midnight, Bloom, Rose themes |
-| `main.css` | 19 | Import hub for all module CSS |
+| `export-modal.js` | 867 | Bulk export UI: scope picker, scope-aware password, progress |
+| `email-list.js` | 778 | Email list rendering, selection, toolbar, filter input |
+| `sidebar.js` | 744 | Sidebar: archive folders, IMAP folders, imports, resize |
+| `imports.js` | 728 | Import mount/unmount, browse, folder/email display |
+| `staging.js` | 580 | Staging workflow, destination picker, stage/unstage |
+| `file-picker.js` | 438 | Filesystem browser modal for import file selection |
+| `date-picker.js` | 383 | Date picker (ported from EdgeCase) for vault retention dates |
+| `progress.js` | 352 | SSE progress modal for commit/import operations |
+| `context-menu.js` | 288 | Right-click context menu for sidebar/folders |
+| `folder-tree.js` | 255 | Reusable folder tree renderer |
+| `custom-select.js` | 223 | Custom dropdown select component |
+| `thread-stage.js` | 197 | Stage-entire-thread modal from email viewer |
+| `move-email-modal.js` | 133 | Move archived emails between folders |
 
-### CSS Modules (`/css/modules/`)
+---
 
-| File | Lines |
-|------|-------|
-| `settings-view.css` | 606 |
-| `backups-view.css` | 577 |
-| `modals.css` | 507 |
-| `email-list.css` | 497 |
-| `sidebar.css` | 320 |
-| `folder-mgmt.css` | 320 |
-| `review-view.css` | 323 |
-| `email-viewer.css` | 270 |
-| `folder-selection.css` | 250 |
-| `trash.css` | 248 |
-| `folder-tree.css` | 198 |
-| `content.css` | 127 |
-| `layout.css` | 123 |
-| `progress.css` | 122 |
-| `custom-select.css` | 108 |
-| `responsive.css` | 84 |
+## CSS (7,469 lines)
+
+| File | Lines | What It Does |
+|------|-------|--------------|
+| `shared.css` | 637 | Design tokens, buttons, forms, utilities |
+| `themes.css` | 318 | Five themes: Atlantic, Ember, Graphite, Obsidian, **Pine** (default) |
+| `main.css` | 23 | Import hub for all module CSS |
+
+Per-module stylesheets in `/css/modules/`: settings-view (606), backups-view (603),
+email-list (599), modals (569), export (513), sidebar (441), vault (413),
+review-view (325), email-viewer (321), folder-mgmt (320), content (293),
+folder-selection (255), date-picker (242), trash (230), folder-tree (198),
+layout (169), custom-select (121), progress (120), responsive (84),
+context-menu (69).
 
 ---
 
@@ -162,53 +183,75 @@ Per `cloc` (excluding blanks, comments, markdown, and vendored libraries):
 
 | File | Lines | What It Does |
 |------|-------|--------------|
+| `main/index.html` | 693 | Main dashboard (three-pane layout); all interactivity via data-tpl-action |
 | `base.html` | 423 | Base layout, left rail, sidebar, content area, modals |
-| `main/index.html` | 575 | Main dashboard (three-pane layout) |
-| `main/create_archive.html` | 63 | First-run archive creation |
+| `auth/login.html` | 84 | Login form |
 | `auth/setup.html` | 68 | Master password setup |
-| `auth/login.html` | 57 | Login form |
+| `main/create_archive.html` | 63 | First-run archive creation |
+
+As of Session 38, `index.html` has zero inline onclick handlers. All
+template interactivity dispatches through `template-bindings.js` via
+`data-tpl-action` attributes.
+
+---
 
 ## Data & Storage
 
 ```
-/home/rick/Applications/mailrepo/
+/Users/rick/Applications/mailrepo/
 ├── data/
-│   ├── mailrepo.db          # SQLCipher-encrypted database
-│   ├── .salt                # PBKDF2 salt (32 bytes)
-│   └── .secret_key          # Flask session key (0o600 permissions)
+│   ├── mailrepo.db          # SQLCipher-encrypted database (key via Argon2id+HKDF)
+│   ├── .salt                # "MRC2"[32B salt][AES-256-GCM verifier]
+│   ├── .secret_key          # Flask session key (0o600 permissions)
+│   └── .sync_cache.db       # Plaintext SQLite for IMAP folder cache
 ├── archive/
 │   └── {folder_id}/
-│       └── {account}_{uid}.eml.enc   # Fernet-encrypted .eml files
+│       └── {account}_{uid}.eml.enc   # AES-256-GCM encrypted (per-file nonce, version 0x02)
 ├── backups/
-│   ├── manifest.json        # Backup history and metadata
-│   ├── full_*.zip           # Full backups
-│   └── incr_*.zip           # Incremental backups
-└── config/                  # Reserved for future use
+│   ├── .backup_state.json   # Backup state (mtime/size hashes, cycle position)
+│   ├── full_*.zip
+│   └── incr_*.zip
+└── config/                  # Reserved
 ```
+
+Per-file encryption format:
+- Byte 0: version (0x02)
+- Bytes 1–12: 12-byte random GCM nonce
+- Bytes 13+: AES-256-GCM ciphertext + auth tag
+
+Forward infrastructure for v3: bump to `MRC3` / `0x03` / HKDF info `.v3`
+so a future KDF/cipher change derives cryptographically distinct keys
+even if the master password collides across versions.
 
 ---
 
-## Database Schema (v3)
+## Database Schema (v5)
 
 ```sql
-accounts    (id, name, email, provider, server, port, credentials_encrypted,
-             cached_folders, cached_folders_at, created_at, last_sync)
-folders     (id, name, parent_id, color, retention_days, created_at,
-             deleted_at, original_parent_id)
-messages    (id, folder_id, source_account_id, message_id, subject, sender,
-             recipients, date, filepath, filed_at, body_text, deleted_at)
-messages_fts (subject, sender, body_text)  -- FTS5 virtual table
-settings    (key, value)
-pending_commit (id, batch_id, item_type, item_data, destination_folder_id,
-                source_action, status, created_at, updated_at)
+accounts        (id, name, email, provider, server, port, credentials_encrypted,
+                 cached_folders, cached_folders_at, created_at, last_sync, is_gmail)
+folders         (id, name, parent_id, color, retention_date, created_at,
+                 deleted_at, original_parent_id)
+messages        (id, folder_id, source_account_id, message_id, subject, sender,
+                 recipients, date, filepath, filed_at, body_text, deleted_at,
+                 flagged_at)
+messages_fts    -- FTS5 virtual table over (subject, sender, recipients, body_text)
+settings        (key, value)
+pending_commit  (commit_id, batch_id, item_type, item_data, destination_folder_id,
+                 source_action, status, created_at, updated_at)
+email_cache     (account_id, folder_name, uidvalidity, uid_data, cached_at)
 ```
+
+Notable indexes: `idx_folders_retention` (vault queries),
+`idx_messages_message_id` (thread lookups), `idx_pending_commit_id`
+(commit resume).
 
 ---
 
 ## How to Run
 
 ```bash
-cd /home/rick/Applications/mailrepo
+cd /Users/rick/Applications/mailrepo
 source venv/bin/activate
 python main.py
 # Opens at http://127.0.0.1:5050
@@ -216,9 +259,9 @@ python main.py
 
 ### First Run
 
-1. Create master password (12+ characters)
+1. Create master password (12+ characters; Argon2id-derived master key)
 2. Create first archive folder
-3. Go to Settings → Add IMAP account
+3. Settings → Add IMAP account (Gmail auto-detected from server hostname)
 4. Browse emails, stage to folders, review, commit
 
 ### Environment Variables
@@ -230,10 +273,53 @@ python main.py
 
 ---
 
+## Test Suite (68 tests)
+
+| File | Coverage |
+|------|----------|
+| `tests/test_encryption.py` | v1 encryption (preserved for migration test reference) |
+| `tests/test_encryption_v2.py` | v2 encryption: Argon2id, HKDF, AES-256-GCM, file/DB round-trip |
+| `tests/test_password_change.py` | v2-native password change (15 tests added Session 37) |
+| `tests/test_database.py` | Schema, migrations, FTS5 |
+| `tests/test_database_threading.py` | Concurrent access, RLock behavior |
+| `tests/test_email_parser.py` | Header/body/attachment parsing |
+| `tests/test_api_folders.py` | Folder CRUD via API |
+
+Run with `pytest -q` from project root.
+
+---
+
+## Frontend Dispatch Model
+
+As of Session 38 the codebase uses a uniform two-layer dispatch model:
+
+1. **Per-view delegation** via `bindActions(container, handlers, eventTypes)`
+   in `web/static/js/delegate.js`. Each view binds its handlers on a
+   view-specific child wrapper (e.g. `.starred-view-root`, `.trash-view-root`)
+   so the listener dies with the view when another render replaces
+   `emailList`'s `innerHTML`. Resolves nested clickables via
+   `closest('[data-action]')`.
+
+2. **Template-level delegation** via `template-bindings.js`. A single
+   click listener on `document.body` resolves `data-tpl-action` attributes
+   in `index.html` to ES-imported functions. Args via data attributes:
+   `data-modal-id` (closeModal), `data-direction` (viewerNavigate),
+   `data-confirm` (resolveConfirm), `data-prompt-cancel` (resolvePrompt
+   cancel branch), `data-rail-view` (jump to a rail tab).
+
+No remaining inline `onclick` attributes anywhere in the codebase.
+Two intentional `window.X` assignments remain: `getMountedImports`
+(cross-module lazy reference) and `skipBeforeUnloadWarning` (internal
+self-reference in app.js).
+
+---
+
 ## If Chat Context Disappears
 
-1. Read this file first
-2. Read `SESSION_NOTES.md` for current state
-3. Read `Session_Log.md` for full history
-4. Read `Security_Audit.md` for security review results
-5. Run `python main.py` to see current state
+1. Read this file first.
+2. Read `docs/Session_Log.md` — most recent sessions are 36 (May 29
+   crypto refactor), 37 (May 30 1.0 ship), 38 (May 31 frontend
+   cleanup).
+3. Read `docs/Post_1_0_Backlog.md` for what's still open.
+4. `git log --oneline -20` to see recent commits.
+5. Run `python main.py` to see current state.
