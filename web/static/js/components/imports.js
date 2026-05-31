@@ -112,14 +112,13 @@ export function initImports(config = {}) {
 /**
  * Show the import type selection modal.
  */
-function showImportModal() {
+export function showImportModal() {
     const modal = document.getElementById('importModal');
     if (modal) {
         modal.classList.add('active');
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 }
-window.openImportModal = showImportModal;
 
 // closeModal is now imported from ../modals.js (canonical implementation).
 // The template still uses inline onclicks via window.closeModal, which is

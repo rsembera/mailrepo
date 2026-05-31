@@ -8,6 +8,7 @@ import { escapeHtml } from '../utils.js';
 import { state, loadFolders } from '../state.js';
 import { closeModal, showAlert } from '../modals.js';
 import { renderEmailList } from './email-list.js';
+import { bindActions } from '../delegate.js';
 
 let selectedFolderId = null;
 
@@ -54,7 +55,7 @@ export async function renderMoveEmailFolderTree() {
         const isCurrent = folder.id == currentFolderId;
         
         html += `
-            <div class="folder-select-item ${isCurrent ? 'disabled' : ''}" data-id="${folder.id}" ${isCurrent ? '' : `onclick="selectMoveEmailFolder(${folder.id})"`} style="padding-left: ${indent + 12}px">
+            <div class="folder-select-item ${isCurrent ? 'disabled' : ''}" data-id="${folder.id}" ${isCurrent ? '' : `data-action="selectFolder" data-folder-id="${folder.id}"`} style="padding-left: ${indent + 12}px">
                 <i data-lucide="folder" class="folder-icon"></i>
                 <span>${escapeHtml(folder.name)}${isCurrent ? ' (current)' : ''}</span>
             </div>
@@ -69,6 +70,13 @@ export async function renderMoveEmailFolderTree() {
     
     listEl.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
+
+    // Delegated click handler for the per-row folder selection. Replaces
+    // the previous inline onclick="selectMoveEmailFolder(N)" pattern and
+    // the window.selectMoveEmailFolder global it required.
+    bindActions(listEl, {
+        selectFolder: (el) => selectMoveEmailFolder(Number(el.dataset.folderId)),
+    });
 }
 
 /**
@@ -84,12 +92,11 @@ function selectMoveEmailFolder(folderId) {
     
     document.getElementById('confirmMoveEmailBtn').disabled = false;
 }
-window.selectMoveEmailFolder = selectMoveEmailFolder;
 
 /**
  * Confirm and execute the email move.
  */
-async function confirmMoveEmail() {
+export async function confirmMoveEmail() {
     const emailIds = window.pendingMoveEmailIds;
     if (!emailIds || emailIds.length === 0 || !selectedFolderId) return;
     
@@ -124,4 +131,3 @@ async function confirmMoveEmail() {
         showAlert('Error', 'Failed to move some emails');
     }
 }
-window.confirmMoveEmail = confirmMoveEmail;

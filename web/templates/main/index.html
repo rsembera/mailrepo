@@ -41,7 +41,7 @@
             <button class="rail-btn" data-view="backups" title="Backup & Restore">
                 <i data-lucide="hard-drive-download"></i>
             </button>
-            <button type="button" class="rail-btn" title="Logout" onclick="handleLogout()">
+            <button type="button" class="rail-btn" title="Logout" data-tpl-action="handleLogout">
                 <i data-lucide="log-out"></i>
             </button>
         </div>
@@ -76,7 +76,7 @@
                 {% else %}
                     <div class="sidebar-empty">
                         <p>No accounts connected</p>
-                        <button class="btn btn-sm btn-primary" onclick="document.querySelector('.rail-btn[data-view=settings]').click()">Add Account</button>
+                        <button class="btn btn-sm btn-primary" data-tpl-action="railView" data-rail-view="settings">Add Account</button>
                     </div>
                 {% endif %}
             </div>
@@ -96,7 +96,7 @@
             <div class="section-content expanded" id="archiveSection">
                 <!-- Search Archive -->
                 <div class="tree-item">
-                    <div class="tree-item-row" data-type="search" onclick="showArchiveSearch()">
+                    <div class="tree-item-row" data-type="search" data-tpl-action="showArchiveSearch">
                         <i data-lucide="search" class="tree-icon"></i>
                         <span class="tree-label">Search Archive</span>
                     </div>
@@ -137,7 +137,7 @@
         </div>
         
         <!-- Import Button (always at bottom of sidebar) -->
-        <button class="tree-item-row add-folder-btn" onclick="openImportModal()">
+        <button class="tree-item-row add-folder-btn" data-tpl-action="openImport">
             <i data-lucide="upload" class="tree-icon"></i>
             <span class="tree-label">Import</span>
         </button>
@@ -162,8 +162,8 @@
             <span class="overdue-alert-text">
                 <strong><span id="overdueCount">0</span> folders</strong> in Retention Vault are ready for deletion review.
             </span>
-            <button class="overdue-alert-btn" onclick="document.querySelector('.rail-btn[data-view=vault]').click();">View Vault</button>
-            <button class="overdue-alert-btn" onclick="dismissOverdueAlert()">Dismiss</button>
+            <button class="overdue-alert-btn" data-tpl-action="railView" data-rail-view="vault">View Vault</button>
+            <button class="overdue-alert-btn" data-tpl-action="dismissOverdueAlert">Dismiss</button>
         </div>
         
         <!-- Subfolders Bar (shown when viewing archive folder with subfolders) -->
@@ -174,11 +174,11 @@
         <!-- Search/Filter Bar (hidden until content loads) -->
         <div class="content-toolbar" style="display: none;">
             <div class="toolbar-actions">
-                <button class="btn btn-secondary btn-sm" id="selectAllEmailsBtn" onclick="selectAllEmails()">
+                <button class="btn btn-secondary btn-sm" id="selectAllEmailsBtn" data-tpl-action="selectAllEmails">
                     <i data-lucide="check-square"></i>
                     Select All
                 </button>
-                <button class="btn btn-secondary btn-sm" id="clearSelectedEmailsBtn" onclick="clearSelectedEmails()" disabled>
+                <button class="btn btn-secondary btn-sm" id="clearSelectedEmailsBtn" data-tpl-action="clearSelectedEmails" disabled>
                     <i data-lucide="x"></i>
                     Clear Selected
                 </button>
@@ -195,7 +195,7 @@
                 <i data-lucide="mail" class="welcome-icon"></i>
                 <h3>Welcome to MailRepo</h3>
                 <p>Select an email account from the sidebar to browse and archive your messages.</p>
-                <p class="welcome-hint">Or connect a new account in <a href="javascript:void(0);" onclick="document.querySelector('.rail-btn[data-view=settings]').click()">Settings</a>.</p>
+                <p class="welcome-hint">Or connect a new account in <a href="javascript:void(0);" data-tpl-action="railView" data-rail-view="settings">Settings</a>.</p>
             </div>
         </div>
     </main>
@@ -206,7 +206,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h2 id="stageModalTitle">Stage <span id="stageCount">0</span> Email(s)</h2>
-            <button class="btn-icon" onclick="closeModal('stageModal')" title="Close" aria-label="Close">
+            <button class="btn-icon" data-tpl-action="closeModal" data-modal-id="stageModal" title="Close" aria-label="Close">
                 <i data-lucide="x"></i>
             </button>
         </div>
@@ -215,7 +215,7 @@
             <!-- Populated dynamically by JavaScript -->
         </div>
         <div class="modal-actions">
-            <button class="btn btn-secondary" onclick="closeModal('stageModal')">Cancel</button>
+            <button class="btn btn-secondary" data-tpl-action="closeModal" data-modal-id="stageModal">Cancel</button>
             <button class="btn btn-primary" id="confirmStageBtn" disabled>Stage</button>
         </div>
     </div>
@@ -232,7 +232,7 @@
             <input type="text" id="newFolderName" placeholder="e.g., Client: John Smith">
         </div>
         <div class="modal-actions">
-            <button class="btn btn-secondary" onclick="closeModal('newFolderModal')">Cancel</button>
+            <button class="btn btn-secondary" data-tpl-action="closeModal" data-modal-id="newFolderModal">Cancel</button>
             <button class="btn btn-primary" id="createFolderBtn">Create</button>
         </div>
     </div>
@@ -243,35 +243,35 @@
     <div class="email-viewer">
         <div class="email-viewer-header">
             <div class="email-viewer-actions">
-                <button class="btn btn-secondary btn-icon" id="starBtn" onclick="toggleStarFromViewer()" title="Star this email — press s" style="display: none;">
+                <button class="btn btn-secondary btn-icon" id="starBtn" data-tpl-action="toggleStarFromViewer" title="Star this email — press s" style="display: none;">
                     <i data-lucide="star" id="starBtnIcon"></i>
                 </button>
-                <button class="btn btn-secondary btn-icon" id="stageThreadBtn" onclick="stageThreadFromViewer()" title="Stage thread to folder" style="display: none;">
+                <button class="btn btn-secondary btn-icon" id="stageThreadBtn" data-tpl-action="stageThreadFromViewer" title="Stage thread to folder" style="display: none;">
                     <i data-lucide="messages-square"></i>
                 </button>
-                <button class="btn btn-secondary btn-icon" onclick="copyAsReply()" title="Copy as reply">
+                <button class="btn btn-secondary btn-icon" data-tpl-action="copyAsReply" title="Copy as reply">
                     <i data-lucide="clipboard-copy"></i>
                 </button>
-                <button class="btn btn-secondary btn-icon" onclick="viewEmailSource()" title="View source">
+                <button class="btn btn-secondary btn-icon" data-tpl-action="viewEmailSource" title="View source">
                     <i data-lucide="code"></i>
                 </button>
-                <button class="btn btn-secondary btn-icon" onclick="downloadEmail()" title="Download as .eml">
+                <button class="btn btn-secondary btn-icon" data-tpl-action="downloadEmail" title="Download as .eml">
                     <i data-lucide="download"></i>
                 </button>
-                <button class="btn btn-secondary btn-icon" onclick="printEmail()" title="Print">
+                <button class="btn btn-secondary btn-icon" data-tpl-action="printEmail" title="Print">
                     <i data-lucide="printer"></i>
                 </button>
-                <button class="btn btn-secondary btn-icon" id="loadRemoteBtn" onclick="loadRemoteContent()" title="Load remote images" style="display: none;">
+                <button class="btn btn-secondary btn-icon" id="loadRemoteBtn" data-tpl-action="loadRemoteContent" title="Load remote images" style="display: none;">
                     <i data-lucide="image"></i>
                 </button>
-                <button class="btn btn-secondary btn-icon" id="viewerPrevBtn" onclick="viewerNavigate(-1)" title="Previous (newer) — press k" style="display: none;">
+                <button class="btn btn-secondary btn-icon" id="viewerPrevBtn" data-tpl-action="viewerNavigate" data-direction="-1" title="Previous (newer) — press k" style="display: none;">
                     <i data-lucide="chevron-up"></i>
                 </button>
-                <button class="btn btn-secondary btn-icon" id="viewerNextBtn" onclick="viewerNavigate(1)" title="Next (older) — press j" style="display: none;">
+                <button class="btn btn-secondary btn-icon" id="viewerNextBtn" data-tpl-action="viewerNavigate" data-direction="1" title="Next (older) — press j" style="display: none;">
                     <i data-lucide="chevron-down"></i>
                 </button>
             </div>
-            <button class="btn btn-secondary btn-icon" onclick="closeEmailViewer()">
+            <button class="btn btn-secondary btn-icon" data-tpl-action="closeEmailViewer">
                 <i data-lucide="x"></i>
             </button>
         </div>
@@ -313,8 +313,8 @@
             <input type="text" id="promptInput" placeholder="">
         </div>
         <div class="modal-actions">
-            <button class="btn btn-secondary" onclick="resolvePrompt(null)">Cancel</button>
-            <button class="btn btn-primary" onclick="resolvePrompt(document.getElementById('promptInput').value)">OK</button>
+            <button class="btn btn-secondary" data-tpl-action="resolvePrompt" data-prompt-cancel>Cancel</button>
+            <button class="btn btn-primary" data-tpl-action="resolvePrompt">OK</button>
         </div>
     </div>
 </div>
@@ -327,8 +327,8 @@
         </div>
         <p id="confirmMessage">Are you sure?</p>
         <div class="modal-actions">
-            <button class="btn btn-secondary" onclick="resolveConfirm(false)">Cancel</button>
-            <button class="btn btn-primary" id="confirmOkBtn" onclick="resolveConfirm(true)">OK</button>
+            <button class="btn btn-secondary" data-tpl-action="resolveConfirm" data-confirm="false">Cancel</button>
+            <button class="btn btn-primary" id="confirmOkBtn" data-tpl-action="resolveConfirm" data-confirm="true">OK</button>
         </div>
     </div>
 </div>
@@ -341,7 +341,7 @@
         </div>
         <p id="alertMessage"></p>
         <div class="modal-actions">
-            <button class="btn btn-primary" onclick="resolveAlert()">OK</button>
+            <button class="btn btn-primary" data-tpl-action="resolveAlert">OK</button>
         </div>
     </div>
 </div>
@@ -351,7 +351,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h2>Move "<span id="moveFolderName"></span>"</h2>
-            <button class="btn-icon" onclick="closeModal('moveFolderModal')" title="Close" aria-label="Close">
+            <button class="btn-icon" data-tpl-action="closeModal" data-modal-id="moveFolderModal" title="Close" aria-label="Close">
                 <i data-lucide="x"></i>
             </button>
         </div>
@@ -360,8 +360,8 @@
             <!-- Populated by JS -->
         </div>
         <div class="modal-actions">
-            <button class="btn btn-secondary" onclick="closeModal('moveFolderModal')">Cancel</button>
-            <button class="btn btn-primary" id="confirmMoveBtn" disabled onclick="confirmMoveFolder()">Move</button>
+            <button class="btn btn-secondary" data-tpl-action="closeModal" data-modal-id="moveFolderModal">Cancel</button>
+            <button class="btn btn-primary" id="confirmMoveBtn" disabled data-tpl-action="confirmMoveFolder">Move</button>
         </div>
     </div>
 </div>
@@ -371,7 +371,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h2>Move Email</h2>
-            <button class="btn-icon" onclick="closeModal('moveEmailModal')" title="Close" aria-label="Close">
+            <button class="btn-icon" data-tpl-action="closeModal" data-modal-id="moveEmailModal" title="Close" aria-label="Close">
                 <i data-lucide="x"></i>
             </button>
         </div>
@@ -380,8 +380,8 @@
             <!-- Populated by JS -->
         </div>
         <div class="modal-actions">
-            <button class="btn btn-secondary" onclick="closeModal('moveEmailModal')">Cancel</button>
-            <button class="btn btn-primary" id="confirmMoveEmailBtn" disabled onclick="confirmMoveEmail()">Move</button>
+            <button class="btn btn-secondary" data-tpl-action="closeModal" data-modal-id="moveEmailModal">Cancel</button>
+            <button class="btn btn-primary" id="confirmMoveEmailBtn" disabled data-tpl-action="confirmMoveEmail">Move</button>
         </div>
     </div>
 </div>
@@ -411,7 +411,7 @@
             </button>
         </div>
         <div class="modal-actions">
-            <button class="btn btn-secondary" onclick="closeModal('importModal')">Cancel</button>
+            <button class="btn btn-secondary" data-tpl-action="closeModal" data-modal-id="importModal">Cancel</button>
         </div>
     </div>
 </div>
@@ -452,7 +452,7 @@
                 <span>Show hidden files</span>
             </label>
             <div class="spacer"></div>
-            <button class="btn btn-secondary" onclick="closeModal('filePickerModal')">Cancel</button>
+            <button class="btn btn-secondary" data-tpl-action="closeModal" data-modal-id="filePickerModal">Cancel</button>
             <button class="btn btn-primary" id="filePickerConfirm" disabled>Select</button>
         </div>
     </div>
@@ -505,7 +505,7 @@
         </details>
         
         <div class="modal-actions">
-            <button class="btn btn-secondary" onclick="closeModal('addAccountModal')">Cancel</button>
+            <button class="btn btn-secondary" data-tpl-action="closeModal" data-modal-id="addAccountModal">Cancel</button>
             <button class="btn btn-primary" id="createAccountBtn">
                 <i data-lucide="plus"></i>
                 Add Account
@@ -538,7 +538,7 @@
             </p>
         </div>
         <div class="modal-actions">
-            <button class="btn btn-primary" onclick="closeModal('appPasswordModal')" style="width: 100%;">Got it</button>
+            <button class="btn btn-primary" data-tpl-action="closeModal" data-modal-id="appPasswordModal" style="width: 100%;">Got it</button>
         </div>
     </div>
 </div>
@@ -570,7 +570,7 @@
         </div>
         
         <div class="modal-actions">
-            <button class="btn btn-secondary" onclick="closeModal('vaultModal')">Cancel</button>
+            <button class="btn btn-secondary" data-tpl-action="closeModal" data-modal-id="vaultModal">Cancel</button>
             <button class="btn btn-primary" id="vaultConfirmBtn" disabled>
                 <i data-lucide="archive"></i>
                 Move to Vault
@@ -594,8 +594,8 @@
         </div>
         
         <div class="modal-actions">
-            <button class="btn btn-secondary" onclick="closeModal('restoreFolderModal')">Cancel</button>
-            <button class="btn btn-primary" onclick="confirmRestoreFolder()">
+            <button class="btn btn-secondary" data-tpl-action="closeModal" data-modal-id="restoreFolderModal">Cancel</button>
+            <button class="btn btn-primary" data-tpl-action="confirmRestoreFolder">
                 <i data-lucide="archive-restore"></i>
                 Restore
             </button>
@@ -635,7 +635,7 @@
         <p class="about-credits">Designed by Richard Sembera</p>
         <p class="about-credits">Coded by Claude Opus 4.5–4.8</p>
         <p class="about-tagline">"Your correspondence, your machine, your control."</p>
-        <button onclick="closeModal('aboutModal')" class="btn btn-secondary" style="width: 100%;">
+        <button data-tpl-action="closeModal" data-modal-id="aboutModal" class="btn btn-secondary" style="width: 100%;">
             Close
         </button>
     </div>
@@ -665,8 +665,8 @@
         <div id="resetError" class="text-danger" style="display: none; margin-bottom: var(--space-md); font-size: 0.875rem;"></div>
         
         <div class="modal-actions">
-            <button onclick="closeResetDatabaseModal()" class="btn btn-secondary">Cancel</button>
-            <button onclick="executeResetDatabase()" id="resetExecuteBtn" class="btn btn-danger">
+            <button data-tpl-action="closeResetDatabaseModal" class="btn btn-secondary">Cancel</button>
+            <button data-tpl-action="executeResetDatabase" id="resetExecuteBtn" class="btn btn-danger">
                 <i data-lucide="trash-2" class="icon-inline"></i>
                 Reset Everything
             </button>

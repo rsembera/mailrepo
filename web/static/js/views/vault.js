@@ -697,7 +697,7 @@ function selectRestoreDestination(folderId) {
 /**
  * Confirm restore folder from vault.
  */
-async function confirmRestoreFolder() {
+export async function confirmRestoreFolder() {
     if (!restoreFolderId) return;
     
     try {
@@ -726,7 +726,6 @@ async function confirmRestoreFolder() {
         showAlert('Error', 'Failed to restore folder');
     }
 }
-window.confirmRestoreFolder = confirmRestoreFolder;
 
 /**
  * Permanently delete a single folder from vault.
@@ -872,11 +871,10 @@ export function hideOverdueAlert() {
 /**
  * Dismiss the overdue alert for this session.
  */
-function dismissOverdueAlert() {
+export function dismissOverdueAlert() {
     overdueAlertDismissed = true;
     hideOverdueAlert();
 }
-window.dismissOverdueAlert = dismissOverdueAlert;
 
 /**
  * Reset the dismiss state (e.g., when new folders become overdue).

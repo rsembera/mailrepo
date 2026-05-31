@@ -341,7 +341,6 @@ export function showArchiveSearch() {
     // Render search interface
     renderSearchView();
 }
-window.showArchiveSearch = showArchiveSearch;
 
 /**
  * Render the search view interface.
@@ -1861,7 +1860,7 @@ async function downloadImportAttachment(index, viewInline = false) {
 /**
  * Print the current email (browser print dialog).
  */
-function printEmail() {
+export function printEmail() {
     if (!currentViewerContext?.emailData) return;
     
     const email = currentViewerContext.emailData;
@@ -1942,14 +1941,13 @@ function printEmail() {
         }
     }, 500);
 }
-window.printEmail = printEmail;
 
 /**
  * Copy the current email formatted as a reply to the clipboard.
  * Copies both HTML (with blockquote) and plain text (with > prefixes)
  * so it pastes correctly in both HTML and plain text compose modes.
  */
-async function copyAsReply() {
+export async function copyAsReply() {
     if (!currentViewerContext?.emailData) return;
     
     const email = currentViewerContext.emailData;
@@ -2002,12 +2000,11 @@ async function copyAsReply() {
         showAlert('Copy Failed', 'Could not copy to clipboard: ' + error.message);
     }
 }
-window.copyAsReply = copyAsReply;
 
 /**
  * Download the current email as .eml file.
  */
-function downloadEmail() {
+export function downloadEmail() {
     if (!currentViewerContext) return;
     
     let downloadUrl = null;
@@ -2028,12 +2025,11 @@ function downloadEmail() {
         document.body.removeChild(a);
     }
 }
-window.downloadEmail = downloadEmail;
 
 /**
  * Load remote content (images, etc.) in the current email.
  */
-function loadRemoteContent() {
+export function loadRemoteContent() {
     if (!currentViewerContext?.emailData?.html_body) return;
     
     const bodyDiv = document.getElementById('viewerBody');
@@ -2043,12 +2039,11 @@ function loadRemoteContent() {
     const loadRemoteBtn = document.getElementById('loadRemoteBtn');
     if (loadRemoteBtn) loadRemoteBtn.disabled = true;
 }
-window.loadRemoteContent = loadRemoteContent;
 
 /**
  * View raw source of the current email.
  */
-async function viewEmailSource() {
+export async function viewEmailSource() {
     if (!currentViewerContext) return;
     
     let sourceUrl = null;
@@ -2100,7 +2095,6 @@ async function viewEmailSource() {
         win.document.body.textContent = `Error: ${error.message}`;
     }
 }
-window.viewEmailSource = viewEmailSource;
 
 /**
  * Initialize email viewer event listeners.
@@ -2121,8 +2115,6 @@ function initEmailViewerListeners() {
     });
 }
 
-// Expose to window for inline onclick handlers
-window.closeEmailViewer = closeEmailViewer;
 
 
 /**
@@ -2131,7 +2123,7 @@ window.closeEmailViewer = closeEmailViewer;
  * and UID details when type === 'account') and lazy-loads the thread-stage
  * module. The module owns the folder-picker / find / confirm / stage flow.
  */
-window.stageThreadFromViewer = async function() {
+export async function stageThreadFromViewer() {
     const ctx = currentViewerContext;
     if (!ctx || ctx.type !== 'account') {
         console.warn('stageThreadFromViewer called outside a live IMAP context');
@@ -2148,7 +2140,7 @@ window.stageThreadFromViewer = async function() {
     } catch (e) {
         console.error('Failed to load thread-stage module:', e);
     }
-};
+}
 
 
 /**
@@ -2157,7 +2149,7 @@ window.stageThreadFromViewer = async function() {
  *
  * @param {number} direction - -1 for previous (newer), +1 for next (older)
  */
-window.viewerNavigate = function(direction) {
+export function viewerNavigate(direction) {
     const ctx = currentViewerContext;
     if (!ctx || ctx.type !== 'folder' || !ctx.messageId) return;
 
@@ -2175,7 +2167,7 @@ window.viewerNavigate = function(direction) {
     // Reopen the viewer with the new email. openEmailViewer handles all
     // the loading, context-update, and button-state work.
     openEmailViewer(nextId);
-};
+}
 
 /**
  * Keyboard shortcuts for the email viewer:
@@ -2203,9 +2195,7 @@ document.addEventListener('keydown', (e) => {
 
     if (e.key === 'Escape') {
         e.preventDefault();
-        if (typeof window.closeEmailViewer === 'function') {
-            window.closeEmailViewer();
-        }
+        closeEmailViewer();
         return;
     }
 
@@ -2214,15 +2204,13 @@ document.addEventListener('keydown', (e) => {
 
     if (e.key === 'j') {
         e.preventDefault();
-        window.viewerNavigate(1);
+        viewerNavigate(1);
     } else if (e.key === 'k') {
         e.preventDefault();
-        window.viewerNavigate(-1);
+        viewerNavigate(-1);
     } else if (e.key === 's') {
         e.preventDefault();
-        if (typeof window.toggleStarFromViewer === 'function') {
-            window.toggleStarFromViewer();
-        }
+        toggleStarFromViewer();
     }
 });
 
@@ -2233,7 +2221,7 @@ document.addEventListener('keydown', (e) => {
  * state.emails so the renderer (and any subsequent re-render of the
  * email list) reflects the new value.
  */
-window.toggleStarFromViewer = async function() {
+export async function toggleStarFromViewer() {
     const ctx = currentViewerContext;
     if (!ctx || ctx.type !== 'folder' || !ctx.messageId) return;
 
@@ -2293,4 +2281,4 @@ window.toggleStarFromViewer = async function() {
     } catch (e) {
         console.error('Star toggle failed:', e);
     }
-};
+}

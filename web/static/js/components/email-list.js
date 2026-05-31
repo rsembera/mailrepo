@@ -512,7 +512,6 @@ export function selectAllEmails() {
     renderEmailList();
     if (onSelectionChange) onSelectionChange();
 }
-window.selectAllEmails = selectAllEmails;
 
 /**
  * Clear all selected emails.
@@ -522,7 +521,6 @@ export function clearSelectedEmails() {
     renderEmailList();
     if (onSelectionChange) onSelectionChange();
 }
-window.clearSelectedEmails = clearSelectedEmails;
 
 /**
  * Open stage modal for selected emails.

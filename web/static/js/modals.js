@@ -142,7 +142,3 @@ export function initModalListeners() {
 }
 
 // Expose to window for inline onclick handlers
-window.resolvePrompt = resolvePrompt;
-window.resolveConfirm = resolveConfirm;
-window.resolveAlert = resolveAlert;
-window.closeModal = closeModal;

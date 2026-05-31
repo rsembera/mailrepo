@@ -1137,15 +1137,15 @@ function showResetDatabaseModal() {
 /**
  * Close the reset database modal.
  */
-window.closeResetDatabaseModal = function() {
+export function closeResetDatabaseModal() {
     const modal = document.getElementById('resetDatabaseModal');
     if (modal) modal.classList.remove('active');
-};
+}
 
 /**
  * Execute the database reset.
  */
-window.executeResetDatabase = async function() {
+export async function executeResetDatabase() {
     const password = document.getElementById('resetPassword').value;
     const confirmation = document.getElementById('resetConfirmation').value;
     const errorEl = document.getElementById('resetError');
@@ -1199,7 +1199,7 @@ window.executeResetDatabase = async function() {
         btn.innerHTML = '<i data-lucide="trash-2" class="icon-inline"></i> Reset Everything';
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
-};
+}
 
 // Close modal on escape key
 document.addEventListener('keydown', function(e) {

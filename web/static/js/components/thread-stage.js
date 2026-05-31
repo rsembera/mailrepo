@@ -195,4 +195,3 @@ async function _findAndStageThread({ accountId, folder, uid, subject, destinatio
 }
 
 // Expose for inline onclick wiring from the viewer template
-window.openStageThreadModal = openStageThreadModal;

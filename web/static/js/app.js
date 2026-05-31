@@ -31,6 +31,7 @@ import { initSettingsView, showSettingsView } from './views/settings.js';
 import { initBackupsView, showBackupsView } from './views/backups.js';
 import { initReviewView, showReviewView } from './views/review.js';
 import { initImports, getImportEmails, getMountedImports, renderImportsSection } from './components/imports.js';
+import { initTemplateBindings, registerHandler as registerTemplateHandler } from './template-bindings.js';
 
 // ============================================
 // DOM ELEMENTS
@@ -181,6 +182,12 @@ document.addEventListener('DOMContentLoaded', () => {
     
     initEventListeners();
     initModalListeners();
+    // Wire up the template's data-tpl-action attributes (replaces the
+    // inline onclick handlers in index.html). handleLogout lives here in
+    // app.js so we register it as the dispatcher for that one action --
+    // the rest are imported directly by template-bindings.js.
+    registerTemplateHandler('handleLogout', () => handleLogout());
+    initTemplateBindings();
     loadFolders().then(() => {
         updateTrashBadge();
         updateStarredBadge();
@@ -247,7 +254,6 @@ function openNewFolderModal(fromStageModal = false) {
 }
 
 // Expose globally for inline onclick handlers
-window.openNewFolderModal = openNewFolderModal;
 
 async function createFolder(returnToStage) {
     const name = document.getElementById('newFolderName').value.trim();
@@ -724,4 +730,3 @@ async function handleLogout() {
     }
 }
 
-window.handleLogout = handleLogout;
