@@ -6,6 +6,7 @@
  */
 
 import { initCustomSelects, CustomSelect } from '../components/custom-select.js';
+import { bindActions } from '../delegate.js';
 
 let contextTitle = null;
 let contextMeta = null;
@@ -52,7 +53,7 @@ export function showSettingsView() {
  */
 function renderSettingsView() {
     const html = `
-        <div class="settings-view">
+        <div class="settings-view settings-view-root">
             <!-- Appearance Section -->
             <section class="settings-section-inline">
                 <div class="settings-section-header-inline" data-section="appearance">
@@ -130,7 +131,7 @@ function renderSettingsView() {
             
             <!-- About Link -->
             <div class="settings-about-link">
-                <a href="javascript:void(0);" onclick="showAboutModal()">About MailRepo</a>
+                <a href="javascript:void(0);" data-action="showAbout">About MailRepo</a>
             </div>
         </div>
     `;
@@ -146,6 +147,33 @@ function renderSettingsView() {
     initTrashHandlers();
     initThreadStagingHandlers();
     loadCurrentSettings();
+
+    // Bind delegated handlers on the settings-specific root, NOT on the
+    // shared emailList container. Listener dies with the view when another
+    // view's render replaces emailList. See delegate.js docs.
+    //
+    // NOTE: closeModal, closeResetDatabaseModal, executeResetDatabase are
+    // intentionally NOT included here. They're called from inline onclicks
+    // in the index.html Flask template, so they stay on window. When the
+    // template HTML and modals.js get converted, those globals + the
+    // closeModal name-collision across settings/imports/modals can be
+    // consolidated.
+    const root = emailList.querySelector('.settings-view-root');
+    if (root) {
+        bindActions(root, {
+            showAbout: () => showAboutModal(),
+            openAddAccount: () => openAddAccountModal(),
+            showAppPasswordInfo: () => showAppPasswordInfo(),
+            showResetDatabase: () => showResetDatabaseModal(),
+            editAccount: (el) => editAccount(
+                Number(el.dataset.accountId),
+                el.dataset.accountName,
+                el.dataset.accountEmail,
+            ),
+            testAccount: (el) => testAccount(Number(el.dataset.accountId)),
+            deleteAccount: (el) => deleteAccount(Number(el.dataset.accountId)),
+        });
+    }
 }
 
 /**
@@ -220,7 +248,7 @@ function renderAccountsSection() {
         </div>
         
         <div style="margin-top: var(--space-lg);">
-            <button class="btn btn-primary" id="addAccountBtn" onclick="openAddAccountModal()">
+            <button class="btn btn-primary" id="addAccountBtn" data-action="openAddAccount">
                 <i data-lucide="plus"></i>
                 Add Email Account
             </button>
@@ -229,7 +257,7 @@ function renderAccountsSection() {
         <div class="helper-box">
             <strong>Note:</strong> For Gmail, iCloud, and other providers with 2FA, 
             you'll need to use an <strong>app-specific password</strong> instead of your regular password.
-            <a href="javascript:void(0);" onclick="showAppPasswordInfo()">What's this?</a>
+            <a href="javascript:void(0);" data-action="showAppPasswordInfo">What's this?</a>
         </div>
 
         <hr class="settings-divider">
@@ -579,7 +607,7 @@ function renderDangerZoneSection() {
             </ul>
             <p><strong>This action cannot be undone.</strong></p>
             
-            <button onclick="showResetDatabaseModal()" class="btn btn-danger">
+            <button data-action="showResetDatabase" class="btn btn-danger">
                 <i data-lucide="trash-2" class="icon-inline"></i>
                 Reset Database
             </button>
@@ -833,13 +861,13 @@ async function loadAccounts() {
                         </div>
                     </div>
                     <div class="account-actions">
-                        <button class="btn btn-secondary btn-sm" onclick="editAccount(${account.id}, '${escapeHtml(account.name).replace(/'/g, "\\'")}', '${escapeHtml(account.email || '').replace(/'/g, "\\'")}')" title="Edit account">
+                        <button class="btn btn-secondary btn-sm" data-action="editAccount" data-account-id="${account.id}" data-account-name="${escapeHtml(account.name)}" data-account-email="${escapeHtml(account.email || '')}" title="Edit account">
                             <i data-lucide="pencil"></i>
                         </button>
-                        <button class="btn btn-secondary btn-sm" onclick="testAccount(${account.id})" title="Test connection">
+                        <button class="btn btn-secondary btn-sm" data-action="testAccount" data-account-id="${account.id}" title="Test connection">
                             <i data-lucide="wifi"></i>
                         </button>
-                        <button class="btn btn-danger btn-sm" onclick="deleteAccount(${account.id})" title="Delete account">
+                        <button class="btn btn-danger btn-sm" data-action="deleteAccount" data-account-id="${account.id}" title="Delete account">
                             <i data-lucide="trash-2"></i>
                         </button>
                     </div>
@@ -873,7 +901,7 @@ function escapeHtml(str) {
 /**
  * Open the Add Account modal.
  */
-window.openAddAccountModal = function() {
+function openAddAccountModal() {
     editingAccountId = null;  // Ensure we're in "add" mode
     const modal = document.getElementById('addAccountModal');
     if (modal) {
@@ -906,7 +934,7 @@ window.openAddAccountModal = function() {
 /**
  * Show app password info modal.
  */
-window.showAppPasswordInfo = function() {
+function showAppPasswordInfo() {
     const modal = document.getElementById('appPasswordModal');
     if (modal) modal.classList.add('active');
 };
@@ -914,7 +942,7 @@ window.showAppPasswordInfo = function() {
 /**
  * Show about modal.
  */
-window.showAboutModal = function() {
+function showAboutModal() {
     const modal = document.getElementById('aboutModal');
     if (modal) modal.classList.add('active');
 };
@@ -922,7 +950,7 @@ window.showAboutModal = function() {
 /**
  * Test account connection.
  */
-window.testAccount = async function(accountId) {
+async function testAccount(accountId) {
     const { showAlert } = await import('../modals.js');
     try {
         const response = await fetch(`/api/accounts/${accountId}/test`, { method: 'POST' });
@@ -940,7 +968,7 @@ window.testAccount = async function(accountId) {
 /**
  * Delete an account.
  */
-window.deleteAccount = async function(accountId) {
+async function deleteAccount(accountId) {
     const { showConfirm, showAlert } = await import('../modals.js');
     const confirmed = await showConfirm('Delete Account', 'Are you sure you want to remove this account?', {
         confirmText: 'Delete',
@@ -969,7 +997,7 @@ window.deleteAccount = async function(accountId) {
  */
 let editingAccountId = null;
 
-window.editAccount = function(accountId, name, email) {
+function editAccount(accountId, name, email) {
     editingAccountId = accountId;
     const modal = document.getElementById('addAccountModal');
     if (modal) {
@@ -1094,7 +1122,7 @@ window.closeModal = closeModal;
 /**
  * Show the reset database confirmation modal.
  */
-window.showResetDatabaseModal = function() {
+function showResetDatabaseModal() {
     const modal = document.getElementById('resetDatabaseModal');
     if (modal) {
         document.getElementById('resetPassword').value = '';
