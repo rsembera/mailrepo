@@ -8,7 +8,7 @@
  * - View state management
  */
 
-import { escapeHtml, escapeForOnclick } from '../utils.js';
+import { escapeHtml, escapeForOnclick, debounce } from '../utils.js';
 import { state } from '../state.js';
 import { renderEmailList, clearEmailFilter, clearArchivedEmailSelection } from '../components/email-list.js';
 import { bindActions } from '../delegate.js';
@@ -348,73 +348,152 @@ window.showArchiveSearch = showArchiveSearch;
  */
 function renderSearchView(results = null, query = '') {
     if (!emailList) return;
-    
-    const hasQuery = query.length > 0;
-    
-    // Current scope label (for the scope button)
+
+    // Live-search architecture: shell/list split. The toolbar (with the
+    // search input) is rendered once and reused across all subsequent
+    // updates. Only the body (#searchBody) is replaced on each search.
+    // This is the same pattern starred.js and trash.js use to keep the
+    // filter input element stable while typing -- no focus loss, no
+    // typing-during-search race conditions, no manual setSelectionRange
+    // gymnastics. Live search via a debounced input listener bound after
+    // the first shell render.
+    const existingRoot = emailList.querySelector('.search-view-root');
+    if (!existingRoot) {
+        renderSearchShell();
+    }
+    renderSearchBody(results, query);
+    updateSearchToolbarState(query, results);
+}
+
+/**
+ * Build the persistent search toolbar + empty body container. Called once
+ * when entering the search view; remains in the DOM until another view's
+ * render replaces emailList's innerHTML.
+ */
+function renderSearchShell() {
     const scopeLabel = getSearchScopeLabel();
-    
-    let html = `
+    emailList.innerHTML = `
         <div class="folder-management-list search-view search-view-root">
             <div class="email-list-toolbar">
                 <div class="email-filter" style="flex: 1;">
                     <i data-lucide="search" class="search-icon"></i>
-                    <input type="text" 
-                           id="archiveSearchInput" 
-                           placeholder="Search subject, sender, or content…" 
-                           value="${escapeHtml(query)}"
+                    <input type="text"
+                           id="archiveSearchInput"
+                           placeholder="Search subject, sender, or content…"
                            autocomplete="off">
+                    <button class="search-clear hidden"
+                            id="archiveSearchClearBtn"
+                            data-action="clearSearch"
+                            title="Clear search">
+                        <i data-lucide="x"></i>
+                    </button>
                 </div>
                 <div class="toolbar-actions">
-                    <button class="btn btn-secondary search-scope-btn" id="searchScopeBtn" data-action="openScope" title="Choose folder to search in">
+                    <button class="btn btn-secondary search-scope-btn"
+                            id="searchScopeBtn"
+                            data-action="openScope"
+                            title="Choose folder to search in">
                         <i data-lucide="folder"></i>
                         <span class="search-scope-label">${escapeHtml(scopeLabel)}</span>
                         <i data-lucide="chevron-down" class="search-scope-chevron"></i>
                     </button>
-                    <button class="btn btn-primary" data-action="execSearch">
-                        <i data-lucide="search"></i>
-                        Search
+                    <button class="btn btn-secondary"
+                            id="searchExportBtn"
+                            data-action="exportSearch"
+                            title="Export these search results as PDF"
+                            disabled>
+                        <i data-lucide="download"></i>
+                        Export…
                     </button>
-                    <button class="btn btn-secondary" data-action="clearSearch" ${!hasQuery ? 'disabled' : ''}>
-                        <i data-lucide="x"></i>
-                        Clear
-                    </button>
-                    ${(results && results.length > 0) ? `
-                        <button class="btn btn-secondary" data-action="exportSearch" title="Export these search results as PDF">
-                            <i data-lucide="download"></i>
-                            Export…
-                        </button>
-                    ` : ''}
                 </div>
             </div>
+            <div id="searchBody"></div>
+        </div>
     `;
-    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+
+    // Wire up live search: debounced input listener fires executeArchiveSearch
+    // (or clears results if input is empty). 300ms delay -- long enough to
+    // avoid hammering the server while feeling responsive.
+    const input = document.getElementById('archiveSearchInput');
+    if (input) {
+        const debouncedSearch = debounce(() => {
+            const q = input.value.trim();
+            if (!q) {
+                // Empty input -> go back to the help/initial state.
+                renderSearchBody(null, '');
+                updateSearchToolbarState('', null);
+            } else {
+                executeArchiveSearch();
+            }
+        }, 300);
+        input.addEventListener('input', () => {
+            // Toggle the X clear button immediately on any keystroke, so
+            // it doesn't wait for the debounced search to update toolbar
+            // state. UX expects "input has text -> X visible" instantly.
+            const clearBtn = document.getElementById('archiveSearchClearBtn');
+            if (clearBtn) clearBtn.classList.toggle('hidden', !input.value);
+            // Debounced: actually run the search (or clear if empty).
+            debouncedSearch();
+        });
+        // Focus the input on first render so the user can start typing
+        // immediately.
+        input.focus();
+    }
+
+    // Bind delegated handlers on the search-specific root. Listener dies
+    // with the view when another render replaces emailList's innerHTML.
+    // See delegate.js docs.
+    const searchRoot = emailList.querySelector('.search-view-root');
+    if (searchRoot) {
+        bindActions(searchRoot, {
+            openScope:    () => openSearchScopePicker(),
+            clearSearch:  () => clearArchiveSearch(),
+            exportSearch: () => exportSearchResults(),
+            openResult:   (el) => openSearchResult(
+                Number(el.dataset.emailId),
+                Number(el.dataset.folderId),
+            ),
+        });
+    }
+}
+
+/**
+ * Render just the search body (help text / no-results / results list).
+ * Leaves the toolbar alone -- input keeps focus, debounce timer
+ * untouched.
+ */
+function renderSearchBody(results, query) {
+    const body = document.getElementById('searchBody');
+    if (!body) return;
+
     if (results === null) {
-        // Build a scope-aware sentence so the helper text matches the active scope.
+        // Initial / cleared state -- show scope-aware help text.
         const folderId = window._searchFolderId;
         const includeSubs = window._searchIncludeSubfolders !== false;
         let scopeSentence;
         if (!folderId) {
-            scopeSentence = 'Type a search term and press Enter (or click Search) to find emails across your entire archive.';
+            scopeSentence = 'Start typing to search across your entire archive.';
         } else {
-            // Use the folder's name (not the full path) for the helper sentence — readable inline.
             const folder = (state.folders || []).find(f => String(f.id) === String(folderId));
             const folderName = folder ? folder.name : 'this folder';
             const where = includeSubs
                 ? `${escapeHtml(folderName)} and its subfolders`
                 : `${escapeHtml(folderName)} only`;
-            scopeSentence = `Type a search term and press Enter (or click Search) to find emails in <strong>${where}</strong>. Use the folder button above to change the scope.`;
+            scopeSentence = `Start typing to search in <strong>${where}</strong>. Use the folder button above to change the scope.`;
         }
-        
-        // Initial state - show helpful text
-        html += `
+        body.innerHTML = `
             <div class="search-help">
                 <p>${scopeSentence}</p>
+                <p class="search-hint">
+                    Matches whole words by default. Add <code>*</code> to match word prefixes &mdash; e.g.
+                    <code>consult*</code> finds <em>consultation</em>, <em>consulting</em>, etc.
+                </p>
                 <p class="search-hint">Searches subject lines, sender/recipient addresses, and email content.</p>
                 <details class="search-tips">
                     <summary>Search tips</summary>
                     <table class="search-tips-table">
-                        <tr><td><code>ther*</code></td><td>Prefix search — matches "therapy", "therapist", etc.</td></tr>
+                        <tr><td><code>ther*</code></td><td>Prefix search &mdash; matches "therapy", "therapist", etc.</td></tr>
                         <tr><td><code>"meeting notes"</code></td><td>Exact phrase</td></tr>
                         <tr><td><code>smith AND invoice</code></td><td>Both terms must appear</td></tr>
                         <tr><td><code>smith OR jones</code></td><td>Either term</td></tr>
@@ -429,82 +508,63 @@ function renderSearchView(results = null, query = '') {
             </div>
         `;
     } else if (results.length === 0) {
-        html += `
+        // If the user's query is a single bare word with no FTS5 syntax,
+        // they're the most likely to be confused by token-exact matching
+        // (e.g. searching "consul" and getting nothing when "consultant"
+        // exists). Surface the asterisk hint directly in the empty state
+        // so the fix is right there.
+        const isPlainSingleWord = query &&
+            !/[*"():\s]/.test(query) &&
+            !/\b(AND|OR|NOT)\b/.test(query);
+        const escQuery = escapeHtml(query);
+        const hint = isPlainSingleWord
+            ? `<p class="search-hint">Try <code>${escQuery}*</code> to match all words starting with <em>${escQuery}</em>.</p>`
+            : '';
+        body.innerHTML = `
             <div class="empty-state">
                 <i data-lucide="search-x" class="empty-icon"></i>
                 <h3>No Results</h3>
-                <p>No emails found matching "${escapeHtml(query)}"</p>
+                <p>No emails found matching "${escQuery}"</p>
+                ${hint}
             </div>
         `;
     } else {
-        results.forEach(email => {
-            html += `
-                <div class="folder-management-item email-list-item search-result" 
-                     data-action="openResult" data-email-id="${email.id}" data-folder-id="${email.folder_id}">
-                    <div class="email-list-content">
-                        <div class="email-list-main">
-                            <div class="email-list-header-row">
-                                <span class="email-sender">${escapeHtml(extractName(email.sender))}</span>
-                                <span class="email-date">${formatDate(email.date)}</span>
-                            </div>
-                            <span class="email-subject">${escapeHtml(email.subject || '(no subject)')}</span>
-                            <span class="email-folder-path">${escapeHtml(email.folder_path)}</span>
+        body.innerHTML = results.map(email => `
+            <div class="folder-management-item email-list-item search-result"
+                 data-action="openResult" data-email-id="${email.id}" data-folder-id="${email.folder_id}">
+                <div class="email-list-content">
+                    <div class="email-list-main">
+                        <div class="email-list-header-row">
+                            <span class="email-sender">${escapeHtml(extractName(email.sender))}</span>
+                            <span class="email-date">${formatDate(email.date)}</span>
                         </div>
+                        <span class="email-subject">${escapeHtml(email.subject || '(no subject)')}</span>
+                        <span class="email-folder-path">${escapeHtml(email.folder_path)}</span>
                     </div>
                 </div>
-            `;
-        });
-    }
-    
-    html += `</div>`;
-    
-    // Capture pre-render focus state so re-renders don't yank focus from the
-    // search input (which would otherwise stop Enter from working until the
-    // user clicked back into the field).
-    const oldInput = document.getElementById('archiveSearchInput');
-    const hadFocus = oldInput && document.activeElement === oldInput;
-    const caretPos = hadFocus ? oldInput.selectionStart : null;
-    
-    emailList.innerHTML = html;
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-    
-    const input = document.getElementById('archiveSearchInput');
-    if (input) {
-        // Attach a real listener so Enter triggers a search reliably,
-        // even after the input has been re-emitted into the DOM.
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                executeArchiveSearch();
-            }
-        });
-        
-        if (hadFocus) {
-            input.focus();
-            // Put the caret back where it was, or at the end if we don't know.
-            const pos = caretPos != null ? caretPos : input.value.length;
-            try { input.setSelectionRange(pos, pos); } catch (_) { /* ignore */ }
-        } else if (!query) {
-            input.focus();
-        }
+            </div>
+        `).join('');
     }
 
-    // Bind delegated handlers on the search-specific root. Listener dies
-    // with the view when another render replaces emailList's innerHTML.
-    // See delegate.js docs.
-    const searchRoot = emailList.querySelector('.search-view-root');
-    if (searchRoot) {
-        bindActions(searchRoot, {
-            openScope:    () => openSearchScopePicker(),
-            execSearch:   () => executeArchiveSearch(),
-            clearSearch:  () => clearArchiveSearch(),
-            exportSearch: () => exportSearchResults(),
-            openResult:   (el) => openSearchResult(
-                Number(el.dataset.emailId),
-                Number(el.dataset.folderId),
-            ),
-        });
-    }
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+/**
+ * Update the toolbar's stateful bits (clear-X visibility, Export button
+ * visibility, scope label) without recreating any DOM elements. Called
+ * on every search render.
+ */
+function updateSearchToolbarState(query, results) {
+    const clearBtn = document.getElementById('archiveSearchClearBtn');
+    if (clearBtn) clearBtn.classList.toggle('hidden', !query);
+
+    const exportBtn = document.getElementById('searchExportBtn');
+    if (exportBtn) exportBtn.disabled = !results || results.length === 0;
+
+    // Reflect any scope change since the shell was first rendered. Cheap
+    // text update -- doesn't touch the input or its event listeners.
+    const scopeLabel = document.querySelector('.search-scope-label');
+    if (scopeLabel) scopeLabel.textContent = getSearchScopeLabel();
 }
 
 /**
@@ -810,6 +870,14 @@ function clearArchiveSearch() {
     window._searchFolderId = '';
     window._searchIncludeSubfolders = true;
     if (contextMeta) contextMeta.textContent = 'Search all archived emails';
+    // Shell/list split: the input element persists across renders, so we
+    // have to clear its value explicitly. Re-focus too -- user expects to
+    // immediately start typing again after clearing.
+    const input = document.getElementById('archiveSearchInput');
+    if (input) {
+        input.value = '';
+        input.focus();
+    }
     renderSearchView(null, '');
     updateSearchScopeButton();
 }
