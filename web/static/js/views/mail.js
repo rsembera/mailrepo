@@ -11,6 +11,7 @@
 import { escapeHtml, escapeForOnclick } from '../utils.js';
 import { state } from '../state.js';
 import { renderEmailList, clearEmailFilter, clearArchivedEmailSelection } from '../components/email-list.js';
+import { bindActions } from '../delegate.js';
 
 // DOM element references
 let contextTitle = null;
@@ -165,6 +166,40 @@ export function initMailView(config) {
     onButtonStatesUpdate = config.onButtonStatesUpdate;
     
     initEmailViewerListeners();
+
+    // Bind delegated handlers on persistent DOM elements OUTSIDE emailList.
+    //
+    // #subfoldersBar holds breadcrumb / subfolder navigation rendered by
+    // mail.js above the email list. Element persists across view changes;
+    // mail.js replaces its innerHTML but the element itself stays, so
+    // binding here once at init is sufficient. See delegate.js docs.
+    const subfoldersBar = document.getElementById('subfoldersBar');
+    if (subfoldersBar) {
+        bindActions(subfoldersBar, {
+            navSubfolder: (el, ev) => {
+                ev.preventDefault();  // <a href="#"> -- prevent scroll-to-top
+                navigateToSubfolder(Number(el.dataset.folderId));
+            },
+            navImap: (el, ev) => {
+                ev.preventDefault();
+                navigateToImapFolder(
+                    Number(el.dataset.accountId),
+                    el.dataset.folderPath,
+                );
+            },
+        });
+    }
+
+    // #viewerBody is the email-viewer body container. Import-attachment
+    // buttons render inside it with data-action='downloadAtt' / 'viewAtt'.
+    // Same lifecycle reasoning -- element persists, content is replaced.
+    const viewerBody = document.getElementById('viewerBody');
+    if (viewerBody) {
+        bindActions(viewerBody, {
+            downloadAtt: (el) => downloadImportAttachment(Number(el.dataset.attachmentIndex), false),
+            viewAtt:     (el) => downloadImportAttachment(Number(el.dataset.attachmentIndex), true),
+        });
+    }
 }
 
 /**
@@ -320,7 +355,7 @@ function renderSearchView(results = null, query = '') {
     const scopeLabel = getSearchScopeLabel();
     
     let html = `
-        <div class="folder-management-list search-view">
+        <div class="folder-management-list search-view search-view-root">
             <div class="email-list-toolbar">
                 <div class="email-filter" style="flex: 1;">
                     <i data-lucide="search" class="search-icon"></i>
@@ -331,21 +366,21 @@ function renderSearchView(results = null, query = '') {
                            autocomplete="off">
                 </div>
                 <div class="toolbar-actions">
-                    <button class="btn btn-secondary search-scope-btn" id="searchScopeBtn" onclick="openSearchScopePicker()" title="Choose folder to search in">
+                    <button class="btn btn-secondary search-scope-btn" id="searchScopeBtn" data-action="openScope" title="Choose folder to search in">
                         <i data-lucide="folder"></i>
                         <span class="search-scope-label">${escapeHtml(scopeLabel)}</span>
                         <i data-lucide="chevron-down" class="search-scope-chevron"></i>
                     </button>
-                    <button class="btn btn-primary" onclick="executeArchiveSearch()">
+                    <button class="btn btn-primary" data-action="execSearch">
                         <i data-lucide="search"></i>
                         Search
                     </button>
-                    <button class="btn btn-secondary" onclick="clearArchiveSearch()" ${!hasQuery ? 'disabled' : ''}>
+                    <button class="btn btn-secondary" data-action="clearSearch" ${!hasQuery ? 'disabled' : ''}>
                         <i data-lucide="x"></i>
                         Clear
                     </button>
                     ${(results && results.length > 0) ? `
-                        <button class="btn btn-secondary" onclick="exportSearchResults()" title="Export these search results as PDF">
+                        <button class="btn btn-secondary" data-action="exportSearch" title="Export these search results as PDF">
                             <i data-lucide="download"></i>
                             Export…
                         </button>
@@ -405,7 +440,7 @@ function renderSearchView(results = null, query = '') {
         results.forEach(email => {
             html += `
                 <div class="folder-management-item email-list-item search-result" 
-                     onclick="openSearchResult(${email.id}, ${email.folder_id})">
+                     data-action="openResult" data-email-id="${email.id}" data-folder-id="${email.folder_id}">
                     <div class="email-list-content">
                         <div class="email-list-main">
                             <div class="email-list-header-row">
@@ -452,6 +487,23 @@ function renderSearchView(results = null, query = '') {
         } else if (!query) {
             input.focus();
         }
+    }
+
+    // Bind delegated handlers on the search-specific root. Listener dies
+    // with the view when another render replaces emailList's innerHTML.
+    // See delegate.js docs.
+    const searchRoot = emailList.querySelector('.search-view-root');
+    if (searchRoot) {
+        bindActions(searchRoot, {
+            openScope:    () => openSearchScopePicker(),
+            execSearch:   () => executeArchiveSearch(),
+            clearSearch:  () => clearArchiveSearch(),
+            exportSearch: () => exportSearchResults(),
+            openResult:   (el) => openSearchResult(
+                Number(el.dataset.emailId),
+                Number(el.dataset.folderId),
+            ),
+        });
     }
 }
 
@@ -585,7 +637,6 @@ async function openSearchScopePicker() {
     // Focus the filter input for fast typing
     setTimeout(() => filterInput?.focus(), 50);
 }
-window.openSearchScopePicker = openSearchScopePicker;
 
 /**
  * Close the search scope picker modal.
@@ -751,7 +802,6 @@ async function executeArchiveSearch() {
         showAlert('Search Error', error.message);
     }
 }
-window.executeArchiveSearch = executeArchiveSearch;
 
 /**
  * Clear archive search and reset to initial state.
@@ -763,7 +813,6 @@ function clearArchiveSearch() {
     renderSearchView(null, '');
     updateSearchScopeButton();
 }
-window.clearArchiveSearch = clearArchiveSearch;
 
 /**
  * Open a search result - load the email in viewer.
@@ -799,7 +848,6 @@ async function openSearchResult(messageId, folderId) {
         showAlert('Error', error.message);
     }
 }
-window.openSearchResult = openSearchResult;
 
 /**
  * Export the current search results via the bulk-export modal (Phase 2).
@@ -843,7 +891,6 @@ function exportSearchResults() {
         console.error('Failed to load export modal:', err);
     });
 }
-window.exportSearchResults = exportSearchResults;
 
 // Helper functions for search results display
 function extractName(sender) {
@@ -914,7 +961,7 @@ function renderImapNavigation(accountId, folderPath) {
                     html += `<span class="breadcrumb-current">${escapeHtml(part)}</span>`;
                 } else {
                     const pathToHere = parts.slice(0, i + 1).join(delimiter);
-                    html += `<a href="#" onclick="window.navigateToImapFolder(${accountId}, '${escapeForOnclick(pathToHere)}'); return false;" class="breadcrumb-link">${escapeHtml(part)}</a>`;
+                    html += `<a href="#" data-action="navImap" data-account-id="${accountId}" data-folder-path="${escapeForOnclick(pathToHere)}" class="breadcrumb-link">${escapeHtml(part)}</a>`;
                 }
             });
             html += `</div>`;
@@ -934,7 +981,7 @@ function renderImapNavigation(accountId, folderPath) {
             html += subfolders.map((sf, i) => {
                 const name = sf.name.split(delimiter).pop();
                 const separator = i < subfolders.length - 1 ? ', ' : '';
-                return `<a href="#" onclick="window.navigateToImapFolder(${accountId}, '${escapeForOnclick(sf.name)}'); return false;" class="subfolder-link">${escapeHtml(name)}</a>${separator}`;
+                return `<a href="#" data-action="navImap" data-account-id="${accountId}" data-folder-path="${escapeForOnclick(sf.name)}" class="subfolder-link">${escapeHtml(name)}</a>${separator}`;
             }).join('');
             html += `</div>`;
         }
@@ -978,7 +1025,7 @@ function renderFolderContents(folderId, subfolders) {
                 if (i === breadcrumbs.length - 1) {
                     html += `<span class="breadcrumb-current">${escapeHtml(crumb.name)}</span>`;
                 } else {
-                    html += `<a href="#" onclick="window.navigateToSubfolder(${crumb.id}); return false;" class="breadcrumb-link">${escapeHtml(crumb.name)}</a>`;
+                    html += `<a href="#" data-action="navSubfolder" data-folder-id="${crumb.id}" class="breadcrumb-link">${escapeHtml(crumb.name)}</a>`;
                 }
             });
             html += `</div>`;
@@ -990,7 +1037,7 @@ function renderFolderContents(folderId, subfolders) {
             html += `<span class="subfolder-label">Subfolders:</span> `;
             html += subfolders.map((sf, i) => {
                 const separator = i < subfolders.length - 1 ? ', ' : '';
-                return `<a href="#" onclick="window.navigateToSubfolder(${sf.id}); return false;" class="subfolder-link">${escapeHtml(sf.name)}</a>${separator}`;
+                return `<a href="#" data-action="navSubfolder" data-folder-id="${sf.id}" class="subfolder-link">${escapeHtml(sf.name)}</a>${separator}`;
             }).join('');
             html += `</div>`;
         }
@@ -1010,7 +1057,7 @@ function renderFolderContents(folderId, subfolders) {
 /**
  * Navigate to a subfolder.
  */
-window.navigateToSubfolder = function(folderId) {
+function navigateToSubfolder(folderId) {
     // Update view state
     state.currentView = { type: 'folder', id: folderId };
     state.selectedEmails.clear();
@@ -1029,7 +1076,7 @@ window.navigateToSubfolder = function(folderId) {
 /**
  * Navigate to an IMAP folder.
  */
-window.navigateToImapFolder = function(accountId, folderPath) {
+function navigateToImapFolder(accountId, folderPath) {
     // Update view state
     state.currentView = { type: 'account', id: accountId, folder: folderPath };
     state.selectedEmails.clear();
@@ -1051,7 +1098,6 @@ export function refreshImapFolder() {
     const folder = state.currentView.folder || 'INBOX';
     loadAccountEmails(accountId, folder, { forceRefresh: true });
 }
-window.refreshImapFolder = refreshImapFolder;
 
 /**
  * Show loading state in email list.
@@ -1402,8 +1448,8 @@ function renderEmailContent(email, context = null) {
                         <i data-lucide="paperclip"></i>
                         <span class="attachment-name">${escapeHtml(att.filename)}</span>
                         <span class="attachment-actions">
-                            <button class="attachment-action" onclick="downloadImportAttachment(${originalIndex}, false)" title="Download"><i data-lucide="download"></i></button>
-                            ${isViewable ? `<button class="attachment-action" onclick="downloadImportAttachment(${originalIndex}, true)" title="Open in new tab"><i data-lucide="external-link"></i></button>` : ''}
+                            <button class="attachment-action" data-action="downloadAtt" data-attachment-index="${originalIndex}" title="Download"><i data-lucide="download"></i></button>
+                            ${isViewable ? `<button class="attachment-action" data-action="viewAtt" data-attachment-index="${originalIndex}" title="Open in new tab"><i data-lucide="external-link"></i></button>` : ''}
                         </span>
                     </div>
                 `;
@@ -1682,7 +1728,7 @@ export function closeEmailViewer() {
  * Download attachment from an import source.
  * Uses POST request since imports require body parameters.
  */
-window.downloadImportAttachment = async function(index, viewInline = false) {
+async function downloadImportAttachment(index, viewInline = false) {
     if (!currentViewerContext || currentViewerContext.type !== 'import') {
         console.error('No import context available');
         return;
@@ -2008,7 +2054,6 @@ function initEmailViewerListeners() {
 }
 
 // Expose to window for inline onclick handlers
-window.openEmailViewer = openEmailViewer;
 window.closeEmailViewer = closeEmailViewer;
 
 
