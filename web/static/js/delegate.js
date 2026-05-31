@@ -5,6 +5,21 @@
  * single delegated listener per container. One module-local handler map,
  * no globals, dependencies are grep-able.
  *
+ * IMPORTANT — bind on a view-specific child, not a shared parent:
+ *
+ * Views share the same outer container (the main emailList element). If
+ * two views both call bindActions(emailList, ...), both listeners attach
+ * to the same node, and both fire on every event with a matching
+ * data-action / data-input. The previous view's listener will dispatch
+ * to the new view's elements if the action names collide -- which they
+ * commonly do (e.g. searchInput, openEmail).
+ *
+ * The fix: each view's renderShell should wrap its content in a
+ * view-specific element (e.g. <div class="trash-view-root">) and bind
+ * on THAT element. When the next view's render replaces emailList's
+ * inner HTML, the view-specific root is destroyed and its listener
+ * goes with it. No leftover listeners, no cross-talk.
+ *
  * Usage:
  *
  *   import { bindActions } from '../delegate.js';

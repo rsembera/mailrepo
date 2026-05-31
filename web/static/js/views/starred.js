@@ -26,32 +26,14 @@ let emailList = null;
 let starredEmails = [];
 let searchQuery = '';
 let inStarredContext = false;
-let actionsBound = false;
 
-/**
- * Initialize starred view. Called once at app startup with the DOM
- * references it needs.
- */
+/** Initialize starred view. Just stash DOM refs; actions are bound inside
+ *  renderShell() on a view-specific root so they die with the view when
+ *  another view's render replaces emailList's inner HTML. */
 export function initStarredView(config) {
     contextTitle = config.contextTitle;
     contextMeta = config.contextMeta;
     emailList = config.emailList;
-
-    // Bind delegated click + input handlers once. Safe to call on the
-    // shared emailList container -- closest([data-action]) only fires for
-    // descendants that currently have the data-* attribute, which our
-    // own renderStarredView is the only thing setting in this view.
-    if (emailList && !actionsBound) {
-        bindActions(emailList, {
-            openEmail: (el) => openStarredEmail(
-                Number(el.dataset.emailId),
-                Number(el.dataset.folderId),
-            ),
-            clearSearch: () => clearStarredSearch(),
-            searchInput: (el) => handleStarredSearch(el.value),
-        }, ['click', 'input']);
-        actionsBound = true;
-    }
 }
 
 /**
@@ -77,6 +59,13 @@ export async function showStarredView() {
     // openEmailViewer treats it like a folder view (archive context).
     state.currentView = { type: 'starred' };
     inStarredContext = true;
+
+    // Render immediately with cached starredEmails (empty array on first
+    // visit, or whatever's left from a previous load). Without this, the
+    // previous view's content stays visible for the full duration of the
+    // loadStarredEmails fetch -- producing a visible "flash" of the
+    // previous view's UI before Starred renders.
+    renderStarredView();
 
     await loadStarredEmails();
     renderStarredView();
@@ -150,7 +139,7 @@ function renderStarredView() {
 function renderShell() {
     const clearHidden = searchQuery ? '' : 'hidden';
     emailList.innerHTML = `
-        <div class="trash-management-list">
+        <div class="trash-management-list starred-view-root">
             <div class="trash-management-toolbar">
                 <div class="trash-toolbar-left">
                     <div class="trash-search">
@@ -172,6 +161,23 @@ function renderShell() {
         </div>
     `;
     if (typeof lucide !== 'undefined') lucide.createIcons();
+
+    // Bind delegated handlers on the starred-specific root, NOT on the
+    // shared emailList container. When the next view's render replaces
+    // emailList's inner HTML, this root is destroyed and its listener
+    // goes with it -- no cross-talk with other views' listeners.
+    // See delegate.js docs.
+    const root = emailList.querySelector('.starred-view-root');
+    if (root) {
+        bindActions(root, {
+            openEmail: (el) => openStarredEmail(
+                Number(el.dataset.emailId),
+                Number(el.dataset.folderId),
+            ),
+            clearSearch: () => clearStarredSearch(),
+            searchInput: (el) => handleStarredSearch(el.value),
+        }, ['click', 'input']);
+    }
 }
 
 /**
