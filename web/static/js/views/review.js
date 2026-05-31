@@ -12,6 +12,7 @@ import { getStagedEmails, getStagedFolders, clearAllStaged, updateStagedBadge, o
 import { showConfirm, showAlert } from '../modals.js';
 import { state, loadFolders } from '../state.js';
 import { refreshSidebarFolders } from '../components/sidebar.js';
+import { bindActions } from '../delegate.js';
 
 // === Module State ===
 
@@ -292,7 +293,7 @@ function renderReviewView() {
     
     if (totalCount === 0) {
         emailList.innerHTML = `
-            <div class="review-view">
+            <div class="review-view review-view-root">
                 <div class="empty-state">
                     <i data-lucide="package" class="empty-icon"></i>
                     <h3>No Staged Items</h3>
@@ -301,13 +302,38 @@ function renderReviewView() {
             </div>
         `;
         if (typeof lucide !== 'undefined') lucide.createIcons();
+        // No interactive elements in the empty state; bindActions still
+        // attaches to the root for consistency / future-proofing.
+    // Bind delegated handlers on the review-specific root, NOT on the shared
+    // emailList container. When the next view's render replaces emailList's
+    // inner HTML, this root is destroyed and its listener goes with it.
+    // See delegate.js docs.
+    const root = emailList.querySelector('.review-view-root');
+    if (root) {
+        bindActions(root, {
+            unstageDest: (el) => unstageDestination(el.dataset.destId),
+            unstageFolderByIndex: (el) => unstageFolderByIndex(Number(el.dataset.index)),
+            unstageSourceFolder: (el) => unstageSourceFolder(el.dataset.lineKey, el.dataset.destId),
+            openChangeDest: (el) => openChangeDestPicker(el.dataset.currentDest),
+            toggleSource: (el, ev) => {
+                // The original code had onclick="event.stopPropagation()" on
+                // .review-source-header-right to prevent clicks inside the
+                // header-right from toggling the section. Reproduce that here
+                // by bailing out if the click target was inside header-right.
+                // (closest() on the header is still the right action match;
+                // we need the actual click origin to decide.)
+                if (ev.target.closest('.review-source-header-right')) return;
+                toggleSourceGroup(el.dataset.groupId);
+            },
+        });
+    }
         updateButtons();
         return;
     }
     
     const byDestination = buildGroupedData();
     
-    let html = '<div class="review-view"><div class="review-list">';
+    let html = '<div class="review-view review-view-root"><div class="review-list">';
     
     byDestination.forEach((destData, destId) => {
         const destFolder = folders.find(f => f.id == destId);
@@ -337,7 +363,7 @@ function renderReviewView() {
                     </div>
                     <div class="review-destination-header-right">
                         ${renderDestinationDropdown(destId)}
-                        <button class="btn btn-sm btn-icon" onclick="unstageDestination('${destId}')" title="Unstage all items going to this folder">
+                        <button class="btn btn-sm btn-icon" data-action="unstageDest" data-dest-id="${destId}" title="Unstage all items going to this folder">
                             <i data-lucide="x"></i>
                         </button>
                     </div>
@@ -378,7 +404,31 @@ function renderReviewView() {
     
     emailList.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
-    
+
+    // Bind delegated handlers on the review-specific root, NOT on the shared
+    // emailList container. When the next view's render replaces emailList's
+    // inner HTML, this root is destroyed and its listener goes with it.
+    // See delegate.js docs.
+    const root = emailList.querySelector('.review-view-root');
+    if (root) {
+        bindActions(root, {
+            unstageDest: (el) => unstageDestination(el.dataset.destId),
+            unstageFolderByIndex: (el) => unstageFolderByIndex(Number(el.dataset.index)),
+            unstageSourceFolder: (el) => unstageSourceFolder(el.dataset.lineKey, el.dataset.destId),
+            openChangeDest: (el) => openChangeDestPicker(el.dataset.currentDest),
+            toggleSource: (el, ev) => {
+                // The original code had onclick="event.stopPropagation()" on
+                // .review-source-header-right to prevent clicks inside the
+                // header-right from toggling the section. Reproduce that here
+                // by bailing out if the click target was inside header-right.
+                // (closest() on the header is still the right action match;
+                // we need the actual click origin to decide.)
+                if (ev.target.closest('.review-source-header-right')) return;
+                toggleSourceGroup(el.dataset.groupId);
+            },
+        });
+    }
+
     initIconSelects();
     updateButtons();
 }
@@ -451,7 +501,7 @@ function renderFolderTreeItems(nodes, depth, ancestry) {
                     <span class="review-item-name">${escapeHtml(node.name)}</span>
                 </div>
                 <div class="review-source-item-right">
-                    <button class="btn btn-sm btn-icon" onclick="unstageFolderByIndex(${originalIndex})" title="Unstage">
+                    <button class="btn btn-sm btn-icon" data-action="unstageFolderByIndex" data-index="${originalIndex}" title="Unstage">
                         <i data-lucide="x"></i>
                     </button>
                 </div>
@@ -497,14 +547,14 @@ function renderSourceGroup(source, sourceKey, destId, type) {
     
     let html = `
         <div class="review-source-group" data-group-id="${escapeHtml(groupId)}">
-            <div class="review-source-header" onclick="toggleSourceGroup('${escapedGroupId}')">
+            <div class="review-source-header" data-action="toggleSource" data-group-id="${escapedGroupId}">
                 <div class="review-source-header-left">
                     <i data-lucide="${isExpanded ? 'chevron-down' : 'chevron-right'}" class="review-chevron"></i>
                     <i data-lucide="${isImap ? 'mail' : 'archive'}" class="review-source-icon"></i>
                     <span class="review-source-name">${escapeHtml(sourceName)}</span>
                     <span class="review-source-count">(${itemLabel})</span>
                 </div>
-                <div class="review-source-header-right" onclick="event.stopPropagation()">
+                <div class="review-source-header-right">
                     ${isImap ? `
                         <label class="source-action-label" title="Action to apply to emails on the server after committing">
                             <span>On server:</span>
@@ -539,7 +589,7 @@ function renderSourceGroup(source, sourceKey, destId, type) {
                             <span class="review-item-count">(${items.length})</span>
                         </div>
                         <div class="review-source-item-right">
-                            <button class="btn btn-sm btn-icon" onclick="unstageSourceFolder('${escapedLineKey}', '${escapedDestId}')" title="Unstage">
+                            <button class="btn btn-sm btn-icon" data-action="unstageSourceFolder" data-line-key="${escapedLineKey}" data-dest-id="${escapedDestId}" title="Unstage">
                                 <i data-lucide="x"></i>
                             </button>
                         </div>
@@ -559,7 +609,7 @@ function renderSourceGroup(source, sourceKey, destId, type) {
     return html;
 }
 
-window.toggleSourceGroup = function(groupId) {
+function toggleSourceGroup(groupId) {
     if (expandedSourceGroups.has(groupId)) {
         expandedSourceGroups.delete(groupId);
     } else {
@@ -576,7 +626,7 @@ window.toggleSourceGroup = function(groupId) {
  */
 function renderDestinationDropdown(currentDestId) {
     return `
-        <button class="btn btn-sm btn-secondary" onclick="openChangeDestPicker('${escapeForOnclick(String(currentDestId))}')" title="Change destination folder">
+        <button class="btn btn-sm btn-secondary" data-action="openChangeDest" data-current-dest="${escapeForOnclick(String(currentDestId))}" title="Change destination folder">
             <i data-lucide="folder-output"></i>
             Change Destination
         </button>
@@ -588,7 +638,7 @@ function renderDestinationDropdown(currentDestId) {
  * On confirm, updates all staged items currently going to oldDestId so
  * they go to newDestId instead.
  */
-window.openChangeDestPicker = function(oldDestId) {
+function openChangeDestPicker(oldDestId) {
     openChangeDestinationModal({
         currentDestId: oldDestId,
         title: 'Change Destination',
@@ -638,7 +688,7 @@ function renderSourceActionDropdown(sourceKey, selectedValue = 'leave', isGmail 
 
 // === Unstage functions ===
 
-window.unstageDestination = async function(destId) {
+async function unstageDestination(destId) {
     const stagedEmails = getStagedEmails();
     const stagedFolders = getStagedFolders();
     
@@ -693,72 +743,8 @@ window.unstageDestination = async function(destId) {
     updateStagedBadge();
     renderReviewView();
 };
-
-window.unstageSource = async function(sourceKey, destId, type) {
-    const stagedEmails = getStagedEmails();
-    const stagedFolders = getStagedFolders();
-    const normalizedDestId = normalizeDestId(destId);
-    
-    // Count items to unstage
-    let count = 0;
-    
-    if (type === 'emails') {
-        stagedEmails.forEach(data => {
-            const itemSourceKey = buildSourceKey(data);
-            const itemDestId = normalizeDestId(data.destinationFolderId);
-            if (itemSourceKey === sourceKey && itemDestId === normalizedDestId) {
-                count++;
-            }
-        });
-    } else {
-        stagedFolders.forEach(sf => {
-            const itemSourceKey = buildSourceKey(sf);
-            const itemDestId = normalizeDestId(sf.destinationFolderId);
-            if (itemSourceKey === sourceKey && itemDestId === normalizedDestId) {
-                count++;
-            }
-        });
-    }
-    
-    const confirmed = await showConfirm(
-        'Unstage Items',
-        `Unstage ${count} ${type === 'emails' ? 'email' : 'folder'}${count !== 1 ? 's' : ''} from this source?`,
-        { confirmText: 'Unstage', confirmClass: 'btn-danger' }
-    );
-    
-    if (!confirmed) return;
-    
-    if (type === 'emails') {
-        // Modify the Map directly
-        const toDelete = [];
-        stagedEmails.forEach((data, emailId) => {
-            const itemSourceKey = buildSourceKey(data);
-            const itemDestId = normalizeDestId(data.destinationFolderId);
-            if (itemSourceKey === sourceKey && itemDestId === normalizedDestId) {
-                toDelete.push(emailId);
-            }
-        });
-        toDelete.forEach(id => stagedEmails.delete(id));
-        sessionStorage.setItem('stagedEmails', JSON.stringify([...stagedEmails.entries()]));
-    } else {
-        // Modify the array in place
-        for (let i = stagedFolders.length - 1; i >= 0; i--) {
-            const sf = stagedFolders[i];
-            const itemSourceKey = buildSourceKey(sf);
-            const itemDestId = normalizeDestId(sf.destinationFolderId);
-            if (itemSourceKey === sourceKey && itemDestId === normalizedDestId) {
-                stagedFolders.splice(i, 1);
-            }
-        }
-        sessionStorage.setItem('stagedFolders', JSON.stringify(stagedFolders));
-    }
-    
-    updateStagedBadge();
-    renderReviewView();
-};
-
 // Unstage emails from a specific source folder (account:id:folderName)
-window.unstageSourceFolder = async function(lineKey, destId) {
+async function unstageSourceFolder(lineKey, destId) {
     const stagedEmails = getStagedEmails();
     const { sourceType, sourceId, folderName } = parseLineKey(lineKey);
     
@@ -806,7 +792,7 @@ window.unstageSourceFolder = async function(lineKey, destId) {
 };
 
 // Unstage a single folder by its index
-window.unstageFolderByIndex = async function(index) {
+async function unstageFolderByIndex(index) {
     const stagedFolders = getStagedFolders();
     const sf = stagedFolders[index];
     if (!sf) return;
