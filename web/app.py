@@ -98,6 +98,12 @@ def create_app(test_config: dict = None) -> Flask:
                 return jsonify({"error": "Invalid CSRF token"}), 403
         
         # Session timeout check - skip for SSE streaming endpoints
+        # NOTE: the export progress stream (api.export_progress) is
+        # deliberately NOT listed here. Its work runs in a detached daemon
+        # thread and the generator self-caps at 5 min, so it doesn't need the
+        # session kept alive — and an already-expired session shouldn't be
+        # able to open a fresh export stream. Only the long-lived account/
+        # commit streams are exempted from the timeout.
         streaming_endpoints = {
             "api.stream_account_emails",
             "api.stream_commit",
@@ -147,6 +153,22 @@ def create_app(test_config: dict = None) -> Flask:
             "csrf_token": csrf_token,
         }
     
+    # JSON safety net: any uncaught exception on an API path returns JSON
+    # instead of Flask's default HTML error page, so the frontend's fetch
+    # handlers always receive a parseable response. Non-API routes keep
+    # Flask's normal behavior (including the debugger in debug mode).
+    @app.errorhandler(Exception)
+    def handle_uncaught(e):
+        from werkzeug.exceptions import HTTPException
+        if not is_api_request():
+            if isinstance(e, HTTPException):
+                return e
+            raise e
+        if isinstance(e, HTTPException):
+            return jsonify({"error": e.description or e.name, "code": e.code}), e.code
+        app.logger.exception("Unhandled exception on API route")
+        return jsonify({"error": "Internal server error"}), 500
+
     # Teardown: ensure clean state
     @app.teardown_appcontext
     def teardown(exception):
