@@ -22,6 +22,30 @@ from utils.log import get_logger
 log = get_logger(__name__)
 
 
+def _atomic_write_text(path, text):
+    """Write text to `path` atomically.
+
+    Temp file in the same directory -> fsync -> os.replace (atomic on POSIX)
+    -> fsync the containing directory so the rename itself survives power
+    loss. Same crash-safe pattern as core/encryption.py's salt writer. Used
+    for the manifest and the external backup-state file, both of which are
+    sources of truth for change detection and restore.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    with open(tmp_path, "w") as f:
+        f.write(text)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_path, path)
+    dir_fd = os.open(str(path.parent), os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
+
+
 def get_data_root():
     """Get data root directory from Config."""
     return Config.get_base_path()
@@ -203,10 +227,9 @@ def load_manifest():
 
 
 def save_manifest(manifest):
-    """Save backup manifest to disk."""
+    """Save backup manifest to disk (atomic, crash-safe write)."""
     ensure_backup_dir()
-    with open(get_manifest_file(), 'w') as f:
-        json.dump(manifest, f, indent=2)
+    _atomic_write_text(get_manifest_file(), json.dumps(manifest, indent=2))
 
 
 # ============================================================================
@@ -235,11 +258,9 @@ def _read_backup_state():
 
 
 def _write_backup_state(state):
-    """Write backup state to external JSON file."""
+    """Write backup state to external JSON file (atomic, crash-safe write)."""
     state_file = _get_backup_state_file()
-    get_data_dir().mkdir(parents=True, exist_ok=True)
-    with open(state_file, 'w') as f:
-        json.dump(state, f, indent=2)
+    _atomic_write_text(state_file, json.dumps(state, indent=2))
 
 
 def _get_baseline_hashes():
