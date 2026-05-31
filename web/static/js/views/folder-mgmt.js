@@ -53,8 +53,6 @@ export function initFolderMgmt(config) {
     emailList = config.emailList;
 }
 
-
-
 export async function renameFolder(folderId) {
     const folder = state.folders.find(f => f.id == folderId);
     if (!folder) return;
@@ -98,7 +96,6 @@ export async function renameFolder(folderId) {
         showAlert('Error', 'Failed to rename folder');
     }
 }
-window.renameFolder = renameFolder;
 
 export async function createSubfolder(parentId) {
     const isRoot = parentId === null || parentId === undefined;
@@ -142,7 +139,6 @@ export async function createSubfolder(parentId) {
         showAlert('Error', 'Failed to create subfolder');
     }
 }
-window.createSubfolder = createSubfolder;
 
 export function openMoveFolder(folderId) {
     const folder = state.folders.find(f => f.id == folderId);
@@ -216,7 +212,6 @@ export function openMoveFolder(folderId) {
     document.getElementById('moveFolderModal').classList.add('active');
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
-window.openMoveFolder = openMoveFolder;
 
 function getDescendantIds(folderId) {
     const descendants = [];
@@ -276,7 +271,6 @@ export async function confirmMoveFolder() {
         showAlert('Error', 'Failed to move folder');
     }
 }
-window.confirmMoveFolder = confirmMoveFolder;
 
 export async function deleteFolder(folderId) {
     const folder = state.folders.find(f => f.id == folderId);
@@ -371,7 +365,6 @@ export async function deleteFolder(folderId) {
         showAlert('Error', 'Failed to delete folder');
     }
 }
-window.deleteFolder = deleteFolder;
 
 export async function exportFolder(folderId) {
     const folder = state.folders.find(f => f.id == folderId);
@@ -437,7 +430,6 @@ export async function exportFolder(folderId) {
         showAlert('Error', 'Failed to export folder');
     }
 }
-window.exportFolder = exportFolder;
 
 function updateSidebarFoldersAfterDelete() {
     refreshSidebarFolders();
@@ -483,7 +475,6 @@ export function openColorPicker(folderId, event) {
         });
     }, 10);
 }
-window.openColorPicker = openColorPicker;
 
 /**
  * Show color picker for a folder, positioned near the folder row in sidebar.
@@ -536,7 +527,6 @@ export function showColorPickerForFolder(folderId) {
         });
     }, 10);
 }
-window.showColorPickerForFolder = showColorPickerForFolder;
 
 async function setFolderColor(folderId, color) {
     try {
@@ -568,7 +558,7 @@ async function setFolderColor(folderId, color) {
 /**
  * Open the Move to Vault modal for a folder.
  */
-function openMoveToVault(folderId) {
+export function openMoveToVault(folderId) {
     vaultFolderId = folderId;
     
     // Initialize date picker if not already done
@@ -601,7 +591,6 @@ function openMoveToVault(folderId) {
     document.getElementById('vaultModal').classList.add('active');
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
-window.openMoveToVault = openMoveToVault;
 
 /**
  * Update the vault confirm button state.

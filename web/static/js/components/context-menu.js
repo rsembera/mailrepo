@@ -182,51 +182,37 @@ export function hideContextMenu() {
  */
 async function handleAction(action, folderId, folder) {
     switch (action) {
-        case 'subfolder':
-            if (typeof window.createSubfolder === 'function') {
-                window.createSubfolder(folderId);
-            } else {
-                const { createSubfolder } = await import('../views/folder-mgmt.js');
-                createSubfolder(folderId);
-            }
+        case 'subfolder': {
+            const { createSubfolder } = await import('../views/folder-mgmt.js');
+            createSubfolder(folderId);
             break;
+        }
             
-        case 'rename':
-            if (typeof window.renameFolder === 'function') {
-                window.renameFolder(folderId);
-            } else {
-                // Import and call if not on window
-                const { renameFolder } = await import('../views/folder-mgmt.js');
-                renameFolder(folderId);
-            }
+        case 'rename': {
+            const { renameFolder } = await import('../views/folder-mgmt.js');
+            renameFolder(folderId);
             break;
+        }
             
-        case 'color':
-            if (typeof window.showColorPickerForFolder === 'function') {
-                window.showColorPickerForFolder(folderId);
-            } else {
-                const { showColorPickerForFolder } = await import('../views/folder-mgmt.js');
-                showColorPickerForFolder(folderId);
-            }
+        case 'color': {
+            const { showColorPickerForFolder } = await import('../views/folder-mgmt.js');
+            showColorPickerForFolder(folderId);
             break;
+        }
             
-        case 'move':
-            if (typeof window.openMoveFolder === 'function') {
-                window.openMoveFolder(folderId);
-            } else {
-                const { openMoveFolder } = await import('../views/folder-mgmt.js');
-                openMoveFolder(folderId);
-            }
+        case 'move': {
+            const { openMoveFolder } = await import('../views/folder-mgmt.js');
+            openMoveFolder(folderId);
             break;
+        }
             
-        case 'vault':
-            if (typeof window.openMoveToVault === 'function') {
-                window.openMoveToVault(folderId);
-            } else {
-                // Function might not be exported, show error
-                console.error('openMoveToVault not available');
-            }
+        case 'vault': {
+            // (Previously this used window.openMoveToVault with a console.error
+            //  fallback because openMoveToVault wasn't ES-exported. Now it is.)
+            const { openMoveToVault } = await import('../views/folder-mgmt.js');
+            openMoveToVault(folderId);
             break;
+        }
             
         case 'export': {
             // Open the bulk-export modal with this folder as the source.
@@ -242,14 +228,11 @@ async function handleAction(action, folderId, folder) {
             break;
         }
             
-        case 'delete':
-            if (typeof window.deleteFolder === 'function') {
-                window.deleteFolder(folderId);
-            } else {
-                const { deleteFolder } = await import('../views/folder-mgmt.js');
-                deleteFolder(folderId);
-            }
+        case 'delete': {
+            const { deleteFolder } = await import('../views/folder-mgmt.js');
+            deleteFolder(folderId);
             break;
+        }
     }
 }
 
@@ -288,12 +271,8 @@ export function showArchiveHeaderContextMenu(e) {
             const action = el.dataset.action;
             hideContextMenu();
             if (action === 'newfolder') {
-                if (typeof window.createSubfolder === 'function') {
-                    window.createSubfolder(null);
-                } else {
-                    const { createSubfolder } = await import('../views/folder-mgmt.js');
-                    createSubfolder(null);
-                }
+                const { createSubfolder } = await import('../views/folder-mgmt.js');
+                createSubfolder(null);
             }
         });
     });
