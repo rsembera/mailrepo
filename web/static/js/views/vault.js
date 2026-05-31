@@ -16,6 +16,7 @@ import { refreshSidebarFolders } from '../components/sidebar.js';
 import { formatDate, daysUntil } from '../components/date-picker.js';
 import { renderEmailList } from '../components/email-list.js';
 import { openEmailViewer } from './mail.js';
+import { bindActions } from '../delegate.js';
 
 // Module state
 let vaultFolders = [];
@@ -34,7 +35,6 @@ let vaultSubfolders = [];   // Subfolders of current viewing folder
 let contextTitle = null;
 let contextMeta = null;
 let emailList = null;
-
 
 /**
  * Initialize vault view with DOM references.
@@ -86,7 +86,6 @@ export async function showVaultView() {
     await loadVaultFolders();
     renderVaultList();
 }
-
 
 /**
  * Filter and sort vault folders.
@@ -151,7 +150,7 @@ function renderVaultList() {
     }
     
     let html = `
-        <div class="vault-management-list">
+        <div class="vault-management-list vault-view-root">
             <div class="vault-management-toolbar">
                 <div class="vault-toolbar-left">
                     <div class="vault-search">
@@ -160,13 +159,13 @@ function renderVaultList() {
                                id="vaultFilterInput" 
                                placeholder="Search folders..." 
                                value="${escapeHtml(vaultFilter)}"
-                               oninput="handleVaultFilter(this.value)">
-                        ${vaultFilter ? '<button class="search-clear" onclick="clearVaultFilter()"><i data-lucide="x"></i></button>' : ''}
+                               data-input="vaultFilter">
+                        ${vaultFilter ? '<button class="search-clear" data-action="clearFilter"><i data-lucide="x"></i></button>' : ''}
                     </div>
                     ${renderVaultSortButton()}
                 </div>
                 ${overdueCount > 0 ? `
-                    <button class="btn btn-danger" onclick="deleteAllOverdue()">
+                    <button class="btn btn-danger" data-action="deleteAllOverdue">
                         <i data-lucide="x"></i>
                         Delete Overdue (${overdueCount})
                     </button>
@@ -198,6 +197,7 @@ function renderVaultList() {
     
     emailList.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
+    bindVaultActions();
 }
 
 /**
@@ -219,7 +219,7 @@ function renderVaultItem(folder) {
     
     return `
         <div class="vault-management-item ${isOverdue ? 'overdue' : ''}">
-            <div class="vault-management-name clickable" onclick="openVaultFolder(${folder.id})">
+            <div class="vault-management-name clickable" data-action="openFolder" data-folder-id="${folder.id}">
                 ${colorDot}
                 <i data-lucide="folder" class="folder-icon"></i>
                 <span class="folder-label">${escapeHtml(folder.name)}</span>
@@ -229,11 +229,11 @@ function renderVaultItem(folder) {
                 ${dateText}
             </div>
             <div class="vault-management-actions">
-                <button class="btn btn-sm btn-icon" onclick="openRestoreFolder(${folder.id})" title="Restore to Archive">
+                <button class="btn btn-sm btn-icon" data-action="openRestore" data-folder-id="${folder.id}" title="Restore to Archive">
                     <i data-lucide="archive-restore"></i>
                 </button>
                 ${isOverdue ? `
-                    <button class="btn btn-sm btn-icon btn-danger-subtle" onclick="permadeleteFolder(${folder.id})" title="Permanently Delete">
+                    <button class="btn btn-sm btn-icon btn-danger-subtle" data-action="permadelete" data-folder-id="${folder.id}" title="Permanently Delete">
                         <i data-lucide="x"></i>
                     </button>
                 ` : ''}
@@ -285,7 +285,6 @@ async function openVaultFolder(folderId, isSubfolder = false) {
         if (contextMeta) contextMeta.textContent = 'Error loading emails';
     }
 }
-window.openVaultFolder = openVaultFolder;
 
 /**
  * Go back to vault folder list from folder contents view.
@@ -299,7 +298,6 @@ function backToVaultList() {
     if (contextTitle) contextTitle.textContent = 'Retention Vault';
     renderVaultList();
 }
-window.backToVaultList = backToVaultList;
 
 /**
  * Navigate to a breadcrumb folder.
@@ -340,7 +338,6 @@ async function navigateVaultBreadcrumb(folderId) {
         if (contextMeta) contextMeta.textContent = 'Error loading emails';
     }
 }
-window.navigateVaultBreadcrumb = navigateVaultBreadcrumb;
 
 /**
  * Render the contents of a vault folder (email list).
@@ -379,7 +376,7 @@ function renderVaultFolderContents() {
             navBarHtml += `<div class="vault-breadcrumbs">`;
             vaultBreadcrumbs.forEach((b, i) => {
                 if (i > 0) navBarHtml += ` <i data-lucide="chevron-right" class="breadcrumb-sep"></i> `;
-                navBarHtml += `<a href="#" onclick="navigateVaultBreadcrumb(${b.id}); return false;" class="breadcrumb-link">${escapeHtml(b.name)}</a>`;
+                navBarHtml += `<a href="#" data-action="navBreadcrumb" data-folder-id="${b.id}" class="breadcrumb-link">${escapeHtml(b.name)}</a>`;
             });
             navBarHtml += ` <i data-lucide="chevron-right" class="breadcrumb-sep"></i> `;
             navBarHtml += `<span class="breadcrumb-current">${escapeHtml(viewingFolder.name)}</span>`;
@@ -392,7 +389,7 @@ function renderVaultFolderContents() {
             navBarHtml += `<span class="subfolder-label">Subfolders:</span> `;
             navBarHtml += vaultSubfolders.map((sf, i) => {
                 const separator = i < vaultSubfolders.length - 1 ? ', ' : '';
-                return `<a href="#" onclick="openVaultFolder(${sf.id}, true); return false;" class="subfolder-link">${escapeHtml(sf.name)}</a>${separator}`;
+                return `<a href="#" data-action="openFolder" data-folder-id="${sf.id}" data-is-subfolder="1" class="subfolder-link">${escapeHtml(sf.name)}</a>${separator}`;
             }).join('');
             navBarHtml += `</div>`;
         }
@@ -401,13 +398,13 @@ function renderVaultFolderContents() {
     }
     
     let html = `
-        <div class="vault-folder-view">
+        <div class="vault-folder-view vault-view-root">
             <div class="vault-folder-toolbar">
-                <button class="btn btn-secondary" onclick="backToVaultList()">
+                <button class="btn btn-secondary" data-action="backToList">
                     <i data-lucide="arrow-left"></i>
                     Back to Vault
                 </button>
-                <button class="btn btn-secondary" onclick="openRestoreFolder(${vaultBreadcrumbs.length > 0 ? vaultBreadcrumbs[0].id : viewingFolder.id})">
+                <button class="btn btn-secondary" data-action="openRestore" data-folder-id="${vaultBreadcrumbs.length > 0 ? vaultBreadcrumbs[0].id : viewingFolder.id}">
                     <i data-lucide="archive-restore"></i>
                     Restore Folder
                 </button>
@@ -435,6 +432,7 @@ function renderVaultFolderContents() {
     
     emailList.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
+    bindVaultActions();
 }
 
 /**
@@ -449,7 +447,7 @@ function renderVaultEmailRow(email) {
     });
     
     return `
-        <div class="email-row" onclick="openVaultEmail(${viewingFolder.id}, ${email.id})">
+        <div class="email-row" data-action="openEmail" data-folder-id="${viewingFolder.id}" data-email-id="${email.id}">
             <div class="email-row-main">
                 <span class="email-sender">${escapeHtml(email.sender || '(No sender)')}</span>
                 <span class="email-subject">${escapeHtml(email.subject || '(No subject)')}</span>
@@ -469,7 +467,6 @@ async function openVaultEmail(folderId, emailId) {
     // Pass vault mode flag and folder ID for fetching
     openEmailViewer(emailId, { vaultMode: true, folderId: folderId });
 }
-window.openVaultEmail = openVaultEmail;
 
 /**
  * Render sort icon button with dropdown.
@@ -493,7 +490,7 @@ function renderVaultSortButton() {
     ).join('');
     return `
         <div class="sort-dropdown-wrapper">
-            <button class="btn btn-icon sort-btn" onclick="toggleVaultSortDropdown(event)" title="Sort: ${currentLabel}">
+            <button class="btn btn-icon sort-btn" data-action="toggleSort" title="Sort: ${currentLabel}">
                 <i data-lucide="arrow-up-down"></i>
             </button>
             <div class="sort-dropdown" id="vaultSortDropdown">
@@ -525,8 +522,6 @@ function toggleVaultSortDropdown(e) {
         });
     }
 }
-window.toggleVaultSortDropdown = toggleVaultSortDropdown;
-
 
 /**
  * Handle vault filter input.
@@ -541,7 +536,6 @@ function handleVaultFilter(query) {
         input.setSelectionRange(query.length, query.length);
     }
 }
-window.handleVaultFilter = handleVaultFilter;
 
 /**
  * Clear vault filter.
@@ -552,7 +546,6 @@ function clearVaultFilter() {
     const input = document.getElementById('vaultFilterInput');
     if (input) input.focus();
 }
-window.clearVaultFilter = clearVaultFilter;
 
 /**
  * Handle vault sort change.
@@ -561,8 +554,6 @@ function handleVaultSort(value) {
     vaultSort = value;
     renderVaultList();
 }
-window.handleVaultSort = handleVaultSort;
-
 
 /**
  * Open restore folder modal.
@@ -580,11 +571,72 @@ async function openRestoreFolder(folderId) {
     renderRestoreDestinations();
     document.getElementById('restoreFolderModal').classList.add('active');
 }
-window.openRestoreFolder = openRestoreFolder;
 
 /**
  * Render restore destination folder list.
  */
+
+/**
+ * Bind delegated handlers on the vault-specific root. Listener dies with
+ * the view when another view's render replaces emailList. Called by both
+ * the folder-list and folder-detail render paths (same handler set works
+ * for both since they share toolbar / row actions / breadcrumb links).
+ *
+ * The two anchor-tag handlers (navBreadcrumb + openFolder-as-subfolder)
+ * call e.preventDefault() so the page doesn't jump to top when clicked
+ * (replaces the legacy 'return false' on the inline onclick).
+ *
+ * See delegate.js docs.
+ */
+function bindVaultActions() {
+    const root = emailList.querySelector('.vault-view-root');
+    if (!root) return;
+    bindActions(root, {
+        clearFilter:      () => clearVaultFilter(),
+        vaultFilter:      (el) => handleVaultFilter(el.value),
+        deleteAllOverdue: () => deleteAllOverdue(),
+        openFolder:       (el, ev) => {
+            // This handler is wired to both <button> and <a href="#"> elements
+            // (the <a> for subfolder navigation in the breadcrumb area).
+            // preventDefault keeps the <a> from scrolling the page.
+            ev.preventDefault();
+            const id = Number(el.dataset.folderId);
+            const isSubfolder = el.dataset.isSubfolder === '1';
+            openVaultFolder(id, isSubfolder);
+        },
+        openRestore:      (el) => openRestoreFolder(Number(el.dataset.folderId)),
+        permadelete:      (el) => permadeleteFolder(Number(el.dataset.folderId)),
+        navBreadcrumb:    (el, ev) => {
+            // <a href="#"> -- prevent default scroll-to-top
+            ev.preventDefault();
+            navigateVaultBreadcrumb(Number(el.dataset.folderId));
+        },
+        backToList:       () => backToVaultList(),
+        openEmail:        (el) => openVaultEmail(
+            Number(el.dataset.folderId),
+            Number(el.dataset.emailId),
+        ),
+        toggleSort:       (el, ev) => toggleVaultSortDropdown(ev),
+    }, ['click', 'input']);
+}
+
+/**
+ * Bind the destination-picker handler. The restore-folder modal lives
+ * in the index.html template (outside emailList), so it needs its own
+ * bindActions call on the picker container -- can't ride along with
+ * bindVaultActions which targets emailList descendants only.
+ */
+function bindRestorePickerActions() {
+    const container = document.getElementById('restoreDestinationList');
+    if (!container) return;
+    bindActions(container, {
+        selectDest: (el) => {
+            const destId = el.dataset.destId;
+            selectRestoreDestination(destId === '' ? null : Number(destId));
+        },
+    });
+}
+
 function renderRestoreDestinations() {
     const container = document.getElementById('restoreDestinationList');
     
@@ -595,7 +647,7 @@ function renderRestoreDestinations() {
     
     let html = `
         <div class="folder-select-item ${restoreDestinationId === null ? 'selected' : ''}" 
-             onclick="selectRestoreDestination(null)">
+             data-action="selectDest" data-dest-id="">
             <i data-lucide="home" style="width: 16px; height: 16px;"></i>
             <span>Archive Root</span>
         </div>
@@ -613,7 +665,7 @@ function renderRestoreDestinations() {
         html += `
             <div class="folder-select-item ${restoreDestinationId === folder.id ? 'selected' : ''}" 
                  style="padding-left: ${16 + indent}px;"
-                 onclick="selectRestoreDestination(${folder.id})">
+                 data-action="selectDest" data-dest-id="${folder.id}">
                 ${colorDot}
                 <i data-lucide="folder" style="width: 16px; height: 16px;"></i>
                 <span>${escapeHtml(folder.name)}</span>
@@ -631,6 +683,7 @@ function renderRestoreDestinations() {
     
     container.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
+    bindRestorePickerActions();
 }
 
 /**
@@ -640,8 +693,6 @@ function selectRestoreDestination(folderId) {
     restoreDestinationId = folderId;
     renderRestoreDestinations();
 }
-window.selectRestoreDestination = selectRestoreDestination;
-
 
 /**
  * Confirm restore folder from vault.
@@ -676,7 +727,6 @@ async function confirmRestoreFolder() {
     }
 }
 window.confirmRestoreFolder = confirmRestoreFolder;
-
 
 /**
  * Permanently delete a single folder from vault.
@@ -716,8 +766,6 @@ async function permadeleteFolder(folderId) {
         showAlert('Error', 'Failed to delete folder');
     }
 }
-window.permadeleteFolder = permadeleteFolder;
-
 
 /**
  * Delete all overdue folders.
@@ -762,8 +810,6 @@ async function deleteAllOverdue() {
         showAlert('Error', 'Failed to delete folders');
     }
 }
-window.deleteAllOverdue = deleteAllOverdue;
-
 
 /**
  * Update the vault badge in the left rail.
