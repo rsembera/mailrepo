@@ -9,7 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_Nothing yet._
+### Changed
+- **Search view (Archive Search).** Reworked the search interface to
+  match the rest of the app's filter-input pattern. Live search with a
+  300ms debounce replaces the explicit "Search" button; an X clear
+  button inside the input field replaces the separate "Clear" button.
+  The Export button is now always visible (disabled when there are no
+  results) instead of appearing on first result, so the toolbar no
+  longer reflows when a search returns. Helper text and the no-results
+  state both surface the `*` prefix-matching syntax explicitly, since
+  FTS5's default is whole-word matching.
+
+### Refactored (no behavior change)
+- **Frontend dispatch model unified.** Replaced every inline
+  `onclick="..."` attribute (in render-generated HTML and the
+  `index.html` template) and every cross-module `window.X = X`
+  assignment with a uniform delegation model: per-view
+  `bindActions(container, handlers)` for view-scoped clicks, plus a
+  single `template-bindings.js` delegated handler on `document.body`
+  for template-level actions. 11 files converted across sessions on
+  May 30–31, 2026. Closes the three "global `window` pollution",
+  "inline onclick", and "mixed event handling patterns" items from
+  `docs/Code_Quality_Review.md`.
+- **`closeModal` consolidated.** Three modules each defined their own
+  `closeModal` and assigned to `window.closeModal`; load order
+  determined which won. Replaced with a single canonical
+  implementation in `modals.js` plus a
+  `registerModalCloseHandler(modalId, callback)` extension point for
+  per-modal cleanup (used by `settings.js` for the Add Account form
+  reset).
 
 ---
 

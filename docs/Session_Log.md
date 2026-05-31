@@ -1848,3 +1848,236 @@ Implemented folder-level retention system for compliance workflows. Folders can 
 - `0a92a23` — Align Vault view styling with Trash view
 - `38f96a7` — Fix duplicate overdueCount declaration in vault.js
 - `91fd117` — Move Vault icon before Trash in left rail
+
+
+---
+
+## Session 36 — May 29, 2026 (MacBook)
+
+### Crypto Refactor: v1 → v2 (PBKDF2/Fernet → Argon2id/AES-256-GCM)
+
+Replaced the original PBKDF2 + Fernet encryption stack with a modern
+Argon2id + AES-256-GCM + HKDF setup. Designed for forward-migratability
+(per-file version byte, HKDF info strings include version) so a future
+v3 can ship the same way without touching v2 files.
+
+**Crypto stack:**
+- Argon2id KDF replacing PBKDF2 (memory-hard, post-quantum-friendlier)
+- AES-256-GCM AEAD replacing Fernet (authenticated, faster)
+- HKDF with version-tagged info strings for forward isolation
+- New per-file salt magic `MRC2` (was `MRC1`) and version byte `0x02`
+- v3 forward path: `MRC3` / `0x03` / `.v3` HKDF info — cryptographically
+  distinct keys even if the master password collides across versions
+
+**Migration architecture:**
+- Two-phase walk: Phase 1 rekeys the SQLCipher database; Phase 2 walks
+  every file on disk, decrypts with v1, re-encrypts with v2.
+- Marker-file resumability so interrupted migrations resume from the
+  last completed file rather than starting over.
+- Migration exclusivity flag on the DB to prevent concurrent migrations.
+- New thread-safety RLock around DB ops (paired with the migration flag).
+- SSE-based progress streaming with unlock-resume detection.
+- Banner + modal UI during migration showing Phase 1/2 progress.
+
+**Production migration:**
+- 1,648 files migrated successfully on Rick's archive.
+- Zero corruption, zero data loss, full round-trip verified.
+
+**v2-native password change:**
+- Replaced the old in-place rekey with a v2-native flow.
+- Logout-modal during post-change backup (the rekey produces a new DB,
+  and the backup of the post-change state takes long enough that
+  blocking the UI is the right behavior).
+
+### Commits
+- `e59ca2b` — Encryption: dual v1/v2 class with Argon2id + AES-256-GCM
+- `cdd5229` — Crypto plan: fold DB threading lock into scope
+- `076f3db` — Database: thread-safety lock + migration exclusivity flag
+- `b7db944` — Migration: two-phase v1->v2 crypto migration module
+- `39e0ce2` — Migration: SSE blueprint + unlock-resume detection
+- `944b0aa` — Migration UI: banner + modal + Phase 1/2 progress
+- `3f0e67a` — Password change: v2-native flow + logout-modal post-change
+
+
+---
+
+## Session 37 — May 30, 2026 (MacBook)
+
+### v1 Cleanup, 1.0 Ship, Post-1.0 Setup, Frontend Cleanup Start
+
+The day MailRepo shipped 1.0 (feature-complete, dogfooding before tag).
+Three threads: strip the v1 crypto paths now that v2 is production,
+set up the post-1.0 infrastructure, and start a parallel cleanup pass
+on the frontend that runs into Session 38.
+
+**v1 cleanup (-2,334 lines):**
+- Stripped Fernet + PBKDF2 from `core/encryption.py` (dual-class became
+  v2-only).
+- Deleted the migration module, blueprint, banner, modal, and SSE
+  endpoint — all the v1->v2 scaffolding from Session 36.
+- v1 migration code preserved in git history at `353ae2f` as a
+  reference template if/when a future v3 migration ships.
+
+**Backup UX fixes + 1.0 ship:**
+- Backup state UI polish (clearer "last backup" formatting, status
+  badge colors).
+- Declared the 1.0 feature set complete.
+- Decision: dogfood for an unspecified period before `git tag v1.0.0`.
+
+**Post-1.0 infrastructure:**
+- Created `docs/Post_1_0_Backlog.md` from items deferred during the
+  road-to-1.0 push.
+- Removed `docs/Future_Backup_Refactor.md` (the backup state externalization
+  had already been implemented; the planning doc was obsolete).
+- Struck the phantom "Future_Backup_Refactor" entry from the backlog.
+
+**Backlog items closed during the session:**
+- Item 1: split `progress.py` (1,114 lines → 61 lines main + 3 focused
+  modules: streams, state, handlers).
+- Item 2: 15 unit tests for `core/password_change.py` (test count
+  53 → 68).
+- Item 4: created `CHANGELOG.md` (Keep a Changelog format), archived
+  legacy plan docs to `docs/archive/`, fixed `.gitignore`.
+
+**Frontend cleanup pass — start:**
+- Built `web/static/js/delegate.js` — the `bindActions(container,
+  handlers, eventTypes)` helper that the whole pass uses. Event-to-
+  attribute map: click→data-action, input→data-input, change→data-change,
+  submit→data-submit, keydown→data-keydown. Uses
+  `closest('[data-${attr}]')` to resolve nested clickables.
+- Converted `starred.js` (1st file). Established the per-view-root
+  binding pattern.
+- Converted `trash.js` (2nd file). Refined the pattern after a cross-
+  talk bug: binding on shared parents caused multiple views'
+  handlers to fire on the same elements. Fix: bind on view-specific
+  child wrappers (`.starred-view-root`, `.trash-view-root`) so the
+  listener dies with the view when innerHTML is replaced.
+
+### Commits
+- `9337954` — v1 cleanup pass: strip Fernet/PBKDF2 + delete migration
+- `85fc21d` — Backup UX fixes + Session_Log: ships 1.0
+- `8efb8be` — Post-1.0: README crypto refresh + Post_1_0_Backlog.md
+- `75b1cca` — Backlog: strike phantom Future_Backup_Refactor entry
+- `2a9f880` — Cleanup: split progress.py into three focused modules
+- `5fdf7f1` — Add unit tests for core/password_change.py (15 tests)
+- `0ff4c67` — Item 4: CHANGELOG.md + docs/ archive cleanup + .gitignore fix
+- `0da63d9` — Frontend cleanup: delegation helper + starred.js (1st)
+- `650e1c1` — Frontend cleanup: trash.js (2nd) + binding pattern refined
+
+
+---
+
+## Session 38 — May 31, 2026 (MacBook)
+
+### Frontend Cleanup Pass — Complete
+
+Picked up the frontend cleanup pass started in Session 37 and ran it
+to completion. Goal: replace every inline `onclick="..."` and every
+`window.X = X` cross-module dispatch with delegated `data-action` /
+`data-tpl-action` handlers backed by ES imports. Eleven files
+total — the remaining nine views/components plus a final index.html
+template pass.
+
+**Views/components converted (9 of 11 this session):**
+- `export-modal.js` (3rd) — was already addEventListener-based; just
+  cleaned the `window._export` singleton to module-local state and
+  dropped `window.openExportModal`.
+- `review.js` (4th) — 5 window exports + 6 inline handlers. Deleted
+  dead `unstageSource` along the way.
+- `folder-mgmt.js` (5th) + `context-menu.js` caller simplification.
+- `settings.js` (6th) — 10 window exports, 7 inline handlers. Kept 3
+  on window pending the template batch.
+- `folder-selection.js` (7th) — 11 window exports, 16 inline handlers.
+  Two render functions share one bind helper.
+- `vault.js` (8th) — 14 inline handlers, 14 window exports. Three
+  binding helpers: main vault, folder-detail, restore-picker modal
+  (outside emailList).
+- `email-list.js` (9th) + `mail.js`/`app.js` callback wiring — extended
+  `initEmailList` config with `onOpenEmail` + `onRefresh` callbacks
+  so email-list no longer reaches into mail.js via window.
+- `mail.js` (10th) — 2,183 lines, the largest file. Three binding
+  sites: `.search-view-root` (per-render), `#subfoldersBar`
+  (persistent), `#viewerBody` (persistent).
+
+**Search view UX refactor:**
+Rick noted during mail.js testing that the search input shrank when
+the Export button appeared, and that separate Search/Clear buttons
+felt inconsistent with every other filter input in the app.
+Refactored:
+- Shell/list split — toolbar (with input) rendered once, body rebuilt
+  on each search. Input stays in DOM, no focus loss.
+- Removed Search and Clear buttons; X clear button inside the input
+  (consistent with starred, trash, vault, folder-selection,
+  email-list filter inputs).
+- Live search with 300ms debounce.
+- Export button always visible, disabled when no results — no toolbar
+  reflow.
+- Helper text now prominently mentions `*` for prefix matching.
+- No-results state shows context-aware hint: "Try `<query>*` to match
+  all words starting with `<query>`" — suppressed when the query
+  already uses FTS5 syntax.
+- Decision worth preserving: I initially auto-prefixed queries client-
+  side ("consul" silently becomes "consul*"). Rick pushed back and
+  was right — silently rewriting input would break legitimate exact-
+  word matching (e.g., searching "Smith" to find Smith but not
+  Smithson) and confuse power users. Helper text is the honest fix.
+
+**closeModal consolidation:**
+Three modules each defined their own `closeModal` and assigned to
+`window.closeModal`. Last loaded won. In practice `settings.js` won
+and its `resetAccountModal` cleanup worked — but fragile.
+- `modals.js` becomes canonical. New
+  `registerModalCloseHandler(modalId, callback)` extension point.
+- `imports.js` and `settings.js` drop their duplicate definitions
+  and import the canonical version.
+- `settings.js` registers `resetAccountModal` for `addAccountModal`
+  via the new API.
+
+**Template inline-onclick conversion (11th file):**
+The final piece. `web/templates/main/index.html` had 43 inline
+`onclick="X()"` handlers calling functions exposed via `window.X = X`.
+- New file: `web/static/js/template-bindings.js` — imports every
+  template-callable function as a named ES import, maps action names
+  to handlers, sets up a single delegated click listener on
+  `document.body`.
+- Argument handling via data attributes: `data-modal-id`,
+  `data-direction`, `data-confirm`, `data-prompt-cancel`,
+  `data-rail-view`.
+- `registerHandler(action, fn)` escape hatch for `handleLogout`
+  (which lives in app.js and can't be imported here without a cycle).
+- All 43 onclicks in `index.html` converted to `data-tpl-action`
+  attributes.
+- 21 `window.X = X` assignments dropped across 8 files.
+- Bonus: `move-email-modal.js`'s render-generated inline onclick
+  (the only stray inline-onclick-in-rendered-HTML outside index.html)
+  also converted to `bindActions` delegation.
+
+**Bug worth preserving:** during the template-bindings work I removed
+the `window.X` assignments for five viewer functions (`copyAsReply`,
+`viewEmailSource`, `downloadEmail`, `printEmail`, `loadRemoteContent`)
+but forgot to add the `export` keyword to their declarations. Missing
+named imports in `template-bindings.js` exploded at module-link time
+in the browser — but `node --check` passes (parse-time, not link-
+time). Symptom: folder tree rendered flat, accounts section missing.
+Lesson: run a name-vs-export audit before declaring a window-to-import
+conversion done.
+
+**End state:**
+- Zero inline `onclick` attributes anywhere in the codebase.
+- Zero `window.X` assignments for cross-module function dispatch.
+- Two legitimate `window.X` remaining: `getMountedImports`
+  (cross-module lazy reference in review.js + mail.js) and
+  `skipBeforeUnloadWarning` (internal self-reference in app.js).
+
+### Commits
+- `5e798d6` — export-modal.js (3rd)
+- `b18a43b` — review.js (4th)
+- `34341c5` — folder-mgmt.js (5th) + context-menu.js
+- `c6695e4` — settings.js (6th) + About credit update
+- `1b747e7` — folder-selection.js (7th)
+- `498345a` — vault.js (8th)
+- `7cca298` — email-list.js (9th) + mail.js/app.js callbacks
+- `da54946` — mail.js (10th)
+- `8368bd5` — Search view UX: live search + X-in-input + always-show Export
+- `12bf631` — Consolidate closeModal: one canonical implementation
+- `1604c94` — Template inline onclicks -> data-tpl-action (11th, final)

@@ -36,16 +36,9 @@ Not yet tagged. Will happen after dogfooding settles.
 Announce 1.0, list current crypto stack, link to docs / repo. Rick\'s
 own task; will be done outside of these working sessions.
 
-### CHANGELOG.md
-Not yet created. Worth doing as part of the 1.0 announce push so users
-landing on the repo can see what\'s changed.
-
 ---
 
 ## Documentation
-
-### CHANGELOG.md
-See above.
 
 ### docs/ cleanup
 Several plan docs are now historical artifacts of completed work:
@@ -89,36 +82,6 @@ backup flow specifically after the change.
 
 ---
 
-## Architectural items deferred from earlier reviews
-
-These all come from `docs/Code_Quality_Review.md` (Jan 26 / Feb 17, 2026)
-where they were explicitly deferred to post-1.0:
-
-### `progress.py` size (1,114 lines)
-The progress UI / SSE wiring module grew large during the IMAP commit
-flow work. Worth splitting into focused modules — possibly:
-- `progress/streams.py` — SSE generator logic
-- `progress/state.py` — progress state machines
-- `progress/handlers.py` — Flask route handlers
-
-Refactor; no behavior change.
-
-### Global `window` function pollution
-Several views (legacy chunks of `app.js`, modals, etc.) attach handlers
-as `window.functionName = ...` for use by inline `onclick` HTML attrs.
-Modernize to `addEventListener` + delegated handlers.
-
-### Inline `onclick` / event handler pattern mix
-Same root cause as the previous item. Some views use proper event
-delegation; others use inline `onclick="..."` attributes. Standardize
-on event delegation.
-
-### Mixed event handling patterns
-Catch-all for the above two. Sweep through the JS and converge on one
-pattern.
-
----
-
 ## Performance items (only act on if symptoms appear)
 
 ### Per-thread DB connection pool
@@ -154,7 +117,8 @@ graphically distinct keys even if the master collides.
 
 ## Done — listed here for traceability
 
-These were on earlier post-1.0 lists but turned out to already be done:
+These were on earlier post-1.0 lists but turned out to already be done,
+or were closed out during a working session:
 
 - **Gmail auto-detection + Gmail-specific post-commit options.** Confirmed
   May 30, 2026: `web/blueprints/api/accounts.py:49-56` sets `is_gmail`
@@ -162,3 +126,42 @@ These were on earlier post-1.0 lists but turned out to already be done:
   "Delete emails" option for Gmail accounts (since Gmail\'s IMAP delete
   just archives, which is misleading). Memory was stale; implementation
   was already in place.
+
+- **Backup state refactor (Libram-style external state file).** The
+  planning doc `Future_Backup_Refactor.md` was removed May 30, 2026
+  (`c090c4f`) because the work had been shipped earlier in
+  `42e2951 Refactor: External backup state file (Libram-style)`. The
+  phantom backlog entry was also struck in `75b1cca`.
+
+- **`progress.py` size refactor.** Done Session 37, May 30, 2026
+  (`2a9f880`). Split 1,114-line `progress.py` into a 61-line entry
+  point plus three focused modules: `progress/streams.py` (SSE
+  generator logic), `progress/state.py` (state machines), and
+  `progress/handlers.py` (route handlers).
+
+- **`core/password_change.py` unit tests.** Done Session 37, May 30,
+  2026 (`5fdf7f1`). 15 new tests added; suite went from 53 to 68 tests.
+  Tests build a v2 archive, change password, verify new unlocks and
+  old does not, verify content equivalence across files — same shape
+  as the deleted `Migration.run_phase_1` tests.
+
+- **CHANGELOG.md.** Done Session 37, May 30, 2026 (`0ff4c67`). Keep a
+  Changelog format. Currently has the 1.0.0 entry under "Unreleased
+  (dogfooding)" pending `git tag v1.0.0`.
+
+- **docs/ archive cleanup.** Done Session 37, May 30, 2026 (`0ff4c67`).
+  Legacy plan docs (`Crypto_Refactor_Plan.md`, `Bulk_Export_Plan.md`,
+  `Refactoring_Plan*.md`, etc.) moved to `docs/archive/`.
+
+- **Frontend cleanup pass: window pollution, inline onclicks, mixed
+  event handling.** Done across Sessions 37–38, May 30–31, 2026. The
+  three architectural items in `Code_Quality_Review.md` are all
+  closed. Net effect: zero inline `onclick` attributes anywhere in
+  the codebase (including render-generated HTML and the index.html
+  template), zero `window.X` assignments for cross-module function
+  dispatch. The dispatch model is uniform end-to-end: per-view
+  `bindActions(container, handlers)` for view-scoped clicks, plus a
+  single `template-bindings.js` delegated handler on `document.body`
+  for template-level actions. Eleven files converted plus a final
+  template pass. See Session 38 for the full file list and the
+  `template-bindings.js` design.
