@@ -12,6 +12,7 @@ import { state, setSelectedFoldersGetter, setSelectedFoldersClearer, updateStage
 import { showAlert } from '../modals.js';
 import { buildImapFolderTree, getFolderIcon } from '../components/sidebar.js';
 import { getMountedImports } from '../components/imports.js';
+import { bindActions } from '../delegate.js';
 
 // Module state
 let selectedFoldersForStaging = new Set();
@@ -178,6 +179,31 @@ export function showImportFolderSelectionView(importId) {
     renderImportFolderSelectionView(folderSelectionTree, importId);
 }
 
+
+/**
+ * Bind delegated handlers on the folder-selection-specific root, NOT on the
+ * shared emailList container. Listener dies with the view when another
+ * view's render replaces emailList. Called by both renderFolderSelectionView
+ * (account/IMAP path) and renderImportFolderSelectionView (mbox import path)
+ * since they render very similar UI with the same set of actions.
+ *
+ * See delegate.js docs for why per-render binding (rather than init-once)
+ * is required when multiple views share a parent container.
+ */
+function bindFolderSelectionActions() {
+    const root = emailList.querySelector('.folder-selection-view-root');
+    if (!root) return;
+    bindActions(root, {
+        selectFolder: (el) => selectFolder(el.dataset.path),
+        clearFolder:  (el) => clearFolder(el.dataset.path),
+        selectAll:    () => selectAllFolders(),
+        clearAll:     () => clearAllSelected(),
+        stageSelected:() => stageSelectedFoldersFromSelection(),
+        clearFilter:  () => clearFolderFilterInput(),
+        folderFilter: (el) => handleFolderFilter(el.value),
+    }, ['click', 'input']);
+}
+
 function renderImportFolderSelectionView(tree, importId) {
     const selectedCount = selectedFoldersForStaging.size;
     const filteredTree = filterFolderTree(tree, folderFilter);
@@ -194,7 +220,7 @@ function renderImportFolderSelectionView(tree, importId) {
     }
     
     let html = `
-        <div class="folder-management-list">
+        <div class="folder-management-list folder-selection-view-root">
             <div class="folder-selection-toolbar">
                 <div class="folder-filter">
                     <i data-lucide="search" class="search-icon"></i>
@@ -202,19 +228,19 @@ function renderImportFolderSelectionView(tree, importId) {
                            id="folderFilterInput" 
                            placeholder="Filter folders..." 
                            value="${escapeHtml(folderFilter)}"
-                           oninput="handleFolderFilter(this.value)">
-                    ${folderFilter ? '<button class="search-clear" onclick="clearFolderFilterInput()"><i data-lucide="x"></i></button>' : ''}
+                           data-input="folderFilter">
+                    ${folderFilter ? '<button class="search-clear" data-action="clearFilter"><i data-lucide="x"></i></button>' : ''}
                 </div>
                 <div class="toolbar-actions">
-                    <button class="btn btn-secondary" onclick="selectAllFolders()">
+                    <button class="btn btn-secondary" data-action="selectAll">
                         <i data-lucide="check-square"></i>
                         Select All
                     </button>
-                    <button class="btn btn-secondary" onclick="clearAllSelected()" ${selectedCount === 0 ? 'disabled' : ''}>
+                    <button class="btn btn-secondary" data-action="clearAll" ${selectedCount === 0 ? 'disabled' : ''}>
                         <i data-lucide="x"></i>
                         Clear
                     </button>
-                    <button class="btn btn-primary" id="stageSelectedBtn" onclick="stageSelectedFoldersFromSelection()" ${selectedCount === 0 ? 'disabled' : ''}>
+                    <button class="btn btn-primary" id="stageSelectedBtn" data-action="stageSelected" ${selectedCount === 0 ? 'disabled' : ''}>
                         <i data-lucide="archive"></i>
                         Stage${selectedCount > 0 ? ` (${selectedCount})` : ''}
                     </button>
@@ -240,6 +266,7 @@ function renderImportFolderSelectionView(tree, importId) {
     
     emailList.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
+    bindFolderSelectionActions();
 }
 
 function renderImportFolderSelectionTree(nodes, importId, depth, ancestry = []) {
@@ -271,7 +298,7 @@ function renderImportFolderSelectionTree(nodes, importId, depth, ancestry = []) 
                 <button class="btn btn-sm btn-icon" disabled title="Already staged">
                     <i data-lucide="circle"></i>
                 </button>
-                <button class="btn btn-sm btn-icon" onclick="clearFolder('${escapedPath}')" title="Unstage">
+                <button class="btn btn-sm btn-icon" data-action="clearFolder" data-path="${escapedPath}" title="Unstage">
                     <i data-lucide="x"></i>
                 </button>
             `;
@@ -280,13 +307,13 @@ function renderImportFolderSelectionTree(nodes, importId, depth, ancestry = []) 
                 <button class="btn btn-sm btn-icon btn-selected" disabled title="Selected">
                     <i data-lucide="check"></i>
                 </button>
-                <button class="btn btn-sm btn-icon" onclick="clearFolder('${escapedPath}')" title="Deselect">
+                <button class="btn btn-sm btn-icon" data-action="clearFolder" data-path="${escapedPath}" title="Deselect">
                     <i data-lucide="x"></i>
                 </button>
             `;
         } else {
             actionsHtml = `
-                <button class="btn btn-sm btn-icon" onclick="selectFolder('${escapedPath}')" title="Select">
+                <button class="btn btn-sm btn-icon" data-action="selectFolder" data-path="${escapedPath}" title="Select">
                     <i data-lucide="circle"></i>
                 </button>
                 <button class="btn btn-sm btn-icon" disabled title="Not selected">
@@ -345,7 +372,7 @@ function renderFolderSelectionView(tree, accountId) {
     }
     
     let html = `
-        <div class="folder-management-list">
+        <div class="folder-management-list folder-selection-view-root">
             <div class="folder-selection-toolbar">
                 <div class="folder-filter">
                     <i data-lucide="search" class="search-icon"></i>
@@ -353,19 +380,19 @@ function renderFolderSelectionView(tree, accountId) {
                            id="folderFilterInput" 
                            placeholder="Filter folders..." 
                            value="${escapeHtml(folderFilter)}"
-                           oninput="handleFolderFilter(this.value)">
-                    ${folderFilter ? '<button class="search-clear" onclick="clearFolderFilterInput()"><i data-lucide="x"></i></button>' : ''}
+                           data-input="folderFilter">
+                    ${folderFilter ? '<button class="search-clear" data-action="clearFilter"><i data-lucide="x"></i></button>' : ''}
                 </div>
                 <div class="toolbar-actions">
-                    <button class="btn btn-secondary" onclick="selectAllFolders()">
+                    <button class="btn btn-secondary" data-action="selectAll">
                         <i data-lucide="check-square"></i>
                         Select All
                     </button>
-                    <button class="btn btn-secondary" onclick="clearAllSelected()" ${selectedCount === 0 ? 'disabled' : ''}>
+                    <button class="btn btn-secondary" data-action="clearAll" ${selectedCount === 0 ? 'disabled' : ''}>
                         <i data-lucide="x"></i>
                         Clear
                     </button>
-                    <button class="btn btn-primary" id="stageSelectedBtn" onclick="stageSelectedFoldersFromSelection()" ${selectedCount === 0 ? 'disabled' : ''}>
+                    <button class="btn btn-primary" id="stageSelectedBtn" data-action="stageSelected" ${selectedCount === 0 ? 'disabled' : ''}>
                         <i data-lucide="archive"></i>
                         Stage${selectedCount > 0 ? ` (${selectedCount})` : ''}
                     </button>
@@ -391,6 +418,7 @@ function renderFolderSelectionView(tree, accountId) {
     
     emailList.innerHTML = html;
     if (typeof lucide !== 'undefined') lucide.createIcons();
+    bindFolderSelectionActions();
 }
 
 function renderFolderSelectionTree(nodes, accountId, depth, ancestry = []) {
@@ -422,7 +450,7 @@ function renderFolderSelectionTree(nodes, accountId, depth, ancestry = []) {
                 <button class="btn btn-sm btn-icon" disabled title="Already staged">
                     <i data-lucide="circle"></i>
                 </button>
-                <button class="btn btn-sm btn-icon" onclick="clearFolder('${escapedPath}')" title="Unstage">
+                <button class="btn btn-sm btn-icon" data-action="clearFolder" data-path="${escapedPath}" title="Unstage">
                     <i data-lucide="x"></i>
                 </button>
             `;
@@ -431,13 +459,13 @@ function renderFolderSelectionTree(nodes, accountId, depth, ancestry = []) {
                 <button class="btn btn-sm btn-icon btn-selected" disabled title="Selected">
                     <i data-lucide="check"></i>
                 </button>
-                <button class="btn btn-sm btn-icon" onclick="clearFolder('${escapedPath}')" title="Deselect">
+                <button class="btn btn-sm btn-icon" data-action="clearFolder" data-path="${escapedPath}" title="Deselect">
                     <i data-lucide="x"></i>
                 </button>
             `;
         } else {
             actionsHtml = `
-                <button class="btn btn-sm btn-icon" onclick="selectFolder('${escapedPath}')" title="Select">
+                <button class="btn btn-sm btn-icon" data-action="selectFolder" data-path="${escapedPath}" title="Select">
                     <i data-lucide="circle"></i>
                 </button>
                 <button class="btn btn-sm btn-icon" disabled title="Not selected">
@@ -558,7 +586,6 @@ export function selectFolder(folderPath) {
     
     refreshFolderSelectionView();
 }
-window.selectFolder = selectFolder;
 
 /**
  * Clear a folder - deselects if selected, unstages if staged.
@@ -603,7 +630,6 @@ export function clearFolder(folderPath) {
         refreshFolderSelectionView();
     }
 }
-window.clearFolder = clearFolder;
 
 /**
  * Select all unstaged folders.
@@ -628,7 +654,6 @@ export function selectAllFolders() {
     
     refreshFolderSelectionView();
 }
-window.selectAllFolders = selectAllFolders;
 
 /**
  * Clear all selected folders.
@@ -637,7 +662,6 @@ export function clearAllSelected() {
     selectedFoldersForStaging.clear();
     refreshFolderSelectionView();
 }
-window.clearAllSelected = clearAllSelected;
 
 /**
  * Stage all currently selected folders.
@@ -673,7 +697,6 @@ export function stageSelectedFoldersFromSelection() {
     // so user can cancel and try again
     openStageFoldersModal();
 }
-window.stageSelectedFoldersFromSelection = stageSelectedFoldersFromSelection;
 
 /**
  * Stage a single folder.
@@ -703,7 +726,6 @@ export function stageSingleFolder(folderPath) {
     
     openStageFoldersModal();
 }
-window.stageSingleFolder = stageSingleFolder;
 
 /**
  * Stage all folders in the current view.
@@ -750,7 +772,6 @@ export function stageAllFolders() {
     
     openStageFoldersModal();
 }
-window.stageAllFolders = stageAllFolders;
 
 /**
  * Unstage a single folder.
@@ -772,7 +793,6 @@ export function unstageSingleFolder(folderPath) {
         refreshFolderSelectionView();
     }
 }
-window.unstageSingleFolder = unstageSingleFolder;
 
 export function stageSelectedFolders() {
     if (selectedFoldersForStaging.size === 0) return;
@@ -801,7 +821,6 @@ export function stageSelectedFolders() {
     
     openStageFoldersModal();
 }
-window.stageSelectedFolders = stageSelectedFolders;
 
 export function getPendingFolderStaging() {
     return pendingFolderStaging;
@@ -858,7 +877,6 @@ function handleFolderFilter(query) {
         input.setSelectionRange(query.length, query.length);
     }
 }
-window.handleFolderFilter = handleFolderFilter;
 
 /**
  * Clear folder filter.
@@ -875,4 +893,3 @@ function clearFolderFilterInput() {
     const input = document.getElementById('folderFilterInput');
     if (input) input.focus();
 }
-window.clearFolderFilterInput = clearFolderFilterInput;
