@@ -25,6 +25,7 @@ and `CHANGELOG.md` for the user-facing changelog under
 | `docs/Navigation_Map.md` | This file — codebase overview and context recovery |
 | `docs/Session_Log.md` | Chronological record of sessions and decisions |
 | `docs/Post_1_0_Backlog.md` | Post-1.0 items: packaging, tag, website, deferred work |
+| `docs/Test_Coverage_Plan.md` | Tiered plan for the post-1.0 test-coverage expansion |
 | `CHANGELOG.md` | User-facing changelog (Keep a Changelog format) |
 | `docs/TESTING_CHECKLIST.md` | Manual testing checklist for release |
 | `docs/Security_Audit.md` | Feb 4, 2026 pre-release security review |
@@ -279,7 +280,7 @@ python main.py
 
 ---
 
-## Test Suite (85 tests)
+## Test Suite (104 tests)
 
 | File | Coverage |
 |------|----------|
@@ -287,6 +288,7 @@ python main.py
 | `tests/test_encryption_v2.py` | v2 encryption: Argon2id, HKDF, AES-256-GCM, file/DB round-trip |
 | `tests/test_password_change.py` | v2-native password change (15 tests added Session 37) |
 | `tests/test_backup.py` | Backup: state-file round-trip + corruption degrade, change detection, WAL-checkpoint no-op, interrupted-backup baseline safety (17 tests, Session 39) |
+| `tests/test_pending_commit.py` | Commit-resume state machine: session creation, status transitions, resume detection, post-action filtering, clear/discard (19 tests, Session 39) |
 | `tests/test_database.py` | Schema, migrations, FTS5 |
 | `tests/test_database_threading.py` | Concurrent access, RLock behavior |
 | `tests/test_email_parser.py` | Header/body/attachment parsing |

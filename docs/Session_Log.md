@@ -2150,3 +2150,22 @@ high-cost/low-ROL and likely skippable.
 - `efb74d2` — Frontend/cleanup: bind modal pickers once; narrow bare except
 - `c81c34e` — Tests: backup change detection + interrupted-backup safety
 - `181ea22` — Docs: code-review findings + resolutions; nav-map schema; changelog
+
+
+### Continued — Test coverage plan + pending_commit tests
+
+Added `docs/Test_Coverage_Plan.md`: a tiered plan for filling the coverage
+gap. Auth-flow tests (login/logout, password-change via job id, rate-limit
+lockout, CSRF) were elevated to Tier 1 — per an Opus 4.7 suggestion — since
+they cover the security boundary and validate the Session 39 #1 fix, which
+otherwise leans only on a manual test. Then completed the first item:
+`tests/test_pending_commit.py`, 19 tests covering session creation, the
+pending -> committed -> post_action_done state machine, resume detection,
+post-action filtering (excludes 'leave' and import-sourced items), clear
+vs discard, and the source-key helpers. Suite 85 -> 104, all green.
+
+Next session: Tier 1 auth-flow tests, then the Tier 2 API blueprints.
+
+### Commits (continued)
+- `9989da5` — Docs: test coverage plan
+- `1085f7f` — Tests: commit-resume state machine (pending_commit, 19 tests)
