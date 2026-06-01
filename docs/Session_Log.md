@@ -2169,3 +2169,36 @@ Next session: Tier 1 auth-flow tests, then the Tier 2 API blueprints.
 ### Commits (continued)
 - `9989da5` — Docs: test coverage plan
 - `1085f7f` — Tests: commit-resume state machine (pending_commit, 19 tests)
+
+
+### Continued — Website docs: v2 crypto stack
+
+(On Apollo, `~/Websites/mailrepo-website/` — separate repo, push target
+Sentinel.) Updated `docs.html`'s Encryption section to reflect the v2
+stack. Was still describing v1: Fernet (AES-128-CBC) for files and
+PBKDF2-HMAC-SHA256 with 480,000 iterations for key derivation. New text
+describes AES-256-GCM file encryption (with the per-file random nonce),
+Argon2id as the password KDF, and the HKDF subkey derivation with
+distinct labels for the database key vs the file-encryption key (so a
+key valid for one purpose can't be substituted for the other). Added a
+one-sentence explanation of why memory-hard KDFs matter, since that's
+the property that distinguishes Argon2id from PBKDF2 in a way relevant
+to the audience's threat model — someone with a backup drive trying to
+brute-force the passphrase offline.
+
+Audited the rest of the site (`index.html`, `index_final.html`,
+`why.html`, `download.html`) for stale crypto claims; only docs.html's
+Encryption section was actually wrong. The other pages either don't
+make implementation-specific claims, or use the generic "AES-256"
+framing that's still accurate for v2 (SQLCipher AES-256 for the
+database; AES-256-GCM for files). `index.html` is still the "Coming
+Soon" placeholder; `index_final.html` is the staged real homepage
+waiting for tag day.
+
+The site itself is not yet live — Sentinel push is a staging point.
+The public flip (swap `index_final.html` into `index.html`, point DNS
+at it) is paired with `git tag v1.0.0` per the original plan, not done
+now.
+
+### Commits (continued, mailrepo-website repo)
+- `7ce9867` — docs: update Encryption section to reflect v2 crypto stack
