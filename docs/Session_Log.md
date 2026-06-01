@@ -2081,3 +2081,72 @@ conversion done.
 - `8368bd5` — Search view UX: live search + X-in-input + always-show Export
 - `12bf631` — Consolidate closeModal: one canonical implementation
 - `1604c94` — Template inline onclicks -> data-tpl-action (11th, final)
+
+
+---
+
+## Session 39 — May 31, 2026 (MacBook)
+
+### Pre-1.0-tag Code Review + Fixes
+
+An outside-eyes review against `docs/Code_Review_Prompt.md` (the reusable
+prompt written end of Session 38), followed by fixing everything it
+surfaced. Goal: a clean bill of health before `git tag v1.0.0`.
+
+**Review outcome:** no critical findings. One important (master passwords
+transiting the client-side session cookie in the password-change flow),
+the rest suggestions and doc drift. The two threads flagged hardest came
+back clean — the missing-export audit found zero broken named imports
+across all 29 JS files, and the crypto construction verified correct
+(Argon2id params, HKDF domain separation, GCM AAD binding, and the
+SQLCipher raw-key `x'...'` form so the HKDF subkey is used directly with
+no double-KDF). SQL is fully parameterized. The backup WAL-checkpoint
+false-positive handling and the save-baseline-after-verify ordering both
+verified correct. Findings written to `docs/Code_Review_Findings.md`.
+
+**Fixes (all committed; suite 68 -> 85 green):**
+- **#1 (important) — password-change credentials off the cookie.** The
+  flow stashed current+new master passwords in the Flask session (a
+  signed-but-unencrypted client cookie). Moved to the export pipeline's
+  one-time job-id model: passwords held only in a server-side dict keyed
+  by an opaque token, TTL-GC'd, consumed once by the SSE endpoint.
+  Frontend passes the id in the EventSource URL.
+- **#2 — atomic backup writes.** New `_atomic_write_text`
+  (temp + fsync + os.replace + dir-fsync); `save_manifest` and
+  `_write_backup_state` route through it.
+- **#3 — JSON 500 safety net.** `@app.errorhandler` returns JSON on
+  `/api/` paths; non-API routes and the debugger untouched.
+- **#4 — modal picker listener stacking.** `dataset.actionsBound` guard
+  so the move-email and restore-destination pickers bind exactly once.
+- **#9 — bare `except:`** in accounts.py narrowed to `except Exception:`.
+- **Color aside — server-side folder-color validation** (null or
+  `#rgb`/`#rrggbb`), since color lands in a `style` attribute on render.
+- **#6 — documented** the intentional exclusion of `export_progress`
+  from the session-timeout skip set.
+- **#7/#8 — Navigation_Map** schema block regenerated from `SCHEMA_SQL`
+  (server/port/is_gmail/original_parent_id aren't columns;
+  pending_commit.batch_id and email_cache.uid_data were also wrong),
+  test_encryption.py label corrected.
+
+**Backup test module (#5):** new `tests/test_backup.py`, 17 tests —
+state-file round-trip + corruption degrade, the two-layer change
+detector, the WAL-checkpoint no-spurious-backup case, and the
+interrupted-backup baseline-safety invariant. Suite 68 -> 85.
+
+**Left for the author:** one manual end-to-end test — change the master
+password once to confirm the job-id handoff completes — since that
+exercises the live re-encryption path the unit suite can't.
+
+**Still open (next sessions):** test coverage for `pending_commit.py`
+(top priority — data-integrity, as testable as backup) and the API
+blueprints, then `exports.py` and `importer.py`. IMAP/PDF tiers are
+high-cost/low-ROL and likely skippable.
+
+### Commits
+- `e1b3d11` — Security: password-change credentials server-side, not in cookie
+- `4da009a` — Security: validate folder color server-side
+- `2eebb99` — Backup: atomic, crash-safe state-file and manifest writes
+- `4400c33` — API: return JSON on uncaught errors for /api/ paths
+- `efb74d2` — Frontend/cleanup: bind modal pickers once; narrow bare except
+- `c81c34e` — Tests: backup change detection + interrupted-backup safety
+- `181ea22` — Docs: code-review findings + resolutions; nav-map schema; changelog

@@ -279,13 +279,14 @@ python main.py
 
 ---
 
-## Test Suite (68 tests)
+## Test Suite (85 tests)
 
 | File | Coverage |
 |------|----------|
 | `tests/test_encryption.py` | v2 `Encryption` lifecycle: init / unlock / lock / wrong-password (no v1 code remains) |
 | `tests/test_encryption_v2.py` | v2 encryption: Argon2id, HKDF, AES-256-GCM, file/DB round-trip |
 | `tests/test_password_change.py` | v2-native password change (15 tests added Session 37) |
+| `tests/test_backup.py` | Backup: state-file round-trip + corruption degrade, change detection, WAL-checkpoint no-op, interrupted-backup baseline safety (17 tests, Session 39) |
 | `tests/test_database.py` | Schema, migrations, FTS5 |
 | `tests/test_database_threading.py` | Concurrent access, RLock behavior |
 | `tests/test_email_parser.py` | Header/body/attachment parsing |
