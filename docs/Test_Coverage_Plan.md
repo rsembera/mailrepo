@@ -24,9 +24,11 @@ PDF rendering) are explicitly deprioritized and likely skippable.
 2. **`web/blueprints/auth.py`** — login, logout, password-change via the
    job-id flow (validates the Session 39 #1 security fix, which otherwise
    relies only on a manual test), rate-limit lockout trigger, and CSRF
-   token verification. This is the security boundary and currently has
-   zero automated coverage. *Elevated to Tier 1 per Opus 4.7's suggestion —
-   higher ROI than the generic API blueprints below.*
+   token verification. The security boundary. *Done in Session 40*
+   (`tests/test_auth.py`, 22 tests, including the password-change job-id
+   handoff end to end — which also surfaced/exercises the non-overridable
+   "backup must be <=24h old" guard before a rekey). Elevated to Tier 1
+   per Opus 4.7's suggestion — higher ROI than the generic API blueprints.
    - Test notes: exercise the rate-limit *lockout trigger* (5 failures →
      blocked) without waiting out the 60s window; don't test the time-based
      reset unless `time` is mocked. For CSRF, use the raw test client (not
