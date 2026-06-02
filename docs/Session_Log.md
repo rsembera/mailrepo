@@ -2202,3 +2202,37 @@ now.
 
 ### Commits (continued, mailrepo-website repo)
 - `7ce9867` — docs: update Encryption section to reflect v2 crypto stack
+
+
+---
+
+## Session 40 — June 1, 2026 (MacBook)
+
+### Tier 1 auth-flow tests
+
+Continued the test-coverage plan. Wrote `tests/test_auth.py` — 22 tests
+covering the auth boundary: setup (validation, redirects), login (success,
+wrong password, redirects, rate-limit lockout), logout (locks + clears
+session), CSRF enforcement on the `/auth/api` endpoints (missing token →
+403, valid token → passes), and the password-change job-id handoff.
+
+The handoff tests are the point: they validate the Session 39 #1 fix
+end to end — POST mints a job id, passwords are held server-side and never
+land in the session cookie, and the SSE endpoint consumes the job exactly
+once — which retires the manual test that fix previously relied on. The
+full end-to-end change test also surfaced (and now exercises) a good
+safety guard in `change_master_password`: a non-overridable requirement
+that a backup be <=24h old before a rekey, since the DB-rekey window
+isn't resumable and the backup is the recovery path. The test creates a
+backup first, exactly as the app requires of the user.
+
+Suite 104 -> 126, all green (full run ~4 min; backgrounded past the tool
+timeout). Rebased onto the website-docs commit pushed from the other chat
+(`6674293`) — clean, no conflicts.
+
+Per the coverage plan, next is Tier 2: the API blueprints (`emails`,
+`imports`, `accounts`, `commit`, `threads`, `settings`) via the Flask
+test-client template.
+
+### Commits
+- `891b095` — Tests: auth-flow suite (auth.py, 22 tests)

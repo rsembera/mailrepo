@@ -139,12 +139,11 @@ is; the date and tag will land when dogfooding settles.
   short-circuit + CONDSTORE/HIGHESTMODSEQ) and a manual refresh button.
 
 #### Tooling
-- **85 unit tests** across encryption (v2 wire format + AAD binding),
-  database (thread safety), email parser, API folders, password change
-  (15 tests covering happy path, refusal cases, resumability, and
-  corruption-halt behavior), and the backup system (17 tests covering
-  change detection, the WAL-checkpoint no-op case, and interrupted-
-  backup baseline safety).
+- **126 unit tests** across the auth boundary (login, rate-limit lockout,
+  CSRF, password-change job-id handoff), encryption (v2 wire format + AAD
+  binding), database (thread safety), email parser, API folders, password
+  change, the backup system (change detection, WAL-checkpoint no-op,
+  interrupted-backup safety), and the commit-resume state machine.
 
 [Unreleased]: https://github.com/rsembera/mailrepo/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/rsembera/mailrepo/releases/tag/v1.0.0

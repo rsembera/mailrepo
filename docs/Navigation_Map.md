@@ -280,10 +280,11 @@ python main.py
 
 ---
 
-## Test Suite (104 tests)
+## Test Suite (126 tests)
 
 | File | Coverage |
 |------|----------|
+| `tests/test_auth.py` | Auth boundary: setup, login + rate-limit lockout, logout, CSRF enforcement, password-change job-id handoff end-to-end (22 tests, Session 40) |
 | `tests/test_encryption.py` | v2 `Encryption` lifecycle: init / unlock / lock / wrong-password (no v1 code remains) |
 | `tests/test_encryption_v2.py` | v2 encryption: Argon2id, HKDF, AES-256-GCM, file/DB round-trip |
 | `tests/test_password_change.py` | v2-native password change (15 tests added Session 37) |
