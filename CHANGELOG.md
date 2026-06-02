@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Tests
+- **Tier 2 API-surface coverage (Session 41).** Test suite 126 → 238.
+  Added blueprint tests for emails (`test_api_emails.py`, 28), imports +
+  export (`test_api_imports.py`, 19), accounts incl. runtime `is_gmail`
+  detection (`test_api_accounts.py`, 23), the commit workflow —
+  `commit.py` helpers + the SSE `/api/commit/stream` endpoint —
+  (`test_commit.py`, 22), and threads + settings (`test_api_threads.py`,
+  6; `test_api_settings.py`, 14). Data-integrity and security paths are
+  exercised against real AES-256-GCM fixtures (decrypt-and-parse viewer,
+  unencrypted-ZIP export round-trip, atomic save-to-archive with
+  orphan-file cleanup, SSE import round-trip); live-IMAP paths are
+  covered only at their pre-connection validation boundary.
+
 ### Changed
 - **Search view (Archive Search).** Reworked the search interface to
   match the rest of the app's filter-input pattern. Live search with a

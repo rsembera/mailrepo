@@ -2236,3 +2236,83 @@ test-client template.
 
 ### Commits
 - `891b095` — Tests: auth-flow suite (auth.py, 22 tests)
+
+
+---
+
+## Session 41 — June 1, 2026 (MacBook)
+
+### Tier 2 API-surface tests
+
+Completed Tier 2 of the test-coverage plan in one sitting — the full
+user-facing API surface, one committed/pushed module at a time. Suite
+126 → 238, all green (full run ~6m55s).
+
+- `test_api_emails.py` (28) — FTS search with folder scoping, the
+  subfolder toggle, and trash exclusion; folder listing; the
+  decrypt-and-parse viewer and raw-source endpoint exercised against
+  **real AES-256-GCM `.eml.enc` fixtures** (a seed helper encrypts a
+  crafted RFC822 message to disk and inserts the row, so the viewer's
+  decrypt path runs for real, not mocked); soft-delete (folder detach to
+  `original_folder_id`); restore across all three branches
+  (original / needs-destination 409 / chosen destination); permanent
+  delete (row + file both gone); flag set/clear + flagged list; move.
+- `test_api_imports.py` (19) — mbox/eml scan + import validation, a real
+  single-`.eml` import round-trip, import-email content + an attachment
+  read from a file on disk, and the unencrypted-ZIP folder export read
+  back and verified to **decrypt to the original bytes** (incl. nested
+  subfolders).
+- `test_api_accounts.py` (23) — listing + the runtime `is_gmail`
+  detection (decrypts stored credentials via `IMAP.save_credentials`/
+  `load_credentials`, inspects host), create/update validation, the
+  no-password update path, test/emails guards, the cached-folder fast
+  path that returns without touching IMAP, delete, and email-domain
+  server detection. Live IMAP paths left at the validation boundary.
+- `test_commit.py` (22) — unit tests for the pure `commit.py` helpers
+  (archive-folder-from-path nested chain + reuse, duplicate detection
+  incl. trashed/other-folder, summary singular/plural + post-actions,
+  the 3- and 4-part post-action key parsing with colon folder names),
+  the atomic `_save_email_to_archive` including **orphan-file cleanup on
+  DB failure** (monkeypatched insert), plus the SSE `/api/commit/stream`
+  endpoint: empty-payload error event, and a full import round-trip
+  (create session → walk → archive row + encrypted file → pending_commit
+  cleared). Pairs with the Session 39 pending_commit state-machine tests.
+- `test_api_threads.py` (6) — the request-validation boundary that runs
+  before any IMAP connect (required/typed `account_id`, `folder`, `uid`;
+  unknown account; no-credentials account).
+- `test_api_settings.py` (14) — the validated settings endpoints
+  (trash retention, session timeout, thread-max-messages) with GET
+  defaults and allow-list rejection; session-status incl. the "Never"
+  timeout; keepalive; and the reset-database guards (confirmation text +
+  password) without running the destructive reset. Verified first that
+  `Encryption.unlock` *raises* on a wrong password, so the wrong-password
+  test safely hits the 401 guard and never falls through to the wipe.
+
+### Gotcha worth remembering
+
+A bodyless POST to a route that reads an *optional* JSON body returns
+**415 Unsupported Media Type**, not the route's own fallback: Flask's
+`request.get_json()` raises before `or {}` can apply when there's no
+JSON content-type. Surfaced on `/api/folders/<id>/export`. The real
+frontend always sends a body, so it's a test-only artifact — fix is to
+pass `json={}` in the test. Anything testing a POST route with an
+optional body needs the same.
+
+### Commits
+- `dc1fb43` — Tests: emails API (api/emails.py, 28 tests)
+- `522e2b4` — Tests: imports + export API (api/imports.py, 19 tests)
+- `dc40021` — Tests: accounts API (api/accounts.py, 23 tests)
+- `5d490fa` — Tests: commit workflow (commit.py + progress_commit.py, 22 tests)
+- `905e1ee` — Tests: threads + settings API (api/threads.py, api/settings.py, 20 tests)
+- (this entry) — Docs: Session 41 log; coverage plan + Navigation_Map + changelog to 238
+
+### On the horizon
+
+Tier 1 + Tier 2 of the coverage plan are now done — `pending_commit`,
+`auth`, and the full API surface cover the real data-integrity and
+security paths. Remaining: Tier 3 (`api/exports.py` scope resolution +
+job state machine + encrypted-ZIP round-trip; `core/importer.py` with
+the `test_files/` samples) is fixture-heavy but ~1 session; Tier 4
+(`core/imap.py`, `core/pdf_export.py`) is the recommended skip. Then the
+remaining pre-tag items and the dogfooding period before `git tag
+v1.0.0`.

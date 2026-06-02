@@ -280,7 +280,7 @@ python main.py
 
 ---
 
-## Test Suite (126 tests)
+## Test Suite (238 tests)
 
 | File | Coverage |
 |------|----------|
@@ -294,6 +294,12 @@ python main.py
 | `tests/test_database_threading.py` | Concurrent access, RLock behavior |
 | `tests/test_email_parser.py` | Header/body/attachment parsing |
 | `tests/test_api_folders.py` | Folder CRUD via API |
+| `tests/test_api_emails.py` | Emails API: FTS search (folder scoping, subfolder toggle, trash exclusion), folder listing, decrypt-and-parse viewer + raw source via real encrypted fixtures, soft-delete/restore (incl. needs-destination 409), permanent delete, flagging, move (28 tests, Session 41) |
+| `tests/test_api_imports.py` | Import + export API: mbox/eml scan + import validation, single-.eml import round-trip, import-email content + attachment from disk, unencrypted-ZIP folder export decrypt round-trip (19 tests, Session 41) |
+| `tests/test_api_accounts.py` | Accounts API: listing + runtime `is_gmail` detection, create/update validation, no-password update, cached-folder fast path, delete, server detection (23 tests, Session 41) |
+| `tests/test_commit.py` | Commit helpers (archive-folder-from-path, duplicate detection, summary, post-action key parsing, atomic save + orphan cleanup) + SSE `/api/commit/stream` empty-guard and import round-trip (22 tests, Session 41) |
+| `tests/test_api_threads.py` | Thread-discovery request validation before IMAP connect (6 tests, Session 41) |
+| `tests/test_api_settings.py` | Settings API: validated retention/timeout/thread-size endpoints, session-status, keepalive, reset-database guards (14 tests, Session 41) |
 
 Run with `pytest -q` from project root.
 
