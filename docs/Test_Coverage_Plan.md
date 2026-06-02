@@ -4,9 +4,10 @@ Created May 31, 2026 (Session 39). Tracks the post-1.0 effort to fill the
 test-coverage gap surfaced in the pre-tag code review
 (`docs/Code_Review_Findings.md` #5).
 
-**Current suite:** 238 tests (encryption, password change, backup, database,
-threading, email parser, auth, pending-commit, and the full API surface:
-folders, emails, imports/export, accounts, commit, threads, settings).
+**Current suite:** 320 tests (encryption, password change, backup, database,
+threading, email parser, auth, pending-commit, the full API surface, the
+export pipeline, the importer, and the sync-cache / server-detection
+helpers).
 
 **Guiding principle:** cover the paths where a silent regression would
 *corrupt or lose data* or *break a security boundary* — not coverage parity
@@ -76,22 +77,46 @@ is a working template and `conftest.py` provides `initialized_app` and
    allow-list rejection, session-status incl. Never, keepalive, and the
    reset-database guards without running the destructive reset).*
 
-### Tier 3 — pipelines (medium effort, fixture-heavy)
+### Tier 3 — pipelines (medium effort, fixture-heavy) — *Done in Session 42*
 
 8. **`api/exports.py`** — scope resolution (`_resolve_message_ids` and
    friends), the job state machine, and an encrypted-ZIP round-trip (build,
    then read back with the export password via pyzipper). Needs a DB with
    sample messages plus real decryptable `.eml.enc` files on disk.
+   *Done (`tests/test_api_exports.py`, 39 tests): folder/messages/search
+   scope resolution incl. recursive subfolder collection + FTS scoping +
+   path labels; the in-memory job state machine (new/push/fail/finish,
+   save-to-disk with filename disambiguation, missing-destination failure,
+   TTL GC); plain + AES-256 `.eml` ZIP builders built from real encrypted
+   fixtures and read back to verify decrypt-to-original (+ wrong-password
+   rejection); and endpoint contracts (start validation, download
+   404/409/200, cancel, reveal path-allowlist). PDF/WeasyPrint paths left
+   to Tier 4.*
 9. **`core/importer.py`** — mbox / EML using the existing `test_files/`
    samples. PST needs the `libpst` binary, so leave PST for last or skip.
+   *Done (`tests/test_importer.py`, 29 tests): header decoding, metadata
+   extraction (subject default/truncation, bad-date), and the import
+   paths driven by the edge-case samples. Core property pinned: an email
+   is never silently dropped or altered — malformed `.eml` files archive
+   byte-for-byte, the 17MB + multi-attachment samples round-trip, and a
+   corrupt mbox accounts for every message as success-or-failure rather
+   than aborting. PST not attempted (no `libpst`).*
 
 ### Tier 4 — high cost / low ROI (consider skipping)
 
 10. **`core/imap.py`** — the pure helpers (credential load/save, folder-name
     parsing, sync-cache TTL) are cheap; the connect/fetch paths need heavy
     `imaplib` mocking or a throwaway server. High cost, catches little.
+    *Partially done (Session 42): the cheap connection-free helpers are
+    covered — `detect_server` (`tests/test_sync_cache.py`) and the
+    credential round-trip (indirectly, via the accounts `is_gmail` tests).
+    The connect/fetch machinery remains intentionally uncovered:
+    verify it by dogfooding against a real throwaway mailbox, not mocks.*
 11. **`core/pdf_export.py`** — WeasyPrint is slow and rendering assertions
-    are brittle.
+    are brittle. *Skipped, as recommended.*
+
+**Sync cache.** `core/sync_cache.py` (the folder-cache TTL that throttles
+IMAP re-hits) is covered in `tests/test_sync_cache.py` (Session 42).
 
 ---
 

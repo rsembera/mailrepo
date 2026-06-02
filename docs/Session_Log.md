@@ -2316,3 +2316,83 @@ the `test_files/` samples) is fixture-heavy but ~1 session; Tier 4
 (`core/imap.py`, `core/pdf_export.py`) is the recommended skip. Then the
 remaining pre-tag items and the dogfooding period before `git tag
 v1.0.0`.
+
+
+---
+
+## Session 42 — June 2, 2026 (MacBook)
+
+### Tier 3 pipelines + the cheap IMAP helpers
+
+Completed Tier 3 of the coverage plan and folded in the connection-free
+IMAP helpers I'd flagged at the end of Session 41. Suite 238 → 320, full
+run green (3m55s). One module per commit, as usual.
+
+- `test_api_exports.py` (39) — the export pipeline, no network / no
+  WeasyPrint. Three areas: (1) **scope resolution** —
+  folder/messages/search sources, recursive subfolder collection,
+  FTS folder-scoping, slash-path + "(+ subfolders)" labels, unknown-
+  source `ValueError`; (2) the in-memory **job state machine** —
+  new/push/fail/finish, in-memory vs save-to-disk with filename
+  disambiguation, the "no mkdir -p" missing-destination failure, and TTL
+  garbage collection; (3) the **`.eml` ZIP builders** — both plain and
+  AES-256 (pyzipper), built from real encrypted fixtures and read back to
+  confirm they **decrypt to the original bytes**, plus wrong-password
+  rejection, empty/skip-missing/dedup. Endpoint contracts on top: start
+  validation, a synchronous worker run for the eml path, download
+  404/409/200, cancel, and the reveal path-allowlist (403 on an unknown
+  path — the small anti-`open`-arbitrary-file guard).
+- `test_importer.py` (29) — driven by the `test_files/` edge-case
+  samples. Header decoding (RFC 2047 q/b), metadata extraction (subject
+  default + 500-char truncation, bad-date → None). The property that
+  matters for an archive: **mail is never silently dropped or altered**.
+  Malformed `.eml` files (no-headers, bad-encoding, truncated) archive
+  byte-for-byte; the 17MB and multi-attachment samples round-trip; a
+  corrupt mbox accounts for every message as success-or-failure rather
+  than aborting the whole import. Plus message-id vs sha256 filenames,
+  the progress callback, and bad-path → `ImportError` for scan + import.
+  (PST untouched — needs `libpst`.)
+- `test_sync_cache.py` (14) — the connection-free IMAP pieces. The
+  sync-cache state round-trip (per account+folder, INSERT-OR-REPLACE,
+  clear) and the **freshness TTL** (no-state/fresh/stale, 120s constant)
+  that throttles how often we re-hit a server; plus `IMAP.detect_server`
+  as a pure domain lookup (case-insensitive, name-wrapped addresses,
+  unknown/malformed → None).
+
+### Notes
+
+- The export job registry (`_JOBS`) and the sync-cache module-global
+  connection are both process-global, so each test file has an autouse
+  fixture that clears them — `_JOBS` between tests, and
+  `sync_cache.close()` so the connection rebuilds against the current
+  temp data dir. Worth remembering for any future test that touches
+  module-level singletons.
+- `mailbox.mbox` is lenient: it **creates** a missing file rather than
+  raising, so "nonexistent mbox" isn't an error path — the real raise
+  comes from a path whose *parent* doesn't exist. The API layer guards
+  existence before calling, so this only matters for direct unit tests.
+- Probed the deliberately-broken samples before asserting: `corrupt.mbox`
+  actually scans to 2 messages (the corruption is in content, not mbox
+  framing), and Python's email parser swallows all three malformed
+  `.eml` files without raising. Tests assert observed behavior, not
+  guesses.
+- Mid-session the Desktop Commander MCP server went unresponsive right
+  after `test_sync_cache.py` was written; the file was committed in the
+  next sitting once it recovered. No work lost — the two Tier 3 modules
+  were already pushed.
+
+### Commits
+- `396280f` — Tests: exports pipeline (api/exports.py, 39 tests)
+- `025a7d5` — Tests: importer (core/importer.py, 29 tests)
+- `6e90bad` — Tests: sync cache + detect_server (core/sync_cache.py, core/imap.py, 14 tests)
+- (this entry) — Docs: Session 42 log; coverage plan + Navigation_Map + changelog to 320
+
+### On the horizon
+
+The coverage plan is now effectively complete: Tiers 1–3 done, Tier 4
+deliberately limited to the cheap helpers (the rest — live IMAP
+connect/fetch and WeasyPrint PDF rendering — is dogfooding/skip by
+design). Remaining before the tag: the pre-tag items still open in the
+code review, then the dogfooding period itself, then `git tag v1.0.0`
+paired with the website update. Packaging (`.deb` / `.dmg`) is the
+flagged next focus after the tag.

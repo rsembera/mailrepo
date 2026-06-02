@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Tests
+- **Tier 3 + IMAP-helper coverage (Session 42).** Test suite 238 → 320.
+  Added the export pipeline (`test_api_exports.py`, 39 — scope
+  resolution, job state machine, plain + AES-256 ZIP decrypt
+  round-trips), the importer (`test_importer.py`, 29 — driven by the
+  `test_files/` edge cases, pinning that mail is archived byte-for-byte
+  and a corrupt mbox is handled per-message), and the connection-free
+  IMAP helpers (`test_sync_cache.py`, 14 — sync-cache TTL +
+  `detect_server`). PDF/WeasyPrint and live IMAP connect/fetch remain
+  intentionally uncovered (dogfooding territory).
 - **Tier 2 API-surface coverage (Session 41).** Test suite 126 → 238.
   Added blueprint tests for emails (`test_api_emails.py`, 28), imports +
   export (`test_api_imports.py`, 19), accounts incl. runtime `is_gmail`

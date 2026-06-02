@@ -280,7 +280,7 @@ python main.py
 
 ---
 
-## Test Suite (238 tests)
+## Test Suite (320 tests)
 
 | File | Coverage |
 |------|----------|
@@ -300,6 +300,9 @@ python main.py
 | `tests/test_commit.py` | Commit helpers (archive-folder-from-path, duplicate detection, summary, post-action key parsing, atomic save + orphan cleanup) + SSE `/api/commit/stream` empty-guard and import round-trip (22 tests, Session 41) |
 | `tests/test_api_threads.py` | Thread-discovery request validation before IMAP connect (6 tests, Session 41) |
 | `tests/test_api_settings.py` | Settings API: validated retention/timeout/thread-size endpoints, session-status, keepalive, reset-database guards (14 tests, Session 41) |
+| `tests/test_api_exports.py` | Export pipeline: scope resolution (folder/messages/search + subfolders + FTS), job state machine (save-to-disk, disambiguation, TTL GC), plain + AES-256 ZIP decrypt round-trips, endpoint contracts (39 tests, Session 42) |
+| `tests/test_importer.py` | Importer: header decode + metadata, mbox/eml import driven by `test_files/` edge cases; malformed mail archived byte-for-byte, corrupt mbox handled per-message (29 tests, Session 42) |
+| `tests/test_sync_cache.py` | Sync-cache state + TTL freshness logic, and the pure `IMAP.detect_server` domain lookup (14 tests, Session 42) |
 
 Run with `pytest -q` from project root.
 
