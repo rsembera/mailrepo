@@ -230,3 +230,10 @@ session. Full test suite green at **85 passed** (was 68; +17 backup tests).
 one change worth a manual end-to-end test — change the master password once
 and confirm the progress stream completes — because it touches the
 re-encryption path and that can't be fully exercised by the unit suite.
+
+**Author confirmation — June 2, 2026 (Session 42):** manual end-to-end test
+performed on the live archive. Master password changed, progress stream
+completed cleanly, and the archive re-locked and re-opened with the new
+password with mail bodies decrypting correctly. All nine findings plus this
+manual verification are now closed; no code-review items remain open
+pre-tag.
