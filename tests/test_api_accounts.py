@@ -15,8 +15,14 @@ import json
 from core import IMAP, Database
 
 
-def _make_account(name="Work", email="user@example.com", provider="imap",
-                  host=None, password="secret", cached_folders=None):
+def _make_account(
+    name="Work",
+    email="user@example.com",
+    provider="imap",
+    host=None,
+    password="secret",
+    cached_folders=None,
+):
     """Insert an account row; optionally attach encrypted credentials and/or
     a cached folder list."""
     cur = Database.execute(
@@ -39,6 +45,7 @@ def _make_account(name="Work", email="user@example.com", provider="imap",
 # ---------------------------------------------------------------------------
 # Listing + is_gmail detection
 # ---------------------------------------------------------------------------
+
 
 class TestListAccounts:
     def test_list_empty(self, authenticated_client, initialized_app):
@@ -73,6 +80,7 @@ class TestListAccounts:
 # Create + update validation
 # ---------------------------------------------------------------------------
 
+
 class TestCreateAccountValidation:
     def test_create_requires_name(self, authenticated_client, initialized_app):
         resp = authenticated_client.post("/api/accounts", json={})
@@ -94,12 +102,16 @@ class TestCreateAccountValidation:
 
 class TestUpdateAccount:
     def test_update_not_found(self, authenticated_client, initialized_app):
-        resp = authenticated_client.patch("/api/accounts/9999", json={"name": "X", "email": "x@e.com"})
+        resp = authenticated_client.patch(
+            "/api/accounts/9999", json={"name": "X", "email": "x@e.com"}
+        )
         assert resp.status_code == 404
 
     def test_update_requires_name(self, authenticated_client, initialized_app):
         aid = _make_account()
-        resp = authenticated_client.patch(f"/api/accounts/{aid}", json={"name": "", "email": "x@e.com"})
+        resp = authenticated_client.patch(
+            f"/api/accounts/{aid}", json={"name": "", "email": "x@e.com"}
+        )
         assert resp.status_code == 400
 
     def test_update_requires_email(self, authenticated_client, initialized_app):
@@ -107,7 +119,9 @@ class TestUpdateAccount:
         resp = authenticated_client.patch(f"/api/accounts/{aid}", json={"name": "X", "email": ""})
         assert resp.status_code == 400
 
-    def test_update_without_password_changes_name_and_email(self, authenticated_client, initialized_app):
+    def test_update_without_password_changes_name_and_email(
+        self, authenticated_client, initialized_app
+    ):
         aid = _make_account(name="Old Name", email="old@example.com")
         resp = authenticated_client.patch(
             f"/api/accounts/{aid}", json={"name": "New Name", "email": "new@example.com"}
@@ -134,6 +148,7 @@ class TestTestConnectionGuards:
 # ---------------------------------------------------------------------------
 # Folder cache fast-path, email guards, delete, server detection
 # ---------------------------------------------------------------------------
+
 
 class TestAccountEmailGuards:
     def test_emails_account_not_found(self, authenticated_client, initialized_app):

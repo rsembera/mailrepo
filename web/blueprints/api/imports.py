@@ -26,7 +26,7 @@ def _linkify_html(html):
     """
     # Split HTML into parts: inside tags vs text content
     # This regex captures HTML tags (including their content) as separate groups
-    parts = re.split(r'(<a\s[^>]*>.*?</a>|<[^>]+>)', html, flags=re.IGNORECASE | re.DOTALL)
+    parts = re.split(r"(<a\s[^>]*>.*?</a>|<[^>]+>)", html, flags=re.IGNORECASE | re.DOTALL)
 
     result = []
     for part in parts:
@@ -34,7 +34,7 @@ def _linkify_html(html):
         if not part:
             continue
         # Skip HTML tags and existing anchor elements
-        if part.startswith('<'):
+        if part.startswith("<"):
             result.append(part)
             continue
 
@@ -44,17 +44,17 @@ def _linkify_html(html):
         part = re.sub(
             r'(https?://(?:(?!&(?:nbsp|amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)[^\s\u00a0<>"\'])+)',
             r'<a href="\1" target="_blank" rel="noopener noreferrer">\1</a>',
-            part
+            part,
         )
         # Then linkify email addresses (but not ones we just made into links)
         part = re.sub(
-            r'\b([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\b(?![^<]*>)',
+            r"\b([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\b(?![^<]*>)",
             r'<a href="mailto:\1">\1</a>',
-            part
+            part,
         )
         result.append(part)
 
-    return ''.join(result)
+    return "".join(result)
 
 
 @api_bp.route("/import/mbox/scan", methods=["POST"])
@@ -99,13 +99,15 @@ def import_mbox():
 
     try:
         result = import_mbox_file(path, folder_id)
-        return jsonify({
-            "success": True,
-            "total": result["total"],
-            "imported": result["success_count"],
-            "failed": result["failed_count"],
-            "errors": result["errors"][:10],
-        })
+        return jsonify(
+            {
+                "success": True,
+                "total": result["total"],
+                "imported": result["success_count"],
+                "failed": result["failed_count"],
+                "errors": result["errors"][:10],
+            }
+        )
     except ImportError as e:
         return jsonify({"error": str(e)}), 500
 
@@ -228,6 +230,7 @@ def get_import_email():
     def get_inline_images(msg):
         """Extract inline images (parts with Content-ID) for cid: replacement."""
         import base64
+
         inline_images = {}  # cid -> data URL
 
         if msg.is_multipart():
@@ -238,8 +241,8 @@ def get_import_email():
                     if payload:
                         content_type = part.get_content_type()
                         # Strip angle brackets: <image001.png@...> -> image001.png@...
-                        cid = content_id.strip('<>')
-                        b64_data = base64.b64encode(payload).decode('ascii')
+                        cid = content_id.strip("<>")
+                        b64_data = base64.b64encode(payload).decode("ascii")
                         inline_images[cid] = f"data:{content_type};base64,{b64_data}"
 
         return inline_images
@@ -250,6 +253,7 @@ def get_import_email():
             return html_body
 
         import re
+
         def replace_cid(match):
             cid = match.group(1)
             return inline_images.get(cid, match.group(0))
@@ -267,7 +271,9 @@ def get_import_email():
                 content_id = part.get("Content-ID")
 
                 # Debug logging
-                log.debug(f"  Part: {content_type}, filename: {filename}, disposition: {content_disposition[:30] if content_disposition else 'None'}")
+                log.debug(
+                    f"  Part: {content_type}, filename: {filename}, disposition: {content_disposition[:30] if content_disposition else 'None'}"
+                )
 
                 # Skip inline images - they're handled via cid: replacement in HTML
                 # Only skip if it's an image with Content-ID (actual inline embedded image)
@@ -276,13 +282,17 @@ def get_import_email():
 
                 # Treat as attachment if explicitly marked as attachment,
                 # OR if it has a filename (even if inline)
-                if "attachment" in content_disposition or (filename and part.get_content_maintype() != "text"):
+                if "attachment" in content_disposition or (
+                    filename and part.get_content_maintype() != "text"
+                ):
                     if filename:
-                        attachments.append({
-                            "filename": decode_header_value(filename),
-                            "content_type": part.get_content_type(),
-                            "size": len(part.get_payload(decode=True) or b""),
-                        })
+                        attachments.append(
+                            {
+                                "filename": decode_header_value(filename),
+                                "content_type": part.get_content_type(),
+                                "size": len(part.get_payload(decode=True) or b""),
+                            }
+                        )
         log.debug(f"  Found {len(attachments)} attachments")
         return attachments
 
@@ -296,34 +306,34 @@ def get_import_email():
             if email_path.exists() and email_path.is_file():
                 suffix = email_path.suffix.lower()
                 # Only use direct file reading for individual email files
-                if suffix == '.emlx':
+                if suffix == ".emlx":
                     # Parse Apple .emlx format
-                    with open(email_path, 'rb') as f:
+                    with open(email_path, "rb") as f:
                         content = f.read()
-                    first_newline = content.find(b'\n')
+                    first_newline = content.find(b"\n")
                     if first_newline > 0:
-                        email_content = content[first_newline + 1:]
-                        plist_marker = email_content.rfind(b'<?xml version=')
+                        email_content = content[first_newline + 1 :]
+                        plist_marker = email_content.rfind(b"<?xml version=")
                         if plist_marker > 0:
                             email_content = email_content[:plist_marker]
                         raw_email = email_content
-                elif suffix == '.eml':
+                elif suffix == ".eml":
                     # Regular .eml file
-                    with open(email_path, 'rb') as f:
+                    with open(email_path, "rb") as f:
                         raw_email = f.read()
                 # For mbox files, fall through to UID-based lookup below
 
         # Fallback lookups - only if direct file reading didn't work
         if not raw_email:
-            if import_type == 'eml':
+            if import_type == "eml":
                 # EML directory - find specific file
-                if uid.startswith('eml-'):
+                if uid.startswith("eml-"):
                     results = _parse_eml_directory(str(source_path))
                     for r_uid, r_bytes in results:
                         if r_uid == uid:
                             raw_email = r_bytes
                             break
-            elif import_type == 'apple-mbox':
+            elif import_type == "apple-mbox":
                 # Apple Mail export - parse directly using same logic as filesystem.py
                 import mailbox
                 import os
@@ -352,24 +362,24 @@ def get_import_email():
                     if os.path.isdir(messages_dir):
                         # UID format: f"emlx-{filename}"
                         for entry in os.scandir(messages_dir):
-                            if entry.name.endswith('.emlx') and entry.is_file():
+                            if entry.name.endswith(".emlx") and entry.is_file():
                                 expected_uid = f"emlx-{entry.name}"
                                 if expected_uid == uid:
                                     try:
-                                        with open(entry.path, 'rb') as f:
+                                        with open(entry.path, "rb") as f:
                                             content = f.read()
                                         # .emlx format: first line is byte count, then email, then plist
-                                        first_newline = content.find(b'\n')
+                                        first_newline = content.find(b"\n")
                                         if first_newline > 0:
-                                            email_content = content[first_newline + 1:]
-                                            plist_marker = email_content.rfind(b'<?xml version=')
+                                            email_content = content[first_newline + 1 :]
+                                            plist_marker = email_content.rfind(b"<?xml version=")
                                             if plist_marker > 0:
                                                 email_content = email_content[:plist_marker]
                                             raw_email = email_content
                                             break
                                     except Exception:
                                         pass
-            elif import_type == 'pst':
+            elif import_type == "pst":
                 # PST converted to mbox - use emailSourcePath which points to specific mbox file
                 if email_source_path:
                     raw_email = get_raw_email_from_import(email_source_path, uid)
@@ -449,6 +459,7 @@ def download_import_attachment():
     from utils.log import get_logger
 
     from .email_parser import _parse_eml_directory, get_raw_email_from_import
+
     log = get_logger()
 
     data = request.get_json() or {}
@@ -461,7 +472,9 @@ def download_import_attachment():
     view_inline = data.get("inline", False)
 
     log.debug(f"Import attachment request: type={import_type}, uid={uid}, index={index}")
-    log.debug(f"  sourcePath={source_path}, emailSourcePath={email_source_path}, folderPath={folder_path}")
+    log.debug(
+        f"  sourcePath={source_path}, emailSourcePath={email_source_path}, folderPath={folder_path}"
+    )
 
     if not source_path and not email_source_path:
         return jsonify({"error": "Source path is required"}), 400
@@ -495,36 +508,37 @@ def download_import_attachment():
             email_path = Path(email_source_path).expanduser()
             if email_path.exists() and email_path.is_file():
                 suffix = email_path.suffix.lower()
-                if suffix == '.emlx':
-                    with open(email_path, 'rb') as f:
+                if suffix == ".emlx":
+                    with open(email_path, "rb") as f:
                         content = f.read()
-                    first_newline = content.find(b'\n')
+                    first_newline = content.find(b"\n")
                     if first_newline > 0:
-                        email_content = content[first_newline + 1:]
-                        plist_marker = email_content.rfind(b'<?xml version=')
+                        email_content = content[first_newline + 1 :]
+                        plist_marker = email_content.rfind(b"<?xml version=")
                         if plist_marker > 0:
                             email_content = email_content[:plist_marker]
                         raw_email = email_content
-                elif suffix == '.eml':
-                    with open(email_path, 'rb') as f:
+                elif suffix == ".eml":
+                    with open(email_path, "rb") as f:
                         raw_email = f.read()
 
         if not raw_email:
-            if import_type == 'pst':
+            if import_type == "pst":
                 if email_source_path:
                     raw_email = get_raw_email_from_import(email_source_path, uid)
                 else:
                     raw_email = get_raw_email_from_import(str(source_path), uid)
-            elif import_type == 'eml':
-                if uid.startswith('eml-'):
+            elif import_type == "eml":
+                if uid.startswith("eml-"):
                     results = _parse_eml_directory(str(source_path))
                     for r_uid, r_bytes in results:
                         if r_uid == uid:
                             raw_email = r_bytes
                             break
-            elif import_type == 'apple-mbox':
+            elif import_type == "apple-mbox":
                 import mailbox
                 import os
+
                 mbox_dir = folder_path if folder_path else str(source_path)
                 mbox_file = os.path.join(mbox_dir, "mbox")
                 if os.path.isfile(mbox_file):
@@ -541,16 +555,16 @@ def download_import_attachment():
                     messages_dir = os.path.join(mbox_dir, "Messages")
                     if os.path.isdir(messages_dir):
                         for entry in os.scandir(messages_dir):
-                            if entry.name.endswith('.emlx') and entry.is_file():
+                            if entry.name.endswith(".emlx") and entry.is_file():
                                 expected_uid = f"emlx-{entry.name}"
                                 if expected_uid == uid:
                                     try:
-                                        with open(entry.path, 'rb') as f:
+                                        with open(entry.path, "rb") as f:
                                             content = f.read()
-                                        first_newline = content.find(b'\n')
+                                        first_newline = content.find(b"\n")
                                         if first_newline > 0:
-                                            email_content = content[first_newline + 1:]
-                                            plist_marker = email_content.rfind(b'<?xml version=')
+                                            email_content = content[first_newline + 1 :]
+                                            plist_marker = email_content.rfind(b"<?xml version=")
                                             if plist_marker > 0:
                                                 email_content = email_content[:plist_marker]
                                             raw_email = email_content
@@ -581,13 +595,17 @@ def download_import_attachment():
 
                 # Treat as attachment if explicitly marked as attachment,
                 # OR if it has a filename (even if inline) and isn't text
-                if "attachment" in content_disposition or (filename and part.get_content_maintype() != "text"):
+                if "attachment" in content_disposition or (
+                    filename and part.get_content_maintype() != "text"
+                ):
                     if filename:
-                        attachments.append({
-                            "filename": decode_header_value(filename),
-                            "content_type": content_type,
-                            "data": part.get_payload(decode=True),
-                        })
+                        attachments.append(
+                            {
+                                "filename": decode_header_value(filename),
+                                "content_type": content_type,
+                                "data": part.get_payload(decode=True),
+                            }
+                        )
 
         if index < 0 or index >= len(attachments):
             return jsonify({"error": "Attachment not found"}), 404
@@ -599,7 +617,7 @@ def download_import_attachment():
         return Response(
             att["data"],
             mimetype=content_type,
-            headers={"Content-Disposition": f'{disposition}; filename="{att["filename"]}"'}
+            headers={"Content-Disposition": f'{disposition}; filename="{att["filename"]}"'},
         )
 
     except Exception as e:
@@ -625,12 +643,13 @@ def export_folder(folder_id):
         def collect_children(parent_id, collected):
             children = Database.fetchall(
                 "SELECT id, name, parent_id FROM folders WHERE parent_id = ? AND deleted_at IS NULL",
-                (parent_id,)
+                (parent_id,),
             )
             for child in children:
                 collected.append(child["id"])
                 folders_by_id[child["id"]] = child
                 collect_children(child["id"], collected)
+
         collect_children(folder_id, folder_ids)
 
     # Build folder path lookup (folder_id -> relative path in ZIP)
@@ -658,7 +677,7 @@ def export_folder(folder_id):
         WHERE folder_id IN ({placeholders})
         ORDER BY folder_id, date
         """,
-        tuple(folder_ids)
+        tuple(folder_ids),
     )
 
     # Create ZIP in memory
@@ -685,7 +704,9 @@ def export_folder(folder_id):
                 # Generate a safe filename
                 subject = msg["subject"] or "no_subject"
                 # Sanitize subject for filename
-                safe_subject = "".join(c if c.isalnum() or c in " -_" else "_" for c in subject)[:50].strip()
+                safe_subject = "".join(c if c.isalnum() or c in " -_" else "_" for c in subject)[
+                    :50
+                ].strip()
                 base_filename = f"{safe_subject}.eml"
 
                 # Ensure uniqueness within folder
@@ -713,12 +734,11 @@ def export_folder(folder_id):
     zip_buffer.seek(0)
 
     # Generate download filename
-    safe_folder_name = "".join(c if c.isalnum() or c in " -_" else "_" for c in folder["name"])[:30].strip()
+    safe_folder_name = "".join(c if c.isalnum() or c in " -_" else "_" for c in folder["name"])[
+        :30
+    ].strip()
     download_filename = f"{safe_folder_name}_export.zip"
 
     return send_file(
-        zip_buffer,
-        mimetype="application/zip",
-        as_attachment=True,
-        download_name=download_filename
+        zip_buffer, mimetype="application/zip", as_attachment=True, download_name=download_filename
     )

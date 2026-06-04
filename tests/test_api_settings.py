@@ -9,7 +9,6 @@ guards (confirmation text + password) without performing the
 destructive reset itself.
 """
 
-
 from core import Database
 from core.database import set_setting
 
@@ -21,20 +20,14 @@ class TestTrashRetention:
         assert resp.get_json()["value"] == "0"
 
     def test_set_valid(self, authenticated_client, initialized_app):
-        resp = authenticated_client.post(
-            "/api/settings/trash-retention", json={"value": "30"}
-        )
+        resp = authenticated_client.post("/api/settings/trash-retention", json={"value": "30"})
         assert resp.status_code == 200
         assert resp.get_json()["value"] == "30"
         # Persisted
-        assert authenticated_client.get(
-            "/api/settings/trash-retention"
-        ).get_json()["value"] == "30"
+        assert authenticated_client.get("/api/settings/trash-retention").get_json()["value"] == "30"
 
     def test_reject_invalid(self, authenticated_client, initialized_app):
-        resp = authenticated_client.post(
-            "/api/settings/trash-retention", json={"value": "999"}
-        )
+        resp = authenticated_client.post("/api/settings/trash-retention", json={"value": "999"})
         assert resp.status_code == 400
 
 
@@ -44,16 +37,12 @@ class TestSessionTimeout:
         assert resp.get_json()["value"] == "30"
 
     def test_set_valid(self, authenticated_client, initialized_app):
-        resp = authenticated_client.post(
-            "/api/settings/session-timeout", json={"value": "60"}
-        )
+        resp = authenticated_client.post("/api/settings/session-timeout", json={"value": "60"})
         assert resp.status_code == 200
         assert resp.get_json()["value"] == "60"
 
     def test_reject_invalid(self, authenticated_client, initialized_app):
-        resp = authenticated_client.post(
-            "/api/settings/session-timeout", json={"value": "7"}
-        )
+        resp = authenticated_client.post("/api/settings/session-timeout", json={"value": "7"})
         assert resp.status_code == 400
 
 
@@ -70,9 +59,7 @@ class TestThreadMaxMessages:
         assert resp.get_json()["value"] == "1000"
 
     def test_reject_invalid(self, authenticated_client, initialized_app):
-        resp = authenticated_client.post(
-            "/api/settings/thread-max-messages", json={"value": "5"}
-        )
+        resp = authenticated_client.post("/api/settings/thread-max-messages", json={"value": "5"})
         assert resp.status_code == 400
 
 

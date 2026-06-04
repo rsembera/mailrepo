@@ -17,17 +17,22 @@ from core import Config, Database, Encryption
 # Seeding helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_folder(name, parent_id=None):
-    cur = Database.execute(
-        "INSERT INTO folders (name, parent_id) VALUES (?, ?)", (name, parent_id)
-    )
+    cur = Database.execute("INSERT INTO folders (name, parent_id) VALUES (?, ?)", (name, parent_id))
     Database.commit()
     return cur.lastrowid
 
 
-def _make_message(folder_id, subject="Quarterly Report", sender="alice@example.com",
-                  recipients="bob@example.com", body="The widget revenue figures are attached.",
-                  message_id=None, flagged_at=None):
+def _make_message(
+    folder_id,
+    subject="Quarterly Report",
+    sender="alice@example.com",
+    recipients="bob@example.com",
+    body="The widget revenue figures are attached.",
+    message_id=None,
+    flagged_at=None,
+):
     """Insert a message backed by a real encrypted .eml.enc file on disk."""
     mid = message_id or f"<{secrets.token_hex(8)}@test>"
     raw = (
@@ -36,7 +41,7 @@ def _make_message(folder_id, subject="Quarterly Report", sender="alice@example.c
         f"Subject: {subject}\r\n"
         f"Message-ID: {mid}\r\n"
         f"Date: Sat, 15 Feb 2026 10:30:00 -0500\r\n"
-        f'MIME-Version: 1.0\r\n'
+        f"MIME-Version: 1.0\r\n"
         f'Content-Type: text/plain; charset="utf-8"\r\n\r\n'
         f"{body}\r\n"
     ).encode()
@@ -60,6 +65,7 @@ def _make_message(folder_id, subject="Quarterly Report", sender="alice@example.c
 # ---------------------------------------------------------------------------
 # Search
 # ---------------------------------------------------------------------------
+
 
 class TestEmailSearch:
     def test_search_requires_query(self, authenticated_client, initialized_app):
@@ -119,6 +125,7 @@ class TestEmailSearch:
 # Folder email listing + full-content viewer
 # ---------------------------------------------------------------------------
 
+
 class TestFolderEmails:
     def test_list_emails_folder_not_found(self, authenticated_client, initialized_app):
         resp = authenticated_client.get("/api/folders/9999/emails")
@@ -143,8 +150,11 @@ class TestArchivedEmailView:
     def test_view_decrypts_and_parses(self, authenticated_client, initialized_app):
         fid = _make_folder("Clients")
         mid = _make_message(
-            fid, subject="Settlement terms", sender="lawyer@firm.example",
-            recipients="client@example.com", body="Please review the attached terms.",
+            fid,
+            subject="Settlement terms",
+            sender="lawyer@firm.example",
+            recipients="client@example.com",
+            body="Please review the attached terms.",
         )
         resp = authenticated_client.get(f"/api/folders/{fid}/emails/{mid}")
         assert resp.status_code == 200
@@ -164,6 +174,7 @@ class TestArchivedEmailView:
 # ---------------------------------------------------------------------------
 # Soft delete / restore / permanent delete
 # ---------------------------------------------------------------------------
+
 
 class TestSoftDelete:
     def test_delete_not_found(self, authenticated_client, initialized_app):
@@ -216,7 +227,9 @@ class TestRestore:
         assert row["deleted_at"] is None
         assert row["original_folder_id"] is None
 
-    def test_restore_needs_destination_when_original_gone(self, authenticated_client, initialized_app):
+    def test_restore_needs_destination_when_original_gone(
+        self, authenticated_client, initialized_app
+    ):
         fid = _make_folder("Temp")
         mid = _make_message(fid)
         authenticated_client.delete(f"/api/messages/{mid}")
@@ -232,9 +245,7 @@ class TestRestore:
         dest = _make_folder("Destination")
         mid = _make_message(src)
         authenticated_client.delete(f"/api/messages/{mid}")
-        resp = authenticated_client.post(
-            f"/api/messages/{mid}/restore", json={"folder_id": dest}
-        )
+        resp = authenticated_client.post(f"/api/messages/{mid}/restore", json={"folder_id": dest})
         assert resp.status_code == 200
         assert resp.get_json()["folder_id"] == dest
 
@@ -266,6 +277,7 @@ class TestPermanentDelete:
 # ---------------------------------------------------------------------------
 # Flagging + move
 # ---------------------------------------------------------------------------
+
 
 class TestFlagging:
     def test_flag_not_found(self, authenticated_client, initialized_app):

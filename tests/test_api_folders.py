@@ -3,16 +3,13 @@ Tests for web/blueprints/api/folders.py - Folder management API.
 """
 
 
-
 class TestFolderCreation:
     """Tests for creating archive folders."""
 
     def test_create_folder(self, authenticated_client, initialized_app):
         """Should create a folder at root level."""
         response = authenticated_client.post(
-            "/api/folders",
-            json={"name": "Client Files"},
-            content_type="application/json"
+            "/api/folders", json={"name": "Client Files"}, content_type="application/json"
         )
 
         assert response.status_code == 201
@@ -24,9 +21,7 @@ class TestFolderCreation:
         """Should create a nested folder."""
         # Create parent
         response = authenticated_client.post(
-            "/api/folders",
-            json={"name": "Clients"},
-            content_type="application/json"
+            "/api/folders", json={"name": "Clients"}, content_type="application/json"
         )
         parent_id = response.get_json()["folder"]["id"]
 
@@ -34,7 +29,7 @@ class TestFolderCreation:
         response = authenticated_client.post(
             "/api/folders",
             json={"name": "John Smith", "parent_id": parent_id},
-            content_type="application/json"
+            content_type="application/json",
         )
 
         assert response.status_code == 201
@@ -45,9 +40,7 @@ class TestFolderCreation:
     def test_create_folder_empty_name_rejected(self, authenticated_client, initialized_app):
         """Should reject empty folder names."""
         response = authenticated_client.post(
-            "/api/folders",
-            json={"name": ""},
-            content_type="application/json"
+            "/api/folders", json={"name": ""}, content_type="application/json"
         )
 
         assert response.status_code == 400
@@ -56,15 +49,11 @@ class TestFolderCreation:
     def test_create_folder_duplicate_name_rejected(self, authenticated_client, initialized_app):
         """Should reject duplicate names at same level."""
         authenticated_client.post(
-            "/api/folders",
-            json={"name": "Unique Name"},
-            content_type="application/json"
+            "/api/folders", json={"name": "Unique Name"}, content_type="application/json"
         )
 
         response = authenticated_client.post(
-            "/api/folders",
-            json={"name": "Unique Name"},
-            content_type="application/json"
+            "/api/folders", json={"name": "Unique Name"}, content_type="application/json"
         )
 
         assert response.status_code == 400
@@ -127,8 +116,7 @@ class TestFolderDeletion:
 
         # Create child
         response = authenticated_client.post(
-            "/api/folders",
-            json={"name": "Child", "parent_id": parent_id}
+            "/api/folders", json={"name": "Child", "parent_id": parent_id}
         )
         child_id = response.get_json()["folder"]["id"]
 

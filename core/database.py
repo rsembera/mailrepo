@@ -6,9 +6,11 @@ Handles SQLCipher encrypted database connection, schema creation, and migrations
 
 try:
     from sqlcipher3 import dbapi2 as sqlite3
+
     SQLCIPHER_AVAILABLE = True
 except ImportError:
     import sqlite3
+
     SQLCIPHER_AVAILABLE = False
 
 import threading
@@ -232,9 +234,7 @@ class Database:
     def _get_schema_version(cls) -> int:
         """Get the current schema version from the database."""
         try:
-            row = cls.fetchone(
-                "SELECT value FROM settings WHERE key = 'schema_version'"
-            )
+            row = cls.fetchone("SELECT value FROM settings WHERE key = 'schema_version'")
             return int(row["value"]) if row else 0
         except sqlite3.OperationalError:
             # Settings table doesn't exist yet

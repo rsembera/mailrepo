@@ -34,11 +34,11 @@ def get_emails_from_import_folder(source_path: str, folder_path: str, import_typ
     """
     results = []
 
-    if import_type == 'eml':
+    if import_type == "eml":
         results = _parse_eml_directory(source_path)
-    elif import_type == 'apple-mbox':
+    elif import_type == "apple-mbox":
         results = _parse_apple_mbox(folder_path)
-    elif import_type == 'mbox' and os.path.isfile(source_path):
+    elif import_type == "mbox" and os.path.isfile(source_path):
         results = _parse_standard_mbox(source_path, folder_path)
 
     return results
@@ -49,10 +49,10 @@ def _parse_eml_directory(source_path: str) -> list:
     results = []
     if os.path.isdir(source_path):
         for i, filename in enumerate(sorted(os.listdir(source_path))):
-            if filename.lower().endswith('.eml'):
+            if filename.lower().endswith(".eml"):
                 filepath = os.path.join(source_path, filename)
                 try:
-                    with open(filepath, 'rb') as f:
+                    with open(filepath, "rb") as f:
                         raw_email = f.read()
                     results.append((f"eml-{i}", raw_email))
                 except Exception:
@@ -71,7 +71,7 @@ def _parse_apple_mbox(folder_path: str) -> list:
     results = []
 
     # Try standard mbox file inside the .mbox directory
-    mbox_internal = os.path.join(folder_path, 'mbox')
+    mbox_internal = os.path.join(folder_path, "mbox")
     if os.path.exists(mbox_internal):
         try:
             mbox = mailbox.mbox(mbox_internal)
@@ -82,10 +82,10 @@ def _parse_apple_mbox(folder_path: str) -> list:
         return results
 
     # Check for emlx files in Messages subdirectory
-    messages_dir = os.path.join(folder_path, 'Messages')
+    messages_dir = os.path.join(folder_path, "Messages")
     if os.path.isdir(messages_dir):
         for i, filename in enumerate(sorted(os.listdir(messages_dir))):
-            if filename.endswith('.emlx'):
+            if filename.endswith(".emlx"):
                 filepath = os.path.join(messages_dir, filename)
                 email_content = _parse_emlx_file(filepath)
                 if email_content:
@@ -128,15 +128,15 @@ def _parse_emlx_file(filepath: str) -> bytes | None:
     - Apple plist metadata at the end
     """
     try:
-        with open(filepath, 'rb') as f:
+        with open(filepath, "rb") as f:
             content = f.read()
 
         # Skip the byte count line
-        first_newline = content.find(b'\n')
+        first_newline = content.find(b"\n")
         if first_newline > 0:
-            email_content = content[first_newline + 1:]
+            email_content = content[first_newline + 1 :]
             # Find where the email ends (before Apple's plist metadata)
-            plist_marker = email_content.rfind(b'<?xml version=')
+            plist_marker = email_content.rfind(b"<?xml version=")
             if plist_marker > 0:
                 email_content = email_content[:plist_marker]
             return email_content
@@ -162,17 +162,17 @@ def get_raw_email_from_import(source_path: str, uid: str) -> bytes | None:
         return None
 
     # Handle .emlx files (Apple Mail format)
-    if source_path.endswith('.emlx'):
+    if source_path.endswith(".emlx"):
         return _parse_emlx_file(source_path)
 
     # Handle mbox files
-    if uid.startswith('mbox-') or uid.startswith('apple-'):
+    if uid.startswith("mbox-") or uid.startswith("apple-"):
         return _get_email_from_mbox_by_index(source_path, uid)
 
     # Handle standalone .eml files
-    if source_path.endswith('.eml'):
+    if source_path.endswith(".eml"):
         try:
-            with open(source_path, 'rb') as f:
+            with open(source_path, "rb") as f:
                 return f.read()
         except Exception:
             return None
@@ -184,7 +184,7 @@ def _get_email_from_mbox_by_index(source_path: str, uid: str) -> bytes | None:
     """Extract a specific email from mbox by index in UID."""
     try:
         # Extract index from uid (e.g., "mbox-5" -> 5)
-        parts = uid.split('-')
+        parts = uid.split("-")
         if len(parts) >= 2:
             index = int(parts[-1])
             mbox = mailbox.mbox(source_path)
@@ -216,21 +216,21 @@ def extract_body_text(raw_email: bytes) -> str:
         def decode_part(part):
             payload = part.get_payload(decode=True)
             if payload:
-                charset = part.get_content_charset() or 'utf-8'
+                charset = part.get_content_charset() or "utf-8"
                 try:
-                    return payload.decode(charset, errors='replace')
+                    return payload.decode(charset, errors="replace")
                 except Exception:
-                    return payload.decode('utf-8', errors='replace')
+                    return payload.decode("utf-8", errors="replace")
             return ""
 
         def strip_html(html):
             """Strip HTML tags and entities, adding spaces for proper tokenization."""
-            text = re.sub(r'<style[^>]*>[\s\S]*?</style>', '', html, flags=re.IGNORECASE)
-            text = re.sub(r'<script[^>]*>[\s\S]*?</script>', '', text, flags=re.IGNORECASE)
-            text = re.sub(r'<[^>]+>', ' ', text)
-            text = re.sub(r'&nbsp;', ' ', text)
-            text = re.sub(r'&[a-zA-Z]+;', ' ', text)
-            text = re.sub(r'\s+', ' ', text).strip()
+            text = re.sub(r"<style[^>]*>[\s\S]*?</style>", "", html, flags=re.IGNORECASE)
+            text = re.sub(r"<script[^>]*>[\s\S]*?</script>", "", text, flags=re.IGNORECASE)
+            text = re.sub(r"<[^>]+>", " ", text)
+            text = re.sub(r"&nbsp;", " ", text)
+            text = re.sub(r"&[a-zA-Z]+;", " ", text)
+            text = re.sub(r"\s+", " ", text).strip()
             return text
 
         plain_parts = []
@@ -238,14 +238,14 @@ def extract_body_text(raw_email: bytes) -> str:
 
         if msg.is_multipart():
             for part in msg.walk():
-                if part.get_content_type() == 'text/plain':
+                if part.get_content_type() == "text/plain":
                     plain_parts.append(decode_part(part))
-                elif part.get_content_type() == 'text/html':
+                elif part.get_content_type() == "text/html":
                     html_parts.append(strip_html(decode_part(part)))
         else:
-            if msg.get_content_type() == 'text/plain':
+            if msg.get_content_type() == "text/plain":
                 plain_parts.append(decode_part(msg))
-            elif msg.get_content_type() == 'text/html':
+            elif msg.get_content_type() == "text/html":
                 html_parts.append(strip_html(decode_part(msg)))
 
         # Prefer HTML-derived text (better tokenization from tag boundaries)

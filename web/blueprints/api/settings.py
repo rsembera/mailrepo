@@ -40,6 +40,7 @@ def set_trash_retention():
 # SESSION TIMEOUT SETTINGS
 # ============================================================================
 
+
 @api_bp.route("/settings/session-timeout", methods=["GET"])
 def get_session_timeout():
     """Get the session timeout setting."""
@@ -76,12 +77,14 @@ def session_status():
 
     # If timeout is 0 ("Never"), no warning needed
     if timeout_minutes == 0:
-        return jsonify({
-            "logged_in": True,
-            "timeout_minutes": 0,
-            "seconds_remaining": None,
-            "warning_needed": False
-        })
+        return jsonify(
+            {
+                "logged_in": True,
+                "timeout_minutes": 0,
+                "seconds_remaining": None,
+                "warning_needed": False,
+            }
+        )
 
     last_activity = session.get("last_activity", time.time())
     elapsed = time.time() - last_activity
@@ -99,13 +102,15 @@ def session_status():
     else:
         warning_threshold = 300
 
-    return jsonify({
-        "logged_in": True,
-        "timeout_minutes": timeout_minutes,
-        "seconds_remaining": int(seconds_remaining),
-        "warning_threshold": warning_threshold,
-        "warning_needed": seconds_remaining <= warning_threshold and seconds_remaining > 0
-    })
+    return jsonify(
+        {
+            "logged_in": True,
+            "timeout_minutes": timeout_minutes,
+            "seconds_remaining": int(seconds_remaining),
+            "warning_threshold": warning_threshold,
+            "warning_needed": seconds_remaining <= warning_threshold and seconds_remaining > 0,
+        }
+    )
 
 
 # ============================================================================
@@ -159,6 +164,7 @@ def keepalive():
 # ============================================================================
 # DATABASE RESET
 # ============================================================================
+
 
 @api_bp.route("/reset_database", methods=["POST"])
 def reset_database():
@@ -230,10 +236,12 @@ def reset_database():
         # Clear session to force re-login
         session.clear()
 
-        return jsonify({
-            "success": True,
-            "message": "Database reset complete. You will be redirected to set up a new password."
-        })
+        return jsonify(
+            {
+                "success": True,
+                "message": "Database reset complete. You will be redirected to set up a new password.",
+            }
+        )
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

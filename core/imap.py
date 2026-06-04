@@ -52,6 +52,7 @@ THREAD_MAX_MESSAGES_FLOOR = 10
 
 class IMAPError(Exception):
     """Raised when IMAP operations fail."""
+
     pass
 
 
@@ -160,9 +161,9 @@ class IMAP:
                 decoded = item.decode() if isinstance(item, bytes) else item
 
                 # Extract flags
-                flags_match = re.match(r'\(([^)]*)\)', decoded)
+                flags_match = re.match(r"\(([^)]*)\)", decoded)
                 flags = flags_match.group(1).split() if flags_match else []
-                noselect = any(f.lower() == '\\noselect' for f in flags)
+                noselect = any(f.lower() == "\\noselect" for f in flags)
 
                 # Extract delimiter - it's between the flags and folder name
                 match = re.match(r'\([^)]*\)\s+"(.)"|\s+NIL\s+', decoded)
@@ -172,12 +173,14 @@ class IMAP:
                 parts = decoded.rsplit('" ', 1)
                 if len(parts) == 2:
                     name = parts[1].strip('"')
-                    folders.append({
-                        "name": name,
-                        "delimiter": delimiter,
-                        "noselect": noselect,
-                        "raw": decoded,
-                    })
+                    folders.append(
+                        {
+                            "name": name,
+                            "delimiter": delimiter,
+                            "noselect": noselect,
+                            "raw": decoded,
+                        }
+                    )
 
             return folders
         except Exception as e:
@@ -211,28 +214,34 @@ class IMAP:
             # Get UIDVALIDITY and HIGHESTMODSEQ using STATUS command
             try:
                 status, status_data = self.connection.status(
-                    f'"{folder}"', '(UIDVALIDITY HIGHESTMODSEQ)'
+                    f'"{folder}"', "(UIDVALIDITY HIGHESTMODSEQ)"
                 )
-                if status == 'OK' and status_data and status_data[0]:
-                    response = status_data[0].decode() if isinstance(status_data[0], bytes) else status_data[0]
+                if status == "OK" and status_data and status_data[0]:
+                    response = (
+                        status_data[0].decode()
+                        if isinstance(status_data[0], bytes)
+                        else status_data[0]
+                    )
 
-                    uv_match = re.search(r'UIDVALIDITY\s+(\d+)', response)
+                    uv_match = re.search(r"UIDVALIDITY\s+(\d+)", response)
                     if uv_match:
                         result["uidvalidity"] = int(uv_match.group(1))
 
-                    hm_match = re.search(r'HIGHESTMODSEQ\s+(\d+)', response)
+                    hm_match = re.search(r"HIGHESTMODSEQ\s+(\d+)", response)
                     if hm_match:
                         result["highestmodseq"] = int(hm_match.group(1))
             except Exception as e:
                 # HIGHESTMODSEQ not supported — fall back to UIDVALIDITY only
                 log.debug(f"Could not get STATUS with HIGHESTMODSEQ: {e}")
                 try:
-                    status, status_data = self.connection.status(
-                        f'"{folder}"', '(UIDVALIDITY)'
-                    )
-                    if status == 'OK' and status_data and status_data[0]:
-                        response = status_data[0].decode() if isinstance(status_data[0], bytes) else status_data[0]
-                        uv_match = re.search(r'UIDVALIDITY\s+(\d+)', response)
+                    status, status_data = self.connection.status(f'"{folder}"', "(UIDVALIDITY)")
+                    if status == "OK" and status_data and status_data[0]:
+                        response = (
+                            status_data[0].decode()
+                            if isinstance(status_data[0], bytes)
+                            else status_data[0]
+                        )
+                        uv_match = re.search(r"UIDVALIDITY\s+(\d+)", response)
                         if uv_match:
                             result["uidvalidity"] = int(uv_match.group(1))
                 except Exception as e2:
@@ -292,8 +301,7 @@ class IMAP:
 
         try:
             status, data = self.connection.uid(
-                "FETCH", uid,
-                "(BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID)])"
+                "FETCH", uid, "(BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID)])"
             )
             if status != "OK" or not data[0]:
                 raise IMAPError(f"Failed to fetch headers for {uid}")
@@ -372,6 +380,7 @@ class IMAP:
         # images that the html doesn\'t reference \u2014 those should appear
         # in the attachments list, not be silently dropped.
         import base64
+
         referenced_cids: set[str] = set()
         if msg.is_multipart():
             for part in msg.walk():
@@ -397,7 +406,7 @@ class IMAP:
                 content_id = part.get("Content-ID")
                 if not content_id:
                     continue
-                cid = content_id.strip('<>')
+                cid = content_id.strip("<>")
                 if cid not in referenced_cids:
                     # Has a Content-ID but the html doesn\'t use it \u2014
                     # the second pass will handle it as a regular attachment.
@@ -406,7 +415,7 @@ class IMAP:
                 if not payload:
                     continue
                 content_type = part.get_content_type()
-                b64_data = base64.b64encode(payload).decode('ascii')
+                b64_data = base64.b64encode(payload).decode("ascii")
                 inline_images[cid] = f"data:{content_type};base64,{b64_data}"
 
         # Second pass: parse body and collect attachments
@@ -420,7 +429,7 @@ class IMAP:
                 # set of referenced cids so we don\'t accidentally also skip
                 # attachments that happen to have a Content-ID.
                 if content_id and content_type.startswith("image/"):
-                    cid = content_id.strip('<>')
+                    cid = content_id.strip("<>")
                     if cid in referenced_cids:
                         continue
 
@@ -428,24 +437,30 @@ class IMAP:
                 if "attachment" in content_disposition:
                     filename = part.get_filename()
                     if filename:
-                        result["attachments"].append({
-                            "filename": self._decode_header(filename),
-                            "content_type": content_type,
-                            "size": len(part.get_payload(decode=True) or b""),
-                        })
+                        result["attachments"].append(
+                            {
+                                "filename": self._decode_header(filename),
+                                "content_type": content_type,
+                                "size": len(part.get_payload(decode=True) or b""),
+                            }
+                        )
                     continue
 
                 if content_type == "text/plain":
                     payload = part.get_payload(decode=True)
                     if payload:
                         charset = part.get_content_charset() or "utf-8"
-                        result["text_body"] = (result["text_body"] or "") + payload.decode(charset, errors="replace")
+                        result["text_body"] = (result["text_body"] or "") + payload.decode(
+                            charset, errors="replace"
+                        )
 
                 elif content_type == "text/html":
                     payload = part.get_payload(decode=True)
                     if payload:
                         charset = part.get_content_charset() or "utf-8"
-                        result["html_body"] = (result["html_body"] or "") + payload.decode(charset, errors="replace")
+                        result["html_body"] = (result["html_body"] or "") + payload.decode(
+                            charset, errors="replace"
+                        )
         else:
             # Simple message
             content_type = msg.get_content_type()
@@ -460,15 +475,12 @@ class IMAP:
 
         # Replace cid: references in HTML body with data URLs
         if result["html_body"] and inline_images:
+
             def replace_cid(match):
                 cid = match.group(1)
                 return inline_images.get(cid, match.group(0))
 
-            result["html_body"] = re.sub(
-                r'cid:([^"\'\s>]+)',
-                replace_cid,
-                result["html_body"]
-            )
+            result["html_body"] = re.sub(r'cid:([^"\'\s>]+)', replace_cid, result["html_body"])
 
         # Linkify URLs and emails in HTML body that aren't already links
         if result["html_body"]:
@@ -490,9 +502,9 @@ class IMAP:
 
         try:
             status, data = self.connection.uid(
-                "FETCH", uid,
-                "(BODY.PEEK[HEADER.FIELDS (MESSAGE-ID IN-REPLY-TO REFERENCES "
-                "FROM SUBJECT DATE)])"
+                "FETCH",
+                uid,
+                "(BODY.PEEK[HEADER.FIELDS (MESSAGE-ID IN-REPLY-TO REFERENCES FROM SUBJECT DATE)])",
             )
             if status != "OK" or not data or not data[0]:
                 raise IMAPError(f"Failed to fetch thread headers for {uid}")
@@ -505,12 +517,12 @@ class IMAP:
 
             # References is a space-separated list of <id> tokens; parse all
             references_raw = msg.get("References", "") or ""
-            references = re.findall(r'<[^>]+>', references_raw)
+            references = re.findall(r"<[^>]+>", references_raw)
 
             in_reply_to_raw = (msg.get("In-Reply-To", "") or "").strip()
             # In-Reply-To should be a single id but some clients put more
-            in_reply_to = ''
-            ir_match = re.search(r'<[^>]+>', in_reply_to_raw)
+            in_reply_to = ""
+            ir_match = re.search(r"<[^>]+>", in_reply_to_raw)
             if ir_match:
                 in_reply_to = ir_match.group(0)
 
@@ -602,14 +614,16 @@ class IMAP:
         if not source_mid:
             # No Message-ID means we can\'t thread. Return just this message.
             return {
-                "thread": [{
-                    "folder": source_folder,
-                    "uid": source_uid,
-                    "message_id": "",
-                    "subject": source_headers["subject"],
-                    "from": source_headers["from"],
-                    "date": source_headers["date"],
-                }],
+                "thread": [
+                    {
+                        "folder": source_folder,
+                        "uid": source_uid,
+                        "message_id": "",
+                        "subject": source_headers["subject"],
+                        "from": source_headers["from"],
+                        "date": source_headers["date"],
+                    }
+                ],
                 "truncated": False,
                 "timed_out": False,
                 "method": "header_walk",
@@ -688,7 +702,8 @@ class IMAP:
                         continue
                     try:
                         status, data = self.connection.uid(
-                            "SEARCH", None,
+                            "SEARCH",
+                            None,
                             f'HEADER Message-ID "{_imap_escape(wid)}"',
                         )
                     except Exception as e:
@@ -741,11 +756,14 @@ class IMAP:
                         break
                     try:
                         status, data = self.connection.uid(
-                            "SEARCH", None,
+                            "SEARCH",
+                            None,
                             f'HEADER In-Reply-To "{_imap_escape(known_id)}"',
                         )
                     except Exception as e:
-                        log.debug(f"find_thread: reply-search failed for {known_id} in {folder}: {e}")
+                        log.debug(
+                            f"find_thread: reply-search failed for {known_id} in {folder}: {e}"
+                        )
                         continue
                     if status != "OK" or not data or not data[0]:
                         continue
@@ -787,6 +805,7 @@ class IMAP:
                 return (0, parsedate_to_datetime(item["date"]))
             except Exception:
                 return (1, None)
+
         sorted_thread = sorted(found.values(), key=_date_key)
 
         return {
@@ -819,13 +838,13 @@ class IMAP:
         Skips content that's already inside anchor tags or other HTML attributes.
         """
         # Split HTML into parts: inside tags vs text content
-        parts = re.split(r'(<a\s[^>]*>.*?</a>|<[^>]+>)', html, flags=re.IGNORECASE | re.DOTALL)
+        parts = re.split(r"(<a\s[^>]*>.*?</a>|<[^>]+>)", html, flags=re.IGNORECASE | re.DOTALL)
 
         result = []
         for part in parts:
             if not part:
                 continue
-            if part.startswith('<'):
+            if part.startswith("<"):
                 result.append(part)
                 continue
 
@@ -835,24 +854,25 @@ class IMAP:
             part = re.sub(
                 r'(https?://(?:(?!&(?:nbsp|amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)[^\s\u00a0<>"\'])+)',
                 r'<a href="\1" target="_blank" rel="noopener noreferrer">\1</a>',
-                part
+                part,
             )
             part = re.sub(
-                r'\b([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\b(?![^<]*>)',
+                r"\b([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\b(?![^<]*>)",
                 r'<a href="mailto:\1">\1</a>',
-                part
+                part,
             )
             result.append(part)
 
-        return ''.join(result)
+        return "".join(result)
 
     # ==========================================
     # Credential management (stored encrypted)
     # ==========================================
 
     @classmethod
-    def save_credentials(cls, account_id: int, email: str, password: str,
-                         host: str, port: int, use_ssl: bool = True) -> None:
+    def save_credentials(
+        cls, account_id: int, email: str, password: str, host: str, port: int, use_ssl: bool = True
+    ) -> None:
         """
         Save encrypted IMAP credentials to database.
 
@@ -878,7 +898,7 @@ class IMAP:
 
         Database.execute(
             "UPDATE accounts SET email = ?, credentials_encrypted = ? WHERE id = ?",
-            (email, encrypted, account_id)
+            (email, encrypted, account_id),
         )
         Database.commit()
 
@@ -925,8 +945,9 @@ class IMAP:
         return client
 
     @classmethod
-    def test_connection(cls, email: str, password: str,
-                        host: str, port: int, use_ssl: bool = True) -> dict:
+    def test_connection(
+        cls, email: str, password: str, host: str, port: int, use_ssl: bool = True
+    ) -> dict:
         """
         Test IMAP connection without saving credentials.
 
@@ -949,7 +970,7 @@ class IMAP:
             return {
                 "success": True,
                 "folder_count": len(folders),
-                "message": f"Connected successfully. Found {len(folders)} folders."
+                "message": f"Connected successfully. Found {len(folders)} folders.",
             }
         except IMAPError as e:
             return {
@@ -980,22 +1001,22 @@ class IMAP:
         # Common folder names by type. Order matters slightly — provider-specific
         # names go first so we match (e.g.) "[Gmail]/Sent Mail" before the
         # generic "Sent" if both somehow exist.
-        archive_names = ['Archive', '[Gmail]/All Mail', 'Archives', 'INBOX.Archive']
-        trash_names = ['Trash', '[Gmail]/Trash', 'Deleted Items', 'Deleted Messages', 'INBOX.Trash']
+        archive_names = ["Archive", "[Gmail]/All Mail", "Archives", "INBOX.Archive"]
+        trash_names = ["Trash", "[Gmail]/Trash", "Deleted Items", "Deleted Messages", "INBOX.Trash"]
         sent_names = [
-            '[Gmail]/Sent Mail',  # Gmail
-            'Sent Mail',          # some clients
-            'Sent Items',         # Outlook / Exchange
-            'Sent Messages',      # Apple Mail (older)
-            'INBOX.Sent',         # cPanel / Courier-style nested
-            'Sent',               # most everything else (Fastmail, generic IMAP, NCF)
+            "[Gmail]/Sent Mail",  # Gmail
+            "Sent Mail",  # some clients
+            "Sent Items",  # Outlook / Exchange
+            "Sent Messages",  # Apple Mail (older)
+            "INBOX.Sent",  # cPanel / Courier-style nested
+            "Sent",  # most everything else (Fastmail, generic IMAP, NCF)
         ]
 
-        if folder_type == 'archive':
+        if folder_type == "archive":
             search_names = archive_names
-        elif folder_type == 'trash':
+        elif folder_type == "trash":
             search_names = trash_names
-        elif folder_type == 'sent':
+        elif folder_type == "sent":
             search_names = sent_names
         else:
             log.warning(f"Unknown folder_type: {folder_type}")
@@ -1003,7 +1024,7 @@ class IMAP:
 
         try:
             folders = self.list_folders()
-            folder_names = [f['name'] for f in folders]
+            folder_names = [f["name"] for f in folders]
 
             # Try to find matching folder
             for name in search_names:
@@ -1037,13 +1058,13 @@ class IMAP:
 
         try:
             # Copy to destination
-            status, _ = self.connection.uid('COPY', uid, f'"{destination_folder}"')
-            if status != 'OK':
+            status, _ = self.connection.uid("COPY", uid, f'"{destination_folder}"')
+            if status != "OK":
                 raise IMAPError(f"Failed to copy message {uid} to {destination_folder}")
 
             # Mark original as deleted
-            status, _ = self.connection.uid('STORE', uid, '+FLAGS', '(\\Deleted)')
-            if status != 'OK':
+            status, _ = self.connection.uid("STORE", uid, "+FLAGS", "(\\Deleted)")
+            if status != "OK":
                 raise IMAPError(f"Failed to mark message {uid} as deleted")
 
             # Expunge to remove from source folder
@@ -1063,7 +1084,7 @@ class IMAP:
         Returns:
             True if successful, raises IMAPError if archive folder not found.
         """
-        archive_folder = self.get_special_folder('archive')
+        archive_folder = self.get_special_folder("archive")
         if not archive_folder:
             raise IMAPError("Archive folder not found on server")
 
@@ -1079,7 +1100,7 @@ class IMAP:
         Returns:
             True if successful, raises IMAPError if trash folder not found.
         """
-        trash_folder = self.get_special_folder('trash')
+        trash_folder = self.get_special_folder("trash")
         if not trash_folder:
             raise IMAPError("Trash folder not found on server")
 
@@ -1100,8 +1121,8 @@ class IMAP:
 
         try:
             # Mark as deleted
-            status, _ = self.connection.uid('STORE', uid, '+FLAGS', '(\\Deleted)')
-            if status != 'OK':
+            status, _ = self.connection.uid("STORE", uid, "+FLAGS", "(\\Deleted)")
+            if status != "OK":
                 raise IMAPError(f"Failed to mark message {uid} as deleted")
 
             # Expunge to permanently remove

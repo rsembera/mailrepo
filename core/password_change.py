@@ -45,13 +45,16 @@ from .encryption import (
 # EXCEPTIONS
 # ============================================================
 
+
 class PasswordChangeError(Exception):
     """Raised when password change cannot proceed or fails partway."""
+
     pass
 
 
 class PasswordChangeCorruptionError(PasswordChangeError):
     """Raised when a file decrypts with neither the old nor the new key."""
+
     def __init__(self, filepath: str, original_error: Exception):
         self.filepath = filepath
         self.original_error = original_error
@@ -132,8 +135,7 @@ def change_master_password(
 
     if new_file_key == old_file_key:
         raise PasswordChangeError(
-            "New password derives to the same keys as the old one. "
-            "Choose a different password."
+            "New password derives to the same keys as the old one. Choose a different password."
         )
 
     # 5. File walk: decrypt with old, encrypt with new, atomic replace.
@@ -144,27 +146,35 @@ def change_master_password(
     total = len(files)
 
     if progress_cb:
-        progress_cb({
-            "status": "counted", "total": total,
-            "message": f"Found {total} encrypted files",
-        })
+        progress_cb(
+            {
+                "status": "counted",
+                "total": total,
+                "message": f"Found {total} encrypted files",
+            }
+        )
 
     for i, path in enumerate(files):
         _rekey_file(path, old_file_key, new_file_key)
         if (i + 1) % 10 == 0 or (i + 1) == total:
             if progress_cb:
-                progress_cb({
-                    "status": "encrypting",
-                    "total": total, "current": i + 1,
-                    "message": f"Re-encrypting {i + 1} of {total}...",
-                })
+                progress_cb(
+                    {
+                        "status": "encrypting",
+                        "total": total,
+                        "current": i + 1,
+                        "message": f"Re-encrypting {i + 1} of {total}...",
+                    }
+                )
 
     # 6. Stored credentials.
     if progress_cb:
-        progress_cb({
-            "status": "credentials",
-            "message": "Re-encrypting account credentials...",
-        })
+        progress_cb(
+            {
+                "status": "credentials",
+                "message": "Re-encrypting account credentials...",
+            }
+        )
     cred_count = _rekey_credentials(old_file_key, new_file_key)
 
     # 7. Database rekey + salt file rewrite. These two operations together
@@ -177,7 +187,7 @@ def change_master_password(
     try:
         conn = Database.get_connection()
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        conn.execute(f"PRAGMA rekey = \"x\'{new_db_key_hex}\'\"")
+        conn.execute(f"PRAGMA rekey = \"x'{new_db_key_hex}'\"")
         Database._db_key = new_db_key_hex
 
         if progress_cb:
@@ -192,10 +202,12 @@ def change_master_password(
         Database.release_after_migration()
 
     if progress_cb:
-        progress_cb({
-            "status": "complete",
-            "message": "Password changed successfully.",
-        })
+        progress_cb(
+            {
+                "status": "complete",
+                "message": "Password changed successfully.",
+            }
+        )
 
     return {"files": total, "credentials": cred_count}
 
@@ -203,6 +215,7 @@ def change_master_password(
 # ============================================================
 # FILE / CREDENTIAL REKEY HELPERS
 # ============================================================
+
 
 def _rekey_file(path: Path, old_key: bytes, new_key: bytes) -> bool:
     """Re-encrypt one file from old_key to new_key. Atomic replace.
@@ -239,8 +252,7 @@ def _rekey_credentials(old_key: bytes, new_key: bytes) -> int:
     already-new entries are excluded from the count).
     """
     rows = Database.fetchall(
-        "SELECT id, credentials_encrypted FROM accounts "
-        "WHERE credentials_encrypted IS NOT NULL"
+        "SELECT id, credentials_encrypted FROM accounts WHERE credentials_encrypted IS NOT NULL"
     )
     count = 0
     for row in rows:
@@ -260,9 +272,7 @@ def _rekey_credentials(old_key: bytes, new_key: bytes) -> int:
                 Encryption._decrypt_v2_with_key(raw, new_key)
                 continue  # already migrated
             except Exception:
-                raise PasswordChangeCorruptionError(
-                    f"accounts.id={row['id']}/credentials", old_err
-                )
+                raise PasswordChangeCorruptionError(f"accounts.id={row['id']}/credentials", old_err)
 
         new_raw = Encryption._encrypt_v2_with_key(plaintext, new_key)
         new_enc = base64.urlsafe_b64encode(new_raw).decode("ascii")
@@ -278,6 +288,7 @@ def _rekey_credentials(old_key: bytes, new_key: bytes) -> int:
 # ============================================================
 # FILE SYSTEM HELPERS
 # ============================================================
+
 
 def _iter_archive_files() -> Iterator[Path]:
     """Yield every .eml.enc file under the archive root."""

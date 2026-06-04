@@ -25,7 +25,7 @@ def get_cached_emails(account_id: int, folder: str, uidvalidity: int) -> list[di
            FROM email_cache
            WHERE account_id = ? AND folder_name = ? AND uidvalidity = ?
            ORDER BY CAST(uid AS INTEGER) DESC""",
-        (account_id, folder, uidvalidity)
+        (account_id, folder, uidvalidity),
     )
     return [
         {
@@ -50,7 +50,7 @@ def get_highest_cached_uid(account_id: int, folder: str, uidvalidity: int) -> in
         """SELECT MAX(CAST(uid AS INTEGER)) as max_uid
            FROM email_cache
            WHERE account_id = ? AND folder_name = ? AND uidvalidity = ?""",
-        (account_id, folder, uidvalidity)
+        (account_id, folder, uidvalidity),
     )
     return row["max_uid"] if row and row["max_uid"] else 0
 
@@ -61,12 +61,12 @@ def clear_folder_cache(account_id: int, folder: str):
     Also clears the sync state so the next load does a full server check.
     """
     Database.execute(
-        "DELETE FROM email_cache WHERE account_id = ? AND folder_name = ?",
-        (account_id, folder)
+        "DELETE FROM email_cache WHERE account_id = ? AND folder_name = ?", (account_id, folder)
     )
     Database.commit()
     # Also clear the external sync cache
     from core.sync_cache import clear_folder_sync_state
+
     clear_folder_sync_state(account_id, folder)
 
 
@@ -81,7 +81,7 @@ def get_any_cached_emails(account_id: int, folder: str) -> list[dict]:
            FROM email_cache
            WHERE account_id = ? AND folder_name = ?
            ORDER BY CAST(uid AS INTEGER) DESC""",
-        (account_id, folder)
+        (account_id, folder),
     )
     return [
         {
@@ -116,11 +116,13 @@ def cache_email(account_id: int, folder: str, uidvalidity: int, email: dict):
             email.get("to"),
             email.get("date"),
             email.get("message_id"),
-        )
+        ),
     )
 
 
-def remove_stale_cache_entries(account_id: int, folder: str, uidvalidity: int, valid_uids: list) -> int:
+def remove_stale_cache_entries(
+    account_id: int, folder: str, uidvalidity: int, valid_uids: list
+) -> int:
     """
     Remove cached emails that no longer exist on the server.
 
@@ -140,7 +142,7 @@ def remove_stale_cache_entries(account_id: int, folder: str, uidvalidity: int, v
     cached = Database.fetchall(
         """SELECT uid FROM email_cache
            WHERE account_id = ? AND folder_name = ? AND uidvalidity = ?""",
-        (account_id, folder, uidvalidity)
+        (account_id, folder, uidvalidity),
     )
 
     cached_uids = {str(row["uid"]) for row in cached}
@@ -153,7 +155,7 @@ def remove_stale_cache_entries(account_id: int, folder: str, uidvalidity: int, v
         Database.execute(
             f"""DELETE FROM email_cache
                WHERE account_id = ? AND folder_name = ? AND uid IN ({placeholders})""",
-            (account_id, folder, *stale_uids)
+            (account_id, folder, *stale_uids),
         )
         Database.commit()
 

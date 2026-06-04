@@ -28,18 +28,23 @@ from web.blueprints.api.commit import (
 
 
 def _make_folder(name, parent_id=None):
-    cur = Database.execute(
-        "INSERT INTO folders (name, parent_id) VALUES (?, ?)", (name, parent_id)
-    )
+    cur = Database.execute("INSERT INTO folders (name, parent_id) VALUES (?, ?)", (name, parent_id))
     Database.commit()
     return cur.lastrowid
 
 
 def _empty_results():
     return {
-        "success": [], "failed": [], "skipped": [],
-        "folders_success": 0, "folders_failed": 0,
-        "post_actions": {"success": 0, "failed": 0, "by_action": {"archive": 0, "trash": 0, "delete": 0}},
+        "success": [],
+        "failed": [],
+        "skipped": [],
+        "folders_success": 0,
+        "folders_failed": 0,
+        "post_actions": {
+            "success": 0,
+            "failed": 0,
+            "by_action": {"archive": 0, "trash": 0, "delete": 0},
+        },
     }
 
 
@@ -56,6 +61,7 @@ def _raw_eml(subject="Hi", body="hello body", message_id=None):
 # ---------------------------------------------------------------------------
 # create_archive_folder_from_path
 # ---------------------------------------------------------------------------
+
 
 class TestArchiveFolderFromPath:
     def test_empty_path_returns_parent(self, initialized_app):
@@ -88,6 +94,7 @@ class TestArchiveFolderFromPath:
 # ---------------------------------------------------------------------------
 # _check_duplicate
 # ---------------------------------------------------------------------------
+
 
 class TestCheckDuplicate:
     def _seed(self, folder_id, message_id, deleted=False):
@@ -122,6 +129,7 @@ class TestCheckDuplicate:
 # ---------------------------------------------------------------------------
 # build_commit_summary
 # ---------------------------------------------------------------------------
+
 
 class TestBuildCommitSummary:
     def test_nothing_committed(self):
@@ -162,6 +170,7 @@ class TestBuildCommitSummary:
 # _find_action_for_source
 # ---------------------------------------------------------------------------
 
+
 class TestFindActionForSource:
     def test_three_part_key_applies_to_account(self):
         actions = {"account:1:5": "archive"}
@@ -184,6 +193,7 @@ class TestFindActionForSource:
 # ---------------------------------------------------------------------------
 # _save_email_to_archive (atomic file + DB)
 # ---------------------------------------------------------------------------
+
 
 class TestSaveEmailToArchive:
     def test_happy_path_writes_file_and_row(self, initialized_app):
@@ -219,6 +229,7 @@ class TestSaveEmailToArchive:
 # SSE endpoint: /api/commit/stream
 # ---------------------------------------------------------------------------
 
+
 def _parse_sse(text):
     """Parse an SSE stream into a list of (event, data_dict) tuples."""
     events = []
@@ -229,9 +240,9 @@ def _parse_sse(text):
         data = None
         for line in block.split("\n"):
             if line.startswith("event: "):
-                event = line[len("event: "):]
+                event = line[len("event: ") :]
             elif line.startswith("data: "):
-                data = json.loads(line[len("data: "):])
+                data = json.loads(line[len("data: ") :])
         if event:
             events.append((event, data))
     return events
@@ -248,16 +259,18 @@ class TestCommitStream:
         eml = tmp_path / "msg.eml"
         eml.write_bytes(_raw_eml(subject="Committed via stream", body="stream body"))
 
-        staged = [{
-            "sourceType": "import",
-            "destinationFolderId": fid,
-            "email": {
-                "uid": "eml-0",
-                "subject": "Committed via stream",
-                "message_id": "<stream@test>",
-                "sourcePath": str(eml),
-            },
-        }]
+        staged = [
+            {
+                "sourceType": "import",
+                "destinationFolderId": fid,
+                "email": {
+                    "uid": "eml-0",
+                    "subject": "Committed via stream",
+                    "message_id": "<stream@test>",
+                    "sourcePath": str(eml),
+                },
+            }
+        ]
         resp = authenticated_client.post("/api/commit/stream", json={"staged": staged})
         events = _parse_sse(resp.get_data(as_text=True))
         types = [e for e, _ in events]

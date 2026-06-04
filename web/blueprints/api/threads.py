@@ -110,9 +110,7 @@ def find_thread():
         # this into its own safe range regardless, so a bad stored value
         # cannot cause harm — this just honours the user's choice.
         try:
-            max_messages = int(get_setting(
-                "thread_max_messages", str(THREAD_MAX_MESSAGES_DEFAULT)
-            ))
+            max_messages = int(get_setting("thread_max_messages", str(THREAD_MAX_MESSAGES_DEFAULT)))
         except (TypeError, ValueError):
             max_messages = THREAD_MAX_MESSAGES_DEFAULT
 

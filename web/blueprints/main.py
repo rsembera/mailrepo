@@ -56,8 +56,7 @@ def create_archive():
 
         # Check for duplicate name at root level
         existing = Database.fetchone(
-            "SELECT id FROM folders WHERE name = ? AND parent_id IS NULL",
-            (name,)
+            "SELECT id FROM folders WHERE name = ? AND parent_id IS NULL", (name,)
         )
         if existing:
             errors.append("A folder with this name already exists.")

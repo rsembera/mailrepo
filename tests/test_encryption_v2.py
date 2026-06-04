@@ -27,6 +27,7 @@ from core.encryption import (
 # SALT FILE FORMAT
 # ============================================================
 
+
 class TestV2SaltFile:
     """A fresh initialize() must produce a v2-format salt file."""
 
@@ -43,9 +44,11 @@ class TestV2SaltFile:
         # The 32 bytes immediately after the magic should be the salt.
         # We confirm this indirectly by checking that re-unlock succeeds.
 
+
 # ============================================================
 # V2 ON-DISK WIRE FORMAT
 # ============================================================
+
 
 class TestV2WireFormat:
     """encrypt() output for a v2 archive must have the [version][nonce][ct][tag] shape."""
@@ -82,6 +85,7 @@ class TestV2WireFormat:
 # VERSION BYTE AAD BINDING
 # ============================================================
 
+
 class TestVersionByteAAD:
     """A tampered version byte must break the GCM auth check."""
 
@@ -107,7 +111,7 @@ class TestVersionByteAAD:
         ct = Encryption.encrypt(b"original data")
         # Flip a bit in the middle of the ciphertext
         mid = 1 + GCM_NONCE_LENGTH + 2
-        tampered = ct[:mid] + bytes([ct[mid] ^ 0x01]) + ct[mid + 1:]
+        tampered = ct[:mid] + bytes([ct[mid] ^ 0x01]) + ct[mid + 1 :]
         with pytest.raises(EncryptionError):
             Encryption.decrypt(tampered)
 
@@ -123,6 +127,7 @@ class TestVersionByteAAD:
 # ============================================================
 # UNLOCK ROUNDTRIP FOR V2
 # ============================================================
+
 
 class TestV2Unlock:
     """Lock + unlock with the same password must produce keys that decrypt the same data."""

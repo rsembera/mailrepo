@@ -46,17 +46,11 @@ class TestDatabaseOperations:
         from core.database import Database
 
         with app.app_context():
-            cursor = Database.execute(
-                "INSERT INTO folders (name) VALUES (?)",
-                ("Test Folder",)
-            )
+            cursor = Database.execute("INSERT INTO folders (name) VALUES (?)", ("Test Folder",))
             Database.commit()
             folder_id = cursor.lastrowid
 
-            folder = Database.fetchone(
-                "SELECT id, name FROM folders WHERE id = ?",
-                (folder_id,)
-            )
+            folder = Database.fetchone("SELECT id, name FROM folders WHERE id = ?", (folder_id,))
 
             assert folder is not None
             assert folder["name"] == "Test Folder"
@@ -105,16 +99,12 @@ class TestDatabaseOperations:
 
             # The failed insert should not exist
             result = Database.fetchone(
-                "SELECT id FROM folders WHERE name = ?",
-                ("Should Rollback",)
+                "SELECT id FROM folders WHERE name = ?", ("Should Rollback",)
             )
             assert result is None
 
             # The first insert should still exist
-            result = Database.fetchone(
-                "SELECT id FROM folders WHERE name = ?",
-                ("Rollback Test",)
-            )
+            result = Database.fetchone("SELECT id FROM folders WHERE name = ?", ("Rollback Test",))
             assert result is not None
 
 
@@ -137,9 +127,15 @@ class TestFTSIndex:
                 """INSERT INTO messages
                    (folder_id, message_id, subject, sender, recipients, body_text, filepath)
                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (folder_id, "<test@example.com>", "Important Meeting",
-                 "boss@company.com", "team@company.com",
-                 "Please attend the quarterly review meeting.", "/fake/path.eml")
+                (
+                    folder_id,
+                    "<test@example.com>",
+                    "Important Meeting",
+                    "boss@company.com",
+                    "team@company.com",
+                    "Please attend the quarterly review meeting.",
+                    "/fake/path.eml",
+                ),
             )
             Database.commit()
 
@@ -148,7 +144,7 @@ class TestFTSIndex:
                 """SELECT m.* FROM messages m
                    JOIN messages_fts ON m.id = messages_fts.rowid
                    WHERE messages_fts MATCH ?""",
-                ("quarterly",)
+                ("quarterly",),
             )
 
             assert len(results) == 1
@@ -167,7 +163,13 @@ class TestFTSIndex:
             # Insert messages with different searchable content
             messages = [
                 ("1", "Budget Report", "alice@example.com", "bob@example.com", "Q1 numbers"),
-                ("2", "Lunch Plans", "bob@example.com", "alice@example.com", "Budget friendly restaurant"),
+                (
+                    "2",
+                    "Lunch Plans",
+                    "bob@example.com",
+                    "alice@example.com",
+                    "Budget friendly restaurant",
+                ),
                 ("3", "Project Update", "charlie@example.com", "team@example.com", "On track"),
             ]
 
@@ -176,7 +178,7 @@ class TestFTSIndex:
                     """INSERT INTO messages
                        (folder_id, message_id, subject, sender, recipients, body_text, filepath)
                        VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                    (folder_id, msg_id, subject, sender, recipients, body, f"/fake/{msg_id}.eml")
+                    (folder_id, msg_id, subject, sender, recipients, body, f"/fake/{msg_id}.eml"),
                 )
             Database.commit()
 
@@ -185,7 +187,7 @@ class TestFTSIndex:
                 """SELECT m.subject FROM messages m
                    JOIN messages_fts ON m.id = messages_fts.rowid
                    WHERE messages_fts MATCH ?""",
-                ("budget",)
+                ("budget",),
             )
 
             assert len(results) == 2

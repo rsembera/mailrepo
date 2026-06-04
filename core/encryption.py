@@ -37,13 +37,16 @@ from .config import Config
 # EXCEPTIONS
 # ============================================================
 
+
 class EncryptionError(Exception):
     """Raised when encryption/decryption fails."""
+
     pass
 
 
 class InvalidPasswordError(Exception):
     """Raised when the master password is incorrect."""
+
     pass
 
 
@@ -57,9 +60,9 @@ VERIFICATION_TOKEN = b"MAILREPO_PASSWORD_OK"
 # Argon2id parameters measured on the MacBook Air M4: ~750ms at t=6.
 # Memory is the GPU-resistance knob; 256 MiB is invisible on machines with
 # >=8 GB RAM and meaningfully raises offline cracking cost.
-ARGON2_TIME_COST = 6           # iterations
-ARGON2_MEMORY_COST = 262_144   # 256 MiB, in KiB
-ARGON2_PARALLELISM = 1         # cleaner than p=2 for a latency-bound single derivation
+ARGON2_TIME_COST = 6  # iterations
+ARGON2_MEMORY_COST = 262_144  # 256 MiB, in KiB
+ARGON2_PARALLELISM = 1  # cleaner than p=2 for a latency-bound single derivation
 ARGON2_KEY_LENGTH = 32
 
 # HKDF-Expand info strings. The .v2 suffix means a future v3 KDF would
@@ -77,6 +80,7 @@ GCM_TAG_LENGTH = 16
 # ============================================================
 # MAIN CLASS
 # ============================================================
+
 
 class Encryption:
     """
@@ -159,8 +163,8 @@ class Encryption:
                 "may be corrupt."
             )
 
-        salt = data[4:4 + SALT_LENGTH]
-        encrypted_verification = data[4 + SALT_LENGTH:]
+        salt = data[4 : 4 + SALT_LENGTH]
+        encrypted_verification = data[4 + SALT_LENGTH :]
 
         master = cls._derive_master_v2(password, salt)
         file_key = cls._derive_subkey_v2(master, HKDF_INFO_FILE_V2)
@@ -207,9 +211,7 @@ class Encryption:
             raise EncryptionError("Encryption is locked.")
         if len(data) < 1 or data[0] != VERSION_BYTE_V2:
             got = f"0x{data[0]:02x}" if len(data) > 0 else "empty"
-            raise EncryptionError(
-                f"Unexpected version byte: {got} (expected 0x02)."
-            )
+            raise EncryptionError(f"Unexpected version byte: {got} (expected 0x02).")
         try:
             return cls._decrypt_v2_with_key(data, cls._file_key_v2)
         except Exception as e:
@@ -272,11 +274,9 @@ class Encryption:
             raise EncryptionError("Ciphertext too short for v2 format.")
         version_byte = data[0:1]
         if version_byte[0] != VERSION_BYTE_V2:
-            raise EncryptionError(
-                f"Unexpected v2 version byte: 0x{version_byte[0]:02x}"
-            )
-        nonce = data[1:1 + GCM_NONCE_LENGTH]
-        ct_and_tag = data[1 + GCM_NONCE_LENGTH:]
+            raise EncryptionError(f"Unexpected v2 version byte: 0x{version_byte[0]:02x}")
+        nonce = data[1 : 1 + GCM_NONCE_LENGTH]
+        ct_and_tag = data[1 + GCM_NONCE_LENGTH :]
         aesgcm = AESGCM(key)
         return aesgcm.decrypt(nonce, ct_and_tag, associated_data=version_byte)
 
@@ -313,12 +313,8 @@ class Encryption:
         """
         if cls._salt is None or cls._file_key_v2 is None:
             raise EncryptionError("Keys not available; cannot write salt file.")
-        encrypted_verification = cls._encrypt_v2_with_key(
-            VERIFICATION_TOKEN, cls._file_key_v2
-        )
-        cls._atomic_write_salt_file(
-            SALT_MAGIC_V2 + cls._salt + encrypted_verification
-        )
+        encrypted_verification = cls._encrypt_v2_with_key(VERIFICATION_TOKEN, cls._file_key_v2)
+        cls._atomic_write_salt_file(SALT_MAGIC_V2 + cls._salt + encrypted_verification)
 
     # ----------------------------------------------------------
     # Atomic file replacement
@@ -354,6 +350,7 @@ class Encryption:
 # ============================================================
 # FLASK SECRET KEY (independent of master password)
 # ============================================================
+
 
 def generate_flask_secret_key() -> str:
     """

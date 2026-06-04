@@ -27,7 +27,7 @@ def _linkify_html(html):
     """
     # Split HTML into parts: inside tags vs text content
     # This regex captures HTML tags (including their content) as separate groups
-    parts = re.split(r'(<a\s[^>]*>.*?</a>|<[^>]+>)', html, flags=re.IGNORECASE | re.DOTALL)
+    parts = re.split(r"(<a\s[^>]*>.*?</a>|<[^>]+>)", html, flags=re.IGNORECASE | re.DOTALL)
 
     result = []
     for part in parts:
@@ -35,7 +35,7 @@ def _linkify_html(html):
         if not part:
             continue
         # Skip HTML tags and existing anchor elements
-        if part.startswith('<'):
+        if part.startswith("<"):
             result.append(part)
             continue
 
@@ -45,24 +45,22 @@ def _linkify_html(html):
         part = re.sub(
             r'(https?://(?:(?!&(?:nbsp|amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)[^\s\u00a0<>"\'])+)',
             r'<a href="\1" target="_blank" rel="noopener noreferrer">\1</a>',
-            part
+            part,
         )
         # Then linkify email addresses (but not ones we just made into links)
         part = re.sub(
-            r'\b([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\b(?![^<]*>)',
+            r"\b([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\b(?![^<]*>)",
             r'<a href="mailto:\1">\1</a>',
-            part
+            part,
         )
         result.append(part)
 
-    return ''.join(result)
+    return "".join(result)
 
 
 def _get_folder_and_descendants(folder_id: int) -> list[int]:
     """Get a folder ID and all its descendant folder IDs."""
-    all_folders = Database.fetchall(
-        "SELECT id, parent_id FROM folders WHERE deleted_at IS NULL"
-    )
+    all_folders = Database.fetchall("SELECT id, parent_id FROM folders WHERE deleted_at IS NULL")
     folder_map = {}
     for f in all_folders:
         parent = f["parent_id"]
@@ -147,7 +145,7 @@ def search_emails():
             ORDER BY m.date DESC
             LIMIT ?
             """,
-            (fts_query, *folder_ids, limit)
+            (fts_query, *folder_ids, limit),
         )
     else:
         results = Database.fetchall(
@@ -160,7 +158,7 @@ def search_emails():
             ORDER BY m.date DESC
             LIMIT ?
             """,
-            (fts_query, limit)
+            (fts_query, limit),
         )
 
     # Build folder path map from a single query (avoids N+1 per result)
@@ -183,16 +181,19 @@ def search_emails():
             current_id = folder["parent_id"]
         return " › ".join(path_parts) if path_parts else ""
 
-    emails = [{
-        "id": r["id"],
-        "folder_id": r["folder_id"],
-        "folder_name": r["folder_name"],
-        "folder_path": get_folder_path(r["folder_id"]),
-        "subject": r["subject"],
-        "sender": r["sender"],
-        "date": r["date"],
-        "flagged_at": r["flagged_at"],
-    } for r in results]
+    emails = [
+        {
+            "id": r["id"],
+            "folder_id": r["folder_id"],
+            "folder_name": r["folder_name"],
+            "folder_path": get_folder_path(r["folder_id"]),
+            "subject": r["subject"],
+            "sender": r["sender"],
+            "date": r["date"],
+            "flagged_at": r["flagged_at"],
+        }
+        for r in results
+    ]
 
     return jsonify({"query": query, "count": len(emails), "emails": emails})
 
@@ -210,16 +211,19 @@ def get_folder_emails(folder_id):
         FROM messages WHERE folder_id = ? AND deleted_at IS NULL
         ORDER BY date DESC
         """,
-        (folder_id,)
+        (folder_id,),
     )
 
-    emails = [{
-        "id": m["id"],
-        "subject": m["subject"],
-        "sender": m["sender"],
-        "date": m["date"],
-        "flagged_at": m["flagged_at"],
-    } for m in messages]
+    emails = [
+        {
+            "id": m["id"],
+            "subject": m["subject"],
+            "sender": m["sender"],
+            "date": m["date"],
+            "flagged_at": m["flagged_at"],
+        }
+        for m in messages
+    ]
 
     return jsonify({"emails": emails})
 
@@ -237,7 +241,7 @@ def get_archived_email(folder_id, message_id):
         SELECT id, folder_id, subject, sender, date, filepath, flagged_at
         FROM messages WHERE id = ? AND folder_id = ?
         """,
-        (message_id, folder_id)
+        (message_id, folder_id),
     )
     if not message:
         return jsonify({"error": "Message not found"}), 404
@@ -282,14 +286,14 @@ def get_archived_email(folder_id, message_id):
                 content_id = part.get("Content-ID")
                 if not content_id:
                     continue
-                cid = content_id.strip('<>')
+                cid = content_id.strip("<>")
                 if cid not in referenced_cids:
                     continue
                 payload = part.get_payload(decode=True)
                 if not payload:
                     continue
                 content_type = part.get_content_type()
-                b64_data = base64.b64encode(payload).decode('ascii')
+                b64_data = base64.b64encode(payload).decode("ascii")
                 inline_images[cid] = f"data:{content_type};base64,{b64_data}"
 
         # Second pass: collect body and attachments
@@ -302,19 +306,23 @@ def get_archived_email(folder_id, message_id):
 
                 # Skip only the inline images registered above
                 if content_id and content_type.startswith("image/"):
-                    cid = content_id.strip('<>')
+                    cid = content_id.strip("<>")
                     if cid in referenced_cids:
                         continue
 
                 # Treat as attachment if explicitly marked as attachment,
                 # OR if it has a filename (even if inline) and isn't text
-                if "attachment" in content_disposition or (filename and part.get_content_maintype() != "text"):
+                if "attachment" in content_disposition or (
+                    filename and part.get_content_maintype() != "text"
+                ):
                     if filename:
-                        result["attachments"].append({
-                            "filename": _decode_header(filename),
-                            "content_type": content_type,
-                            "size": len(part.get_payload(decode=True) or b""),
-                        })
+                        result["attachments"].append(
+                            {
+                                "filename": _decode_header(filename),
+                                "content_type": content_type,
+                                "size": len(part.get_payload(decode=True) or b""),
+                            }
+                        )
                     continue
 
                 payload = part.get_payload(decode=True)
@@ -338,16 +346,13 @@ def get_archived_email(folder_id, message_id):
 
         # Replace cid: references in HTML body with data URLs
         if result["html_body"] and inline_images:
+
             def replace_cid(match):
                 cid = match.group(1)
                 return inline_images.get(cid, match.group(0))
 
             # Match cid:xxx in src attributes (handles quoted and unquoted)
-            result["html_body"] = re.sub(
-                r'cid:([^"\'\s>]+)',
-                replace_cid,
-                result["html_body"]
-            )
+            result["html_body"] = re.sub(r'cid:([^"\'\s>]+)', replace_cid, result["html_body"])
 
         # Linkify URLs and emails in HTML body that aren't already links
         if result["html_body"]:
@@ -369,10 +374,7 @@ def delete_message(message_id):
     The user sees the email's original location preserved via
     original_folder_id; restore reads from that.
     """
-    message = Database.fetchone(
-        "SELECT id, folder_id FROM messages WHERE id = ?",
-        (message_id,)
-    )
+    message = Database.fetchone("SELECT id, folder_id FROM messages WHERE id = ?", (message_id,))
     if not message:
         return jsonify({"error": "Message not found"}), 404
 
@@ -385,7 +387,7 @@ def delete_message(message_id):
             folder_id = NULL
         WHERE id = ?
         """,
-        (now, message_id)
+        (now, message_id),
     )
     Database.commit()
     return jsonify({"success": True})
@@ -405,8 +407,7 @@ def restore_message(message_id):
     can prompt the user.
     """
     message = Database.fetchone(
-        "SELECT id, deleted_at, original_folder_id FROM messages WHERE id = ?",
-        (message_id,)
+        "SELECT id, deleted_at, original_folder_id FROM messages WHERE id = ?", (message_id,)
     )
     if not message:
         return jsonify({"error": "Message not found"}), 404
@@ -421,8 +422,7 @@ def restore_message(message_id):
     destination_id = None
     if requested_dest is not None:
         dest = Database.fetchone(
-            "SELECT id FROM folders WHERE id = ? AND deleted_at IS NULL",
-            (requested_dest,)
+            "SELECT id FROM folders WHERE id = ? AND deleted_at IS NULL", (requested_dest,)
         )
         if not dest:
             return jsonify({"error": "Destination folder not found or in trash"}), 400
@@ -431,7 +431,7 @@ def restore_message(message_id):
         # Try the original folder; only use it if it still exists and is alive
         dest = Database.fetchone(
             "SELECT id FROM folders WHERE id = ? AND deleted_at IS NULL",
-            (message["original_folder_id"],)
+            (message["original_folder_id"],),
         )
         if dest:
             destination_id = dest["id"]
@@ -439,10 +439,12 @@ def restore_message(message_id):
     if destination_id is None:
         # Original is gone (or trashed) and caller didn't pick. Frontend
         # should present a folder picker.
-        return jsonify({
-            "error": "Original folder is unavailable. Please choose a destination.",
-            "needs_destination": True,
-        }), 409
+        return jsonify(
+            {
+                "error": "Original folder is unavailable. Please choose a destination.",
+                "needs_destination": True,
+            }
+        ), 409
 
     Database.execute(
         """
@@ -452,7 +454,7 @@ def restore_message(message_id):
             original_folder_id = NULL
         WHERE id = ?
         """,
-        (destination_id, message_id)
+        (destination_id, message_id),
     )
     Database.commit()
     return jsonify({"success": True, "folder_id": destination_id})
@@ -462,8 +464,7 @@ def restore_message(message_id):
 def permanently_delete_message(message_id):
     """Permanently delete a message from trash."""
     message = Database.fetchone(
-        "SELECT id, deleted_at, filepath FROM messages WHERE id = ?",
-        (message_id,)
+        "SELECT id, deleted_at, filepath FROM messages WHERE id = ?", (message_id,)
     )
     if not message:
         return jsonify({"error": "Message not found"}), 404
@@ -490,10 +491,7 @@ def flag_message(message_id):
     Body: {"flagged": true} sets flagged_at to now; {"flagged": false}
     clears it. Returns the resulting flagged_at value (timestamp or null)
     so the frontend can sync local state without re-fetching."""
-    message = Database.fetchone(
-        "SELECT id FROM messages WHERE id = ?",
-        (message_id,)
-    )
+    message = Database.fetchone("SELECT id FROM messages WHERE id = ?", (message_id,))
     if not message:
         return jsonify({"error": "Message not found"}), 404
 
@@ -503,17 +501,11 @@ def flag_message(message_id):
 
     if data["flagged"]:
         now = int(time.time())
-        Database.execute(
-            "UPDATE messages SET flagged_at = ? WHERE id = ?",
-            (now, message_id)
-        )
+        Database.execute("UPDATE messages SET flagged_at = ? WHERE id = ?", (now, message_id))
         Database.commit()
         return jsonify({"flagged_at": now})
     else:
-        Database.execute(
-            "UPDATE messages SET flagged_at = NULL WHERE id = ?",
-            (message_id,)
-        )
+        Database.execute("UPDATE messages SET flagged_at = NULL WHERE id = ?", (message_id,))
         Database.commit()
         return jsonify({"flagged_at": None})
 
@@ -537,7 +529,7 @@ def get_flagged_emails():
           AND f.deleted_at IS NULL
         ORDER BY m.flagged_at DESC
         """,
-        ()
+        (),
     )
 
     # Build a folder-path map once (avoid N+1 per result)
@@ -559,16 +551,19 @@ def get_flagged_emails():
             current_id = folder["parent_id"]
         return " › ".join(path_parts) if path_parts else ""
 
-    emails = [{
-        "id": m["id"],
-        "subject": m["subject"],
-        "sender": m["sender"],
-        "date": m["date"],
-        "flagged_at": m["flagged_at"],
-        "folder_id": m["folder_id"],
-        "folder_name": m["folder_name"],
-        "folder_path": get_folder_path(m["folder_id"]),
-    } for m in messages]
+    emails = [
+        {
+            "id": m["id"],
+            "subject": m["subject"],
+            "sender": m["sender"],
+            "date": m["date"],
+            "flagged_at": m["flagged_at"],
+            "folder_id": m["folder_id"],
+            "folder_name": m["folder_name"],
+            "folder_path": get_folder_path(m["folder_id"]),
+        }
+        for m in messages
+    ]
 
     return jsonify({"emails": emails})
 
@@ -576,10 +571,7 @@ def get_flagged_emails():
 @api_bp.route("/messages/<int:message_id>", methods=["PATCH"])
 def update_message(message_id):
     """Update message properties (move to different folder)."""
-    message = Database.fetchone(
-        "SELECT id, folder_id FROM messages WHERE id = ?",
-        (message_id,)
-    )
+    message = Database.fetchone("SELECT id, folder_id FROM messages WHERE id = ?", (message_id,))
     if not message:
         return jsonify({"error": "Message not found"}), 404
 
@@ -589,15 +581,13 @@ def update_message(message_id):
         new_folder_id = data["folder_id"]
         # Verify destination folder exists
         folder = Database.fetchone(
-            "SELECT id FROM folders WHERE id = ? AND deleted_at IS NULL",
-            (new_folder_id,)
+            "SELECT id FROM folders WHERE id = ? AND deleted_at IS NULL", (new_folder_id,)
         )
         if not folder:
             return jsonify({"error": "Destination folder not found"}), 404
 
         Database.execute(
-            "UPDATE messages SET folder_id = ? WHERE id = ?",
-            (new_folder_id, message_id)
+            "UPDATE messages SET folder_id = ? WHERE id = ?", (new_folder_id, message_id)
         )
         Database.commit()
 
@@ -625,24 +615,27 @@ def get_trashed_emails():
         WHERE m.deleted_at IS NOT NULL
         ORDER BY m.deleted_at DESC
         """,
-        ()
+        (),
     )
 
-    emails = [{
-        "id": m["id"],
-        "subject": m["subject"],
-        "sender": m["sender"],
-        "date": m["date"],
-        "deleted_at": m["deleted_at"],
-        "folder_id": m["folder_id"],
-        "folder_name": m["folder_name"],
-        # True if the original folder is itself in trash or gone, which
-        # affects the restore flow (user will need to pick a destination)
-        "original_folder_unavailable": (
-            m["folder_id"] is None or m["folder_deleted_at"] is not None
-        ),
-        "flagged_at": m["flagged_at"],
-    } for m in messages]
+    emails = [
+        {
+            "id": m["id"],
+            "subject": m["subject"],
+            "sender": m["sender"],
+            "date": m["date"],
+            "deleted_at": m["deleted_at"],
+            "folder_id": m["folder_id"],
+            "folder_name": m["folder_name"],
+            # True if the original folder is itself in trash or gone, which
+            # affects the restore flow (user will need to pick a destination)
+            "original_folder_unavailable": (
+                m["folder_id"] is None or m["folder_deleted_at"] is not None
+            ),
+            "flagged_at": m["flagged_at"],
+        }
+        for m in messages
+    ]
 
     return jsonify({"emails": emails})
 
@@ -655,7 +648,7 @@ def download_archived_email(folder_id, message_id):
         SELECT id, folder_id, subject, filepath
         FROM messages WHERE id = ? AND folder_id = ?
         """,
-        (message_id, folder_id)
+        (message_id, folder_id),
     )
     if not message:
         return jsonify({"error": "Message not found"}), 404
@@ -670,19 +663,23 @@ def download_archived_email(folder_id, message_id):
 
         # Clean subject for filename
         subject = message["subject"] or "email"
-        safe_filename = "".join(c for c in subject if c.isalnum() or c in " -_")[:50].strip() or "email"
+        safe_filename = (
+            "".join(c for c in subject if c.isalnum() or c in " -_")[:50].strip() or "email"
+        )
         filename = f"{safe_filename}.eml"
 
         return Response(
             raw_bytes,
             mimetype="message/rfc822",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
     except Exception as e:
         return jsonify({"error": f"Failed to read email: {e}"}), 500
 
 
-@api_bp.route("/folders/<int:folder_id>/emails/<int:message_id>/attachments/<int:index>", methods=["GET"])
+@api_bp.route(
+    "/folders/<int:folder_id>/emails/<int:message_id>/attachments/<int:index>", methods=["GET"]
+)
 def download_archived_attachment(folder_id, message_id, index):
     """Download an attachment from an archived email."""
     message = Database.fetchone(
@@ -690,7 +687,7 @@ def download_archived_attachment(folder_id, message_id, index):
         SELECT id, folder_id, filepath
         FROM messages WHERE id = ? AND folder_id = ?
         """,
-        (message_id, folder_id)
+        (message_id, folder_id),
     )
     if not message:
         return jsonify({"error": "Message not found"}), 404
@@ -719,17 +716,21 @@ def download_archived_attachment(folder_id, message_id, index):
                 # Skip only the inline images that are actually referenced
                 # via cid: in the html body \u2014 same logic as the viewer route.
                 if content_id and content_type.startswith("image/"):
-                    cid = content_id.strip('<>')
+                    cid = content_id.strip("<>")
                     if cid in referenced_cids:
                         continue
 
-                if "attachment" in content_disposition or (filename and part.get_content_maintype() != "text"):
+                if "attachment" in content_disposition or (
+                    filename and part.get_content_maintype() != "text"
+                ):
                     if filename:
-                        attachments.append({
-                            "filename": _decode_header(filename),
-                            "content_type": content_type,
-                            "payload": part.get_payload(decode=True),
-                        })
+                        attachments.append(
+                            {
+                                "filename": _decode_header(filename),
+                                "content_type": content_type,
+                                "payload": part.get_payload(decode=True),
+                            }
+                        )
 
         if index < 0 or index >= len(attachments):
             return jsonify({"error": "Attachment not found"}), 404
@@ -743,7 +744,7 @@ def download_archived_attachment(folder_id, message_id, index):
         return Response(
             att["payload"],
             mimetype=att["content_type"],
-            headers={"Content-Disposition": f'{disposition}; filename="{att["filename"]}"'}
+            headers={"Content-Disposition": f'{disposition}; filename="{att["filename"]}"'},
         )
     except Exception as e:
         return jsonify({"error": f"Failed to read attachment: {e}"}), 500
@@ -757,7 +758,7 @@ def get_archived_email_source(folder_id, message_id):
         SELECT id, folder_id, filepath
         FROM messages WHERE id = ? AND folder_id = ?
         """,
-        (message_id, folder_id)
+        (message_id, folder_id),
     )
     if not message:
         return jsonify({"error": "Message not found"}), 404
@@ -772,9 +773,9 @@ def get_archived_email_source(folder_id, message_id):
 
         # Try to decode as text, fallback to latin-1 if UTF-8 fails
         try:
-            source = raw_bytes.decode('utf-8')
+            source = raw_bytes.decode("utf-8")
         except UnicodeDecodeError:
-            source = raw_bytes.decode('latin-1')
+            source = raw_bytes.decode("latin-1")
 
         return jsonify({"source": source})
     except Exception as e:
@@ -786,8 +787,7 @@ def reindex_search():
     """Rebuild FTS index by re-extracting body text from archived .eml files."""
     try:
         messages = Database.fetchall(
-            "SELECT id, filepath FROM messages WHERE deleted_at IS NULL",
-            ()
+            "SELECT id, filepath FROM messages WHERE deleted_at IS NULL", ()
         )
 
         updated = 0
@@ -803,8 +803,7 @@ def reindex_search():
                 raw_email = Encryption.decrypt(raw_email)
                 body_text = extract_body_text(raw_email)
                 Database.execute(
-                    "UPDATE messages SET body_text = ? WHERE id = ?",
-                    (body_text, msg["id"])
+                    "UPDATE messages SET body_text = ? WHERE id = ?", (body_text, msg["id"])
                 )
                 updated += 1
             except Exception as e:
@@ -814,10 +813,12 @@ def reindex_search():
         # Rebuild FTS index
         Database.execute("INSERT INTO messages_fts(messages_fts) VALUES('rebuild')", ())
 
-        return jsonify({
-            "message": f"Reindexed {updated} emails ({errors} errors)",
-            "updated": updated,
-            "errors": errors
-        })
+        return jsonify(
+            {
+                "message": f"Reindexed {updated} emails ({errors} errors)",
+                "updated": updated,
+                "errors": errors,
+            }
+        )
     except Exception as e:
         return jsonify({"error": f"Reindex failed: {e}"}), 500

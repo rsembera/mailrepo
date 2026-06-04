@@ -17,9 +17,7 @@ from core import Config, Database, Encryption
 
 
 def _make_folder(name, parent_id=None):
-    cur = Database.execute(
-        "INSERT INTO folders (name, parent_id) VALUES (?, ?)", (name, parent_id)
-    )
+    cur = Database.execute("INSERT INTO folders (name, parent_id) VALUES (?, ?)", (name, parent_id))
     Database.commit()
     return cur.lastrowid
 
@@ -32,7 +30,7 @@ def _eml_bytes(subject="Imported message", body="body text here", attachment=Fal
             f"Subject: {subject}\r\nMessage-ID: <{secrets.token_hex(6)}@test>\r\n"
             f"MIME-Version: 1.0\r\n"
             f'Content-Type: multipart/mixed; boundary="{boundary}"\r\n\r\n'
-            f"--{boundary}\r\nContent-Type: text/plain; charset=\"utf-8\"\r\n\r\n"
+            f'--{boundary}\r\nContent-Type: text/plain; charset="utf-8"\r\n\r\n'
             f"{body}\r\n"
             f"--{boundary}\r\nContent-Type: application/pdf\r\n"
             f'Content-Disposition: attachment; filename="doc.pdf"\r\n\r\n'
@@ -66,6 +64,7 @@ def _seed_encrypted_message(folder_id, subject="Export me", body="secret content
 # ---------------------------------------------------------------------------
 # mbox / eml scan + import validation
 # ---------------------------------------------------------------------------
+
 
 class TestScanImportValidation:
     def test_scan_requires_path(self, authenticated_client, initialized_app):
@@ -121,21 +120,18 @@ class TestImportEml:
         fid = _make_folder("Imports")
         f = tmp_path / "m.eml"
         f.write_bytes(_eml_bytes(subject="A real import"))
-        resp = authenticated_client.post(
-            "/api/import/eml", json={"path": str(f), "folder_id": fid}
-        )
+        resp = authenticated_client.post("/api/import/eml", json={"path": str(f), "folder_id": fid})
         assert resp.status_code == 200
         assert resp.get_json()["success"] is True
         # A message row now exists in the destination folder
-        row = Database.fetchone(
-            "SELECT subject FROM messages WHERE folder_id = ?", (fid,)
-        )
+        row = Database.fetchone("SELECT subject FROM messages WHERE folder_id = ?", (fid,))
         assert row is not None and row["subject"] == "A real import"
 
 
 # ---------------------------------------------------------------------------
 # Fetch full import-email content + attachment
 # ---------------------------------------------------------------------------
+
 
 class TestGetImportEmail:
     def test_requires_source(self, authenticated_client, initialized_app):
@@ -145,9 +141,7 @@ class TestGetImportEmail:
     def test_requires_uid(self, authenticated_client, initialized_app, tmp_path):
         f = tmp_path / "m.eml"
         f.write_bytes(_eml_bytes())
-        resp = authenticated_client.post(
-            "/api/import/email", json={"emailSourcePath": str(f)}
-        )
+        resp = authenticated_client.post("/api/import/email", json={"emailSourcePath": str(f)})
         assert resp.status_code == 400
 
     def test_source_not_found(self, authenticated_client, initialized_app):
@@ -199,6 +193,7 @@ class TestImportAttachment:
 # ---------------------------------------------------------------------------
 # Folder export (unencrypted ZIP round-trip)
 # ---------------------------------------------------------------------------
+
 
 class TestExportFolder:
     def test_export_folder_not_found(self, authenticated_client, initialized_app):

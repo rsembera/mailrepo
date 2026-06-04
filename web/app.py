@@ -161,6 +161,7 @@ def create_app(test_config: dict = None) -> Flask:
     @app.errorhandler(Exception)
     def handle_uncaught(e):
         from werkzeug.exceptions import HTTPException
+
         if not is_api_request():
             if isinstance(e, HTTPException):
                 return e

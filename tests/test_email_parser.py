@@ -3,7 +3,6 @@ Tests for email parsing functionality.
 """
 
 
-
 class TestEmailMetadataParsing:
     """Tests for parsing email headers and metadata."""
 

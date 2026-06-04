@@ -15,6 +15,7 @@ Used during Stage Thread feature development to confirm our Sent-folder
 candidate list covers the real accounts (NCF, Gmail). Delete this file
 after we're confident the candidate list is right.
 """
+
 import getpass
 import os
 import sys
@@ -41,9 +42,7 @@ db_key = Encryption.get_db_key()
 Database.set_key(db_key)
 Database.initialize()
 
-rows = Database.fetchall(
-    "SELECT id, email FROM accounts WHERE credentials_encrypted IS NOT NULL"
-)
+rows = Database.fetchall("SELECT id, email FROM accounts WHERE credentials_encrypted IS NOT NULL")
 if not rows:
     print("No accounts configured.")
     sys.exit(0)
@@ -52,12 +51,11 @@ for row in rows:
     print(f"\n--- Account: {row['email']} (id={row['id']}) ---")
     try:
         creds_row = Database.fetchone(
-            "SELECT credentials_encrypted FROM accounts WHERE id = ?",
-            (row['id'],)
+            "SELECT credentials_encrypted FROM accounts WHERE id = ?", (row["id"],)
         )
-        client = IMAP.connect_with_credentials(creds_row['credentials_encrypted'])
+        client = IMAP.connect_with_credentials(creds_row["credentials_encrypted"])
         try:
-            for ftype in ('sent', 'archive', 'trash'):
+            for ftype in ("sent", "archive", "trash"):
                 name = client.get_special_folder(ftype)
                 print(f"  {ftype:8s} -> {name!r}")
         finally:

@@ -35,14 +35,16 @@ def check_pending_commit():
 
     pending = get_pending_commit()
     if pending:
-        return jsonify({
-            "hasPending": True,
-            "commitId": pending['commit_id'],
-            "total": pending['total'],
-            "pending": pending['pending'],
-            "committed": pending['committed'],
-            "createdAt": pending['created_at'],
-        })
+        return jsonify(
+            {
+                "hasPending": True,
+                "commitId": pending["commit_id"],
+                "total": pending["total"],
+                "pending": pending["pending"],
+                "committed": pending["committed"],
+                "createdAt": pending["created_at"],
+            }
+        )
     return jsonify({"hasPending": False})
 
 

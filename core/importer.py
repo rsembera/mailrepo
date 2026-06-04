@@ -17,6 +17,7 @@ from .encryption import Encryption
 
 class ImportError(Exception):
     """Raised when import operations fail."""
+
     pass
 
 
@@ -100,6 +101,7 @@ def import_eml_file(
         else:
             # Use hash of content
             import hashlib
+
             safe_id = hashlib.sha256(raw_bytes).hexdigest()[:20]
 
         # Save to archive (always encrypted)
@@ -125,7 +127,7 @@ def import_eml_file(
                 metadata["sender"],
                 metadata["date"],
                 str(dest_path.relative_to(Config.get_base_path())),
-            )
+            ),
         )
 
         return {
@@ -184,6 +186,7 @@ def import_mbox_file(
                     safe_id = metadata["message_id"].strip("<>").replace("/", "_")[:100]
                 else:
                     import hashlib
+
                     safe_id = hashlib.sha256(raw_bytes).hexdigest()[:20]
 
                 # Ensure unique filename
@@ -215,17 +218,19 @@ def import_mbox_file(
                         metadata["sender"],
                         metadata["date"],
                         str(dest_path.relative_to(Config.get_base_path())),
-                    )
+                    ),
                 )
 
                 results["success_count"] += 1
 
             except Exception as e:
                 results["failed_count"] += 1
-                results["errors"].append({
-                    "index": i,
-                    "error": str(e),
-                })
+                results["errors"].append(
+                    {
+                        "index": i,
+                        "error": str(e),
+                    }
+                )
 
             # Progress callback
             if progress_callback:
@@ -259,10 +264,12 @@ def scan_mbox_file(mbox_path: Path) -> dict:
                 break
             subject = decode_header_value(message.get("Subject", "(no subject)"))
             sender = decode_header_value(message.get("From", ""))
-            samples.append({
-                "subject": subject[:100],
-                "sender": sender[:100],
-            })
+            samples.append(
+                {
+                    "subject": subject[:100],
+                    "sender": sender[:100],
+                }
+            )
 
         return {
             "message_count": total,

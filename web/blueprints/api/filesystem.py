@@ -49,7 +49,7 @@ def is_hidden(name):
     system directories that aren\'t dotfile-hidden but are still useless
     in a destination picker (Windows-style $RECYCLE.BIN, etc.).
     """
-    return name.startswith('.') or name in _SYSTEM_DIRS_TO_HIDE
+    return name.startswith(".") or name in _SYSTEM_DIRS_TO_HIDE
 
 
 def is_mbox_file(filepath, name):
@@ -58,15 +58,15 @@ def is_mbox_file(filepath, name):
     Checks by extension first, then by content signature.
     """
     # Check extension
-    if name.lower().endswith('.mbox'):
+    if name.lower().endswith(".mbox"):
         return True
 
     # Check content signature - mbox files start with "From "
     try:
-        with open(filepath, 'rb') as f:
+        with open(filepath, "rb") as f:
             # Read first 5 bytes
             header = f.read(5)
-            if header == b'From ':
+            if header == b"From ":
                 return True
     except (PermissionError, OSError, IOError):
         pass
@@ -122,13 +122,13 @@ def browse_filesystem():
                 is_dir = entry.is_dir()
 
                 # Apply filter
-                if file_filter == 'dirs_only' and not is_dir:
+                if file_filter == "dirs_only" and not is_dir:
                     continue
-                elif file_filter == 'mbox' and not is_dir:
+                elif file_filter == "mbox" and not is_dir:
                     if not is_mbox_file(entry.path, entry.name):
                         continue
-                elif file_filter == 'eml' and not is_dir:
-                    if not entry.name.lower().endswith('.eml'):
+                elif file_filter == "eml" and not is_dir:
+                    if not entry.name.lower().endswith(".eml"):
                         continue
 
                 stat = entry.stat()
@@ -140,7 +140,7 @@ def browse_filesystem():
                 }
 
                 # Mark mbox files for the file picker
-                if not is_dir and file_filter == 'mbox':
+                if not is_dir and file_filter == "mbox":
                     item["is_mbox"] = True
                 elif not is_dir and is_mbox_file(entry.path, entry.name):
                     item["is_mbox"] = True
@@ -155,11 +155,13 @@ def browse_filesystem():
         if parent == path:  # At root
             parent = None
 
-        return jsonify({
-            "path": path,
-            "parent": parent,
-            "items": items,
-        })
+        return jsonify(
+            {
+                "path": path,
+                "parent": parent,
+                "items": items,
+            }
+        )
 
     except PermissionError:
         return jsonify({"error": "Permission denied"}), 403
@@ -198,26 +200,30 @@ def scan_eml_folder():
     try:
         files = []
         for entry in os.scandir(path):
-            if entry.is_file() and entry.name.lower().endswith('.eml'):
+            if entry.is_file() and entry.name.lower().endswith(".eml"):
                 try:
                     stat = entry.stat()
-                    files.append({
-                        "name": entry.name,
-                        "path": entry.path,
-                        "size": stat.st_size,
-                    })
+                    files.append(
+                        {
+                            "name": entry.name,
+                            "path": entry.path,
+                            "size": stat.st_size,
+                        }
+                    )
                 except (PermissionError, OSError):
                     continue
 
         # Sort by name
         files.sort(key=lambda f: f["name"].lower())
 
-        return jsonify({
-            "path": path,
-            "folder_name": os.path.basename(path),
-            "files": files,
-            "count": len(files),
-        })
+        return jsonify(
+            {
+                "path": path,
+                "folder_name": os.path.basename(path),
+                "files": files,
+                "count": len(files),
+            }
+        )
 
     except PermissionError:
         return jsonify({"error": "Permission denied"}), 403
@@ -260,15 +266,17 @@ def read_file_content():
         return jsonify({"error": "Cannot read file"}), 400
 
     try:
-        with open(path, 'r', encoding='utf-8', errors='replace') as f:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
 
-        return jsonify({
-            "path": path,
-            "name": os.path.basename(path),
-            "content": content,
-            "size": size,
-        })
+        return jsonify(
+            {
+                "path": path,
+                "name": os.path.basename(path),
+                "content": content,
+                "size": size,
+            }
+        )
 
     except PermissionError:
         return jsonify({"error": "Permission denied"}), 403
@@ -324,26 +332,30 @@ def parse_mbox_file():
                 if folder:
                     folder = decode_email_header(folder)
 
-                emails.append({
-                    "uid": f"mbox-{i}",
-                    "subject": decode_email_header(message.get("Subject", "(no subject)")),
-                    "from": decode_email_header(message.get("From", "")),
-                    "to": decode_email_header(message.get("To", "")),
-                    "date": date_ts or date_str,
-                    "message_id": message.get("Message-ID", ""),
-                    "folder": folder,
-                })
+                emails.append(
+                    {
+                        "uid": f"mbox-{i}",
+                        "subject": decode_email_header(message.get("Subject", "(no subject)")),
+                        "from": decode_email_header(message.get("From", "")),
+                        "to": decode_email_header(message.get("To", "")),
+                        "date": date_ts or date_str,
+                        "message_id": message.get("Message-ID", ""),
+                        "folder": folder,
+                    }
+                )
             except Exception as e:
                 # Skip malformed messages
-                emails.append({
-                    "uid": f"mbox-{i}",
-                    "subject": f"(error reading message: {e})",
-                    "from": "",
-                    "to": "",
-                    "date": "",
-                    "message_id": "",
-                    "folder": "",
-                })
+                emails.append(
+                    {
+                        "uid": f"mbox-{i}",
+                        "subject": f"(error reading message: {e})",
+                        "from": "",
+                        "to": "",
+                        "date": "",
+                        "message_id": "",
+                        "folder": "",
+                    }
+                )
 
         # Detect folder structure
         folders = {}
@@ -362,12 +374,14 @@ def parse_mbox_file():
                 for name, uids in sorted(folders.items())
             ]
 
-        return jsonify({
-            "path": path,
-            "emails": emails,
-            "count": len(emails),
-            "folders": folder_list,
-        })
+        return jsonify(
+            {
+                "path": path,
+                "emails": emails,
+                "count": len(emails),
+                "folders": folder_list,
+            }
+        )
 
     except Exception as e:
         return jsonify({"error": f"Failed to parse mbox: {e}"}), 500
@@ -400,7 +414,7 @@ def parse_eml_file():
         return jsonify({"error": "Not a file"}), 400
 
     try:
-        with open(path, 'rb') as f:
+        with open(path, "rb") as f:
             message = message_from_binary_file(f)
 
         # Parse date
@@ -413,19 +427,21 @@ def parse_eml_file():
             except Exception:
                 date_ts = date_str
 
-        return jsonify({
-            "path": path,
-            "email": {
-                "uid": f"eml-{os.path.basename(path)}",
-                "subject": decode_email_header(message.get("Subject", "(no subject)")),
-                "from": decode_email_header(message.get("From", "")),
-                "to": decode_email_header(message.get("To", "")),
-                "date": date_ts or date_str,
-                "message_id": message.get("Message-ID", ""),
-                "filename": os.path.basename(path),
-                "sourcePath": path,  # Used by commit to retrieve raw email
-            },
-        })
+        return jsonify(
+            {
+                "path": path,
+                "email": {
+                    "uid": f"eml-{os.path.basename(path)}",
+                    "subject": decode_email_header(message.get("Subject", "(no subject)")),
+                    "from": decode_email_header(message.get("From", "")),
+                    "to": decode_email_header(message.get("To", "")),
+                    "date": date_ts or date_str,
+                    "message_id": message.get("Message-ID", ""),
+                    "filename": os.path.basename(path),
+                    "sourcePath": path,  # Used by commit to retrieve raw email
+                },
+            }
+        )
 
     except Exception as e:
         return jsonify({"error": f"Failed to parse eml: {e}"}), 500
@@ -477,15 +493,17 @@ def scan_apple_mbox_folder():
                         except Exception:
                             date_ts = date_str
 
-                    emails.append({
-                        "uid": f"apple-{os.path.basename(mbox_path)}-{i}",
-                        "subject": decode_email_header(message.get("Subject", "(no subject)")),
-                        "from": decode_email_header(message.get("From", "")),
-                        "to": decode_email_header(message.get("To", "")),
-                        "date": date_ts or date_str,
-                        "message_id": message.get("Message-ID", ""),
-                        "sourcePath": mbox_path,
-                    })
+                    emails.append(
+                        {
+                            "uid": f"apple-{os.path.basename(mbox_path)}-{i}",
+                            "subject": decode_email_header(message.get("Subject", "(no subject)")),
+                            "from": decode_email_header(message.get("From", "")),
+                            "to": decode_email_header(message.get("To", "")),
+                            "date": date_ts or date_str,
+                            "message_id": message.get("Message-ID", ""),
+                            "sourcePath": mbox_path,
+                        }
+                    )
                 except Exception:
                     pass
         except Exception:
@@ -505,18 +523,18 @@ def scan_apple_mbox_folder():
         messages_dir = os.path.join(pkg_path, "Messages")
         if os.path.isdir(messages_dir):
             for entry in os.scandir(messages_dir):
-                if entry.name.endswith('.emlx') and entry.is_file():
+                if entry.name.endswith(".emlx") and entry.is_file():
                     # Parse .emlx file (similar to .eml but with Apple metadata prefix)
                     try:
-                        with open(entry.path, 'rb') as f:
+                        with open(entry.path, "rb") as f:
                             content = f.read()
 
                         # .emlx files start with a line containing the byte count, skip it
-                        first_newline = content.find(b'\n')
+                        first_newline = content.find(b"\n")
                         if first_newline > 0:
-                            email_content = content[first_newline + 1:]
+                            email_content = content[first_newline + 1 :]
                             # Find where the email ends (before Apple's plist metadata)
-                            plist_marker = email_content.rfind(b'<?xml version=')
+                            plist_marker = email_content.rfind(b"<?xml version=")
                             if plist_marker > 0:
                                 email_content = email_content[:plist_marker]
 
@@ -531,15 +549,19 @@ def scan_apple_mbox_folder():
                                 except Exception:
                                     date_ts = date_str
 
-                            emails.append({
-                                "uid": f"emlx-{entry.name}",
-                                "subject": decode_email_header(message.get("Subject", "(no subject)")),
-                                "from": decode_email_header(message.get("From", "")),
-                                "to": decode_email_header(message.get("To", "")),
-                                "date": date_ts or date_str,
-                                "message_id": message.get("Message-ID", ""),
-                                "sourcePath": entry.path,
-                            })
+                            emails.append(
+                                {
+                                    "uid": f"emlx-{entry.name}",
+                                    "subject": decode_email_header(
+                                        message.get("Subject", "(no subject)")
+                                    ),
+                                    "from": decode_email_header(message.get("From", "")),
+                                    "to": decode_email_header(message.get("To", "")),
+                                    "date": date_ts or date_str,
+                                    "message_id": message.get("Message-ID", ""),
+                                    "sourcePath": entry.path,
+                                }
+                            )
                     except Exception:
                         pass
 
@@ -555,7 +577,7 @@ def scan_apple_mbox_folder():
         }
 
         # Check if this folder itself is a .mbox package
-        if folder_path.endswith('.mbox'):
+        if folder_path.endswith(".mbox"):
             result["emails"] = scan_mbox_package(folder_path)
 
             # Check for sibling folder with subfolders
@@ -588,11 +610,13 @@ def scan_apple_mbox_folder():
 
         total_count = count_emails(tree)
 
-        return jsonify({
-            "path": path,
-            "tree": tree,
-            "totalEmails": total_count,
-        })
+        return jsonify(
+            {
+                "path": path,
+                "tree": tree,
+                "totalEmails": total_count,
+            }
+        )
 
     except PermissionError:
         return jsonify({"error": "Permission denied"}), 403
@@ -614,16 +638,20 @@ def check_pst_support():
     readpst_path = shutil.which("readpst")
 
     if readpst_path:
-        return jsonify({
-            "supported": True,
-            "message": "PST import is available",
-            "readpst_path": readpst_path,
-        })
+        return jsonify(
+            {
+                "supported": True,
+                "message": "PST import is available",
+                "readpst_path": readpst_path,
+            }
+        )
     else:
-        return jsonify({
-            "supported": False,
-            "message": "PST import requires libpst. Install with: brew install libpst (macOS) or apt install pst-utils (Linux)",
-        })
+        return jsonify(
+            {
+                "supported": False,
+                "message": "PST import requires libpst. Install with: brew install libpst (macOS) or apt install pst-utils (Linux)",
+            }
+        )
 
 
 @api_bp.route("/filesystem/convert-pst", methods=["POST"])
@@ -657,15 +685,17 @@ def convert_pst_to_mbox():
     if not os.path.isfile(pst_path):
         return jsonify({"error": "Not a file"}), 400
 
-    if not pst_path.lower().endswith('.pst'):
+    if not pst_path.lower().endswith(".pst"):
         return jsonify({"error": "Not a PST file"}), 400
 
     # Check if readpst is available
     readpst_path = shutil.which("readpst")
     if not readpst_path:
-        return jsonify({
-            "error": "PST import requires libpst. Install with: brew install libpst (macOS) or apt install pst-utils (Linux)"
-        }), 400
+        return jsonify(
+            {
+                "error": "PST import requires libpst. Install with: brew install libpst (macOS) or apt install pst-utils (Linux)"
+            }
+        ), 400
 
     try:
         # Create temp directory for conversion
@@ -703,15 +733,17 @@ def convert_pst_to_mbox():
                 if os.path.isfile(filepath):
                     # Check if it's an mbox file (starts with "From ")
                     try:
-                        with open(filepath, 'rb') as mf:
+                        with open(filepath, "rb") as mf:
                             header = mf.read(5)
                             log.debug(f"PST file {filepath} header: {header}")
-                            if header == b'From ':
+                            if header == b"From ":
                                 rel_path = os.path.relpath(filepath, temp_dir)
-                                mbox_files.append({
-                                    "path": filepath,
-                                    "name": rel_path,
-                                })
+                                mbox_files.append(
+                                    {
+                                        "path": filepath,
+                                        "name": rel_path,
+                                    }
+                                )
                     except Exception as e:
                         log.debug(f"PST error reading {filepath}: {e}")
 
@@ -721,18 +753,20 @@ def convert_pst_to_mbox():
             shutil.rmtree(temp_dir, ignore_errors=True)
             return jsonify({"error": "No emails found in PST file"}), 400
 
-        return jsonify({
-            "success": True,
-            "temp_dir": temp_dir,
-            "mbox_files": mbox_files,
-            "folder_count": len(mbox_files),
-        })
+        return jsonify(
+            {
+                "success": True,
+                "temp_dir": temp_dir,
+                "mbox_files": mbox_files,
+                "folder_count": len(mbox_files),
+            }
+        )
 
     except subprocess.TimeoutExpired:
         shutil.rmtree(temp_dir, ignore_errors=True)
         return jsonify({"error": "PST conversion timed out (file may be too large)"}), 500
     except Exception as e:
-        if 'temp_dir' in locals():
+        if "temp_dir" in locals():
             shutil.rmtree(temp_dir, ignore_errors=True)
         return jsonify({"error": f"PST conversion failed: {e}"}), 500
 
@@ -755,6 +789,7 @@ def cleanup_pst_temp():
 
     # Security: only allow cleanup of paths in system temp directory
     import tempfile
+
     system_temp = tempfile.gettempdir()
 
     temp_dir = os.path.realpath(temp_dir)

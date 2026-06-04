@@ -35,9 +35,9 @@ class PollingFilter(logging.Filter):
     """Filter out noisy polling endpoint log messages."""
 
     POLLING_PATHS = [
-        'GET /api/session-status',
-        'GET /api/keepalive',
-        'HEAD / ',  # Heartbeat check
+        "GET /api/session-status",
+        "GET /api/keepalive",
+        "HEAD / ",  # Heartbeat check
     ]
 
     def filter(self, record):
@@ -47,7 +47,7 @@ class PollingFilter(logging.Filter):
             if path in message:
                 return False
         # Filter out static file requests (304 Not Modified)
-        if '/static/' in message and '304' in message:
+        if "/static/" in message and "304" in message:
             return False
         return True
 
@@ -72,14 +72,14 @@ def _cleanup(app):
 
                 from utils import backup
 
-                frequency = get_setting('backup_frequency', 'daily')
+                frequency = get_setting("backup_frequency", "daily")
                 if backup.check_backup_needed(frequency):
-                    location = get_setting('backup_location', '')
+                    location = get_setting("backup_location", "")
                     result = backup.create_backup(location if location else None)
                     if result:
                         log.info(f"Backup completed: {result['filename']}")
                         # Run post-backup command if configured
-                        post_cmd = get_setting('post_backup_command', '')
+                        post_cmd = get_setting("post_backup_command", "")
                         if post_cmd:
                             log.info(f"Running post-backup command: {post_cmd}")
                             try:
@@ -88,16 +88,20 @@ def _cleanup(app):
                                     shell=True,
                                     timeout=300,
                                     capture_output=True,
-                                    text=True
+                                    text=True,
                                 )
                                 if proc_result.stdout:
-                                    for line in proc_result.stdout.strip().split('\n'):
+                                    for line in proc_result.stdout.strip().split("\n"):
                                         if line:
                                             log.info(f"  {line}")
                                 if proc_result.returncode == 0:
                                     log.info("Post-backup command completed")
                                 else:
-                                    error_msg = proc_result.stderr.strip() if proc_result.stderr else f"Exit code {proc_result.returncode}"
+                                    error_msg = (
+                                        proc_result.stderr.strip()
+                                        if proc_result.stderr
+                                        else f"Exit code {proc_result.returncode}"
+                                    )
                                     log.warning(f"Post-backup command failed: {error_msg}")
                             except subprocess.TimeoutExpired:
                                 log.warning("Post-backup command timed out")
@@ -147,20 +151,21 @@ def main():
     """Application entry point."""
 
     # Check for --help first
-    if '--help' in sys.argv or '-h' in sys.argv:
+    if "--help" in sys.argv or "-h" in sys.argv:
         show_help()
 
     # Suppress polling endpoint logging
-    werkzeug_logger = logging.getLogger('werkzeug')
+    werkzeug_logger = logging.getLogger("werkzeug")
     werkzeug_logger.addFilter(PollingFilter())
 
     # Quiet Waitress queue warnings (normal for single-user app)
-    waitress_log = logging.getLogger('waitress')
+    waitress_log = logging.getLogger("waitress")
     waitress_log.setLevel(logging.ERROR)
 
     # Check for pending restore before opening database
     try:
         from utils import backup
+
         result = backup.complete_restore()
         if result:
             log.info(f"Restore completed from: {result.get('restore_point', 'unknown')}")
@@ -177,15 +182,15 @@ def main():
     # Get port from command line (--port=XXXX) or environment variable or default
     port = 5050
     for arg in sys.argv:
-        if arg.startswith('--port='):
+        if arg.startswith("--port="):
             try:
-                port = int(arg.split('=')[1])
+                port = int(arg.split("=")[1])
             except ValueError:
                 print(f"Invalid port: {arg}")
                 sys.exit(1)
 
     # Environment variable override
-    env_port = os.environ.get('MAILREPO_PORT')
+    env_port = os.environ.get("MAILREPO_PORT")
     if env_port:
         try:
             port = int(env_port)
@@ -200,7 +205,7 @@ def main():
     print(f"{'=' * 50}")
 
     # Check for --dev flag for development mode with auto-reload
-    if '--dev' in sys.argv:
+    if "--dev" in sys.argv:
         print("\nStarting in DEVELOPMENT mode (auto-reload enabled)...")
         print(f"Open your browser to: http://localhost:{port}")
         print("\nPress Ctrl+C to stop the server\n")

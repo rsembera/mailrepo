@@ -28,6 +28,7 @@ def pc_env(initialized_app):
 
 # --- item builders matching the frontend's staged-item shape ---------------
 
+
 def _email(dest, *, account_id=1, source_type="account", import_id=5, uid="100"):
     item = {"destinationFolderId": dest, "uid": uid, "subject": "S"}
     if source_type == "import":
@@ -57,6 +58,7 @@ def _folder(dest, *, account_id=1, source_type="account", import_id=5):
 
 
 # ---------------------------------------------------------------------------
+
 
 class TestCreateCommitSession:
     def test_returns_id_and_persists_items(self, pc_env):

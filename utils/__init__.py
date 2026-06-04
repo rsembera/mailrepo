@@ -19,11 +19,7 @@ def run_shell_command(command: str, timeout: int = 300) -> tuple[bool, str]:
 
     try:
         result = subprocess.run(
-            command,
-            shell=True,
-            timeout=timeout,
-            capture_output=True,
-            text=True
+            command, shell=True, timeout=timeout, capture_output=True, text=True
         )
 
         if result.returncode == 0:

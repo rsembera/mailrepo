@@ -54,6 +54,7 @@ def _clean_eml(subject="Hello", body="body", message_id="<clean@test>", date_hdr
 # decode_header_value
 # ---------------------------------------------------------------------------
 
+
 class TestDecodeHeaderValue:
     def test_empty(self):
         assert decode_header_value("") == ""
@@ -72,6 +73,7 @@ class TestDecodeHeaderValue:
 # ---------------------------------------------------------------------------
 # parse_email_metadata
 # ---------------------------------------------------------------------------
+
 
 class TestParseEmailMetadata:
     def test_clean_extraction(self):
@@ -94,11 +96,14 @@ class TestParseEmailMetadata:
         m = parse_email_metadata(_clean_eml(subject=long_subject))
         assert len(m["subject"]) == 500
 
-    @pytest.mark.parametrize("sample", [
-        "malformed_no_headers.eml",
-        "malformed_bad_encoding.eml",
-        "malformed_truncated.eml",
-    ])
+    @pytest.mark.parametrize(
+        "sample",
+        [
+            "malformed_no_headers.eml",
+            "malformed_bad_encoding.eml",
+            "malformed_truncated.eml",
+        ],
+    )
     def test_malformed_samples_do_not_raise(self, sample):
         raw = (TEST_FILES / sample).read_bytes()
         m = parse_email_metadata(raw)  # must not raise
@@ -108,6 +113,7 @@ class TestParseEmailMetadata:
 # ---------------------------------------------------------------------------
 # import_eml_file
 # ---------------------------------------------------------------------------
+
 
 class TestImportEmlFile:
     def test_happy_round_trip(self, initialized_app, tmp_path):
@@ -148,11 +154,14 @@ class TestImportEmlFile:
         assert result["success"] is False
         assert "error" in result
 
-    @pytest.mark.parametrize("sample", [
-        "malformed_no_headers.eml",
-        "malformed_bad_encoding.eml",
-        "malformed_truncated.eml",
-    ])
+    @pytest.mark.parametrize(
+        "sample",
+        [
+            "malformed_no_headers.eml",
+            "malformed_bad_encoding.eml",
+            "malformed_truncated.eml",
+        ],
+    )
     def test_malformed_archived_byte_for_byte(self, initialized_app, sample):
         fid = _make_folder()
         raw = (TEST_FILES / sample).read_bytes()
@@ -186,6 +195,7 @@ class TestImportEmlFile:
 # import_mbox_file
 # ---------------------------------------------------------------------------
 
+
 def _build_clean_mbox(path, *messages):
     mb = mailbox.mbox(str(path))
     mb.lock()
@@ -211,8 +221,10 @@ class TestImportMboxFile:
         assert results["total"] == 2
         assert results["success_count"] == 2
         assert results["failed_count"] == 0
-        subjects = {r["subject"] for r in Database.fetchall(
-            "SELECT subject FROM messages WHERE folder_id = ?", (fid,))}
+        subjects = {
+            r["subject"]
+            for r in Database.fetchall("SELECT subject FROM messages WHERE folder_id = ?", (fid,))
+        }
         assert subjects == {"One", "Two"}
 
     def test_clean_mbox_content_preserved(self, initialized_app, tmp_path):
@@ -247,6 +259,7 @@ class TestImportMboxFile:
 # ---------------------------------------------------------------------------
 # scan_mbox_file
 # ---------------------------------------------------------------------------
+
 
 class TestScanMboxFile:
     def test_scan_counts_and_samples(self, initialized_app, tmp_path):

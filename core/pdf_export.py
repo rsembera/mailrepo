@@ -44,6 +44,7 @@ logger = logging.getLogger(__name__)
 # Email loading and parsing
 # ---------------------------------------------------------------------------
 
+
 def _decode_header_value(header) -> str:
     """Best-effort decoding of an email header value to a str."""
     if not header:
@@ -96,6 +97,7 @@ def _get_bodies(msg) -> tuple[str | None, str | None]:
 def _get_inline_images(msg) -> dict[str, str]:
     """Return ``{cid: data-url}`` for inline images so WeasyPrint can render them."""
     import base64
+
     out: dict[str, str] = {}
     if msg.is_multipart():
         for part in msg.walk():
@@ -173,13 +175,16 @@ def _get_attachments(msg) -> list[dict]:
             payload = part.get_payload(decode=True)
             if not payload:
                 continue
-            attachments.append({
-                "filename": _decode_header_value(filename),
-                "content_type": ctype,
-                "data": payload,
-                "is_pdf": ctype == "application/pdf" or (filename or "").lower().endswith(".pdf"),
-                "is_image": ctype.startswith("image/"),
-            })
+            attachments.append(
+                {
+                    "filename": _decode_header_value(filename),
+                    "content_type": ctype,
+                    "data": payload,
+                    "is_pdf": ctype == "application/pdf"
+                    or (filename or "").lower().endswith(".pdf"),
+                    "is_image": ctype.startswith("image/"),
+                }
+            )
     return attachments
 
 
@@ -254,6 +259,7 @@ def _load_email(message_id: int) -> dict | None:
 # HTML rendering
 # ---------------------------------------------------------------------------
 
+
 def _esc(s: str | None) -> str:
     """HTML-escape a string, returning empty for None."""
     if not s:
@@ -291,25 +297,29 @@ def _render_email_section(
     for att in email.get("attachments", []):
         if att["is_pdf"]:
             label = chr(ord("A") + len(attachment_refs))
-            attachment_refs.append({
-                "label": label,
-                "filename": att["filename"],
-                "data": att["data"],
-                "email_index": index,
-                "email_subject": email.get("subject", ""),
-            })
+            attachment_refs.append(
+                {
+                    "label": label,
+                    "filename": att["filename"],
+                    "data": att["data"],
+                    "email_index": index,
+                    "email_subject": email.get("subject", ""),
+                }
+            )
             attachment_lines.append(
                 f'<li><span class="att-icon">📎</span> {_esc(att["filename"])} '
                 f'<span class="att-ref">(see Appendix {label})</span></li>'
             )
         elif att["is_image"]:
             if other_attachments is not None:
-                other_attachments.append({
-                    "filename": att["filename"],
-                    "data": att["data"],
-                    "email_index": index,
-                    "content_type": att["content_type"],
-                })
+                other_attachments.append(
+                    {
+                        "filename": att["filename"],
+                        "data": att["data"],
+                        "email_index": index,
+                        "content_type": att["content_type"],
+                    }
+                )
                 attachment_lines.append(
                     f'<li><span class="att-icon">📎</span> {_esc(att["filename"])} '
                     f'<span class="att-ref">(image \u2014 see attachments/email-{index}/)</span></li>'
@@ -321,12 +331,14 @@ def _render_email_section(
                 )
         else:
             if other_attachments is not None:
-                other_attachments.append({
-                    "filename": att["filename"],
-                    "data": att["data"],
-                    "email_index": index,
-                    "content_type": att["content_type"],
-                })
+                other_attachments.append(
+                    {
+                        "filename": att["filename"],
+                        "data": att["data"],
+                        "email_index": index,
+                        "content_type": att["content_type"],
+                    }
+                )
                 attachment_lines.append(
                     f'<li><span class="att-icon">📎</span> {_esc(att["filename"])} '
                     f'<span class="att-ref">(see attachments/email-{index}/)</span></li>'
@@ -352,7 +364,7 @@ def _render_email_section(
                 <table class="email-meta">
                     <tr><th>From:</th><td>{_esc(email.get("sender"))}</td></tr>
                     <tr><th>To:</th><td>{_esc(email.get("recipients"))}</td></tr>
-                    {f'<tr><th>Cc:</th><td>{_esc(email.get("cc"))}</td></tr>' if email.get("cc") else ""}
+                    {f"<tr><th>Cc:</th><td>{_esc(email.get('cc'))}</td></tr>" if email.get("cc") else ""}
                     <tr><th>Date:</th><td>{_esc(email.get("date_display"))}</td></tr>
                     <tr><th>Folder:</th><td>{_esc(email.get("folder_name"))}</td></tr>
                 </table>
@@ -435,7 +447,9 @@ def _sanitize_email_html(html: str, *, scope: str) -> str:
             attrs = re.sub(
                 r"(\bclass\s*=\s*[\"\'])",
                 lambda m: m.group(1) + "email-shell " + ("email-shell-" + tag_name) + " ",
-                attrs, count=1, flags=re.IGNORECASE,
+                attrs,
+                count=1,
+                flags=re.IGNORECASE,
             )
         else:
             attrs = ' class="email-shell email-shell-' + tag_name + '"' + attrs
@@ -527,7 +541,7 @@ def _scope_css_selectors(css: str, scope_class: str) -> str:
             while k < n:
                 if css[k] == ";" and depth == 0:
                     # Statement at-rule (e.g. @import, @charset) — pass through
-                    out_parts.append(css[i:k + 1])
+                    out_parts.append(css[i : k + 1])
                     i = k + 1
                     break
                 if css[k] == "{":
@@ -542,9 +556,9 @@ def _scope_css_selectors(css: str, scope_class: str) -> str:
                             depth -= 1
                         k += 1
                     block_end = k  # one past the closing }
-                    prelude = css[i:block_start + 1]   # "@media ... {"
-                    inner = css[block_start + 1:block_end - 1]
-                    closing = css[block_end - 1:block_end]  # "}"
+                    prelude = css[i : block_start + 1]  # "@media ... {"
+                    inner = css[block_start + 1 : block_end - 1]
+                    closing = css[block_end - 1 : block_end]  # "}"
 
                     if at_name in _NESTED_AT_RULES:
                         # Recurse to scope the nested selectors
@@ -572,7 +586,7 @@ def _scope_css_selectors(css: str, scope_class: str) -> str:
         if end_pos == -1:
             out_parts.append(css[i:])
             break
-        body = css[brace_pos:end_pos + 1]
+        body = css[brace_pos : end_pos + 1]
 
         new_selectors = ", ".join(
             _prefix_selector(sel.strip(), scope_class)
@@ -611,14 +625,13 @@ def _prefix_selector(selector: str, scope_class: str) -> str:
     # leading part and prepend our scope.
     m = re.match(r"^(html|body)\b\s*(>?\s*)?", selector, flags=re.IGNORECASE)
     if m:
-        rest = selector[m.end():].lstrip()
+        rest = selector[m.end() :].lstrip()
         if not rest:
             return f".{scope_class}"
         return f".{scope_class} {rest}"
 
     # Default: descend into our scope
     return f".{scope_class} {selector}"
-
 
 
 def _strip_tags(html: str) -> str:
@@ -799,6 +812,7 @@ body {
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def build_combined_pdf(
     message_ids: Iterable[int],
     *,
@@ -840,7 +854,10 @@ def build_combined_pdf(
 
     # ---- Phase 1: load and decrypt --------------------------------------
     plural = "s" if total != 1 else ""
-    yield {"event": "status", "data": {"phase": "loading", "message": f"Loading {total} email{plural}..."}}
+    yield {
+        "event": "status",
+        "data": {"phase": "loading", "message": f"Loading {total} email{plural}..."},
+    }
     emails: list[dict] = []
     for i, mid in enumerate(ids, start=1):
         loaded = _load_email(mid)
@@ -877,7 +894,9 @@ def build_combined_pdf(
     attachment_refs: list[dict] = []
     other_attachments: list[dict] = []
     for idx, em in enumerate(emails, start=1):
-        parts.append(_render_email_section(em, idx, len(emails), attachment_refs, other_attachments))
+        parts.append(
+            _render_email_section(em, idx, len(emails), attachment_refs, other_attachments)
+        )
         if idx % 10 == 0 or idx == len(emails):
             yield {
                 "event": "progress",
@@ -893,36 +912,39 @@ def build_combined_pdf(
         parts.append(_render_appendix_page(attachment_refs))
 
     full_html = (
-        "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
-        "<title>MailRepo Export</title></head><body>"
-        + "".join(parts)
-        + "</body></html>"
+        '<!DOCTYPE html><html><head><meta charset="utf-8">'
+        "<title>MailRepo Export</title></head><body>" + "".join(parts) + "</body></html>"
     )
 
     # ---- Phase 4: WeasyPrint render -------------------------------------
     # WeasyPrint runs synchronously with no progress callbacks, so we can\'t
     # increment the bar during the render. Tell the UI to switch to an
     # indeterminate "pulsing" mode so the user knows we\'re still working.
-    yield {"event": "status", "data": {
-        "phase": "weasyprint",
-        "message": f"Composing PDF ({len(emails)} emails)\u2026 this can take a moment.",
-        "indeterminate": True,
-    }}
+    yield {
+        "event": "status",
+        "data": {
+            "phase": "weasyprint",
+            "message": f"Composing PDF ({len(emails)} emails)\u2026 this can take a moment.",
+            "indeterminate": True,
+        },
+    }
     try:
         if load_remote:
             pdf_bytes = HTML(string=full_html).write_pdf(stylesheets=[CSS(string=_BASE_CSS)])
         else:
             from weasyprint import default_url_fetcher
+
             def _fetcher(url):
                 # Only allow data: URLs (inline images already resolved upstream).
                 # Block http/https/file/anything else — this both speeds up exports
                 # and prevents leaking the user's IP/User-Agent to remote servers
                 # (tracking pixels, etc.).
-                if url.startswith('data:'):
+                if url.startswith("data:"):
                     return default_url_fetcher(url)
                 # Returning a benign empty PNG is friendlier than raising —
                 # WeasyPrint will silently render a missing image.
-                return {'mime_type': 'image/png', 'string': b''}
+                return {"mime_type": "image/png", "string": b""}
+
             # When blocking remote content, WeasyPrint logs an ERROR for every
             # blocked image. That's not actually an error from our perspective —
             # we deliberately blocked them — and on a real folder export it floods
@@ -930,11 +952,13 @@ def build_combined_pdf(
             # logger threshold so only CRITICAL gets through during this render,
             # then restore it. Real WeasyPrint problems still surface via the
             # outer try/except.
-            wp_logger = logging.getLogger('weasyprint')
+            wp_logger = logging.getLogger("weasyprint")
             prev_level = wp_logger.level
             wp_logger.setLevel(logging.CRITICAL)
             try:
-                pdf_bytes = HTML(string=full_html, url_fetcher=_fetcher).write_pdf(stylesheets=[CSS(string=_BASE_CSS)])
+                pdf_bytes = HTML(string=full_html, url_fetcher=_fetcher).write_pdf(
+                    stylesheets=[CSS(string=_BASE_CSS)]
+                )
             finally:
                 wp_logger.setLevel(prev_level)
     except Exception as e:
@@ -942,12 +966,21 @@ def build_combined_pdf(
         yield {"event": "error", "data": {"error": f"PDF rendering failed: {e}"}}
         return
 
-    yield {"event": "progress", "data": {"phase": "weasyprint", "percent": 85, "indeterminate": False}}
+    yield {
+        "event": "progress",
+        "data": {"phase": "weasyprint", "percent": 85, "indeterminate": False},
+    }
 
     # ---- Phase 5: append PDF attachments via pypdf ----------------------
     if attachment_refs:
         app_word = "appendices" if len(attachment_refs) != 1 else "appendix"
-        yield {"event": "status", "data": {"phase": "appendices", "message": f"Attaching {len(attachment_refs)} {app_word}..."}}
+        yield {
+            "event": "status",
+            "data": {
+                "phase": "appendices",
+                "message": f"Attaching {len(attachment_refs)} {app_word}...",
+            },
+        }
         pdf_bytes = _append_pdf_attachments(pdf_bytes, attachment_refs)
 
     yield {"event": "progress", "data": {"phase": "done", "percent": 100}}

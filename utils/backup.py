@@ -65,16 +65,20 @@ def get_backups_dir():
 
 def get_backup_path_for_entry(backup_entry: dict) -> Path:
     """Get the path where a backup file should be located based on its manifest entry."""
-    backup_dir = Path(backup_entry.get('backup_dir', '')) if backup_entry.get('backup_dir') else get_backups_dir()
-    return backup_dir / backup_entry['filename']
+    backup_dir = (
+        Path(backup_entry.get("backup_dir", ""))
+        if backup_entry.get("backup_dir")
+        else get_backups_dir()
+    )
+    return backup_dir / backup_entry["filename"]
 
 
 def get_restore_staging_dir():
-    return get_data_root() / '.restore_staging'
+    return get_data_root() / ".restore_staging"
 
 
 def get_manifest_file():
-    return get_backups_dir() / 'manifest.json'
+    return get_backups_dir() / "manifest.json"
 
 
 def ensure_backup_dir():
@@ -85,8 +89,8 @@ def ensure_backup_dir():
 def get_file_hash(filepath):
     """Calculate SHA-256 hash of a file."""
     sha256 = hashlib.sha256()
-    with open(filepath, 'rb') as f:
-        for chunk in iter(lambda: f.read(8192), b''):
+    with open(filepath, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
             sha256.update(chunk)
     return sha256.hexdigest()
 
@@ -94,10 +98,7 @@ def get_file_hash(filepath):
 def get_file_metadata(filepath):
     """Get file metadata (mtime, size) for quick change detection."""
     stat = filepath.stat()
-    return {
-        'mtime': stat.st_mtime,
-        'size': stat.st_size
-    }
+    return {"mtime": stat.st_mtime, "size": stat.st_size}
 
 
 def get_all_backup_files():
@@ -111,23 +112,23 @@ def get_all_backup_files():
     files = {}
 
     # Database
-    db_path = data_dir / 'mailrepo.db'
+    db_path = data_dir / "mailrepo.db"
     if db_path.exists():
-        files['data/mailrepo.db'] = db_path
+        files["data/mailrepo.db"] = db_path
 
     # Security files (salt and secret key - essential for decryption)
-    salt_path = data_dir / '.salt'
+    salt_path = data_dir / ".salt"
     if salt_path.exists():
-        files['data/.salt'] = salt_path
+        files["data/.salt"] = salt_path
 
-    secret_key_path = data_dir / '.secret_key'
+    secret_key_path = data_dir / ".secret_key"
     if secret_key_path.exists():
-        files['data/.secret_key'] = secret_key_path
+        files["data/.secret_key"] = secret_key_path
 
     # Archive folder (all email files - encrypted and unencrypted)
     if archive_dir.exists():
-        for filepath in archive_dir.rglob('*'):
-            if filepath.is_file() and not filepath.name.startswith('.'):
+        for filepath in archive_dir.rglob("*"):
+            if filepath.is_file() and not filepath.name.startswith("."):
                 rel_path = filepath.relative_to(data_root)
                 files[str(rel_path)] = filepath
 
@@ -143,7 +144,7 @@ def get_file_hashes():
     """
     files = get_all_backup_files()
     state = _read_backup_state()
-    previous_file_info = state.get('file_info', {})
+    previous_file_info = state.get("file_info", {})
 
     hashes = {}
     new_file_info = {}
@@ -153,20 +154,22 @@ def get_file_hashes():
         prev_info = previous_file_info.get(rel_path, {})
 
         # Check if file might have changed (mtime or size different)
-        if (prev_info.get('mtime') == current_meta['mtime'] and
-            prev_info.get('size') == current_meta['size'] and
-            prev_info.get('hash')):
+        if (
+            prev_info.get("mtime") == current_meta["mtime"]
+            and prev_info.get("size") == current_meta["size"]
+            and prev_info.get("hash")
+        ):
             # File unchanged - reuse cached hash
-            file_hash = prev_info['hash']
+            file_hash = prev_info["hash"]
         else:
             # File changed or new - compute hash
             file_hash = get_file_hash(abs_path)
 
         hashes[rel_path] = file_hash
         new_file_info[rel_path] = {
-            'hash': file_hash,
-            'mtime': current_meta['mtime'],
-            'size': current_meta['size']
+            "hash": file_hash,
+            "mtime": current_meta["mtime"],
+            "size": current_meta["size"],
         }
 
     return hashes, new_file_info
@@ -181,7 +184,7 @@ def has_file_changes():
     """
     files = get_all_backup_files()
     state = _read_backup_state()
-    previous_file_info = state.get('file_info', {})
+    previous_file_info = state.get("file_info", {})
 
     # No cached info means we need to do a full check
     if not previous_file_info:
@@ -199,8 +202,10 @@ def has_file_changes():
         current_meta = get_file_metadata(abs_path)
         prev_info = previous_file_info.get(rel_path, {})
 
-        if (prev_info.get('mtime') != current_meta['mtime'] or
-            prev_info.get('size') != current_meta['size']):
+        if (
+            prev_info.get("mtime") != current_meta["mtime"]
+            or prev_info.get("size") != current_meta["size"]
+        ):
             return True  # File modified
 
     return False  # No changes detected
@@ -211,18 +216,18 @@ def load_manifest():
     manifest_file = get_manifest_file()
     if manifest_file.exists():
         try:
-            with open(manifest_file, 'r') as f:
+            with open(manifest_file, "r") as f:
                 return json.load(f)
         except (json.JSONDecodeError, ValueError):
             # Manifest corrupted - backup the bad file and start fresh
-            corrupted_path = manifest_file.with_suffix('.json.corrupted')
+            corrupted_path = manifest_file.with_suffix(".json.corrupted")
             shutil.copy(manifest_file, corrupted_path)
             log.warning(f"manifest.json was corrupted, backed up to {corrupted_path.name}")
     return {
-        'backups': [],
-        'last_full_hashes': {},
-        'current_chain_id': None,
-        'last_backup_check': None
+        "backups": [],
+        "last_full_hashes": {},
+        "current_chain_id": None,
+        "last_backup_check": None,
     }
 
 
@@ -240,9 +245,10 @@ def save_manifest(manifest):
 # state requires modifying the database.
 # ============================================================================
 
+
 def _get_backup_state_file():
     """Get path to backup state file (stored in data dir, not backups)."""
-    return get_data_dir() / '.backup_state.json'
+    return get_data_dir() / ".backup_state.json"
 
 
 def _read_backup_state():
@@ -250,7 +256,7 @@ def _read_backup_state():
     state_file = _get_backup_state_file()
     if state_file.exists():
         try:
-            with open(state_file, 'r') as f:
+            with open(state_file, "r") as f:
                 return json.load(f)
         except (json.JSONDecodeError, OSError):
             pass
@@ -269,18 +275,20 @@ def _get_baseline_hashes():
     Falls back to manifest for migration from old system.
     """
     state = _read_backup_state()
-    if 'last_backup_hashes' in state:
-        return state['last_backup_hashes']
+    if "last_backup_hashes" in state:
+        return state["last_backup_hashes"]
 
     # Migration: check manifest for old-style hashes
     manifest = load_manifest()
-    if manifest.get('last_full_hashes'):
+    if manifest.get("last_full_hashes"):
         # Migrate to new system
-        _write_backup_state({
-            'last_backup_hashes': manifest['last_full_hashes'],
-            'last_backup_check': manifest.get('last_backup_check')
-        })
-        return manifest['last_full_hashes']
+        _write_backup_state(
+            {
+                "last_backup_hashes": manifest["last_full_hashes"],
+                "last_backup_check": manifest.get("last_backup_check"),
+            }
+        )
+        return manifest["last_full_hashes"]
 
     return {}
 
@@ -295,22 +303,22 @@ def _save_baseline_hashes(hashes, file_info=None):
                    If not provided, builds from hashes and current file state.
     """
     state = _read_backup_state()
-    state['last_backup_hashes'] = hashes
+    state["last_backup_hashes"] = hashes
 
     # Update file_info for smart change detection
     if file_info:
-        state['file_info'] = file_info
-    elif 'file_info' not in state:
+        state["file_info"] = file_info
+    elif "file_info" not in state:
         # Build file_info from current state if not present
         files = get_all_backup_files()
-        state['file_info'] = {}
+        state["file_info"] = {}
         for rel_path, abs_path in files.items():
             if rel_path in hashes:
                 meta = get_file_metadata(abs_path)
-                state['file_info'][rel_path] = {
-                    'hash': hashes[rel_path],
-                    'mtime': meta['mtime'],
-                    'size': meta['size']
+                state["file_info"][rel_path] = {
+                    "hash": hashes[rel_path],
+                    "mtime": meta["mtime"],
+                    "size": meta["size"],
                 }
 
     _write_backup_state(state)
@@ -330,7 +338,7 @@ def refresh_hash_baseline():
 
 def generate_backup_filename(backup_type):
     """Generate unique backup filename."""
-    timestamp = datetime.now().strftime('%Y-%m-%d_%H%M%S')
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     return f"{backup_type}_{timestamp}.zip"
 
 
@@ -342,7 +350,14 @@ def validate_backup_location(backup_dir):
     backup_dir = Path(backup_dir)
 
     # Check if it's a cloud folder
-    cloud_indicators = ['iCloud', 'CloudDocs', 'Dropbox', 'Google Drive', 'OneDrive', 'CloudStorage']
+    cloud_indicators = [
+        "iCloud",
+        "CloudDocs",
+        "Dropbox",
+        "Google Drive",
+        "OneDrive",
+        "CloudStorage",
+    ]
     is_cloud = any(indicator in str(backup_dir) for indicator in cloud_indicators)
 
     try:
@@ -350,24 +365,33 @@ def validate_backup_location(backup_dir):
         backup_dir.mkdir(parents=True, exist_ok=True)
 
         # Try to write a test file
-        test_file = backup_dir / '.write_test'
+        test_file = backup_dir / ".write_test"
         try:
-            test_file.write_text('test')
+            test_file.write_text("test")
             test_file.unlink()
         except PermissionError:
             if is_cloud:
-                return False, "Cannot write to cloud folder. Please check that the cloud service is running and you're signed in."
+                return (
+                    False,
+                    "Cannot write to cloud folder. Please check that the cloud service is running and you're signed in.",
+                )
             return False, "Permission denied. Cannot write to this location."
         except OSError as e:
             if is_cloud:
-                return False, "Cloud folder not accessible. Please check your internet connection and that the cloud service is online."
+                return (
+                    False,
+                    "Cloud folder not accessible. Please check your internet connection and that the cloud service is online.",
+                )
             return False, f"Cannot write to backup location: {e}"
 
         return True, None
 
     except PermissionError:
         if is_cloud:
-            return False, "Cannot access cloud folder. Please check that the cloud service is running and you're signed in."
+            return (
+                False,
+                "Cannot access cloud folder. Please check that the cloud service is running and you're signed in.",
+            )
         return False, "Permission denied. Cannot access this location."
     except OSError as e:
         if is_cloud:
@@ -395,16 +419,16 @@ def create_backup(backup_dir=None):
     # Decide: full or incremental?
     need_full = False
 
-    if not manifest['backups']:
+    if not manifest["backups"]:
         need_full = True  # No backups exist
     elif not _get_baseline_hashes():
         need_full = True  # No hash baseline
     else:
         # Check age of last full backup (calendar days, not hours)
-        full_backups = [b for b in manifest['backups'] if b['type'] == 'full']
+        full_backups = [b for b in manifest["backups"] if b["type"] == "full"]
         if full_backups:
-            last_full = max(full_backups, key=lambda x: x['created_at'])
-            last_full_date = datetime.fromisoformat(last_full['created_at']).date()
+            last_full = max(full_backups, key=lambda x: x["created_at"])
+            last_full_date = datetime.fromisoformat(last_full["created_at"]).date()
             if (datetime.now().date() - last_full_date).days >= 7:
                 need_full = True
         else:
@@ -436,7 +460,7 @@ def create_full_backup(backup_dir=None):
     if not valid:
         raise ValueError(error)
 
-    filename = generate_backup_filename('full')
+    filename = generate_backup_filename("full")
     backup_path = backup_dir / filename
 
     files = get_all_backup_files()
@@ -450,18 +474,18 @@ def create_full_backup(backup_dir=None):
 
     # Create zip archive
     try:
-        with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+        with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for rel_path, abs_path in files.items():
                 zf.write(abs_path, rel_path)
                 file_hash = get_file_hash(abs_path)
                 meta = get_file_metadata(abs_path)
                 hashes[rel_path] = file_hash
                 file_info[rel_path] = {
-                    'hash': file_hash,
-                    'mtime': meta['mtime'],
-                    'size': meta['size']
+                    "hash": file_hash,
+                    "mtime": meta["mtime"],
+                    "size": meta["size"],
                 }
-                total_size += meta['size']
+                total_size += meta["size"]
     except OSError as e:
         # Clean up partial backup
         if backup_path.exists():
@@ -473,21 +497,21 @@ def create_full_backup(backup_dir=None):
 
     # Update manifest
     manifest = load_manifest()
-    chain_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+    chain_id = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     backup_info = {
-        'filename': filename,
-        'type': 'full',
-        'chain_id': chain_id,
-        'created_at': datetime.now().isoformat(),
-        'file_count': len(files),
-        'original_size': total_size,
-        'backup_size': backup_path.stat().st_size,
-        'backup_dir': str(backup_dir)
+        "filename": filename,
+        "type": "full",
+        "chain_id": chain_id,
+        "created_at": datetime.now().isoformat(),
+        "file_count": len(files),
+        "original_size": total_size,
+        "backup_size": backup_path.stat().st_size,
+        "backup_dir": str(backup_dir),
     }
 
-    manifest['backups'].append(backup_info)
-    manifest['current_chain_id'] = chain_id
+    manifest["backups"].append(backup_info)
+    manifest["current_chain_id"] = chain_id
     save_manifest(manifest)
 
     # Save hashes and file info to external state file
@@ -549,22 +573,22 @@ def create_incremental_backup(backup_dir=None):
         _save_baseline_hashes(current_hashes, current_file_info)
         return None
 
-    filename = generate_backup_filename('incr')
+    filename = generate_backup_filename("incr")
     backup_path = backup_dir / filename
 
     total_size = 0
 
     # Create zip with only changed files
     try:
-        with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+        with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for rel_path, abs_path in changed_files.items():
                 zf.write(abs_path, rel_path)
                 total_size += abs_path.stat().st_size
 
             # Include a metadata file listing deleted files
             if deleted_files:
-                metadata = {'deleted_files': deleted_files}
-                zf.writestr('_backup_metadata.json', json.dumps(metadata))
+                metadata = {"deleted_files": deleted_files}
+                zf.writestr("_backup_metadata.json", json.dumps(metadata))
     except OSError as e:
         # Clean up partial backup
         if backup_path.exists():
@@ -576,18 +600,18 @@ def create_incremental_backup(backup_dir=None):
 
     # Update manifest
     backup_info = {
-        'filename': filename,
-        'type': 'incremental',
-        'chain_id': manifest['current_chain_id'],
-        'created_at': datetime.now().isoformat(),
-        'file_count': len(changed_files),
-        'deleted_count': len(deleted_files),
-        'original_size': total_size,
-        'backup_size': backup_path.stat().st_size,
-        'backup_dir': str(backup_dir)
+        "filename": filename,
+        "type": "incremental",
+        "chain_id": manifest["current_chain_id"],
+        "created_at": datetime.now().isoformat(),
+        "file_count": len(changed_files),
+        "deleted_count": len(deleted_files),
+        "original_size": total_size,
+        "backup_size": backup_path.stat().st_size,
+        "backup_dir": str(backup_dir),
     }
 
-    manifest['backups'].append(backup_info)
+    manifest["backups"].append(backup_info)
     save_manifest(manifest)
 
     # Save hashes and file info to external state file
@@ -602,7 +626,7 @@ def verify_backup(backup_path):
     Raises exception if corrupted.
     """
     try:
-        with zipfile.ZipFile(backup_path, 'r') as zf:
+        with zipfile.ZipFile(backup_path, "r") as zf:
             bad_file = zf.testzip()
             if bad_file:
                 # Delete corrupted backup
@@ -625,24 +649,26 @@ def list_backups(location: str | Path | None = None):
     manifest = load_manifest()
     backups = []
 
-    for backup in manifest['backups']:
+    for backup in manifest["backups"]:
         # Use the location where this backup was actually saved
         backup_path = get_backup_path_for_entry(backup)
 
         if backup_path.exists():
-            backups.append({
-                'filename': backup['filename'],
-                'type': backup['type'],
-                'chain_id': backup['chain_id'],
-                'created_at': backup['created_at'],
-                'file_count': backup['file_count'],
-                'backup_size': backup['backup_size'],
-                'backup_size_mb': round(backup['backup_size'] / (1024 * 1024), 2),
-                'path': str(backup_path)
-            })
+            backups.append(
+                {
+                    "filename": backup["filename"],
+                    "type": backup["type"],
+                    "chain_id": backup["chain_id"],
+                    "created_at": backup["created_at"],
+                    "file_count": backup["file_count"],
+                    "backup_size": backup["backup_size"],
+                    "backup_size_mb": round(backup["backup_size"] / (1024 * 1024), 2),
+                    "path": str(backup_path),
+                }
+            )
 
     # Sort by date, newest first
-    backups.sort(key=lambda x: x['created_at'], reverse=True)
+    backups.sort(key=lambda x: x["created_at"], reverse=True)
     return backups
 
 
@@ -658,103 +684,109 @@ def get_restore_points():
     Returns list of restore points with display info.
     """
     manifest = load_manifest()
-    backups = manifest['backups']
+    backups = manifest["backups"]
 
     # Group by chain
     chains = {}
     for backup in backups:
-        chain_id = backup['chain_id']
+        chain_id = backup["chain_id"]
         if chain_id not in chains:
-            chains[chain_id] = {'full': None, 'incrementals': [], 'pre_restore': None}
+            chains[chain_id] = {"full": None, "incrementals": [], "pre_restore": None}
 
-        if backup['type'] == 'full':
-            chains[chain_id]['full'] = backup
-        elif backup['type'] == 'pre_restore':
-            chains[chain_id]['pre_restore'] = backup
+        if backup["type"] == "full":
+            chains[chain_id]["full"] = backup
+        elif backup["type"] == "pre_restore":
+            chains[chain_id]["pre_restore"] = backup
         else:
-            chains[chain_id]['incrementals'].append(backup)
+            chains[chain_id]["incrementals"].append(backup)
 
     # Build restore points
     restore_points = []
 
     for chain_id, chain in chains.items():
         # Handle pre_restore backups (standalone, not part of a chain)
-        if chain_id == 'pre_restore' and chain.get('pre_restore'):
-            backup = chain['pre_restore']
+        if chain_id == "pre_restore" and chain.get("pre_restore"):
+            backup = chain["pre_restore"]
             backup_path = get_backup_path_for_entry(backup)
             if backup_path.exists():
                 # Format date with time
-                created = datetime.fromisoformat(backup['created_at'])
-                display_time = created.strftime('%b %d, %Y at %I:%M %p').replace(' 0', ' ')
+                created = datetime.fromisoformat(backup["created_at"])
+                display_time = created.strftime("%b %d, %Y at %I:%M %p").replace(" 0", " ")
 
-                restore_points.append({
-                    'id': f"pre_restore_{backup['filename']}",
-                    'filename': backup['filename'],
-                    'display_name': f"{display_time} (Safety backup)",
-                    'created_at': backup['created_at'],
-                    'type': 'pre_restore',
-                    'is_safety': True,
-                    'chain_id': 'pre_restore',
-                    'dependent_count': 0,
-                    'files_needed': [str(backup_path)]
-                })
+                restore_points.append(
+                    {
+                        "id": f"pre_restore_{backup['filename']}",
+                        "filename": backup["filename"],
+                        "display_name": f"{display_time} (Safety backup)",
+                        "created_at": backup["created_at"],
+                        "type": "pre_restore",
+                        "is_safety": True,
+                        "chain_id": "pre_restore",
+                        "dependent_count": 0,
+                        "files_needed": [str(backup_path)],
+                    }
+                )
             continue
 
-        if not chain['full']:
+        if not chain["full"]:
             continue  # Skip orphaned incrementals
 
         # Sort incrementals by date
-        chain['incrementals'].sort(key=lambda x: x['created_at'])
+        chain["incrementals"].sort(key=lambda x: x["created_at"])
 
         # Count dependents for this chain's full backup
-        dependent_count = len(chain['incrementals'])
+        dependent_count = len(chain["incrementals"])
 
         # Full backup as restore point
-        full_backup = chain['full']
+        full_backup = chain["full"]
         backup_path = get_backup_path_for_entry(full_backup)
 
         if backup_path.exists():
             # Format date with time
-            created = datetime.fromisoformat(full_backup['created_at'])
-            display_time = created.strftime('%b %d, %Y at %I:%M %p').replace(' 0', ' ')
+            created = datetime.fromisoformat(full_backup["created_at"])
+            display_time = created.strftime("%b %d, %Y at %I:%M %p").replace(" 0", " ")
 
-            restore_points.append({
-                'id': f"{chain_id}_full",
-                'filename': full_backup['filename'],
-                'display_name': display_time,
-                'created_at': full_backup['created_at'],
-                'type': 'full',
-                'is_safety': False,
-                'chain_id': chain_id,
-                'dependent_count': dependent_count,
-                'files_needed': [str(backup_path)]
-            })
+            restore_points.append(
+                {
+                    "id": f"{chain_id}_full",
+                    "filename": full_backup["filename"],
+                    "display_name": display_time,
+                    "created_at": full_backup["created_at"],
+                    "type": "full",
+                    "is_safety": False,
+                    "chain_id": chain_id,
+                    "dependent_count": dependent_count,
+                    "files_needed": [str(backup_path)],
+                }
+            )
 
         # Each incremental in the chain is also a restore point
         files_needed = [str(backup_path)]
-        for i, incr in enumerate(chain['incrementals']):
+        for i, incr in enumerate(chain["incrementals"]):
             incr_path = get_backup_path_for_entry(incr)
             if incr_path.exists():
                 files_needed = files_needed + [str(incr_path)]
 
                 # Format date with time
-                created = datetime.fromisoformat(incr['created_at'])
-                display_time = created.strftime('%b %d, %Y at %I:%M %p').replace(' 0', ' ')
+                created = datetime.fromisoformat(incr["created_at"])
+                display_time = created.strftime("%b %d, %Y at %I:%M %p").replace(" 0", " ")
 
-                restore_points.append({
-                    'id': f"{chain_id}_incr_{i}",
-                    'filename': incr['filename'],
-                    'display_name': display_time,
-                    'created_at': incr['created_at'],
-                    'type': 'incremental',
-                    'is_safety': False,
-                    'chain_id': chain_id,
-                    'dependent_count': 0,
-                    'files_needed': files_needed.copy()
-                })
+                restore_points.append(
+                    {
+                        "id": f"{chain_id}_incr_{i}",
+                        "filename": incr["filename"],
+                        "display_name": display_time,
+                        "created_at": incr["created_at"],
+                        "type": "incremental",
+                        "is_safety": False,
+                        "chain_id": chain_id,
+                        "dependent_count": 0,
+                        "files_needed": files_needed.copy(),
+                    }
+                )
 
     # Sort by date, newest first
-    restore_points.sort(key=lambda x: x['created_at'], reverse=True)
+    restore_points.sort(key=lambda x: x["created_at"], reverse=True)
     return restore_points
 
 
@@ -766,7 +798,7 @@ def prepare_restore(restore_point_id):
     Returns path to staging folder.
     """
     restore_points = get_restore_points()
-    point = next((p for p in restore_points if p['id'] == restore_point_id), None)
+    point = next((p for p in restore_points if p["id"] == restore_point_id), None)
 
     if not point:
         raise ValueError(f"Restore point not found: {restore_point_id}")
@@ -786,16 +818,16 @@ def prepare_restore(restore_point_id):
     deleted_files = set()
 
     # Extract backups in order (full first, then incrementals)
-    for backup_path in point['files_needed']:
-        with zipfile.ZipFile(backup_path, 'r') as zf:
+    for backup_path in point["files_needed"]:
+        with zipfile.ZipFile(backup_path, "r") as zf:
             # Check for metadata about deleted files
-            if '_backup_metadata.json' in zf.namelist():
-                metadata = json.loads(zf.read('_backup_metadata.json'))
-                deleted_files.update(metadata.get('deleted_files', []))
+            if "_backup_metadata.json" in zf.namelist():
+                metadata = json.loads(zf.read("_backup_metadata.json"))
+                deleted_files.update(metadata.get("deleted_files", []))
 
             # Extract all other files (overwrites previous versions)
             for name in zf.namelist():
-                if name != '_backup_metadata.json':
+                if name != "_backup_metadata.json":
                     zf.extract(name, staging_dir)
 
     # Remove files that were deleted in later backups
@@ -806,11 +838,11 @@ def prepare_restore(restore_point_id):
 
     # Write restore marker
     marker = {
-        'restore_point_id': restore_point_id,
-        'prepared_at': datetime.now().isoformat(),
-        'point_info': point
+        "restore_point_id": restore_point_id,
+        "prepared_at": datetime.now().isoformat(),
+        "point_info": point,
     }
-    with open(staging_dir / '.restore_marker', 'w') as f:
+    with open(staging_dir / ".restore_marker", "w") as f:
         json.dump(marker, f)
 
     return str(staging_dir)
@@ -827,7 +859,7 @@ def create_pre_restore_backup():
     if not files:
         return None  # Nothing to back up
 
-    with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+    with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for rel_path, abs_path in files.items():
             zf.write(abs_path, rel_path)
 
@@ -835,15 +867,17 @@ def create_pre_restore_backup():
 
     # Add to manifest
     manifest = load_manifest()
-    manifest['backups'].append({
-        'filename': filename,
-        'type': 'pre_restore',
-        'chain_id': 'pre_restore',
-        'created_at': datetime.now().isoformat(),
-        'file_count': len(files),
-        'backup_size': backup_path.stat().st_size,
-        'backup_dir': str(get_backups_dir())
-    })
+    manifest["backups"].append(
+        {
+            "filename": filename,
+            "type": "pre_restore",
+            "chain_id": "pre_restore",
+            "created_at": datetime.now().isoformat(),
+            "file_count": len(files),
+            "backup_size": backup_path.stat().st_size,
+            "backup_dir": str(get_backups_dir()),
+        }
+    )
     save_manifest(manifest)
 
     return str(backup_path)
@@ -851,9 +885,9 @@ def create_pre_restore_backup():
 
 def check_restore_pending():
     """Check if there's a pending restore to complete."""
-    marker_path = get_restore_staging_dir() / '.restore_marker'
+    marker_path = get_restore_staging_dir() / ".restore_marker"
     if marker_path.exists():
-        with open(marker_path, 'r') as f:
+        with open(marker_path, "r") as f:
             return json.load(f)
     return None
 
@@ -874,17 +908,17 @@ def complete_restore():
     archive_dir = get_archive_dir()
 
     # Replace database
-    staged_db = staging_dir / 'data' / 'mailrepo.db'
+    staged_db = staging_dir / "data" / "mailrepo.db"
     if staged_db.exists():
         data_dir.mkdir(parents=True, exist_ok=True)
-        target_db = data_dir / 'mailrepo.db'
+        target_db = data_dir / "mailrepo.db"
         if target_db.exists():
             target_db.unlink()
         shutil.copy2(staged_db, target_db)
 
     # Replace security files
-    for security_file in ['.salt', '.secret_key']:
-        staged_file = staging_dir / 'data' / security_file
+    for security_file in [".salt", ".secret_key"]:
+        staged_file = staging_dir / "data" / security_file
         if staged_file.exists():
             target_file = data_dir / security_file
             if target_file.exists():
@@ -892,7 +926,7 @@ def complete_restore():
             shutil.copy2(staged_file, target_file)
 
     # Replace archive folder
-    staged_archive = staging_dir / 'archive'
+    staged_archive = staging_dir / "archive"
     if staged_archive.exists():
         if archive_dir.exists():
             shutil.rmtree(archive_dir)
@@ -902,9 +936,9 @@ def complete_restore():
     shutil.rmtree(staging_dir)
 
     return {
-        'restored_at': datetime.now().isoformat(),
-        'restore_point': marker['restore_point_id'],
-        'original_date': marker['point_info']['created_at']
+        "restored_at": datetime.now().isoformat(),
+        "restore_point": marker["restore_point_id"],
+        "original_date": marker["point_info"]["created_at"],
     }
 
 
@@ -932,14 +966,10 @@ def cleanup_old_backups(retention, custom_location=None):
     - Delete entire chains when their newest incremental exceeds retention
     - Only delete if a newer chain exists
     """
-    if retention == 'forever':
+    if retention == "forever":
         return
 
-    retention_days = {
-        '1_month': 30,
-        '6_months': 180,
-        '1_year': 365
-    }.get(retention)
+    retention_days = {"1_month": 30, "6_months": 180, "1_year": 365}.get(retention)
 
     if not retention_days:
         return
@@ -952,22 +982,24 @@ def cleanup_old_backups(retention, custom_location=None):
     # Group backups by chain
     chains = {}
     safety_backups = []
-    for backup in manifest['backups']:
-        if backup['type'] == 'pre_restore':
+    for backup in manifest["backups"]:
+        if backup["type"] == "pre_restore":
             safety_backups.append(backup)
             continue
-        chain_id = backup.get('chain_id')
+        chain_id = backup.get("chain_id")
         if chain_id:
             if chain_id not in chains:
-                chains[chain_id] = {'full': None, 'incrementals': []}
-            if backup['type'] == 'full':
-                chains[chain_id]['full'] = backup
+                chains[chain_id] = {"full": None, "incrementals": []}
+            if backup["type"] == "full":
+                chains[chain_id]["full"] = backup
             else:
-                chains[chain_id]['incrementals'].append(backup)
+                chains[chain_id]["incrementals"].append(backup)
 
     # Sort chains by the full backup date (oldest first)
-    sorted_chain_ids = sorted(chains.keys(),
-                              key=lambda cid: chains[cid]['full']['created_at'] if chains[cid]['full'] else '')
+    sorted_chain_ids = sorted(
+        chains.keys(),
+        key=lambda cid: chains[cid]["full"]["created_at"] if chains[cid]["full"] else "",
+    )
 
     # Always keep the newest chain
     if len(sorted_chain_ids) <= 1:
@@ -978,12 +1010,12 @@ def cleanup_old_backups(retention, custom_location=None):
     # Check each chain except the newest
     for chain_id in sorted_chain_ids[:-1]:
         chain = chains[chain_id]
-        if not chain['full']:
+        if not chain["full"]:
             continue
 
         # Find the newest backup in this chain
-        all_in_chain = [chain['full']] + chain['incrementals']
-        newest_date = max(b['created_at'] for b in all_in_chain)
+        all_in_chain = [chain["full"]] + chain["incrementals"]
+        newest_date = max(b["created_at"] for b in all_in_chain)
 
         if newest_date < cutoff_date:
             chains_to_delete.append(chain_id)
@@ -992,21 +1024,21 @@ def cleanup_old_backups(retention, custom_location=None):
     for chain_id in chains_to_delete:
         chain = chains[chain_id]
 
-        for incr in chain['incrementals']:
+        for incr in chain["incrementals"]:
             # Always use current backups directory (app may have moved)
-            incr_path = backup_dir / incr['filename']
+            incr_path = backup_dir / incr["filename"]
             if incr_path.exists():
                 incr_path.unlink()
-            if incr in manifest['backups']:
-                manifest['backups'].remove(incr)
+            if incr in manifest["backups"]:
+                manifest["backups"].remove(incr)
 
-        if chain['full']:
+        if chain["full"]:
             # Always use current backups directory (app may have moved)
-            full_path = backup_dir / chain['full']['filename']
+            full_path = backup_dir / chain["full"]["filename"]
             if full_path.exists():
                 full_path.unlink()
-            if chain['full'] in manifest['backups']:
-                manifest['backups'].remove(chain['full'])
+            if chain["full"] in manifest["backups"]:
+                manifest["backups"].remove(chain["full"])
 
     if chains_to_delete:
         save_manifest(manifest)
@@ -1015,13 +1047,13 @@ def cleanup_old_backups(retention, custom_location=None):
     # Clean up old safety backups
     safety_deleted = 0
     for backup in safety_backups:
-        if backup['created_at'] < cutoff_date:
+        if backup["created_at"] < cutoff_date:
             # Always use current backups directory (app may have moved)
-            backup_path = backup_dir / backup['filename']
+            backup_path = backup_dir / backup["filename"]
             if backup_path.exists():
                 backup_path.unlink()
-            if backup in manifest['backups']:
-                manifest['backups'].remove(backup)
+            if backup in manifest["backups"]:
+                manifest["backups"].remove(backup)
             safety_deleted += 1
 
     if safety_deleted:
@@ -1035,25 +1067,25 @@ def get_backup_status():
     Uses CALENDAR DATE for "Today" comparison, not hours.
     """
     manifest = load_manifest()
-    backups = [b for b in manifest['backups'] if b['type'] in ('full', 'incremental')]
+    backups = [b for b in manifest["backups"] if b["type"] in ("full", "incremental")]
 
     if not backups:
         return {
-            'has_backups': False,
-            'last_backup': None,
-            'last_backup_display': 'Never',
-            'backup_count': 0
+            "has_backups": False,
+            "last_backup": None,
+            "last_backup_display": "Never",
+            "backup_count": 0,
         }
 
-    last = max(backups, key=lambda x: x['created_at'])
-    last_datetime = datetime.fromisoformat(last['created_at'])
+    last = max(backups, key=lambda x: x["created_at"])
+    last_datetime = datetime.fromisoformat(last["created_at"])
     last_date = last_datetime.date()
 
     now = datetime.now()
     today = now.date()
     yesterday = today - timedelta(days=1)
 
-    time_str = last_datetime.strftime('%I:%M %p').lstrip('0')
+    time_str = last_datetime.strftime("%I:%M %p").lstrip("0")
 
     if last_date == today:
         diff_seconds = (now - last_datetime).total_seconds()
@@ -1071,14 +1103,14 @@ def get_backup_status():
         if days_ago < 7:
             display = f"{days_ago} days ago"
         else:
-            display = last_datetime.strftime('%B %d, %Y')
+            display = last_datetime.strftime("%B %d, %Y")
 
     return {
-        'has_backups': True,
-        'last_backup': last['created_at'],
-        'last_backup_display': display,
-        'last_backup_type': last['type'],
-        'backup_count': len(backups)
+        "has_backups": True,
+        "last_backup": last["created_at"],
+        "last_backup_display": display,
+        "last_backup_type": last["type"],
+        "backup_count": len(backups),
     }
 
 
@@ -1091,52 +1123,43 @@ def detect_cloud_folders():
     cloud_folders = []
 
     # iCloud Drive
-    icloud = home / 'Library' / 'Mobile Documents' / 'com~apple~CloudDocs'
+    icloud = home / "Library" / "Mobile Documents" / "com~apple~CloudDocs"
     if icloud.exists():
-        cloud_folders.append({
-            'name': 'iCloud Drive',
-            'path': str(icloud / 'MailRepo Backups')
-        })
+        cloud_folders.append({"name": "iCloud Drive", "path": str(icloud / "MailRepo Backups")})
 
     # Dropbox
-    dropbox = home / 'Dropbox'
+    dropbox = home / "Dropbox"
     if dropbox.exists():
-        cloud_folders.append({
-            'name': 'Dropbox',
-            'path': str(dropbox / 'Apps' / 'MailRepo Backups')
-        })
+        cloud_folders.append(
+            {"name": "Dropbox", "path": str(dropbox / "Apps" / "MailRepo Backups")}
+        )
 
     # Google Drive (new location)
-    google_drive_new = home / 'Library' / 'CloudStorage'
+    google_drive_new = home / "Library" / "CloudStorage"
     if google_drive_new.exists():
         for folder in google_drive_new.iterdir():
-            if folder.name.startswith('GoogleDrive'):
-                cloud_folders.append({
-                    'name': 'Google Drive',
-                    'path': str(folder / 'My Drive' / 'MailRepo Backups')
-                })
+            if folder.name.startswith("GoogleDrive"):
+                cloud_folders.append(
+                    {"name": "Google Drive", "path": str(folder / "My Drive" / "MailRepo Backups")}
+                )
                 break
 
     # Google Drive (old location)
-    google_drive_old = home / 'Google Drive'
-    if google_drive_old.exists() and not any(c['name'] == 'Google Drive' for c in cloud_folders):
-        cloud_folders.append({
-            'name': 'Google Drive',
-            'path': str(google_drive_old / 'MailRepo Backups')
-        })
+    google_drive_old = home / "Google Drive"
+    if google_drive_old.exists() and not any(c["name"] == "Google Drive" for c in cloud_folders):
+        cloud_folders.append(
+            {"name": "Google Drive", "path": str(google_drive_old / "MailRepo Backups")}
+        )
 
     # OneDrive
-    onedrive = home / 'OneDrive'
+    onedrive = home / "OneDrive"
     if onedrive.exists():
-        cloud_folders.append({
-            'name': 'OneDrive',
-            'path': str(onedrive / 'MailRepo Backups')
-        })
+        cloud_folders.append({"name": "OneDrive", "path": str(onedrive / "MailRepo Backups")})
 
     return cloud_folders
 
 
-def check_backup_needed(frequency='daily'):
+def check_backup_needed(frequency="daily"):
     """
     Check if an automatic backup should run.
 
@@ -1151,20 +1174,20 @@ def check_backup_needed(frequency='daily'):
     Returns:
         True if backup should run, False otherwise
     """
-    if frequency == 'manual':
+    if frequency == "manual":
         return False
 
-    if frequency == 'session':
+    if frequency == "session":
         return True  # Always backup on logout
 
     manifest = load_manifest()
-    backups = manifest['backups']
+    backups = manifest["backups"]
 
     if not backups:
         return True  # No backups exist
 
     # Find most recent backup
-    all_backups = [b for b in backups if b['type'] in ('full', 'incremental')]
+    all_backups = [b for b in backups if b["type"] in ("full", "incremental")]
 
     if not all_backups:
         return True
@@ -1173,18 +1196,18 @@ def check_backup_needed(frequency='daily'):
     today = now.date()
 
     # Use last_backup_check if available, otherwise fall back to last backup date
-    last_check = manifest.get('last_backup_check')
+    last_check = manifest.get("last_backup_check")
     if last_check:
         last_date = datetime.fromisoformat(last_check).date()
     else:
         # Legacy: no check recorded, use last backup date
-        last_any = max(all_backups, key=lambda x: x['created_at'])
-        last_date = datetime.fromisoformat(last_any['created_at']).date()
+        last_any = max(all_backups, key=lambda x: x["created_at"])
+        last_date = datetime.fromisoformat(last_any["created_at"]).date()
 
     # Use calendar date comparison
-    if frequency == 'daily' and today > last_date:
+    if frequency == "daily" and today > last_date:
         return True
-    elif frequency == 'weekly' and (today - last_date).days >= 7:
+    elif frequency == "weekly" and (today - last_date).days >= 7:
         return True
 
     return False
@@ -1196,5 +1219,5 @@ def record_backup_check():
     Called after backup attempt (whether successful or no changes).
     """
     manifest = load_manifest()
-    manifest['last_backup_check'] = datetime.now().isoformat()
+    manifest["last_backup_check"] = datetime.now().isoformat()
     save_manifest(manifest)

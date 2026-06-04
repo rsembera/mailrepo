@@ -35,6 +35,7 @@ def reset_singletons(temp_data_dir, monkeypatch):
 
     # Reset Config's cached path
     from core.config import Config
+
     Config._base_path = None
 
     # Force Config to use our temp dir
@@ -42,10 +43,12 @@ def reset_singletons(temp_data_dir, monkeypatch):
 
     # Reset Encryption state
     from core.encryption import Encryption
+
     Encryption.lock()
 
     # Reset Database state
     from core.database import Database
+
     if Database._connection is not None:
         try:
             Database._connection.close()

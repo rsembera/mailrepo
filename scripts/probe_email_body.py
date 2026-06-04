@@ -10,6 +10,7 @@ returns (the same data the email viewer gets), so we can see whether
 the issue is upstream (server returned empty body) or downstream (viewer
 mishandled non-empty body).
 """
+
 import getpass
 import os
 import sys
@@ -36,7 +37,8 @@ from core.imap import IMAP
 try:
     Encryption.unlock(pw)
 except InvalidPasswordError:
-    print("Incorrect password."); sys.exit(1)
+    print("Incorrect password.")
+    sys.exit(1)
 
 Database.set_key(Encryption.get_db_key())
 Database.initialize()
@@ -46,7 +48,8 @@ row = Database.fetchone(
     (account_id,),
 )
 if not row or not row["credentials_encrypted"]:
-    print(f"No credentials for account {account_id}"); sys.exit(1)
+    print(f"No credentials for account {account_id}")
+    sys.exit(1)
 
 print(f"Account: {row['email']}\nFolder: {folder}\nUID: {uid}\n")
 
@@ -59,8 +62,10 @@ try:
     print("MIME STRUCTURE")
     print("=" * 60)
     import email
+
     raw = client.fetch_raw(uid)
     msg = email.message_from_bytes(raw)
+
     def walk(part, depth=0):
         prefix = "  " * depth
         ct = part.get_content_type()
@@ -75,6 +80,7 @@ try:
         if part.is_multipart():
             for sub in part.get_payload():
                 walk(sub, depth + 1)
+
     walk(msg)
 
     # 2. fetch_full output — what the viewer actually sees

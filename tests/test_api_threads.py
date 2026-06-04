@@ -9,7 +9,6 @@ and an account with no stored credentials. These guard the IMAP layer
 from malformed input.
 """
 
-
 from core import Database
 
 
@@ -31,9 +30,7 @@ def _make_account(with_creds=False):
 
 class TestFindThreadValidation:
     def test_account_id_required(self, authenticated_client, initialized_app):
-        resp = authenticated_client.post(
-            "/api/threads/find", json={"folder": "INBOX", "uid": "5"}
-        )
+        resp = authenticated_client.post("/api/threads/find", json={"folder": "INBOX", "uid": "5"})
         assert resp.status_code == 400
         assert "account_id" in resp.get_json()["error"]
 
@@ -44,9 +41,7 @@ class TestFindThreadValidation:
         assert resp.status_code == 400
 
     def test_folder_required(self, authenticated_client, initialized_app):
-        resp = authenticated_client.post(
-            "/api/threads/find", json={"account_id": 1, "uid": "5"}
-        )
+        resp = authenticated_client.post("/api/threads/find", json={"account_id": 1, "uid": "5"})
         assert resp.status_code == 400
         assert "folder" in resp.get_json()["error"]
 

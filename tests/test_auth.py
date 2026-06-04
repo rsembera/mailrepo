@@ -30,6 +30,7 @@ INIT_PW = "TestPassword123!"  # matches conftest.initialized_app
 
 # ---------------------------------------------------------------------------
 
+
 class TestSetup:
     def test_get_renders_when_uninitialized(self, client):
         resp = client.get("/auth/setup")
@@ -218,6 +219,7 @@ class TestPasswordChangeHandoff:
         # backup <=24h old (the DB rekey window isn't resumable, so the backup
         # is the recovery path). Create one first, as the app requires.
         from utils import backup
+
         backup.create_full_backup()
 
         start = authenticated_client.post(

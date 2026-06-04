@@ -17,6 +17,7 @@ Examples:
 Used during Stage Thread development to confirm header-walk works on
 real accounts before wiring up the HTTP endpoint.
 """
+
 import getpass
 import os
 import sys
@@ -49,8 +50,7 @@ Database.set_key(Encryption.get_db_key())
 Database.initialize()
 
 row = Database.fetchone(
-    "SELECT email, credentials_encrypted FROM accounts WHERE id = ?",
-    (account_id,)
+    "SELECT email, credentials_encrypted FROM accounts WHERE id = ?", (account_id,)
 )
 if not row or not row["credentials_encrypted"]:
     print(f"No credentials for account {account_id}")
@@ -83,6 +83,7 @@ try:
         extras = [sent] if sent else []
 
         import time
+
         t0 = time.monotonic()
         result = client.find_thread(
             source_folder=folder,

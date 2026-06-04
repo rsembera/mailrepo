@@ -32,7 +32,7 @@ def get_logger(name: str = "mailrepo") -> logging.Logger:
     # Only configure if not already configured
     if not logger.handlers:
         # Set level based on environment
-        debug_mode = os.environ.get('MAILREPO_DEBUG', '').lower() in ('1', 'true', 'yes')
+        debug_mode = os.environ.get("MAILREPO_DEBUG", "").lower() in ("1", "true", "yes")
         logger.setLevel(logging.DEBUG if debug_mode else logging.INFO)
 
         # Console handler
@@ -40,7 +40,7 @@ def get_logger(name: str = "mailrepo") -> logging.Logger:
         console_handler.setLevel(logging.DEBUG if debug_mode else logging.INFO)
 
         # Simple format
-        formatter = logging.Formatter('[%(levelname)s] %(message)s')
+        formatter = logging.Formatter("[%(levelname)s] %(message)s")
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
 

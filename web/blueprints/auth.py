@@ -45,9 +45,9 @@ _LOCKOUT_SECONDS = 60
 # signed-but-unencrypted client cookie and would expose them to the browser.
 # The POST endpoint mints an opaque one-time job id; the SSE endpoint consumes
 # it exactly once. Mirrors the job model in web/blueprints/api/exports.py.
-_pw_change_jobs = {}            # job_id -> {"current", "new", "created_at"}
+_pw_change_jobs = {}  # job_id -> {"current", "new", "created_at"}
 _pw_change_lock = threading.Lock()
-_PW_CHANGE_TTL = 300            # seconds; abandoned (never-consumed) jobs purged
+_PW_CHANGE_TTL = 300  # seconds; abandoned (never-consumed) jobs purged
 
 
 def _gc_pw_change_jobs():
@@ -118,8 +118,7 @@ def cleanup_expired_trash():
 
         # Find folders that have been deleted longer than retention period
         expired_folders = Database.fetchall(
-            "SELECT id FROM folders WHERE deleted_at IS NOT NULL AND deleted_at < ?",
-            (cutoff_time,)
+            "SELECT id FROM folders WHERE deleted_at IS NOT NULL AND deleted_at < ?", (cutoff_time,)
         )
 
         if expired_folders:
@@ -132,7 +131,7 @@ def cleanup_expired_trash():
         # Find emails that have been deleted longer than retention period
         expired_emails = Database.fetchall(
             "SELECT id, filepath FROM messages WHERE deleted_at IS NOT NULL AND deleted_at < ?",
-            (cutoff_time,)
+            (cutoff_time,),
         )
 
         if expired_emails:
@@ -226,7 +225,7 @@ def login():
         return render_template(
             "auth/login.html",
             error=f"Too many failed attempts. Please wait {seconds_remaining} seconds.",
-            lockout_seconds=seconds_remaining
+            lockout_seconds=seconds_remaining,
         )
 
     if request.method == "POST":
@@ -278,12 +277,12 @@ def _run_auto_backup_check():
         # Checkpoint WAL first so backup captures all changes
         Database.checkpoint()
 
-        frequency = get_setting('backup_frequency', 'daily')
+        frequency = get_setting("backup_frequency", "daily")
         log.debug(f"Backup frequency setting: {frequency}")
 
         if backup.check_backup_needed(frequency):
             log.info("Checking backup status...")
-            location = get_setting('backup_location', '')
+            location = get_setting("backup_location", "")
             if not location:
                 location = None  # Use default
             result = backup.create_backup(location)
@@ -291,26 +290,27 @@ def _run_auto_backup_check():
                 log.info(f"Backup created: {result['filename']}")
 
                 # Run post-backup command if configured
-                post_cmd = get_setting('post_backup_command', '')
+                post_cmd = get_setting("post_backup_command", "")
                 if post_cmd:
                     log.info(f"Running post-backup command: {post_cmd}")
                     import subprocess
+
                     try:
                         proc_result = subprocess.run(
-                            post_cmd,
-                            shell=True,
-                            timeout=300,
-                            capture_output=True,
-                            text=True
+                            post_cmd, shell=True, timeout=300, capture_output=True, text=True
                         )
                         if proc_result.stdout:
-                            for line in proc_result.stdout.strip().split('\n'):
+                            for line in proc_result.stdout.strip().split("\n"):
                                 if line:
                                     log.info(f"  {line}")
                         if proc_result.returncode == 0:
                             log.info("Post-backup command completed")
                         else:
-                            error_msg = proc_result.stderr.strip() if proc_result.stderr else f"Exit code {proc_result.returncode}"
+                            error_msg = (
+                                proc_result.stderr.strip()
+                                if proc_result.stderr
+                                else f"Exit code {proc_result.returncode}"
+                            )
                             log.warning(f"Post-backup command failed: {error_msg}")
                     except subprocess.TimeoutExpired:
                         log.warning("Post-backup command timed out")
@@ -422,24 +422,41 @@ def change_password_progress(job_id):
             PasswordChangeError,
             change_master_password,
         )
+
         q = queue.Queue()
         SENTINEL = object()
+
         def cb(event):
             q.put(event)
+
         def worker():
             try:
                 result = change_master_password(current_password, new_password, progress_cb=cb)
-                q.put({'status': 'complete', 'message': 'Password changed successfully', 'result': result})
+                q.put(
+                    {
+                        "status": "complete",
+                        "message": "Password changed successfully",
+                        "result": result,
+                    }
+                )
             except InvalidPasswordError as e:
-                q.put({'status': 'error', 'message': str(e)})
+                q.put({"status": "error", "message": str(e)})
             except PasswordChangeCorruptionError as e:
-                q.put({'status': 'error', 'message': str(e), 'kind': 'corruption', 'filepath': e.filepath})
+                q.put(
+                    {
+                        "status": "error",
+                        "message": str(e),
+                        "kind": "corruption",
+                        "filepath": e.filepath,
+                    }
+                )
             except PasswordChangeError as e:
-                q.put({'status': 'error', 'message': str(e)})
+                q.put({"status": "error", "message": str(e)})
             except Exception as e:
-                q.put({'status': 'error', 'message': f'{type(e).__name__}: {e}'})
+                q.put({"status": "error", "message": f"{type(e).__name__}: {e}"})
             finally:
                 q.put(SENTINEL)
+
         t = threading.Thread(target=worker, daemon=True)
         t.start()
         while True:
@@ -448,6 +465,5 @@ def change_password_progress(job_id):
                 break
             yield f"data: {json.dumps(ev)}\n\n"
         t.join(timeout=1.0)
-
 
     return Response(generate(), mimetype="text/event-stream")

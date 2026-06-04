@@ -79,7 +79,7 @@ def _new_job() -> str:
             "result_bytes": None,
             "result_mimetype": "application/octet-stream",
             "result_filename": "export.bin",
-            "saved_path": None,         # absolute disk path when output_dir was used
+            "saved_path": None,  # absolute disk path when output_dir was used
             "error": None,
             "created_at": datetime.now(),
             "downloaded_at": None,
@@ -123,6 +123,7 @@ def _gc_jobs() -> None:
 # ---------------------------------------------------------------------------
 # Selection resolution
 # ---------------------------------------------------------------------------
+
 
 def _resolve_message_ids(payload: dict) -> tuple[list[int], str]:
     """Resolve a selection payload into a concrete list of message IDs and a
@@ -236,9 +237,7 @@ def _folder_path_label(folder_id: int) -> str:
     cur_id = folder_id
     while cur_id and cur_id not in seen:
         seen.add(cur_id)
-        row = Database.fetchone(
-            "SELECT name, parent_id FROM folders WHERE id = ?", (cur_id,)
-        )
+        row = Database.fetchone("SELECT name, parent_id FROM folders WHERE id = ?", (cur_id,))
         if not row:
             break
         parts.append(row["name"])
@@ -249,6 +248,7 @@ def _folder_path_label(folder_id: int) -> str:
 # ---------------------------------------------------------------------------
 # Encryption helpers
 # ---------------------------------------------------------------------------
+
 
 def _encrypt_to_zip(payload_bytes: bytes, payload_filename: str, password: str) -> bytes:
     """Wrap ``payload_bytes`` in an AES-256 encrypted ZIP using pyzipper.
@@ -263,6 +263,7 @@ def _encrypt_to_zip(payload_bytes: bytes, payload_filename: str, password: str) 
     - Linux ``unzip`` 6.0+ supports AES with the ``-P`` flag.
     """
     import pyzipper
+
     buf = io.BytesIO()
     with pyzipper.AESZipFile(
         buf, "w", compression=pyzipper.ZIP_DEFLATED, encryption=pyzipper.WZ_AES
@@ -324,6 +325,7 @@ def _build_encrypted_eml_zip(message_ids: list[int], password: str) -> tuple[byt
     )
 
     folder_paths: dict[int, str] = {}
+
     def folder_path(fid: int) -> str:
         if fid in folder_paths:
             return folder_paths[fid]
@@ -366,6 +368,7 @@ def _build_encrypted_eml_zip(message_ids: list[int], password: str) -> tuple[byt
 # ---------------------------------------------------------------------------
 # .eml ZIP builder
 # ---------------------------------------------------------------------------
+
 
 def _build_eml_zip(message_ids: list[int]) -> tuple[bytes, str]:
     """Build an unencrypted ZIP of decrypted .eml files.
@@ -434,6 +437,7 @@ def _build_eml_zip(message_ids: list[int]) -> tuple[bytes, str]:
 # ---------------------------------------------------------------------------
 # Background worker
 # ---------------------------------------------------------------------------
+
 
 def _run_export_job(job_id: str, payload: dict) -> None:
     """Worker thread entry point. Resolves selection, builds the export, and
@@ -521,15 +525,23 @@ def _build_pdf_only(job_id: str, message_ids: list[int], scope_label: str, paylo
         _push_event(job_id, "status", {"phase": "encrypting", "message": "Encrypting export\u2026"})
         _push_event(job_id, "progress", {"phase": "encrypting", "percent": 95})
     elif other_attachments:
-        _push_event(job_id, "status",
-            {"phase": "packaging", "message": f"Packaging {len(other_attachments)} attachments\u2026"})
+        _push_event(
+            job_id,
+            "status",
+            {
+                "phase": "packaging",
+                "message": f"Packaging {len(other_attachments)} attachments\u2026",
+            },
+        )
         _push_event(job_id, "progress", {"phase": "packaging", "percent": 95})
 
     out_buf = io.BytesIO()
     if pdf_password:
         import pyzipper
+
         zf_ctx = pyzipper.AESZipFile(
-            out_buf, "w",
+            out_buf,
+            "w",
             compression=pyzipper.ZIP_DEFLATED,
             encryption=pyzipper.WZ_AES,
         )
@@ -567,10 +579,19 @@ def _build_pdf_only(job_id: str, message_ids: list[int], scope_label: str, paylo
 def _build_eml_only(job_id: str, message_ids: list[int], scope_label: str, payload: dict) -> None:
     eml_password = (payload.get("encryption_password") or "").strip()
     if eml_password:
-        _push_event(job_id, "status", {"phase": "loading",
-            "message": f"Bundling and encrypting {len(message_ids)} emails..."})
-        _push_event(job_id, "progress", {"phase": "loading", "current": 0,
-            "total": len(message_ids), "percent": 5})
+        _push_event(
+            job_id,
+            "status",
+            {
+                "phase": "loading",
+                "message": f"Bundling and encrypting {len(message_ids)} emails...",
+            },
+        )
+        _push_event(
+            job_id,
+            "progress",
+            {"phase": "loading", "current": 0, "total": len(message_ids), "percent": 5},
+        )
         zip_bytes, filename = _build_encrypted_eml_zip(message_ids, eml_password)
         _push_event(job_id, "progress", {"phase": "done", "percent": 100})
         _finish_job(
@@ -583,8 +604,14 @@ def _build_eml_only(job_id: str, message_ids: list[int], scope_label: str, paylo
         )
         return
 
-    _push_event(job_id, "status", {"phase": "loading", "message": f"Bundling {len(message_ids)} emails..."})
-    _push_event(job_id, "progress", {"phase": "loading", "current": 0, "total": len(message_ids), "percent": 5})
+    _push_event(
+        job_id, "status", {"phase": "loading", "message": f"Bundling {len(message_ids)} emails..."}
+    )
+    _push_event(
+        job_id,
+        "progress",
+        {"phase": "loading", "current": 0, "total": len(message_ids), "percent": 5},
+    )
     zip_bytes, filename = _build_eml_zip(message_ids)
     _push_event(job_id, "progress", {"phase": "done", "percent": 100})
     _finish_job(
@@ -597,7 +624,9 @@ def _build_eml_only(job_id: str, message_ids: list[int], scope_label: str, paylo
     )
 
 
-def _build_pdf_and_eml(job_id: str, message_ids: list[int], scope_label: str, payload: dict) -> None:
+def _build_pdf_and_eml(
+    job_id: str, message_ids: list[int], scope_label: str, payload: dict
+) -> None:
     """Combined export: PDF + .eml ZIP, packaged into a single ZIP."""
     from core.pdf_export import build_combined_pdf
 
@@ -648,9 +677,11 @@ def _build_pdf_and_eml(job_id: str, message_ids: list[int], scope_label: str, pa
         # under emails/<folder>/<file>.eml so the recipient only deals with one
         # password.
         import pyzipper
+
         out_buf = io.BytesIO()
         with pyzipper.AESZipFile(
-            out_buf, "w",
+            out_buf,
+            "w",
             compression=pyzipper.ZIP_DEFLATED,
             encryption=pyzipper.WZ_AES,
         ) as zf:
@@ -707,13 +738,21 @@ def _build_pdf_and_eml(job_id: str, message_ids: list[int], scope_label: str, pa
     )
 
 
-def _finish_job(job_id: str, *, result_bytes: bytes, result_mimetype: str,
-                result_filename: str, summary: dict, output_dir: str | None = None) -> None:
+def _finish_job(
+    job_id: str,
+    *,
+    result_bytes: bytes,
+    result_mimetype: str,
+    result_filename: str,
+    summary: dict,
+    output_dir: str | None = None,
+) -> None:
     """Finish a job. If ``output_dir`` is given, write the bytes to disk at
     ``output_dir/result_filename`` and report the saved path; otherwise keep
     the bytes in memory for browser download.
     """
     import os
+
     job = _get_job(job_id)
     if not job:
         return
@@ -762,12 +801,16 @@ def _finish_job(job_id: str, *, result_bytes: bytes, result_mimetype: str,
         else:
             job["result_bytes"] = result_bytes
 
-    _push_event(job_id, "complete", {
-        "filename": os.path.basename(saved_path) if saved_path else result_filename,
-        "size": len(result_bytes),
-        "summary": summary,
-        "saved_path": saved_path,
-    })
+    _push_event(
+        job_id,
+        "complete",
+        {
+            "filename": os.path.basename(saved_path) if saved_path else result_filename,
+            "size": len(result_bytes),
+            "summary": summary,
+            "saved_path": saved_path,
+        },
+    )
 
 
 def _fail_job(job_id: str, error: str) -> None:
@@ -783,6 +826,7 @@ def _fail_job(job_id: str, error: str) -> None:
 # ---------------------------------------------------------------------------
 # HTTP endpoints
 # ---------------------------------------------------------------------------
+
 
 @api_bp.route("/export/start", methods=["POST"])
 def start_export():

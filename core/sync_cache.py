@@ -20,7 +20,7 @@ _connection: Optional[sqlite3.Connection] = None
 
 
 def _get_db_path() -> Path:
-    return Config.get_data_path() / '.sync_cache.db'
+    return Config.get_data_path() / ".sync_cache.db"
 
 
 def _get_connection() -> sqlite3.Connection:
@@ -71,8 +71,10 @@ def get_folder_sync_state(account_id: int, folder: str) -> dict | None:
 
 
 def update_folder_sync_state(
-    account_id: int, folder: str,
-    uidvalidity: int | None, highestmodseq: int | None,
+    account_id: int,
+    folder: str,
+    uidvalidity: int | None,
+    highestmodseq: int | None,
 ) -> None:
     """Record that we just synced a folder."""
     conn = _get_connection()

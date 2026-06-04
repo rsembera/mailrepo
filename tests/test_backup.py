@@ -45,6 +45,7 @@ def _make_data_files(base: Path):
 # External state file
 # ---------------------------------------------------------------------------
 
+
 class TestBackupStateFile:
     def test_write_then_read_roundtrips(self, temp_data_dir):
         state = {"last_backup_hashes": {"a": "1"}, "file_info": {}}
@@ -71,6 +72,7 @@ class TestBackupStateFile:
 # ---------------------------------------------------------------------------
 # Change detection (mtime/size quick check + hash layer)
 # ---------------------------------------------------------------------------
+
 
 class TestChangeDetection:
     def test_no_baseline_means_changed(self, temp_data_dir):
@@ -141,7 +143,11 @@ class TestChangeDetection:
         meta = backup.get_file_metadata(files[rel])
         sentinel = "0" * 64
         backup._write_backup_state(
-            {"file_info": {rel: {"hash": sentinel, "mtime": meta["mtime"] - 100, "size": meta["size"]}}}
+            {
+                "file_info": {
+                    rel: {"hash": sentinel, "mtime": meta["mtime"] - 100, "size": meta["size"]}
+                }
+            }
         )
         hashes, _ = backup.get_file_hashes()
         assert hashes[rel] == backup.get_file_hash(files[rel])
@@ -151,6 +157,7 @@ class TestChangeDetection:
 # ---------------------------------------------------------------------------
 # Full / incremental lifecycle, including the WAL-checkpoint case
 # ---------------------------------------------------------------------------
+
 
 class TestBackupLifecycle:
     def test_full_backup_creates_zip_manifest_and_baseline(self, temp_data_dir):
@@ -202,6 +209,7 @@ class TestBackupLifecycle:
 # ---------------------------------------------------------------------------
 # Interrupted-backup safety: baseline is committed only after verify
 # ---------------------------------------------------------------------------
+
 
 class TestBaselineOrderingSafety:
     def test_baseline_unchanged_when_verification_fails(self, temp_data_dir, monkeypatch):

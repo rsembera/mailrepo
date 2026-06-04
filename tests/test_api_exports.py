@@ -38,15 +38,14 @@ def _clear_jobs():
 
 
 def _make_folder(name, parent_id=None):
-    cur = Database.execute(
-        "INSERT INTO folders (name, parent_id) VALUES (?, ?)", (name, parent_id)
-    )
+    cur = Database.execute("INSERT INTO folders (name, parent_id) VALUES (?, ?)", (name, parent_id))
     Database.commit()
     return cur.lastrowid
 
 
-def _make_message(folder_id, subject="Subject", body="body text", date=1739633400,
-                  deleted=False, write_file=True):
+def _make_message(
+    folder_id, subject="Subject", body="body text", date=1739633400, deleted=False, write_file=True
+):
     """Insert a message; optionally back it with a real encrypted .eml.enc."""
     mid = f"<{secrets.token_hex(8)}@test>"
     rel = None
@@ -66,8 +65,16 @@ def _make_message(folder_id, subject="Subject", body="body text", date=173963340
         """INSERT INTO messages
            (folder_id, message_id, subject, sender, date, filepath, body_text, deleted_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-        (folder_id, mid, subject, "a@example.com", date, rel or "missing.eml.enc",
-         body, 999 if deleted else None),
+        (
+            folder_id,
+            mid,
+            subject,
+            "a@example.com",
+            date,
+            rel or "missing.eml.enc",
+            body,
+            999 if deleted else None,
+        ),
     )
     Database.commit()
     return cur.lastrowid
@@ -76,6 +83,7 @@ def _make_message(folder_id, subject="Subject", body="body text", date=173963340
 # ---------------------------------------------------------------------------
 # Scope resolution
 # ---------------------------------------------------------------------------
+
 
 class TestScopeResolution:
     def test_collect_folder_ids_root_only(self, initialized_app):
@@ -133,9 +141,7 @@ class TestScopeResolution:
         assert label == "Matter (+ subfolders)"
 
     def test_resolve_messages_source(self, initialized_app):
-        ids, label = ex._resolve_message_ids(
-            {"source": "messages", "message_ids": ["3", "7", "9"]}
-        )
+        ids, label = ex._resolve_message_ids({"source": "messages", "message_ids": ["3", "7", "9"]})
         assert ids == [3, 7, 9]
         assert label == "3 selected emails"
 
@@ -151,6 +157,7 @@ class TestScopeResolution:
 # ---------------------------------------------------------------------------
 # Job state machine (in-memory; no DB needed)
 # ---------------------------------------------------------------------------
+
 
 class TestJobStateMachine:
     def test_new_job_is_running_and_retrievable(self):
@@ -179,8 +186,11 @@ class TestJobStateMachine:
     def test_finish_job_in_memory(self):
         job_id = ex._new_job()
         ex._finish_job(
-            job_id, result_bytes=b"hello", result_mimetype="application/zip",
-            result_filename="out.zip", summary={"format": "eml"},
+            job_id,
+            result_bytes=b"hello",
+            result_mimetype="application/zip",
+            result_filename="out.zip",
+            summary={"format": "eml"},
         )
         job = ex._get_job(job_id)
         assert job["status"] == "done"
@@ -193,8 +203,12 @@ class TestJobStateMachine:
     def test_finish_job_to_disk(self, tmp_path):
         job_id = ex._new_job()
         ex._finish_job(
-            job_id, result_bytes=b"file-bytes", result_mimetype="application/zip",
-            result_filename="export.zip", summary={}, output_dir=str(tmp_path),
+            job_id,
+            result_bytes=b"file-bytes",
+            result_mimetype="application/zip",
+            result_filename="export.zip",
+            summary={},
+            output_dir=str(tmp_path),
         )
         job = ex._get_job(job_id)
         saved = job["saved_path"]
@@ -207,8 +221,12 @@ class TestJobStateMachine:
         (tmp_path / "export.zip").write_bytes(b"existing")
         job_id = ex._new_job()
         ex._finish_job(
-            job_id, result_bytes=b"new", result_mimetype="application/zip",
-            result_filename="export.zip", summary={}, output_dir=str(tmp_path),
+            job_id,
+            result_bytes=b"new",
+            result_mimetype="application/zip",
+            result_filename="export.zip",
+            summary={},
+            output_dir=str(tmp_path),
         )
         saved = ex._get_job(job_id)["saved_path"]
         assert saved.endswith("export (1).zip")
@@ -218,8 +236,11 @@ class TestJobStateMachine:
         job_id = ex._new_job()
         # Two levels below an existing parent -> refused (no mkdir -p)
         ex._finish_job(
-            job_id, result_bytes=b"x", result_mimetype="application/zip",
-            result_filename="export.zip", summary={},
+            job_id,
+            result_bytes=b"x",
+            result_mimetype="application/zip",
+            result_filename="export.zip",
+            summary={},
             output_dir=str(tmp_path / "missing" / "deeper"),
         )
         job = ex._get_job(job_id)
@@ -228,6 +249,7 @@ class TestJobStateMachine:
 
     def test_gc_purges_stale_jobs(self):
         from datetime import datetime, timedelta
+
         stale_id = ex._new_job()
         ex._get_job(stale_id)["created_at"] = datetime.now() - timedelta(hours=2)
         # Allocating a new job triggers _gc_jobs internally
@@ -239,6 +261,7 @@ class TestJobStateMachine:
 # ---------------------------------------------------------------------------
 # .eml ZIP builders - plain and AES-256 encrypted round-trips
 # ---------------------------------------------------------------------------
+
 
 class TestEmlZipBuilders:
     def test_plain_zip_round_trip(self, initialized_app):
@@ -307,6 +330,7 @@ class TestEmlZipBuilders:
 # Worker + HTTP endpoints
 # ---------------------------------------------------------------------------
 
+
 class TestRunExportJob:
     def test_eml_job_end_to_end(self, initialized_app):
         fid = _make_folder("Clients")
@@ -326,7 +350,9 @@ class TestRunExportJob:
     def test_empty_selection_fails_job(self, initialized_app):
         fid = _make_folder("Empty")
         job_id = ex._new_job()
-        ex._run_export_job(job_id, {"selection": {"source": "folder", "folder_id": fid}, "format": "eml"})
+        ex._run_export_job(
+            job_id, {"selection": {"source": "folder", "folder_id": fid}, "format": "eml"}
+        )
         job = ex._get_job(job_id)
         assert job["status"] == "failed"
         assert "no emails" in job["error"].lower()
@@ -373,8 +399,13 @@ class TestExportEndpoints:
 
     def test_download_done_job_streams_bytes(self, authenticated_client, initialized_app):
         job_id = ex._new_job()
-        ex._finish_job(job_id, result_bytes=b"the-zip-bytes",
-                       result_mimetype="application/zip", result_filename="x.zip", summary={})
+        ex._finish_job(
+            job_id,
+            result_bytes=b"the-zip-bytes",
+            result_mimetype="application/zip",
+            result_filename="x.zip",
+            summary={},
+        )
         resp = authenticated_client.get(f"/api/export/download/{job_id}")
         assert resp.status_code == 200
         assert resp.data == b"the-zip-bytes"
@@ -391,7 +422,5 @@ class TestExportEndpoints:
 
     def test_reveal_rejects_unknown_path(self, authenticated_client, initialized_app):
         # A path not matching any job's saved_path must be refused (security)
-        resp = authenticated_client.post(
-            "/api/export/reveal", json={"path": "/etc/passwd"}
-        )
+        resp = authenticated_client.post("/api/export/reveal", json={"path": "/etc/passwd"})
         assert resp.status_code == 403

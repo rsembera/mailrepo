@@ -87,40 +87,42 @@ def create_account():
         if detected:
             host, port = detected
         else:
-            return jsonify({
-                "error": "Could not auto-detect IMAP server. Please enter server details manually."
-            }), 400
+            return jsonify(
+                {
+                    "error": "Could not auto-detect IMAP server. Please enter server details manually."
+                }
+            ), 400
 
     test_result = IMAP.test_connection(email_addr, password, host, port, use_ssl)
     if not test_result["success"]:
         return jsonify({"error": test_result["error"]}), 400
 
     cursor = Database.execute(
-        "INSERT INTO accounts (name, email, provider) VALUES (?, ?, ?)",
-        (name, email_addr, "imap")
+        "INSERT INTO accounts (name, email, provider) VALUES (?, ?, ?)", (name, email_addr, "imap")
     )
     Database.commit()
 
     account_id = cursor.lastrowid
     IMAP.save_credentials(account_id, email_addr, password, host, port, use_ssl)
 
-    return jsonify({
-        "account": {
-            "id": account_id,
-            "name": name,
-            "email": email_addr,
-            "provider": "imap",
-        },
-        "message": test_result["message"],
-    }), 201
+    return jsonify(
+        {
+            "account": {
+                "id": account_id,
+                "name": name,
+                "email": email_addr,
+                "provider": "imap",
+            },
+            "message": test_result["message"],
+        }
+    ), 201
 
 
 @api_bp.route("/accounts/<int:account_id>", methods=["PATCH"])
 def update_account(account_id):
     """Update an existing IMAP email account."""
     account = Database.fetchone(
-        "SELECT id, name, email, credentials_encrypted FROM accounts WHERE id = ?",
-        (account_id,)
+        "SELECT id, name, email, credentials_encrypted FROM accounts WHERE id = ?", (account_id,)
     )
     if not account:
         return jsonify({"error": "Account not found"}), 404
@@ -146,9 +148,11 @@ def update_account(account_id):
             if detected:
                 host, port = detected
             else:
-                return jsonify({
-                    "error": "Could not auto-detect IMAP server. Please enter server details manually."
-                }), 400
+                return jsonify(
+                    {
+                        "error": "Could not auto-detect IMAP server. Please enter server details manually."
+                    }
+                ), 400
 
         # Test connection with new credentials
         test_result = IMAP.test_connection(email_addr, password, host, port, use_ssl)
@@ -163,28 +167,28 @@ def update_account(account_id):
 
     # Update account name and email
     Database.execute(
-        "UPDATE accounts SET name = ?, email = ? WHERE id = ?",
-        (name, email_addr, account_id)
+        "UPDATE accounts SET name = ?, email = ? WHERE id = ?", (name, email_addr, account_id)
     )
     Database.commit()
 
-    return jsonify({
-        "account": {
-            "id": account_id,
-            "name": name,
-            "email": email_addr,
-            "provider": "imap",
-        },
-        "message": message,
-    })
+    return jsonify(
+        {
+            "account": {
+                "id": account_id,
+                "name": name,
+                "email": email_addr,
+                "provider": "imap",
+            },
+            "message": message,
+        }
+    )
 
 
 @api_bp.route("/accounts/<int:account_id>/test", methods=["POST"])
 def test_account_connection(account_id):
     """Test connection to an existing IMAP account."""
     account = Database.fetchone(
-        "SELECT id, credentials_encrypted FROM accounts WHERE id = ?",
-        (account_id,)
+        "SELECT id, credentials_encrypted FROM accounts WHERE id = ?", (account_id,)
     )
     if not account:
         return jsonify({"error": "Account not found"}), 404
@@ -196,15 +200,12 @@ def test_account_connection(account_id):
         return jsonify({"error": "Failed to load credentials"}), 400
 
     test_result = IMAP.test_connection(
-        creds["email"], creds["password"],
-        creds["host"], creds["port"],
-        creds.get("use_ssl", True)
+        creds["email"], creds["password"], creds["host"], creds["port"], creds.get("use_ssl", True)
     )
 
     if test_result["success"]:
         Database.execute(
-            "UPDATE accounts SET last_sync = ? WHERE id = ?",
-            (int(time.time()), account_id)
+            "UPDATE accounts SET last_sync = ? WHERE id = ?", (int(time.time()), account_id)
         )
         Database.commit()
 
@@ -215,8 +216,7 @@ def test_account_connection(account_id):
 def get_account_emails(account_id):
     """Get emails from an IMAP account."""
     account = Database.fetchone(
-        "SELECT id, credentials_encrypted FROM accounts WHERE id = ?",
-        (account_id,)
+        "SELECT id, credentials_encrypted FROM accounts WHERE id = ?", (account_id,)
     )
     if not account:
         return jsonify({"error": "Account not found"}), 404
@@ -249,8 +249,7 @@ def get_account_emails(account_id):
 def get_account_email(account_id, uid):
     """Get a single email with full content for viewing."""
     account = Database.fetchone(
-        "SELECT id, credentials_encrypted FROM accounts WHERE id = ?",
-        (account_id,)
+        "SELECT id, credentials_encrypted FROM accounts WHERE id = ?", (account_id,)
     )
     if not account:
         return jsonify({"error": "Account not found"}), 404
@@ -277,7 +276,7 @@ def get_account_folders(account_id):
     """Get IMAP folders (mailboxes) for an account. Uses cache if fresh."""
     account = Database.fetchone(
         "SELECT id, credentials_encrypted, cached_folders, cached_folders_at FROM accounts WHERE id = ?",
-        (account_id,)
+        (account_id,),
     )
     if not account:
         return jsonify({"error": "Account not found"}), 404
@@ -309,7 +308,7 @@ def get_account_folders(account_id):
         if new_folders_json != account["cached_folders"]:
             Database.execute(
                 "UPDATE accounts SET cached_folders = ?, cached_folders_at = ? WHERE id = ?",
-                (new_folders_json, int(time.time()), account_id)
+                (new_folders_json, int(time.time()), account_id),
             )
             Database.commit()
 
@@ -353,18 +352,16 @@ def detect_imap_server():
         host, port = detected
         return jsonify({"detected": True, "host": host, "port": port})
     else:
-        return jsonify({
-            "detected": False,
-            "message": "Could not auto-detect server. Please enter manually."
-        })
+        return jsonify(
+            {"detected": False, "message": "Could not auto-detect server. Please enter manually."}
+        )
 
 
 @api_bp.route("/accounts/<int:account_id>/emails/<uid>/download", methods=["GET"])
 def download_imap_email(account_id, uid):
     """Download an IMAP email as .eml file."""
     account = Database.fetchone(
-        "SELECT id, credentials_encrypted FROM accounts WHERE id = ?",
-        (account_id,)
+        "SELECT id, credentials_encrypted FROM accounts WHERE id = ?", (account_id,)
     )
     if not account:
         return jsonify({"error": "Account not found"}), 404
@@ -382,13 +379,15 @@ def download_imap_email(account_id, uid):
         # Parse to get subject for filename
         msg = email.message_from_bytes(raw_bytes)
         subject = _decode_header_value(msg.get("Subject", "")) or "email"
-        safe_filename = "".join(c for c in subject if c.isalnum() or c in " -_")[:50].strip() or "email"
+        safe_filename = (
+            "".join(c for c in subject if c.isalnum() or c in " -_")[:50].strip() or "email"
+        )
         filename = f"{safe_filename}.eml"
 
         return Response(
             raw_bytes,
             mimetype="message/rfc822",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
     except IMAPError as e:
         return jsonify({"error": str(e)}), 500
@@ -401,8 +400,7 @@ def download_imap_email(account_id, uid):
 def download_imap_attachment(account_id, uid, index):
     """Download an attachment from an IMAP email."""
     account = Database.fetchone(
-        "SELECT id, credentials_encrypted FROM accounts WHERE id = ?",
-        (account_id,)
+        "SELECT id, credentials_encrypted FROM accounts WHERE id = ?", (account_id,)
     )
     if not account:
         return jsonify({"error": "Account not found"}), 404
@@ -434,11 +432,13 @@ def download_imap_attachment(account_id, uid, index):
                 if "attachment" in content_disposition:
                     filename = part.get_filename()
                     if filename:
-                        attachments.append({
-                            "filename": _decode_header_value(filename),
-                            "content_type": content_type,
-                            "payload": part.get_payload(decode=True),
-                        })
+                        attachments.append(
+                            {
+                                "filename": _decode_header_value(filename),
+                                "content_type": content_type,
+                                "payload": part.get_payload(decode=True),
+                            }
+                        )
 
         if index < 0 or index >= len(attachments):
             return jsonify({"error": "Attachment not found"}), 404
@@ -452,7 +452,7 @@ def download_imap_attachment(account_id, uid, index):
         return Response(
             att["payload"],
             mimetype=att["content_type"],
-            headers={"Content-Disposition": f'{disposition}; filename="{att["filename"]}"'}
+            headers={"Content-Disposition": f'{disposition}; filename="{att["filename"]}"'},
         )
     except IMAPError as e:
         return jsonify({"error": str(e)}), 500
@@ -465,8 +465,7 @@ def download_imap_attachment(account_id, uid, index):
 def get_imap_email_source(account_id, uid):
     """Get raw source of an IMAP email."""
     account = Database.fetchone(
-        "SELECT id, credentials_encrypted FROM accounts WHERE id = ?",
-        (account_id,)
+        "SELECT id, credentials_encrypted FROM accounts WHERE id = ?", (account_id,)
     )
     if not account:
         return jsonify({"error": "Account not found"}), 404
@@ -483,9 +482,9 @@ def get_imap_email_source(account_id, uid):
 
         # Try to decode as text, fallback to latin-1 if UTF-8 fails
         try:
-            source = raw_bytes.decode('utf-8')
+            source = raw_bytes.decode("utf-8")
         except UnicodeDecodeError:
-            source = raw_bytes.decode('latin-1')
+            source = raw_bytes.decode("latin-1")
 
         return jsonify({"source": source})
     except IMAPError as e:

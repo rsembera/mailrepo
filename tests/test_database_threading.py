@@ -47,13 +47,16 @@ def _initialized_db():
 # CONCURRENT NORMAL ACCESS
 # ============================================================
 
+
 class TestConcurrentNormalAccess:
     """Multiple threads doing ordinary queries should not deadlock or corrupt
     results. The lock serializes them but they all complete cleanly."""
 
     def test_two_threads_can_query_concurrently(self):
         # Make sure schema exists.
-        Database.execute("CREATE TABLE IF NOT EXISTS thread_test (id INTEGER PRIMARY KEY, val INTEGER)")
+        Database.execute(
+            "CREATE TABLE IF NOT EXISTS thread_test (id INTEGER PRIMARY KEY, val INTEGER)"
+        )
         Database.execute("DELETE FROM thread_test")
         Database.commit()
 
@@ -88,6 +91,7 @@ class TestConcurrentNormalAccess:
 # ============================================================
 # MIGRATION LOCK BLOCKS OTHER THREADS
 # ============================================================
+
 
 class TestMigrationLock:
     """acquire_for_migration() must block other threads until release."""
@@ -183,6 +187,7 @@ class TestMigrationLock:
 # ============================================================
 # REENTRANT LOCK
 # ============================================================
+
 
 class TestReentrantLock:
     """RLock allows the same thread to acquire the lock multiple times.

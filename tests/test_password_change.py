@@ -35,6 +35,7 @@ from core.password_change import (
 # FIXTURES
 # ============================================================
 
+
 @pytest.fixture
 def v2_archive(initialized_app, tmp_path):
     """
@@ -70,13 +71,19 @@ def v2_archive(initialized_app, tmp_path):
     backups_dir = tmp_path / "backups"
     backups_dir.mkdir(parents=True, exist_ok=True)
     now_iso = datetime.now().isoformat()
-    (backups_dir / "manifest.json").write_text(json.dumps({
-        "backups": [{
-            "filename": "full_test.zip",
-            "created_at": now_iso,
-            "type": "full",
-        }],
-    }))
+    (backups_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "backups": [
+                    {
+                        "filename": "full_test.zip",
+                        "created_at": now_iso,
+                        "type": "full",
+                    }
+                ],
+            }
+        )
+    )
 
     with app.app_context():
         yield {
@@ -90,6 +97,7 @@ def v2_archive(initialized_app, tmp_path):
 # ============================================================
 # HAPPY PATH
 # ============================================================
+
 
 class TestChangeMasterPasswordHappyPath:
     """The end-to-end success case: password actually changes."""
@@ -116,20 +124,27 @@ class TestChangeMasterPasswordHappyPath:
     def test_progress_callback_receives_expected_stages(self, v2_archive):
         events = []
         change_master_password(
-            v2_archive["password"], "NewPassword456!",
+            v2_archive["password"],
+            "NewPassword456!",
             progress_cb=lambda ev: events.append(ev),
         )
         statuses = [e.get("status") for e in events]
         # Must include the canonical sequence (matches settings.js vocabulary)
-        for expected in ("counting", "counted", "encrypting",
-                         "credentials", "database", "finalizing", "complete"):
-            assert expected in statuses, (
-                f"Missing status '{expected}' in {statuses}"
-            )
+        for expected in (
+            "counting",
+            "counted",
+            "encrypting",
+            "credentials",
+            "database",
+            "finalizing",
+            "complete",
+        ):
+            assert expected in statuses, f"Missing status '{expected}' in {statuses}"
 
     def test_returns_summary_with_file_count(self, v2_archive):
         result = change_master_password(
-            v2_archive["password"], "NewPassword456!",
+            v2_archive["password"],
+            "NewPassword456!",
         )
         assert result["files"] == len(v2_archive["file_paths"])
         assert "credentials" in result
@@ -138,6 +153,7 @@ class TestChangeMasterPasswordHappyPath:
 # ============================================================
 # REFUSAL CASES — backup, password, same-key
 # ============================================================
+
 
 class TestChangeMasterPasswordBackupCheck:
     """Backup <=24h check is non-overridable."""
@@ -152,20 +168,27 @@ class TestChangeMasterPasswordBackupCheck:
         # Rewrite the manifest with a backup from 48h ago
         manifest_path = v2_archive["tmp_path"] / "backups" / "manifest.json"
         old_time = (datetime.now() - timedelta(hours=48)).isoformat()
-        manifest_path.write_text(json.dumps({
-            "backups": [{
-                "filename": "full_old.zip",
-                "created_at": old_time,
-                "type": "full",
-            }],
-        }))
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "backups": [
+                        {
+                            "filename": "full_old.zip",
+                            "created_at": old_time,
+                            "type": "full",
+                        }
+                    ],
+                }
+            )
+        )
         with pytest.raises(PasswordChangeError, match="backup"):
             change_master_password(v2_archive["password"], "NewPassword456!")
 
     def test_accepts_with_recent_backup(self, v2_archive):
         # Fixture already wrote a now-dated manifest; this should succeed.
         result = change_master_password(
-            v2_archive["password"], "NewPassword456!",
+            v2_archive["password"],
+            "NewPassword456!",
         )
         assert "files" in result
 
@@ -184,13 +207,15 @@ class TestChangeMasterPasswordSamePassword:
     def test_refuses_when_new_equals_old(self, v2_archive):
         with pytest.raises(PasswordChangeError, match="same"):
             change_master_password(
-                v2_archive["password"], v2_archive["password"],
+                v2_archive["password"],
+                v2_archive["password"],
             )
 
 
 # ============================================================
 # RESUMABILITY AND CORRUPTION (low-level _rekey_file tests)
 # ============================================================
+
 
 class TestRekeyFileResumability:
     """
@@ -200,9 +225,7 @@ class TestRekeyFileResumability:
 
     def test_already_new_key_file_returns_false(self, v2_archive, tmp_path):
         # Derive both keys
-        old_key = Encryption.derive_v2_file_key_for_password(
-            v2_archive["password"]
-        )
+        old_key = Encryption.derive_v2_file_key_for_password(v2_archive["password"])
         new_key = Encryption.derive_v2_file_key_for_password("NewPassword456!")
 
         # Write a file already encrypted under NEW key
@@ -216,9 +239,7 @@ class TestRekeyFileResumability:
         assert result is False  # False = skipped (already migrated)
 
         # File should be unchanged
-        still_decrypts_with_new = Encryption._decrypt_v2_with_key(
-            test_file.read_bytes(), new_key
-        )
+        still_decrypts_with_new = Encryption._decrypt_v2_with_key(test_file.read_bytes(), new_key)
         assert still_decrypts_with_new == plaintext
 
 
@@ -229,9 +250,7 @@ class TestRekeyFileCorruption:
     """
 
     def test_corrupted_file_halts_loud(self, v2_archive, tmp_path):
-        old_key = Encryption.derive_v2_file_key_for_password(
-            v2_archive["password"]
-        )
+        old_key = Encryption.derive_v2_file_key_for_password(v2_archive["password"])
         new_key = Encryption.derive_v2_file_key_for_password("NewPassword456!")
 
         # Garbage that can't be decrypted with either key
@@ -246,6 +265,7 @@ class TestRekeyFileCorruption:
 # ============================================================
 # ATOMIC WRITE PRIMITIVE
 # ============================================================
+
 
 class TestAtomicWriteFile:
     """The _atomic_write_file helper is small but safety-critical."""
