@@ -71,8 +71,10 @@ class TestConcurrentNormalAccess:
         
         t1 = threading.Thread(target=worker, args=(0, 50))
         t2 = threading.Thread(target=worker, args=(100, 150))
-        t1.start(); t2.start()
-        t1.join(); t2.join()
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
         
         assert errors == [], f"thread errors: {errors}"
         # Each thread saw at least its own 50 rows committed.
@@ -94,7 +96,6 @@ class TestMigrationLock:
         Database.commit()
         
         other_thread_result = {"raised": None, "elapsed": None}
-        release_event = threading.Event()
         
         def blocked_worker():
             t0 = time.perf_counter()
@@ -194,7 +195,7 @@ class TestReentrantLock:
 
     def test_transaction_with_nested_calls_works(self):
         """transaction() holds the lock; calls inside it re-acquire."""
-        with Database.transaction() as conn:
+        with Database.transaction():
             # transaction holds the lock; these all re-acquire.
             Database.execute("CREATE TABLE IF NOT EXISTS rlock_test (id INTEGER PRIMARY KEY)")
             Database.execute("INSERT INTO rlock_test DEFAULT VALUES")

@@ -12,7 +12,6 @@ auto-detection from the email domain.
 
 import json
 
-import pytest
 
 from core import Database
 from core import IMAP

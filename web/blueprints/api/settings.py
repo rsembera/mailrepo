@@ -164,7 +164,6 @@ def reset_database():
     Requires password confirmation and typing 'RESET' to confirm.
     """
     import shutil
-    from pathlib import Path
     from core.config import Config
     from core.encryption import Encryption
     

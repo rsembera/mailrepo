@@ -130,7 +130,7 @@ class IMAP:
         if self.connection:
             try:
                 self.connection.logout()
-            except:
+            except Exception:
                 pass
             self.connection = None
     
@@ -781,7 +781,6 @@ class IMAP:
                 break
 
         # Sort the thread by date when parseable; unparseable dates go to the end.
-        from email.utils import parsedate_to_datetime
         def _date_key(item):
             try:
                 return (0, parsedate_to_datetime(item["date"]))
@@ -810,7 +809,7 @@ class IMAP:
                 else:
                     decoded.append(content)
             return " ".join(decoded)
-        except:
+        except Exception:
             return header
     
     def _linkify_html(self, html: str) -> str:

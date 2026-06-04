@@ -9,9 +9,7 @@ Argon2id at production parameters (m=256MiB, t=6) is slow (~750ms per
 derivation), so tests share initialized state where possible.
 """
 
-import os
 import pytest
-from pathlib import Path
 
 from core.encryption import (
     Encryption,
@@ -22,7 +20,6 @@ from core.encryption import (
     VERSION_BYTE_V2,
     GCM_NONCE_LENGTH,
     GCM_TAG_LENGTH,
-    VERIFICATION_TOKEN,
 )
 from core.config import Config
 

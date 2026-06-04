@@ -5,11 +5,10 @@ Handles importing emails from .mbox files and individual .eml files.
 """
 
 import mailbox
-from email import message_from_bytes, message_from_binary_file
+from email import message_from_bytes
 from email.header import decode_header
-from email.utils import parseaddr, parsedate_to_datetime
+from email.utils import parsedate_to_datetime
 from pathlib import Path
-from typing import Iterator
 
 from .config import Config
 from .encryption import Encryption
@@ -35,7 +34,7 @@ def decode_header_value(header: str) -> str:
             else:
                 decoded.append(content)
         return " ".join(decoded)
-    except:
+    except Exception:
         return header
 
 
@@ -62,7 +61,7 @@ def parse_email_metadata(raw_bytes: bytes) -> dict:
         try:
             dt = parsedate_to_datetime(date_str)
             date_ts = int(dt.timestamp())
-        except:
+        except Exception:
             pass
     
     return {

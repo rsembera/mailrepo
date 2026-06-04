@@ -11,11 +11,9 @@ test that calls change_master_password takes 2-4 seconds. Shared fixtures
 where possible. Whole module runs in ~30-60s.
 """
 
-import base64
 import json
 import os
 from datetime import datetime, timedelta
-from pathlib import Path
 
 import pytest
 
@@ -29,7 +27,6 @@ from core.password_change import (
     change_master_password,
     PasswordChangeError,
     PasswordChangeCorruptionError,
-    MAX_BACKUP_AGE_HOURS,
     _rekey_file,
     _atomic_write_file,
 )

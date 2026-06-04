@@ -219,7 +219,7 @@ def extract_body_text(raw_email: bytes) -> str:
                 charset = part.get_content_charset() or 'utf-8'
                 try:
                     return payload.decode(charset, errors='replace')
-                except:
+                except Exception:
                     return payload.decode('utf-8', errors='replace')
             return ""
         
@@ -253,7 +253,7 @@ def extract_body_text(raw_email: bytes) -> str:
         text_parts = html_parts if html_parts else plain_parts
         
         return "\n".join(text_parts)[:10000]
-    except:
+    except Exception:
         return ""
 
 
@@ -275,7 +275,7 @@ def decode_email_header(header_value: str) -> str:
             p.decode(c or "utf-8", errors="replace") if isinstance(p, bytes) else p
             for p, c in parts
         )
-    except:
+    except Exception:
         return str(header_value)
 
 
@@ -316,7 +316,7 @@ def parse_email_metadata(raw_email: bytes) -> dict:
         
         try:
             date_ts = int(parsedate_to_datetime(date_str).timestamp()) if date_str else None
-        except:
+        except Exception:
             date_ts = None
         
         return {
@@ -326,7 +326,7 @@ def parse_email_metadata(raw_email: bytes) -> dict:
             "message_id": message_id,
             "date": date_ts,
         }
-    except:
+    except Exception:
         return {
             "subject": "(error)",
             "sender": "",

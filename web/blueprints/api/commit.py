@@ -478,7 +478,7 @@ def apply_post_commit_actions(committed_emails: dict, source_actions: dict, resu
             if client:
                 try:
                     client.disconnect()
-                except:
+                except Exception:
                     pass
 
 

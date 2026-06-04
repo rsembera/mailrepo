@@ -13,7 +13,6 @@ import io
 import secrets
 import zipfile
 
-import pytest
 
 from core import Database, Config, Encryption
 

@@ -11,7 +11,6 @@ not mocked.
 
 import secrets
 
-import pytest
 
 from core import Database, Config, Encryption
 

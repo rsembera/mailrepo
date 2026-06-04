@@ -27,7 +27,7 @@ def _decode_header_value(header):
             else:
                 decoded.append(content)
         return " ".join(decoded)
-    except:
+    except Exception:
         return header
 
 
@@ -317,7 +317,7 @@ def get_account_folders(account_id):
             try:
                 folders = json.loads(account["cached_folders"])
                 return jsonify({"folders": folders, "cached": True, "stale": True, "error": str(e)})
-            except:
+            except Exception:
                 pass
         return jsonify({"error": str(e)}), 500
     finally:

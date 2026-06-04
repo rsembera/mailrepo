@@ -39,7 +39,6 @@ from .database import Database
 from .encryption import (
     Encryption,
     InvalidPasswordError,
-    VERSION_BYTE_V2,
 )
 
 
@@ -119,7 +118,6 @@ def change_master_password(
     #    check equality against what\'s already loaded.
     try:
         old_file_key = Encryption.derive_v2_file_key_for_password(old_password)
-        old_db_key_hex = Encryption.derive_v2_db_key_for_password(old_password)
     except Exception as e:
         raise PasswordChangeError(f"Failed to derive old keys: {e}")
 

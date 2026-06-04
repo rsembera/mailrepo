@@ -2,7 +2,6 @@
 Pytest configuration and fixtures for MailRepo tests.
 """
 
-import os
 import secrets
 import shutil
 import tempfile
@@ -50,7 +49,7 @@ def reset_singletons(temp_data_dir, monkeypatch):
     if Database._connection is not None:
         try:
             Database._connection.close()
-        except:
+        except Exception:
             pass
     Database._connection = None
     Database._db_key = None
@@ -61,7 +60,7 @@ def reset_singletons(temp_data_dir, monkeypatch):
     if Database._connection is not None:
         try:
             Database._connection.close()
-        except:
+        except Exception:
             pass
     Database._connection = None
     Database._db_key = None

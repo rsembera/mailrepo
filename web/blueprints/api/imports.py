@@ -154,7 +154,7 @@ def get_import_email():
     import email as email_lib
     from email.header import decode_header
     from email.utils import parsedate_to_datetime
-    from .email_parser import get_raw_email_from_import, _parse_apple_mbox, _parse_eml_directory
+    from .email_parser import get_raw_email_from_import, _parse_eml_directory
     
     data = request.get_json() or {}
     source_path = data.get("sourcePath", "").strip()
@@ -184,7 +184,7 @@ def get_import_email():
                 else:
                     decoded.append(content)
             return " ".join(decoded)
-        except:
+        except Exception:
             return str(header)
     
     def get_email_body(msg):
@@ -364,7 +364,7 @@ def get_import_email():
                                                 email_content = email_content[:plist_marker]
                                             raw_email = email_content
                                             break
-                                    except:
+                                    except Exception:
                                         pass
             elif import_type == 'pst':
                 # PST converted to mbox - use emailSourcePath which points to specific mbox file
@@ -390,7 +390,7 @@ def get_import_email():
             try:
                 dt = parsedate_to_datetime(date_str)
                 date_display = dt.strftime("%Y-%m-%d %H:%M")
-            except:
+            except Exception:
                 pass
         
         html_body, text_body = get_email_body(msg)
@@ -440,7 +440,7 @@ def download_import_attachment():
     """
     import email as email_lib
     from email.header import decode_header
-    from .email_parser import get_raw_email_from_import, _parse_apple_mbox, _parse_eml_directory
+    from .email_parser import get_raw_email_from_import, _parse_eml_directory
     from flask import Response
     from utils.log import get_logger
     log = get_logger()
@@ -478,7 +478,7 @@ def download_import_attachment():
                 else:
                     decoded.append(content)
             return " ".join(decoded)
-        except:
+        except Exception:
             return str(header)
     
     try:
@@ -549,7 +549,7 @@ def download_import_attachment():
                                                 email_content = email_content[:plist_marker]
                                             raw_email = email_content
                                             break
-                                    except:
+                                    except Exception:
                                         pass
             else:
                 raw_email = get_raw_email_from_import(str(source_path), uid)

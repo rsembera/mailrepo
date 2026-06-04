@@ -6,9 +6,9 @@ Creates and configures the Flask application.
 
 import secrets
 import time
-from flask import Flask, redirect, url_for, session, g, request, jsonify
+from flask import Flask, redirect, url_for, session, request, jsonify
 
-from core import Config, FlaskConfig, Database, Encryption, generate_flask_secret_key
+from core import Config, FlaskConfig, Encryption, generate_flask_secret_key
 from core.database import get_setting
 
 

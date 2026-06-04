@@ -88,7 +88,7 @@ try:
     print(f"  text_body: {full.get('text_body')!r}")
     html = full.get("html_body")
     if html is None:
-        print(f"  html_body: None")
+        print("  html_body: None")
     else:
         print(f"  html_body length: {len(html)} chars")
         print(f"  html_body first 500: {html[:500]!r}")

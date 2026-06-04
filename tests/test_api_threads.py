@@ -9,7 +9,6 @@ and an account with no stored credentials. These guard the IMAP layer
 from malformed input.
 """
 
-import pytest
 
 from core import Database
 

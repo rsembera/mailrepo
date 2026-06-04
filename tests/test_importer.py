@@ -10,7 +10,6 @@ byte-for-byte (encrypted), and a bad message in an mbox is counted as a
 failure rather than aborting the whole import.
 """
 
-from email.mime.text import MIMEText
 from pathlib import Path
 
 import mailbox

@@ -253,7 +253,7 @@ def stream_account_emails(account_id):
             if client:
                 try:
                     client.disconnect()
-                except:
+                except Exception:
                     pass
 
     return Response(

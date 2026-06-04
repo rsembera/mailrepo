@@ -2,7 +2,6 @@
 Tests for email parsing functionality.
 """
 
-import pytest
 
 
 class TestEmailMetadataParsing:

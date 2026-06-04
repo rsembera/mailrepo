@@ -325,7 +325,7 @@ def permanently_delete_folder(folder_id):
             folder_path = Config.get_archive_path() / str(fid)
             if folder_path.exists() and folder_path.is_dir():
                 folder_path.rmdir()
-        except:
+        except Exception:
             pass
     
     # Delete all folders (CASCADE will handle messages)
@@ -621,7 +621,7 @@ def permadelete_vault_folder(folder_id):
             folder_path = Config.get_archive_path() / str(fid)
             if folder_path.exists() and folder_path.is_dir():
                 folder_path.rmdir()
-        except:
+        except Exception:
             pass
     
     # Delete all folders (CASCADE will handle messages)
@@ -703,7 +703,7 @@ def batch_permadelete_vault():
             folder_path = Config.get_archive_path() / str(fid)
             if folder_path.exists() and folder_path.is_dir():
                 folder_path.rmdir()
-        except:
+        except Exception:
             pass
     
     # Delete all folders

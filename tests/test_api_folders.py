@@ -2,8 +2,6 @@
 Tests for web/blueprints/api/folders.py - Folder management API.
 """
 
-import pytest
-import json
 
 
 class TestFolderCreation:

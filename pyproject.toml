@@ -19,3 +19,15 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
 ignore = ["E501"]  # Line too long - handled by formatter
+
+[tool.ruff.lint.per-file-ignores]
+# Blueprint submodules are imported purely for their route-registration
+# side effects (each module attaches @api_bp.route handlers on import).
+# They look "unused" to pyflakes but removing them unregisters the API.
+# E402: those imports must follow the Blueprint() definition above them.
+"web/blueprints/api/__init__.py" = ["F401", "E402"]
+# Entry point and dev probe scripts insert the project root onto sys.path
+# before importing project modules, so module-level imports legitimately
+# come after that setup.
+"main.py" = ["E402"]
+"scripts/*" = ["E402", "E702"]

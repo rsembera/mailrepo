@@ -9,7 +9,6 @@ guards (confirmation text + password) without performing the
 destructive reset itself.
 """
 
-import pytest
 
 from core import Database
 from core.database import set_setting

@@ -266,7 +266,7 @@ def stream_commit():
                 if client:
                     try:
                         client.disconnect()
-                    except:
+                    except Exception:
                         pass
 
         Database.commit()
@@ -431,7 +431,7 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
             if client:
                 try:
                     client.disconnect()
-                except:
+                except Exception:
                     pass
 
 
@@ -490,5 +490,5 @@ def _apply_folder_post_action(folder_item: dict, action: str, results: dict):
         if client:
             try:
                 client.disconnect()
-            except:
+            except Exception:
                 pass

@@ -313,7 +313,7 @@ def parse_mbox_file():
                     try:
                         dt = parsedate_to_datetime(date_str)
                         date_ts = dt.isoformat()
-                    except:
+                    except Exception:
                         date_ts = date_str
                 
                 # Check for folder indicator (X-Folder, X-Gmail-Labels, etc.)
@@ -407,7 +407,7 @@ def parse_eml_file():
             try:
                 dt = parsedate_to_datetime(date_str)
                 date_ts = dt.isoformat()
-            except:
+            except Exception:
                 date_ts = date_str
         
         return jsonify({
@@ -471,7 +471,7 @@ def scan_apple_mbox_folder():
                         try:
                             dt = parsedate_to_datetime(date_str)
                             date_ts = dt.isoformat()
-                        except:
+                        except Exception:
                             date_ts = date_str
                     
                     emails.append({
@@ -483,9 +483,9 @@ def scan_apple_mbox_folder():
                         "message_id": message.get("Message-ID", ""),
                         "sourcePath": mbox_path,
                     })
-                except:
+                except Exception:
                     pass
-        except:
+        except Exception:
             pass
         return emails
     
@@ -525,7 +525,7 @@ def scan_apple_mbox_folder():
                                 try:
                                     dt = parsedate_to_datetime(date_str)
                                     date_ts = dt.isoformat()
-                                except:
+                                except Exception:
                                     date_ts = date_str
                             
                             emails.append({
@@ -537,7 +537,7 @@ def scan_apple_mbox_folder():
                                 "message_id": message.get("Message-ID", ""),
                                 "sourcePath": entry.path,
                             })
-                    except Exception as e:
+                    except Exception:
                         pass
         
         return emails

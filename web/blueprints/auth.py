@@ -5,11 +5,10 @@ Handles master password setup, login, logout, and password change.
 """
 
 import json
-import os
 import secrets
 import threading
 import time
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, Response, current_app, make_response
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, Response, make_response
 
 from core import Encryption, InvalidPasswordError, EncryptionError, Database
 from core.database import get_setting

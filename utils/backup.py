@@ -213,7 +213,7 @@ def load_manifest():
         try:
             with open(manifest_file, 'r') as f:
                 return json.load(f)
-        except (json.JSONDecodeError, ValueError) as e:
+        except (json.JSONDecodeError, ValueError):
             # Manifest corrupted - backup the bad file and start fresh
             corrupted_path = manifest_file.with_suffix('.json.corrupted')
             shutil.copy(manifest_file, corrupted_path)
@@ -360,7 +360,7 @@ def validate_backup_location(backup_dir):
             return False, "Permission denied. Cannot write to this location."
         except OSError as e:
             if is_cloud:
-                return False, f"Cloud folder not accessible. Please check your internet connection and that the cloud service is online."
+                return False, "Cloud folder not accessible. Please check your internet connection and that the cloud service is online."
             return False, f"Cannot write to backup location: {e}"
         
         return True, None
