@@ -19,30 +19,30 @@ in progress.py (the coordinator).
 
 import socket
 
-from flask import request, Response, stream_with_context
+from flask import Response, request, stream_with_context
 
-from core import Database, IMAP, IMAPError
+from core import IMAP, Database, IMAPError
 from core.pending_commit import (
+    clear_commit_session,
     create_commit_session,
-    get_pending_items,
     get_committed_items_needing_post_action,
+    get_pending_items,
+    mark_all_committed_as_done,
     mark_item_committed,
     mark_item_done,
-    mark_all_committed_as_done,
-    clear_commit_session,
 )
 
 from . import api_bp
+from .commit import (
+    build_commit_summary,
+    commit_imap_email,
+    commit_imap_folder,
+    commit_import_email,
+    commit_import_folder,
+    create_archive_folder_from_path,
+)
 from .progress import sse_message
 from .streaming import clear_folder_cache
-from .commit import (
-    create_archive_folder_from_path,
-    commit_import_email,
-    commit_imap_email,
-    commit_import_folder,
-    commit_imap_folder,
-    build_commit_summary,
-)
 
 
 @api_bp.route("/commit/stream", methods=["POST"])

@@ -13,8 +13,9 @@ from email.header import decode_header
 from email.utils import parseaddr, parsedate_to_datetime
 from typing import Optional
 
-from .encryption import Encryption
 from utils.log import get_logger
+
+from .encryption import Encryption
 
 log = get_logger()
 
@@ -60,7 +61,7 @@ class IMAP:
     
     Handles connection, authentication, and email fetching from any IMAP server.
     """
-    
+
     def __init__(self, host: str, port: int = 993, use_ssl: bool = True):
         """
         Initialize IMAP connection.
@@ -74,7 +75,7 @@ class IMAP:
         self.port = port
         self.use_ssl = use_ssl
         self.connection: Optional[imaplib.IMAP4_SSL | imaplib.IMAP4] = None
-    
+
     @classmethod
     def detect_server(cls, email_address: str) -> tuple[str, int] | None:
         """
@@ -89,17 +90,17 @@ class IMAP:
         _, addr = parseaddr(email_address)
         if not addr or "@" not in addr:
             return None
-        
+
         domain = addr.split("@")[1].lower()
         return IMAP_SERVERS.get(domain)
-    
+
     def connect(self) -> None:
         """Establish connection to IMAP server."""
         try:
             if self.use_ssl:
                 context = ssl.create_default_context()
                 self.connection = imaplib.IMAP4_SSL(
-                    self.host, 
+                    self.host,
                     self.port,
                     ssl_context=context,
                     timeout=60,
@@ -108,7 +109,7 @@ class IMAP:
                 self.connection = imaplib.IMAP4(self.host, self.port, timeout=60)
         except Exception as e:
             raise IMAPError(f"Failed to connect to {self.host}:{self.port}: {e}")
-    
+
     def login(self, email_address: str, password: str) -> None:
         """
         Authenticate with IMAP server.
@@ -119,12 +120,12 @@ class IMAP:
         """
         if not self.connection:
             self.connect()
-        
+
         try:
             self.connection.login(email_address, password)
         except imaplib.IMAP4.error as e:
             raise IMAPError(f"Authentication failed: {e}")
-    
+
     def disconnect(self) -> None:
         """Close IMAP connection."""
         if self.connection:
@@ -133,7 +134,7 @@ class IMAP:
             except Exception:
                 pass
             self.connection = None
-    
+
     def list_folders(self) -> list[dict]:
         """
         Get list of IMAP folders (mailboxes).
@@ -143,12 +144,12 @@ class IMAP:
         """
         if not self.connection:
             raise IMAPError("Not connected")
-        
+
         try:
             status, data = self.connection.list()
             if status != "OK":
                 raise IMAPError("Failed to list folders")
-            
+
             folders = []
             for item in data:
                 if item is None:
@@ -157,16 +158,16 @@ class IMAP:
                 # Example: (\HasNoChildren) "/" "INBOX/Subfolder"
                 # Example: (\Noselect \HasChildren) "/" "[Gmail]"
                 decoded = item.decode() if isinstance(item, bytes) else item
-                
+
                 # Extract flags
                 flags_match = re.match(r'\(([^)]*)\)', decoded)
                 flags = flags_match.group(1).split() if flags_match else []
                 noselect = any(f.lower() == '\\noselect' for f in flags)
-                
+
                 # Extract delimiter - it's between the flags and folder name
                 match = re.match(r'\([^)]*\)\s+"(.)"|\s+NIL\s+', decoded)
                 delimiter = match.group(1) if match and match.group(1) else "/"
-                
+
                 # Extract folder name - it's after the delimiter specification
                 parts = decoded.rsplit('" ', 1)
                 if len(parts) == 2:
@@ -177,11 +178,11 @@ class IMAP:
                         "noselect": noselect,
                         "raw": decoded,
                     })
-            
+
             return folders
         except Exception as e:
             raise IMAPError(f"Failed to list folders: {e}")
-    
+
     def select_folder(self, folder: str = "INBOX") -> dict:
         """
         Select a folder for operations.
@@ -194,19 +195,19 @@ class IMAP:
         """
         if not self.connection:
             raise IMAPError("Not connected")
-        
+
         try:
             status, data = self.connection.select(f'"{folder}"')
             if status != "OK":
                 raise IMAPError(f"Failed to select folder: {folder}")
-            
+
             result = {
                 "folder": folder,
                 "message_count": int(data[0]) if data else 0,
                 "uidvalidity": None,
                 "highestmodseq": None,
             }
-            
+
             # Get UIDVALIDITY and HIGHESTMODSEQ using STATUS command
             try:
                 status, status_data = self.connection.status(
@@ -214,11 +215,11 @@ class IMAP:
                 )
                 if status == 'OK' and status_data and status_data[0]:
                     response = status_data[0].decode() if isinstance(status_data[0], bytes) else status_data[0]
-                    
+
                     uv_match = re.search(r'UIDVALIDITY\s+(\d+)', response)
                     if uv_match:
                         result["uidvalidity"] = int(uv_match.group(1))
-                    
+
                     hm_match = re.search(r'HIGHESTMODSEQ\s+(\d+)', response)
                     if hm_match:
                         result["highestmodseq"] = int(hm_match.group(1))
@@ -236,11 +237,11 @@ class IMAP:
                             result["uidvalidity"] = int(uv_match.group(1))
                 except Exception as e2:
                     log.debug(f"Could not get UIDVALIDITY: {e2}")
-            
+
             return result
         except Exception as e:
             raise IMAPError(f"Failed to select folder {folder}: {e}")
-    
+
     def search(self, criteria: str = "ALL", limit: int = 0) -> list[str]:
         """
         Search for messages in selected folder.
@@ -254,18 +255,18 @@ class IMAP:
         """
         if not self.connection:
             raise IMAPError("Not connected")
-        
+
         try:
             # Filter out messages flagged for deletion — these are ghost
             # messages that the server hasn't expunged yet (common with Gmail)
             effective_criteria = criteria
             if criteria == "ALL":
                 effective_criteria = "NOT DELETED"
-            
+
             status, data = self.connection.uid("SEARCH", None, effective_criteria)
             if status != "OK":
                 raise IMAPError("Search failed")
-            
+
             uids = data[0].split() if data[0] else []
             # Return most recent first (reverse order)
             uids = [uid.decode() for uid in reversed(uids)]
@@ -275,7 +276,7 @@ class IMAP:
             return uids
         except Exception as e:
             raise IMAPError(f"Search failed: {e}")
-    
+
     def fetch_headers(self, uid: str) -> dict:
         """
         Fetch message headers (lightweight).
@@ -288,22 +289,22 @@ class IMAP:
         """
         if not self.connection:
             raise IMAPError("Not connected")
-        
+
         try:
             status, data = self.connection.uid(
-                "FETCH", uid, 
+                "FETCH", uid,
                 "(BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID)])"
             )
             if status != "OK" or not data[0]:
                 raise IMAPError(f"Failed to fetch headers for {uid}")
-            
+
             # Parse headers
             header_data = data[0][1]
             if isinstance(header_data, bytes):
                 header_data = header_data.decode("utf-8", errors="replace")
-            
+
             msg = email.message_from_string(header_data)
-            
+
             return {
                 "uid": uid,
                 "subject": self._decode_header(msg.get("Subject", "")),
@@ -314,7 +315,7 @@ class IMAP:
             }
         except Exception as e:
             raise IMAPError(f"Failed to fetch headers for {uid}: {e}")
-    
+
     def fetch_raw(self, uid: str) -> bytes:
         """
         Fetch complete raw message (for saving as .eml).
@@ -327,16 +328,16 @@ class IMAP:
         """
         if not self.connection:
             raise IMAPError("Not connected")
-        
+
         try:
             status, data = self.connection.uid("FETCH", uid, "(RFC822)")
             if status != "OK" or not data[0]:
                 raise IMAPError(f"Failed to fetch message {uid}")
-            
+
             return data[0][1]
         except Exception as e:
             raise IMAPError(f"Failed to fetch message {uid}: {e}")
-    
+
     def fetch_full(self, uid: str) -> dict:
         """
         Fetch complete message with parsed body for viewing.
@@ -349,7 +350,7 @@ class IMAP:
         """
         raw = self.fetch_raw(uid)
         msg = email.message_from_bytes(raw)
-        
+
         result = {
             "uid": uid,
             "subject": self._decode_header(msg.get("Subject", "")),
@@ -362,7 +363,7 @@ class IMAP:
             "html_body": None,
             "attachments": [],
         }
-        
+
         # Pre-scan: extract every cid: reference that appears in the html
         # bodies of this message. A MIME part with a Content-ID is only
         # truly "inline" if its id is actually referenced by the html.
@@ -422,7 +423,7 @@ class IMAP:
                     cid = content_id.strip('<>')
                     if cid in referenced_cids:
                         continue
-                
+
                 # Collect attachments
                 if "attachment" in content_disposition:
                     filename = part.get_filename()
@@ -433,13 +434,13 @@ class IMAP:
                             "size": len(part.get_payload(decode=True) or b""),
                         })
                     continue
-                
+
                 if content_type == "text/plain":
                     payload = part.get_payload(decode=True)
                     if payload:
                         charset = part.get_content_charset() or "utf-8"
                         result["text_body"] = (result["text_body"] or "") + payload.decode(charset, errors="replace")
-                
+
                 elif content_type == "text/html":
                     payload = part.get_payload(decode=True)
                     if payload:
@@ -456,25 +457,25 @@ class IMAP:
                     result["html_body"] = body
                 else:
                     result["text_body"] = body
-        
+
         # Replace cid: references in HTML body with data URLs
         if result["html_body"] and inline_images:
             def replace_cid(match):
                 cid = match.group(1)
                 return inline_images.get(cid, match.group(0))
-            
+
             result["html_body"] = re.sub(
                 r'cid:([^"\'\s>]+)',
                 replace_cid,
                 result["html_body"]
             )
-        
+
         # Linkify URLs and emails in HTML body that aren't already links
         if result["html_body"]:
             result["html_body"] = self._linkify_html(result["html_body"])
-        
+
         return result
-    
+
     def fetch_thread_headers(self, uid: str) -> dict:
         """Fetch just the thread-related headers for a message.
 
@@ -799,7 +800,7 @@ class IMAP:
         """Decode RFC 2047 encoded header."""
         if not header:
             return ""
-        
+
         try:
             parts = decode_header(header)
             decoded = []
@@ -811,7 +812,7 @@ class IMAP:
             return " ".join(decoded)
         except Exception:
             return header
-    
+
     def _linkify_html(self, html: str) -> str:
         """
         Convert plain text URLs and email addresses in HTML to clickable links.
@@ -819,7 +820,7 @@ class IMAP:
         """
         # Split HTML into parts: inside tags vs text content
         parts = re.split(r'(<a\s[^>]*>.*?</a>|<[^>]+>)', html, flags=re.IGNORECASE | re.DOTALL)
-        
+
         result = []
         for part in parts:
             if not part:
@@ -827,7 +828,7 @@ class IMAP:
             if part.startswith('<'):
                 result.append(part)
                 continue
-            
+
             # This is text content - linkify URLs and emails
             # URL pattern: match until we hit whitespace, quotes, angle brackets, or HTML entities
             # The negative lookahead stops at &nbsp; &amp; &lt; etc but allows & in query strings
@@ -842,15 +843,15 @@ class IMAP:
                 part
             )
             result.append(part)
-        
+
         return ''.join(result)
-    
+
     # ==========================================
     # Credential management (stored encrypted)
     # ==========================================
-    
+
     @classmethod
-    def save_credentials(cls, account_id: int, email: str, password: str, 
+    def save_credentials(cls, account_id: int, email: str, password: str,
                          host: str, port: int, use_ssl: bool = True) -> None:
         """
         Save encrypted IMAP credentials to database.
@@ -864,7 +865,7 @@ class IMAP:
             use_ssl: Whether to use SSL.
         """
         from .database import Database
-        
+
         creds_data = {
             "email": email,
             "password": password,
@@ -872,15 +873,15 @@ class IMAP:
             "port": port,
             "use_ssl": use_ssl,
         }
-        
+
         encrypted = Encryption.encrypt_string(json.dumps(creds_data))
-        
+
         Database.execute(
             "UPDATE accounts SET email = ?, credentials_encrypted = ? WHERE id = ?",
             (email, encrypted, account_id)
         )
         Database.commit()
-    
+
     @classmethod
     def load_credentials(cls, encrypted_creds: str) -> dict | None:
         """
@@ -894,14 +895,14 @@ class IMAP:
         """
         if not encrypted_creds:
             return None
-        
+
         try:
             creds_json = Encryption.decrypt_string(encrypted_creds)
             return json.loads(creds_json)
         except Exception as e:
             log.warning(f"Error loading credentials: {e}")
             return None
-    
+
     @classmethod
     def connect_with_credentials(cls, encrypted_creds: str) -> "IMAP":
         """
@@ -916,15 +917,15 @@ class IMAP:
         creds = cls.load_credentials(encrypted_creds)
         if not creds:
             raise IMAPError("Failed to load credentials")
-        
+
         client = cls(creds["host"], creds["port"], creds.get("use_ssl", True))
         client.connect()
         client.login(creds["email"], creds["password"])
-        
+
         return client
-    
+
     @classmethod
-    def test_connection(cls, email: str, password: str, 
+    def test_connection(cls, email: str, password: str,
                         host: str, port: int, use_ssl: bool = True) -> dict:
         """
         Test IMAP connection without saving credentials.
@@ -958,11 +959,11 @@ class IMAP:
         finally:
             if client:
                 client.disconnect()
-    
+
     # ==========================================
     # Post-commit actions (archive, trash, delete)
     # ==========================================
-    
+
     def get_special_folder(self, folder_type: str) -> str | None:
         """
         Find special folder name (Archive, Trash, Sent) for this IMAP server.
@@ -1019,7 +1020,7 @@ class IMAP:
         except Exception as e:
             log.debug(f"Could not find {folder_type} folder: {e}")
             return None
-    
+
     def move_email(self, uid: str, destination_folder: str) -> bool:
         """
         Move an email to another folder (copy + delete from source).
@@ -1033,25 +1034,25 @@ class IMAP:
         """
         if not self.connection:
             raise IMAPError("Not connected")
-        
+
         try:
             # Copy to destination
             status, _ = self.connection.uid('COPY', uid, f'"{destination_folder}"')
             if status != 'OK':
                 raise IMAPError(f"Failed to copy message {uid} to {destination_folder}")
-            
+
             # Mark original as deleted
             status, _ = self.connection.uid('STORE', uid, '+FLAGS', '(\\Deleted)')
             if status != 'OK':
                 raise IMAPError(f"Failed to mark message {uid} as deleted")
-            
+
             # Expunge to remove from source folder
             self.connection.expunge()
-            
+
             return True
         except Exception as e:
             raise IMAPError(f"Failed to move message {uid}: {e}")
-    
+
     def archive_email(self, uid: str) -> bool:
         """
         Move email to Archive folder.
@@ -1065,9 +1066,9 @@ class IMAP:
         archive_folder = self.get_special_folder('archive')
         if not archive_folder:
             raise IMAPError("Archive folder not found on server")
-        
+
         return self.move_email(uid, archive_folder)
-    
+
     def trash_email(self, uid: str) -> bool:
         """
         Move email to Trash folder.
@@ -1081,9 +1082,9 @@ class IMAP:
         trash_folder = self.get_special_folder('trash')
         if not trash_folder:
             raise IMAPError("Trash folder not found on server")
-        
+
         return self.move_email(uid, trash_folder)
-    
+
     def delete_email(self, uid: str) -> bool:
         """
         Permanently delete email (mark deleted + expunge).
@@ -1096,16 +1097,16 @@ class IMAP:
         """
         if not self.connection:
             raise IMAPError("Not connected")
-        
+
         try:
             # Mark as deleted
             status, _ = self.connection.uid('STORE', uid, '+FLAGS', '(\\Deleted)')
             if status != 'OK':
                 raise IMAPError(f"Failed to mark message {uid} as deleted")
-            
+
             # Expunge to permanently remove
             self.connection.expunge()
-            
+
             return True
         except Exception as e:
             raise IMAPError(f"Failed to delete message {uid}: {e}")

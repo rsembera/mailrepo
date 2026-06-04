@@ -8,9 +8,11 @@ import email
 import json
 import time
 from email.header import decode_header
-from flask import request, jsonify, Response
-from core import Database
-from core import IMAP, IMAPError
+
+from flask import Response, jsonify, request
+
+from core import IMAP, Database, IMAPError
+
 from . import api_bp
 
 
@@ -37,7 +39,7 @@ def list_accounts():
     accounts = Database.fetchall(
         "SELECT id, name, email, provider, credentials_encrypted, last_sync FROM accounts ORDER BY name"
     )
-    
+
     result = []
     for a in accounts:
         account_dict = {
@@ -57,7 +59,7 @@ def list_accounts():
             except Exception:
                 pass  # If decryption fails, default to False
         result.append(account_dict)
-    
+
     return jsonify({"accounts": result})
 
 
@@ -65,7 +67,7 @@ def list_accounts():
 def create_account():
     """Create a new IMAP email account."""
     data = request.get_json()
-    
+
     name = data.get("name", "").strip()
     email_addr = data.get("email", "").strip()
     password = data.get("password", "")
@@ -79,7 +81,7 @@ def create_account():
         return jsonify({"error": "Email address is required"}), 400
     if not password:
         return jsonify({"error": "Password is required"}), 400
-    
+
     if not host:
         detected = IMAP.detect_server(email_addr)
         if detected:
@@ -88,20 +90,20 @@ def create_account():
             return jsonify({
                 "error": "Could not auto-detect IMAP server. Please enter server details manually."
             }), 400
-    
+
     test_result = IMAP.test_connection(email_addr, password, host, port, use_ssl)
     if not test_result["success"]:
         return jsonify({"error": test_result["error"]}), 400
-    
+
     cursor = Database.execute(
         "INSERT INTO accounts (name, email, provider) VALUES (?, ?, ?)",
         (name, email_addr, "imap")
     )
     Database.commit()
-    
+
     account_id = cursor.lastrowid
     IMAP.save_credentials(account_id, email_addr, password, host, port, use_ssl)
-    
+
     return jsonify({
         "account": {
             "id": account_id,
@@ -122,9 +124,9 @@ def update_account(account_id):
     )
     if not account:
         return jsonify({"error": "Account not found"}), 404
-    
+
     data = request.get_json()
-    
+
     name = data.get("name", "").strip()
     email_addr = data.get("email", "").strip()
     password = data.get("password", "")  # Empty means don't change
@@ -136,7 +138,7 @@ def update_account(account_id):
         return jsonify({"error": "Account name is required"}), 400
     if not email_addr:
         return jsonify({"error": "Email address is required"}), 400
-    
+
     # If password provided, update credentials; otherwise keep existing
     if password:
         if not host:
@@ -147,25 +149,25 @@ def update_account(account_id):
                 return jsonify({
                     "error": "Could not auto-detect IMAP server. Please enter server details manually."
                 }), 400
-        
+
         # Test connection with new credentials
         test_result = IMAP.test_connection(email_addr, password, host, port, use_ssl)
         if not test_result["success"]:
             return jsonify({"error": test_result["message"]}), 400
-        
+
         # Save new credentials
         IMAP.save_credentials(account_id, email_addr, password, host, port, use_ssl)
         message = test_result["message"]
     else:
         message = "Account updated (password unchanged)"
-    
+
     # Update account name and email
     Database.execute(
         "UPDATE accounts SET name = ?, email = ? WHERE id = ?",
         (name, email_addr, account_id)
     )
     Database.commit()
-    
+
     return jsonify({
         "account": {
             "id": account_id,
@@ -188,24 +190,24 @@ def test_account_connection(account_id):
         return jsonify({"error": "Account not found"}), 404
     if not account["credentials_encrypted"]:
         return jsonify({"error": "Account has no saved credentials"}), 400
-    
+
     creds = IMAP.load_credentials(account["credentials_encrypted"])
     if not creds:
         return jsonify({"error": "Failed to load credentials"}), 400
-    
+
     test_result = IMAP.test_connection(
         creds["email"], creds["password"],
         creds["host"], creds["port"],
         creds.get("use_ssl", True)
     )
-    
+
     if test_result["success"]:
         Database.execute(
             "UPDATE accounts SET last_sync = ? WHERE id = ?",
             (int(time.time()), account_id)
         )
         Database.commit()
-    
+
     return jsonify(test_result)
 
 
@@ -220,21 +222,21 @@ def get_account_emails(account_id):
         return jsonify({"error": "Account not found"}), 404
     if not account["credentials_encrypted"]:
         return jsonify({"error": "Account not configured. Add credentials first."}), 401
-    
+
     folder = request.args.get("folder", "INBOX")
     limit = int(request.args.get("limit", 50))
-    
+
     client = None
     try:
         client = IMAP.connect_with_credentials(account["credentials_encrypted"])
         client.select_folder(folder)
         uids = client.search("ALL", limit=limit)
-        
+
         emails = []
         for uid in uids:
             headers = client.fetch_headers(uid)
             emails.append(headers)
-        
+
         return jsonify({"emails": emails})
     except IMAPError as e:
         return jsonify({"error": str(e)}), 500
@@ -254,9 +256,9 @@ def get_account_email(account_id, uid):
         return jsonify({"error": "Account not found"}), 404
     if not account["credentials_encrypted"]:
         return jsonify({"error": "Account not configured"}), 401
-    
+
     folder = request.args.get("folder", "INBOX")
-    
+
     client = None
     try:
         client = IMAP.connect_with_credentials(account["credentials_encrypted"])
@@ -281,9 +283,9 @@ def get_account_folders(account_id):
         return jsonify({"error": "Account not found"}), 404
     if not account["credentials_encrypted"]:
         return jsonify({"error": "Account not configured"}), 401
-    
+
     force_refresh = request.args.get("refresh") == "1"
-    
+
     # Use cache if available (no time-based expiry - folders rarely change)
     # Only refresh on explicit request or when cache is missing
     if not force_refresh and account["cached_folders"]:
@@ -296,12 +298,12 @@ def get_account_folders(account_id):
                 return jsonify({"folders": folders, "cached": True})
         except (json.JSONDecodeError, IndexError, TypeError):
             pass
-    
+
     client = None
     try:
         client = IMAP.connect_with_credentials(account["credentials_encrypted"])
         folders = client.list_folders()
-        
+
         # Only update cache if folder list actually changed
         new_folders_json = json.dumps(folders)
         if new_folders_json != account["cached_folders"]:
@@ -310,7 +312,7 @@ def get_account_folders(account_id):
                 (new_folders_json, int(time.time()), account_id)
             )
             Database.commit()
-        
+
         return jsonify({"folders": folders, "cached": False})
     except IMAPError as e:
         if account["cached_folders"]:
@@ -331,7 +333,7 @@ def delete_account(account_id):
     account = Database.fetchone("SELECT id FROM accounts WHERE id = ?", (account_id,))
     if not account:
         return jsonify({"error": "Account not found"}), 404
-    
+
     Database.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
     Database.commit()
     return jsonify({"success": True})
@@ -342,10 +344,10 @@ def detect_imap_server():
     """Auto-detect IMAP server from email address."""
     data = request.get_json()
     email_addr = data.get("email", "").strip()
-    
+
     if not email_addr:
         return jsonify({"error": "Email address required"}), 400
-    
+
     detected = IMAP.detect_server(email_addr)
     if detected:
         host, port = detected
@@ -368,21 +370,21 @@ def download_imap_email(account_id, uid):
         return jsonify({"error": "Account not found"}), 404
     if not account["credentials_encrypted"]:
         return jsonify({"error": "Account not configured"}), 401
-    
+
     folder = request.args.get("folder", "INBOX")
-    
+
     client = None
     try:
         client = IMAP.connect_with_credentials(account["credentials_encrypted"])
         client.select_folder(folder)
         raw_bytes = client.fetch_raw(uid)
-        
+
         # Parse to get subject for filename
         msg = email.message_from_bytes(raw_bytes)
         subject = _decode_header_value(msg.get("Subject", "")) or "email"
         safe_filename = "".join(c for c in subject if c.isalnum() or c in " -_")[:50].strip() or "email"
         filename = f"{safe_filename}.eml"
-        
+
         return Response(
             raw_bytes,
             mimetype="message/rfc822",
@@ -406,16 +408,16 @@ def download_imap_attachment(account_id, uid, index):
         return jsonify({"error": "Account not found"}), 404
     if not account["credentials_encrypted"]:
         return jsonify({"error": "Account not configured"}), 401
-    
+
     folder = request.args.get("folder", "INBOX")
-    
+
     client = None
     try:
         client = IMAP.connect_with_credentials(account["credentials_encrypted"])
         client.select_folder(folder)
         raw_bytes = client.fetch_raw(uid)
         msg = email.message_from_bytes(raw_bytes)
-        
+
         # Find attachments (must match filtering in IMAP.fetch_email)
         attachments = []
         if msg.is_multipart():
@@ -423,12 +425,12 @@ def download_imap_attachment(account_id, uid, index):
                 content_disposition = str(part.get("Content-Disposition", ""))
                 content_id = part.get("Content-ID")
                 content_type = part.get_content_type()
-                
+
                 # Skip inline images - they're handled via cid: replacement in HTML
                 # Only skip if it's an image with Content-ID (actual inline embedded image)
                 if content_id and content_type.startswith("image/"):
                     continue
-                
+
                 if "attachment" in content_disposition:
                     filename = part.get_filename()
                     if filename:
@@ -437,16 +439,16 @@ def download_imap_attachment(account_id, uid, index):
                             "content_type": content_type,
                             "payload": part.get_payload(decode=True),
                         })
-        
+
         if index < 0 or index >= len(attachments):
             return jsonify({"error": "Attachment not found"}), 404
-        
+
         att = attachments[index]
-        
+
         # Check if user wants to view inline (for PDFs, images, etc.)
         view_inline = request.args.get("view") == "1"
         disposition = "inline" if view_inline else "attachment"
-        
+
         return Response(
             att["payload"],
             mimetype=att["content_type"],
@@ -470,21 +472,21 @@ def get_imap_email_source(account_id, uid):
         return jsonify({"error": "Account not found"}), 404
     if not account["credentials_encrypted"]:
         return jsonify({"error": "Account not configured"}), 401
-    
+
     folder = request.args.get("folder", "INBOX")
-    
+
     client = None
     try:
         client = IMAP.connect_with_credentials(account["credentials_encrypted"])
         client.select_folder(folder)
         raw_bytes = client.fetch_raw(uid)
-        
+
         # Try to decode as text, fallback to latin-1 if UTF-8 fails
         try:
             source = raw_bytes.decode('utf-8')
         except UnicodeDecodeError:
             source = raw_bytes.decode('latin-1')
-        
+
         return jsonify({"source": source})
     except IMAPError as e:
         return jsonify({"error": str(e)}), 500

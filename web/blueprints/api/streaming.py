@@ -135,18 +135,18 @@ def remove_stale_cache_entries(account_id: int, folder: str, uidvalidity: int, v
     """
     if not valid_uids:
         return 0
-    
+
     # Get all cached UIDs for this folder
     cached = Database.fetchall(
         """SELECT uid FROM email_cache
            WHERE account_id = ? AND folder_name = ? AND uidvalidity = ?""",
         (account_id, folder, uidvalidity)
     )
-    
+
     cached_uids = {str(row["uid"]) for row in cached}
     valid_uid_set = {str(uid) for uid in valid_uids}
     stale_uids = cached_uids - valid_uid_set
-    
+
     if stale_uids:
         # Delete stale entries
         placeholders = ",".join("?" * len(stale_uids))
@@ -156,5 +156,5 @@ def remove_stale_cache_entries(account_id: int, folder: str, uidvalidity: int, v
             (account_id, folder, *stale_uids)
         )
         Database.commit()
-    
+
     return len(stale_uids)

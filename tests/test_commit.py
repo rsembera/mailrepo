@@ -17,13 +17,13 @@ import secrets
 
 import pytest
 
-from core import Database, Config, Encryption
+from core import Config, Database, Encryption
 from web.blueprints.api.commit import (
-    create_archive_folder_from_path,
     _check_duplicate,
-    build_commit_summary,
     _find_action_for_source,
     _save_email_to_archive,
+    build_commit_summary,
+    create_archive_folder_from_path,
 )
 
 

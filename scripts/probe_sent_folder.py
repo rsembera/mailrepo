@@ -15,9 +15,9 @@ Used during Stage Thread feature development to confirm our Sent-folder
 candidate list covers the real accounts (NCF, Gmail). Delete this file
 after we're confident the candidate list is right.
 """
+import getpass
 import os
 import sys
-import getpass
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)

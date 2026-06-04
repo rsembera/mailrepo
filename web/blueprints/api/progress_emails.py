@@ -14,23 +14,23 @@ workflow lives in its own focused module. The sse_message() helper lives
 in progress.py (the coordinator).
 """
 
-from flask import request, Response, stream_with_context
+from flask import Response, request, stream_with_context
 
-from core import Database, IMAP, IMAPError
+from core import IMAP, Database, IMAPError
 from core.sync_cache import (
     get_folder_sync_state,
-    update_folder_sync_state,
     is_cache_fresh,
+    update_folder_sync_state,
 )
 
 from . import api_bp
 from .progress import sse_message
 from .streaming import (
-    get_cached_emails,
-    get_highest_cached_uid,
+    cache_email,
     clear_folder_cache,
     get_any_cached_emails,
-    cache_email,
+    get_cached_emails,
+    get_highest_cached_uid,
     remove_stale_cache_entries,
 )
 

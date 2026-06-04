@@ -11,18 +11,17 @@ derivation), so tests share initialized state where possible.
 
 import pytest
 
+from core.config import Config
 from core.encryption import (
+    GCM_NONCE_LENGTH,
+    GCM_TAG_LENGTH,
+    SALT_LENGTH,
+    SALT_MAGIC_V2,
+    VERSION_BYTE_V2,
     Encryption,
     EncryptionError,
     InvalidPasswordError,
-    SALT_MAGIC_V2,
-    SALT_LENGTH,
-    VERSION_BYTE_V2,
-    GCM_NONCE_LENGTH,
-    GCM_TAG_LENGTH,
 )
-from core.config import Config
-
 
 # ============================================================
 # SALT FILE FORMAT

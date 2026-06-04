@@ -8,11 +8,22 @@ import json
 import secrets
 import threading
 import time
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, Response, make_response
 
-from core import Encryption, InvalidPasswordError, EncryptionError, Database
-from core.database import get_setting
+from flask import (
+    Blueprint,
+    Response,
+    flash,
+    make_response,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+
+from core import Database, Encryption, EncryptionError, InvalidPasswordError
 from core.config import Config
+from core.database import get_setting
 from utils.log import get_logger
 
 log = get_logger(__name__)
@@ -57,18 +68,18 @@ def _check_rate_limit(ip: str) -> tuple[bool, int]:
         (allowed: bool, seconds_remaining: int)
     """
     now = time.time()
-    
+
     if ip not in _login_attempts:
         _login_attempts[ip] = []
-    
+
     # Clean old attempts (older than lockout period)
     _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < _LOCKOUT_SECONDS]
-    
+
     if len(_login_attempts[ip]) >= _MAX_ATTEMPTS:
         oldest = min(_login_attempts[ip])
         seconds_remaining = int(_LOCKOUT_SECONDS - (now - oldest))
         return False, max(0, seconds_remaining)
-    
+
     return True, 0
 
 
@@ -100,30 +111,30 @@ def cleanup_expired_trash():
     retention_days = get_setting("trash_retention_days", "0")
     if retention_days == "0":
         return  # Never auto-delete
-    
+
     try:
         retention_seconds = int(retention_days) * 24 * 60 * 60
         cutoff_time = int(time.time()) - retention_seconds
-        
+
         # Find folders that have been deleted longer than retention period
         expired_folders = Database.fetchall(
             "SELECT id FROM folders WHERE deleted_at IS NOT NULL AND deleted_at < ?",
             (cutoff_time,)
         )
-        
+
         if expired_folders:
             # Delete the folders (CASCADE will handle children)
             for folder in expired_folders:
                 Database.execute("DELETE FROM folders WHERE id = ?", (folder["id"],))
             Database.commit()
             log.info(f"Trash cleanup: permanently deleted {len(expired_folders)} expired folder(s)")
-        
+
         # Find emails that have been deleted longer than retention period
         expired_emails = Database.fetchall(
             "SELECT id, filepath FROM messages WHERE deleted_at IS NOT NULL AND deleted_at < ?",
             (cutoff_time,)
         )
-        
+
         if expired_emails:
             # Delete the email files and database records
             for email in expired_emails:
@@ -134,7 +145,7 @@ def cleanup_expired_trash():
                         filepath.unlink()
                 except Exception as e:
                     log.warning(f"Could not delete file {email['filepath']}: {e}")
-                
+
                 # Delete the database record
                 Database.execute("DELETE FROM messages WHERE id = ?", (email["id"],))
             Database.commit()
@@ -153,41 +164,41 @@ def setup():
     # Redirect if already set up
     if Encryption.is_initialized():
         return redirect(url_for("auth.login"))
-    
+
     if request.method == "POST":
         password = request.form.get("password", "")
         confirm = request.form.get("confirm", "")
-        
+
         # Validation
         errors = []
-        
+
         if len(password) < 12:
             errors.append("Password must be at least 12 characters.")
-        
+
         if password != confirm:
             errors.append("Passwords do not match.")
-        
+
         if errors:
             return render_template("auth/setup.html", errors=errors)
-        
+
         # Initialize encryption
         try:
             Encryption.initialize(password)
             init_database()
-            
+
             # Clear any stale session data before setting new values
             session.clear()
             session["authenticated"] = True
             session["last_activity"] = time.time()
             session["csrf_token"] = secrets.token_hex(32)
             session.permanent = True
-            
+
             flash("Master password created successfully.", "success")
             response = make_response(redirect(url_for("main.create_archive")))
             return response
         except EncryptionError as e:
             return render_template("auth/setup.html", errors=[str(e)])
-    
+
     return render_template("auth/setup.html")
 
 
@@ -202,38 +213,38 @@ def login():
     # Redirect if setup needed
     if not Encryption.is_initialized():
         return redirect(url_for("auth.setup"))
-    
+
     # Already logged in
     if session.get("authenticated") and Encryption.is_unlocked():
         return redirect(url_for("main.index"))
-    
+
     # Check rate limit
     client_ip = request.remote_addr or "unknown"
     allowed, seconds_remaining = _check_rate_limit(client_ip)
-    
+
     if not allowed:
         return render_template(
-            "auth/login.html", 
+            "auth/login.html",
             error=f"Too many failed attempts. Please wait {seconds_remaining} seconds.",
             lockout_seconds=seconds_remaining
         )
-    
+
     if request.method == "POST":
         password = request.form.get("password", "")
-        
+
         try:
             Encryption.unlock(password)
             _clear_attempts(client_ip)  # Success - clear attempts
             init_database()
             cleanup_expired_trash()
-            
+
             # Clear any stale session data before setting new values
             session.clear()
             session["authenticated"] = True
             session["last_activity"] = time.time()
             session["csrf_token"] = secrets.token_hex(32)
             session.permanent = True
-            
+
             # Use make_response for explicit cookie handling (Safari/Firefox)
             response = make_response(redirect(url_for("main.index")))
             return response
@@ -242,7 +253,7 @@ def login():
             return render_template("auth/login.html", error="Invalid password.")
         except EncryptionError as e:
             return render_template("auth/login.html", error=str(e))
-    
+
     return render_template("auth/login.html")
 
 
@@ -251,7 +262,7 @@ def logout():
     """Log out, run backup check, and lock encryption."""
     # Run automatic backup check before closing database
     _run_auto_backup_check()
-    
+
     Database.close()
     Encryption.lock()
     session.clear()
@@ -263,13 +274,13 @@ def _run_auto_backup_check():
     """Run automatic backup if frequency setting requires it."""
     try:
         from utils import backup
-        
+
         # Checkpoint WAL first so backup captures all changes
         Database.checkpoint()
-        
+
         frequency = get_setting('backup_frequency', 'daily')
         log.debug(f"Backup frequency setting: {frequency}")
-        
+
         if backup.check_backup_needed(frequency):
             log.info("Checking backup status...")
             location = get_setting('backup_location', '')
@@ -278,7 +289,7 @@ def _run_auto_backup_check():
             result = backup.create_backup(location)
             if result:
                 log.info(f"Backup created: {result['filename']}")
-                
+
                 # Run post-backup command if configured
                 post_cmd = get_setting('post_backup_command', '')
                 if post_cmd:
@@ -307,7 +318,7 @@ def _run_auto_backup_check():
                         log.warning(f"Post-backup command error: {e}")
             else:
                 log.info("No changes since last backup")
-            
+
             # Record that we checked today (whether backup created or not)
             backup.record_backup_check()
         else:
@@ -325,10 +336,10 @@ def verify_password():
     """Verify the current password before allowing password change."""
     if not session.get("authenticated"):
         return {"error": "Not authenticated"}, 401
-    
+
     data = request.get_json()
     current_password = data.get("current_password", "")
-    
+
     try:
         # Try to unlock with the provided password
         # This verifies it matches without changing state
@@ -345,21 +356,21 @@ def change_password_start():
     """Start the password change process - store new password in session."""
     if not session.get("authenticated"):
         return {"error": "Not authenticated"}, 401
-    
+
     data = request.get_json()
     current_password = data.get("current_password", "")
     new_password = data.get("new_password", "")
-    
+
     # Validate
     if len(new_password) < 12:
         return {"error": "New password must be at least 12 characters"}, 400
-    
+
     # Verify current password
     try:
         Encryption.unlock(current_password)
     except InvalidPasswordError:
         return {"error": "Current password is incorrect"}, 400
-    
+
     # Hold the passwords in server-side memory keyed by an opaque one-time
     # job id. They never touch the session cookie. The SSE progress endpoint
     # consumes this job exactly once.
@@ -403,13 +414,14 @@ def change_password_progress(job_id):
         # vocabulary matches settings.js (counting / counted / encrypting
         # with current+total / credentials / database / finalizing /
         # complete + error) so the frontend works without changes.
-        from core.password_change import (
-            change_master_password,
-            PasswordChangeError,
-            PasswordChangeCorruptionError,
-        )
         import queue
         import threading
+
+        from core.password_change import (
+            PasswordChangeCorruptionError,
+            PasswordChangeError,
+            change_master_password,
+        )
         q = queue.Queue()
         SENTINEL = object()
         def cb(event):

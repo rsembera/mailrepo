@@ -12,18 +12,18 @@ Options:
 """
 
 import atexit
+import logging
 import os
 import signal
 import sys
-import logging
 from pathlib import Path
 
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from web import create_app
 from utils.log import get_logger
+from web import create_app
 
 log = get_logger()
 
@@ -33,13 +33,13 @@ _cleanup_done = False
 
 class PollingFilter(logging.Filter):
     """Filter out noisy polling endpoint log messages."""
-    
+
     POLLING_PATHS = [
         'GET /api/session-status',
-        'GET /api/keepalive', 
+        'GET /api/keepalive',
         'HEAD / ',  # Heartbeat check
     ]
-    
+
     def filter(self, record):
         message = record.getMessage()
         # Filter out polling requests (any status code)
@@ -58,19 +58,20 @@ def _cleanup(app):
     if _cleanup_done:
         return
     _cleanup_done = True
-    
+
     try:
         from core.database import Database, get_setting
-        
+
         with app.app_context():
             # Checkpoint WAL first so backup captures all changes
             Database.checkpoint()
-            
+
             # Run backup check before shutdown
             try:
-                from utils import backup
                 import subprocess
-                
+
+                from utils import backup
+
                 frequency = get_setting('backup_frequency', 'daily')
                 if backup.check_backup_needed(frequency):
                     location = get_setting('backup_location', '')
@@ -109,7 +110,7 @@ def _cleanup(app):
                     backup.refresh_hash_baseline()
             except Exception as e:
                 log.warning(f"Backup warning: {e}")
-            
+
             # Close database connection cleanly
             Database.close()
     except Exception:
@@ -144,19 +145,19 @@ Environment variables:
 
 def main():
     """Application entry point."""
-    
+
     # Check for --help first
     if '--help' in sys.argv or '-h' in sys.argv:
         show_help()
-    
+
     # Suppress polling endpoint logging
     werkzeug_logger = logging.getLogger('werkzeug')
     werkzeug_logger.addFilter(PollingFilter())
-    
+
     # Quiet Waitress queue warnings (normal for single-user app)
     waitress_log = logging.getLogger('waitress')
     waitress_log.setLevel(logging.ERROR)
-    
+
     # Check for pending restore before opening database
     try:
         from utils import backup
@@ -165,14 +166,14 @@ def main():
             log.info(f"Restore completed from: {result.get('restore_point', 'unknown')}")
     except Exception as e:
         log.error(f"Restore failed: {e}")
-    
+
     app = create_app()
-    
+
     # Register cleanup handlers
     atexit.register(lambda: _cleanup(app))
     signal.signal(signal.SIGINT, lambda s, f: shutdown_handler(s, f, app))
     signal.signal(signal.SIGTERM, lambda s, f: shutdown_handler(s, f, app))
-    
+
     # Get port from command line (--port=XXXX) or environment variable or default
     port = 5050
     for arg in sys.argv:
@@ -182,7 +183,7 @@ def main():
             except ValueError:
                 print(f"Invalid port: {arg}")
                 sys.exit(1)
-    
+
     # Environment variable override
     env_port = os.environ.get('MAILREPO_PORT')
     if env_port:
@@ -191,13 +192,13 @@ def main():
         except ValueError:
             print(f"Invalid MAILREPO_PORT: {env_port}")
             sys.exit(1)
-    
+
     host = "127.0.0.1"
-    
+
     print(f"\n{'=' * 50}")
     print(f"  MailRepo v{app.config.get('app_version', '0.1.0')}")
     print(f"{'=' * 50}")
-    
+
     # Check for --dev flag for development mode with auto-reload
     if '--dev' in sys.argv:
         print("\nStarting in DEVELOPMENT mode (auto-reload enabled)...")
@@ -207,7 +208,7 @@ def main():
     else:
         # Production mode with Waitress
         from waitress import serve
-        
+
         print("\nStarting web server...")
         print(f"Open your browser to: http://localhost:{port}")
         print("\nPress Ctrl+C to stop the server\n")

@@ -12,9 +12,7 @@ auto-detection from the email domain.
 
 import json
 
-
-from core import Database
-from core import IMAP
+from core import IMAP, Database
 
 
 def _make_account(name="Work", email="user@example.com", provider="imap",

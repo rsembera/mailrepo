@@ -7,6 +7,7 @@ Tracks commit progress to allow resumption after interruption.
 import json
 import uuid
 from typing import Optional
+
 from .database import Database
 
 
@@ -23,31 +24,31 @@ def create_commit_session(staged_emails: list, staged_folders: list, source_acti
         commit_id: Unique identifier for this commit session
     """
     commit_id = str(uuid.uuid4())
-    
+
     # Save emails
     for item in staged_emails:
         source_key = _build_source_key(item)
         action = source_actions.get(source_key, 'leave')
-        
+
         Database.execute(
             """INSERT INTO pending_commit 
                (commit_id, item_type, item_data, destination_folder_id, source_action, status)
                VALUES (?, ?, ?, ?, ?, 'pending')""",
             (commit_id, 'email', json.dumps(item), item.get('destinationFolderId'), action)
         )
-    
+
     # Save folders
     for item in staged_folders:
         source_key = _build_source_key_folder(item)
         action = source_actions.get(source_key, 'leave')
-        
+
         Database.execute(
             """INSERT INTO pending_commit 
                (commit_id, item_type, item_data, destination_folder_id, source_action, status)
                VALUES (?, ?, ?, ?, ?, 'pending')""",
             (commit_id, 'folder', json.dumps(item), item.get('destinationFolderId'), action)
         )
-    
+
     Database.commit()
     return commit_id
 
@@ -73,10 +74,10 @@ def get_pending_commit() -> Optional[dict]:
            ORDER BY created_at DESC
            LIMIT 1"""
     )
-    
+
     if not row:
         return None
-    
+
     return {
         'commit_id': row['commit_id'],
         'total': row['total'],
@@ -105,14 +106,14 @@ def get_pending_items(commit_id: str, status: str = 'pending') -> list:
            ORDER BY id""",
         (commit_id, status)
     )
-    
+
     # Parse JSON data
     result = []
     for row in rows:
         item = dict(row)
         item['item_data'] = json.loads(item['item_data'])
         result.append(item)
-    
+
     return result
 
 
@@ -132,7 +133,7 @@ def get_committed_items_needing_post_action(commit_id: str) -> list:
            ORDER BY id""",
         (commit_id,)
     )
-    
+
     result = []
     for row in rows:
         item = dict(row)
@@ -140,7 +141,7 @@ def get_committed_items_needing_post_action(commit_id: str) -> list:
         # Only IMAP items have post-actions
         if item['item_data'].get('sourceType') != 'import':
             result.append(item)
-    
+
     return result
 
 
@@ -190,13 +191,13 @@ def discard_pending_commit(commit_id: str) -> None:
            WHERE commit_id = ? AND status = 'committed'""",
         (commit_id,)
     )
-    
+
     # Delete pending items
     Database.execute(
         "DELETE FROM pending_commit WHERE commit_id = ? AND status = 'pending'",
         (commit_id,)
     )
-    
+
     Database.commit()
 
 

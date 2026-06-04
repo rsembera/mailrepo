@@ -10,19 +10,21 @@ byte-for-byte (encrypted), and a bad message in an mbox is counted as a
 failure rather than aborting the whole import.
 """
 
+import mailbox
 from pathlib import Path
 
-import mailbox
 import pytest
 
-from core import Database, Config, Encryption
+from core import Config, Database, Encryption
+from core.importer import (
+    ImportError as ImporterError,
+)
 from core.importer import (
     decode_header_value,
-    parse_email_metadata,
     import_eml_file,
     import_mbox_file,
+    parse_email_metadata,
     scan_mbox_file,
-    ImportError as ImporterError,
 )
 
 TEST_FILES = Path(__file__).resolve().parent.parent / "test_files"

@@ -5,14 +5,16 @@ Handles mbox and eml import, and folder export.
 """
 
 import io
+import re
 import zipfile
 from pathlib import Path
-from flask import request, jsonify, send_file
-from core import Database, Config, Encryption
-from core import scan_mbox_file, import_mbox_file, import_eml_file
+
+from flask import jsonify, request, send_file
+
+from core import Config, Database, Encryption, import_eml_file, import_mbox_file, scan_mbox_file
 from utils.log import get_logger
+
 from . import api_bp
-import re
 
 log = get_logger()
 
@@ -25,7 +27,7 @@ def _linkify_html(html):
     # Split HTML into parts: inside tags vs text content
     # This regex captures HTML tags (including their content) as separate groups
     parts = re.split(r'(<a\s[^>]*>.*?</a>|<[^>]+>)', html, flags=re.IGNORECASE | re.DOTALL)
-    
+
     result = []
     for part in parts:
         # Skip empty parts
@@ -35,7 +37,7 @@ def _linkify_html(html):
         if part.startswith('<'):
             result.append(part)
             continue
-        
+
         # This is text content - linkify URLs and emails
         # URL pattern: match until we hit whitespace, quotes, angle brackets, or HTML entities
         # The negative lookahead stops at &nbsp; &amp; &lt; etc but allows & in query strings
@@ -51,7 +53,7 @@ def _linkify_html(html):
             part
         )
         result.append(part)
-    
+
     return ''.join(result)
 
 
@@ -60,14 +62,14 @@ def scan_mbox():
     """Scan an mbox file and return summary."""
     data = request.get_json()
     mbox_path = data.get("path", "").strip()
-    
+
     if not mbox_path:
         return jsonify({"error": "Path is required"}), 400
-    
+
     path = Path(mbox_path).expanduser()
     if not path.exists():
         return jsonify({"error": "File not found"}), 404
-    
+
     try:
         result = scan_mbox_file(path)
         return jsonify(result)
@@ -81,20 +83,20 @@ def import_mbox():
     data = request.get_json()
     mbox_path = data.get("path", "").strip()
     folder_id = data.get("folder_id")
-    
+
     if not mbox_path:
         return jsonify({"error": "Path is required"}), 400
     if not folder_id:
         return jsonify({"error": "Folder ID is required"}), 400
-    
+
     path = Path(mbox_path).expanduser()
     if not path.exists():
         return jsonify({"error": "File not found"}), 404
-    
+
     folder = Database.fetchone("SELECT id FROM folders WHERE id = ?", (folder_id,))
     if not folder:
         return jsonify({"error": "Folder not found"}), 404
-    
+
     try:
         result = import_mbox_file(path, folder_id)
         return jsonify({
@@ -114,22 +116,22 @@ def import_eml():
     data = request.get_json()
     eml_path = data.get("path", "").strip()
     folder_id = data.get("folder_id")
-    
+
     if not eml_path:
         return jsonify({"error": "Path is required"}), 400
     if not folder_id:
         return jsonify({"error": "Folder ID is required"}), 400
-    
+
     path = Path(eml_path).expanduser()
     if not path.exists():
         return jsonify({"error": "File not found"}), 404
-    
+
     folder = Database.fetchone("SELECT id FROM folders WHERE id = ?", (folder_id,))
     if not folder:
         return jsonify({"error": "Folder not found"}), 404
-    
+
     result = import_eml_file(path, folder_id)
-    
+
     if result["success"]:
         Database.commit()
         return jsonify({"success": True, "subject": result["subject"]})
@@ -154,24 +156,25 @@ def get_import_email():
     import email as email_lib
     from email.header import decode_header
     from email.utils import parsedate_to_datetime
-    from .email_parser import get_raw_email_from_import, _parse_eml_directory
-    
+
+    from .email_parser import _parse_eml_directory, get_raw_email_from_import
+
     data = request.get_json() or {}
     source_path = data.get("sourcePath", "").strip()
     uid = data.get("uid", "").strip()
     import_type = data.get("importType", "mbox")
     folder_path = data.get("folderPath", "")
     email_source_path = data.get("emailSourcePath", "").strip()  # Direct path to email file
-    
+
     if not source_path and not email_source_path:
         return jsonify({"error": "Source path is required"}), 400
     if not uid:
         return jsonify({"error": "UID is required"}), 400
-    
+
     source_path = Path(source_path).expanduser() if source_path else None
     if source_path and not source_path.exists():
         return jsonify({"error": "Source not found"}), 404
-    
+
     def decode_header_value(header):
         if not header:
             return ""
@@ -186,20 +189,20 @@ def get_import_email():
             return " ".join(decoded)
         except Exception:
             return str(header)
-    
+
     def get_email_body(msg):
         """Extract email body - returns (html_body, text_body) tuple."""
         html_body = None
         text_body = None
-        
+
         if msg.is_multipart():
             for part in msg.walk():
                 content_type = part.get_content_type()
                 content_disposition = str(part.get("Content-Disposition", ""))
-                
+
                 if "attachment" in content_disposition:
                     continue
-                
+
                 if content_type == "text/html" and not html_body:
                     payload = part.get_payload(decode=True)
                     if payload:
@@ -219,14 +222,14 @@ def get_import_email():
                     html_body = payload.decode(charset, errors="replace")
                 else:
                     text_body = payload.decode(charset, errors="replace")
-        
+
         return (html_body, text_body)
-    
+
     def get_inline_images(msg):
         """Extract inline images (parts with Content-ID) for cid: replacement."""
         import base64
         inline_images = {}  # cid -> data URL
-        
+
         if msg.is_multipart():
             for part in msg.walk():
                 content_id = part.get("Content-ID")
@@ -238,21 +241,21 @@ def get_import_email():
                         cid = content_id.strip('<>')
                         b64_data = base64.b64encode(payload).decode('ascii')
                         inline_images[cid] = f"data:{content_type};base64,{b64_data}"
-        
+
         return inline_images
-    
+
     def replace_cid_refs(html_body, inline_images):
         """Replace cid: references in HTML with data URLs."""
         if not html_body or not inline_images:
             return html_body
-        
+
         import re
         def replace_cid(match):
             cid = match.group(1)
             return inline_images.get(cid, match.group(0))
-        
+
         return re.sub(r'cid:([^"\'\s>]+)', replace_cid, html_body)
-    
+
     def get_attachments(msg):
         """Extract attachment info from email (excludes inline images)."""
         attachments = []
@@ -262,15 +265,15 @@ def get_import_email():
                 filename = part.get_filename()
                 content_type = part.get_content_type()
                 content_id = part.get("Content-ID")
-                
+
                 # Debug logging
                 log.debug(f"  Part: {content_type}, filename: {filename}, disposition: {content_disposition[:30] if content_disposition else 'None'}")
-                
+
                 # Skip inline images - they're handled via cid: replacement in HTML
                 # Only skip if it's an image with Content-ID (actual inline embedded image)
                 if content_id and content_type.startswith("image/"):
                     continue
-                
+
                 # Treat as attachment if explicitly marked as attachment,
                 # OR if it has a filename (even if inline)
                 if "attachment" in content_disposition or (filename and part.get_content_maintype() != "text"):
@@ -282,10 +285,10 @@ def get_import_email():
                         })
         log.debug(f"  Found {len(attachments)} attachments")
         return attachments
-    
+
     try:
         raw_email = None
-        
+
         # If we have a direct path to the email file, use it (EML files, Apple emlx)
         # But NOT for mbox files - those need UID-based lookup
         if email_source_path:
@@ -309,7 +312,7 @@ def get_import_email():
                     with open(email_path, 'rb') as f:
                         raw_email = f.read()
                 # For mbox files, fall through to UID-based lookup below
-        
+
         # Fallback lookups - only if direct file reading didn't work
         if not raw_email:
             if import_type == 'eml':
@@ -324,10 +327,10 @@ def get_import_email():
                 # Apple Mail export - parse directly using same logic as filesystem.py
                 import mailbox
                 import os
-                
+
                 # Use folder_path which points to the specific .mbox directory
                 mbox_dir = folder_path if folder_path else str(source_path)
-                
+
                 # Check for mbox file inside the .mbox directory
                 mbox_file = os.path.join(mbox_dir, "mbox")
                 if os.path.isfile(mbox_file):
@@ -342,7 +345,7 @@ def get_import_email():
                                 break
                     except Exception:
                         pass
-                
+
                 # Check for Messages directory with .emlx files
                 if not raw_email:
                     messages_dir = os.path.join(mbox_dir, "Messages")
@@ -376,13 +379,13 @@ def get_import_email():
             else:
                 # Standard mbox
                 raw_email = get_raw_email_from_import(str(source_path), uid)
-        
+
         if not raw_email:
             return jsonify({"error": "Email not found in import source"}), 404
-        
+
         # Parse the email
         msg = email_lib.message_from_bytes(raw_email)
-        
+
         # Parse date
         date_str = msg.get("Date", "")
         date_display = date_str
@@ -392,17 +395,17 @@ def get_import_email():
                 date_display = dt.strftime("%Y-%m-%d %H:%M")
             except Exception:
                 pass
-        
+
         html_body, text_body = get_email_body(msg)
-        
+
         # Resolve cid: references in HTML body
         inline_images = get_inline_images(msg)
         html_body = replace_cid_refs(html_body, inline_images)
-        
+
         # Linkify URLs and emails in HTML body that aren't already links
         if html_body:
             html_body = _linkify_html(html_body)
-        
+
         email_data = {
             "uid": uid,
             "subject": decode_header_value(msg.get("Subject", "(no subject)")),
@@ -414,9 +417,9 @@ def get_import_email():
             "text_body": text_body,
             "attachments": get_attachments(msg),
         }
-        
+
         return jsonify({"email": email_data})
-        
+
     except Exception as e:
         return jsonify({"error": f"Failed to read email: {str(e)}"}), 500
 
@@ -440,11 +443,14 @@ def download_import_attachment():
     """
     import email as email_lib
     from email.header import decode_header
-    from .email_parser import get_raw_email_from_import, _parse_eml_directory
+
     from flask import Response
+
     from utils.log import get_logger
+
+    from .email_parser import _parse_eml_directory, get_raw_email_from_import
     log = get_logger()
-    
+
     data = request.get_json() or {}
     source_path = data.get("sourcePath", "").strip()
     uid = data.get("uid", "").strip()
@@ -453,19 +459,19 @@ def download_import_attachment():
     email_source_path = data.get("emailSourcePath", "").strip()
     index = data.get("index", 0)
     view_inline = data.get("inline", False)
-    
+
     log.debug(f"Import attachment request: type={import_type}, uid={uid}, index={index}")
     log.debug(f"  sourcePath={source_path}, emailSourcePath={email_source_path}, folderPath={folder_path}")
-    
+
     if not source_path and not email_source_path:
         return jsonify({"error": "Source path is required"}), 400
     if not uid:
         return jsonify({"error": "UID is required"}), 400
-    
+
     source_path = Path(source_path).expanduser() if source_path else None
     if source_path and not source_path.exists():
         return jsonify({"error": "Source not found"}), 404
-    
+
     def decode_header_value(header):
         if not header:
             return ""
@@ -480,11 +486,11 @@ def download_import_attachment():
             return " ".join(decoded)
         except Exception:
             return str(header)
-    
+
     try:
         # Get raw email - same logic as get_import_email
         raw_email = None
-        
+
         if email_source_path:
             email_path = Path(email_source_path).expanduser()
             if email_path.exists() and email_path.is_file():
@@ -502,7 +508,7 @@ def download_import_attachment():
                 elif suffix == '.eml':
                     with open(email_path, 'rb') as f:
                         raw_email = f.read()
-        
+
         if not raw_email:
             if import_type == 'pst':
                 if email_source_path:
@@ -553,13 +559,13 @@ def download_import_attachment():
                                         pass
             else:
                 raw_email = get_raw_email_from_import(str(source_path), uid)
-        
+
         if not raw_email:
             return jsonify({"error": "Email not found in import source"}), 404
-        
+
         # Parse the email and find attachments (must match filtering in get_attachments)
         msg = email_lib.message_from_bytes(raw_email)
-        
+
         attachments = []
         if msg.is_multipart():
             for part in msg.walk():
@@ -567,12 +573,12 @@ def download_import_attachment():
                 filename = part.get_filename()
                 content_id = part.get("Content-ID")
                 content_type = part.get_content_type()
-                
+
                 # Skip inline images - they're handled via cid: replacement in HTML
                 # Only skip if it's an image with Content-ID (actual inline embedded image)
                 if content_id and content_type.startswith("image/"):
                     continue
-                
+
                 # Treat as attachment if explicitly marked as attachment,
                 # OR if it has a filename (even if inline) and isn't text
                 if "attachment" in content_disposition or (filename and part.get_content_maintype() != "text"):
@@ -582,20 +588,20 @@ def download_import_attachment():
                             "content_type": content_type,
                             "data": part.get_payload(decode=True),
                         })
-        
+
         if index < 0 or index >= len(attachments):
             return jsonify({"error": "Attachment not found"}), 404
-        
+
         att = attachments[index]
         content_type = att["content_type"] or "application/octet-stream"
         disposition = "inline" if view_inline else "attachment"
-        
+
         return Response(
             att["data"],
             mimetype=content_type,
             headers={"Content-Disposition": f'{disposition}; filename="{att["filename"]}"'}
         )
-        
+
     except Exception as e:
         return jsonify({"error": f"Failed to download attachment: {str(e)}"}), 500
 
@@ -606,14 +612,14 @@ def export_folder(folder_id):
     folder = Database.fetchone("SELECT id, name FROM folders WHERE id = ?", (folder_id,))
     if not folder:
         return jsonify({"error": "Folder not found"}), 404
-    
+
     data = request.get_json() or {}
     include_subfolders = data.get("include_subfolders", True)
-    
+
     # Get all folders to export (recursive if include_subfolders)
     folder_ids = [folder_id]
     folders_by_id = {folder_id: folder}
-    
+
     if include_subfolders:
         # Recursively collect all child folders
         def collect_children(parent_id, collected):
@@ -626,7 +632,7 @@ def export_folder(folder_id):
                 folders_by_id[child["id"]] = child
                 collect_children(child["id"], collected)
         collect_children(folder_id, folder_ids)
-    
+
     # Build folder path lookup (folder_id -> relative path in ZIP)
     def build_path(fid, path_parts=None):
         if path_parts is None:
@@ -640,9 +646,9 @@ def export_folder(folder_id):
         if parent_id and parent_id in folders_by_id:
             return build_path(parent_id, path_parts)
         return "/".join(reversed(path_parts))
-    
+
     folder_paths = {fid: build_path(fid) for fid in folder_ids}
-    
+
     # Get all messages in these folders
     placeholders = ",".join("?" * len(folder_ids))
     messages = Database.fetchall(
@@ -654,34 +660,34 @@ def export_folder(folder_id):
         """,
         tuple(folder_ids)
     )
-    
+
     # Create ZIP in memory
     zip_buffer = io.BytesIO()
-    
+
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         # Track filenames to avoid duplicates within same folder
         folder_filenames = {}  # folder_id -> set of used filenames
-        
+
         for msg in messages:
             fid = msg["folder_id"]
             if fid not in folder_filenames:
                 folder_filenames[fid] = set()
-            
+
             filepath = Config.get_base_path() / msg["filepath"]
             if not filepath.exists():
                 continue
-            
+
             try:
                 # Read and decrypt the email
                 raw_bytes = filepath.read_bytes()
                 decrypted_bytes = Encryption.decrypt(raw_bytes)
-                
+
                 # Generate a safe filename
                 subject = msg["subject"] or "no_subject"
                 # Sanitize subject for filename
                 safe_subject = "".join(c if c.isalnum() or c in " -_" else "_" for c in subject)[:50].strip()
                 base_filename = f"{safe_subject}.eml"
-                
+
                 # Ensure uniqueness within folder
                 filename = base_filename
                 counter = 1
@@ -690,26 +696,26 @@ def export_folder(folder_id):
                     filename = f"{name_part}_{counter}.eml"
                     counter += 1
                 folder_filenames[fid].add(filename)
-                
+
                 # Build full path in ZIP
                 folder_path = folder_paths.get(fid, "")
                 if folder_path:
                     zip_path = f"{folder_path}/{filename}"
                 else:
                     zip_path = filename
-                
+
                 # Add to ZIP
                 zf.writestr(zip_path, decrypted_bytes)
             except Exception as e:
                 log.warning(f"Error exporting message {msg['id']}: {e}")
                 continue
-    
+
     zip_buffer.seek(0)
-    
+
     # Generate download filename
     safe_folder_name = "".join(c if c.isalnum() or c in " -_" else "_" for c in folder["name"])[:30].strip()
     download_filename = f"{safe_folder_name}_export.zip"
-    
+
     return send_file(
         zip_buffer,
         mimetype="application/zip",

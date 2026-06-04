@@ -20,18 +20,18 @@ itself lives in git history as commits b7db944 / 39e0ce2 / 944b0aa /
 3f0e67a if it ever needs to be referenced for pattern.
 """
 
+import base64
 import os
 import secrets
-import base64
 from typing import Optional
 
+from argon2.low_level import Type as Argon2Type
+from argon2.low_level import hash_secret_raw
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.hkdf import HKDFExpand
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from argon2.low_level import hash_secret_raw, Type as Argon2Type
+from cryptography.hazmat.primitives.kdf.hkdf import HKDFExpand
 
 from .config import Config
-
 
 # ============================================================
 # EXCEPTIONS

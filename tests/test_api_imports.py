@@ -13,8 +13,7 @@ import io
 import secrets
 import zipfile
 
-
-from core import Database, Config, Encryption
+from core import Config, Database, Encryption
 
 
 def _make_folder(name, parent_id=None):

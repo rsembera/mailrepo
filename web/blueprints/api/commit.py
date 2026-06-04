@@ -5,14 +5,12 @@ Handles committing staged emails and folders to the archive.
 Supports post-commit actions (archive, trash, delete) for IMAP emails.
 """
 
-from core import Database
-from core import IMAP, IMAPError
-from core import Config
-from core import Encryption
+from core import IMAP, Config, Database, Encryption, IMAPError
+
 from .email_parser import (
+    extract_body_text,
     get_emails_from_import_folder,
     get_raw_email_from_import,
-    extract_body_text,
     parse_email_metadata,
 )
 
@@ -35,21 +33,21 @@ def create_archive_folder_from_path(archive_path: str, parent_folder_id: int) ->
     """
     if not archive_path:
         return parent_folder_id
-    
+
     parts = archive_path.split('/')
     current_parent_id = parent_folder_id
-    
+
     for part in parts:
         part = part.strip()
         if not part:
             continue
-            
+
         # Check if folder already exists
         existing = Database.fetchone(
             "SELECT id FROM folders WHERE name = ? AND parent_id = ? AND deleted_at IS NULL",
             (part, current_parent_id)
         )
-        
+
         if existing:
             current_parent_id = existing["id"]
         else:
@@ -61,7 +59,7 @@ def create_archive_folder_from_path(archive_path: str, parent_folder_id: int) ->
             current_parent_id = cursor.lastrowid
             # Commit immediately so subsequent lookups can find this folder
             Database.commit()
-    
+
     return current_parent_id
 
 
@@ -98,10 +96,10 @@ def _save_email_to_archive(raw_email: bytes, folder_id: int, account_id: int | N
 
     encrypted_data = Encryption.encrypt(raw_email)
     filepath = archive_path / f"{uid_prefix}.eml.enc"
-    
+
     # Write file first
     filepath.write_bytes(encrypted_data)
-    
+
     # Insert DB record - if this fails, clean up the file
     try:
         Database.execute(
@@ -144,7 +142,7 @@ def commit_import_email(item: dict, results: dict) -> dict:
     folder_id = item.get("destinationFolderId")
     uid = email_data.get("uid", "")
     subject = email_data.get("subject", "(no subject)")[:50]
-    
+
     try:
         # Check destination folder exists
         folder = Database.fetchone(
@@ -152,7 +150,7 @@ def commit_import_email(item: dict, results: dict) -> dict:
         )
         if not folder:
             raise ValueError(f"Folder {folder_id} not found")
-        
+
         # Check for duplicate
         message_id = email_data.get("message_id", "")
         if _check_duplicate(folder_id, message_id):
@@ -163,23 +161,23 @@ def commit_import_email(item: dict, results: dict) -> dict:
         source_path = email_data.get("sourcePath")
         if not source_path:
             raise ValueError("No source path for imported email")
-        
+
         raw_email = get_raw_email_from_import(source_path, uid)
         if not raw_email:
             raise ValueError("Could not retrieve email content")
-        
+
         safe_id = f"import_{uid.replace('/', '_').replace(':', '_')}"
         _save_email_to_archive(raw_email, folder_id, None, safe_id)
-        
+
         results["success"].append(uid)
         return {"status": "success", "subject": subject, "uid": uid}
-        
+
     except Exception as e:
         results["failed"].append({"uid": uid, "error": str(e)})
         return {"status": "failed", "subject": subject, "uid": uid, "error": str(e)}
 
 
-def commit_imap_email(client, account_id: int, email_data: dict, folder_id: int, 
+def commit_imap_email(client, account_id: int, email_data: dict, folder_id: int,
                       source_folder: str, results: dict, committed_emails: dict) -> dict:
     """
     Commit a single email from IMAP.
@@ -198,7 +196,7 @@ def commit_imap_email(client, account_id: int, email_data: dict, folder_id: int,
     """
     uid = email_data.get("uid")
     subject = email_data.get("subject", "(no subject)")[:50]
-    
+
     try:
         # Check destination folder exists
         folder = Database.fetchone(
@@ -206,35 +204,35 @@ def commit_imap_email(client, account_id: int, email_data: dict, folder_id: int,
         )
         if not folder:
             raise ValueError(f"Folder {folder_id} not found")
-        
+
         # Check for duplicate
         message_id = email_data.get("message_id", "")
         if _check_duplicate(folder_id, message_id):
             results["skipped"].append({"uid": uid, "reason": "duplicate", "subject": subject})
             return {"status": "skipped", "subject": subject, "uid": uid}
-        
+
         # Fetch and save email
         raw_email = client.fetch_raw(uid)
         safe_id = f"{account_id}_{uid}"
         _save_email_to_archive(raw_email, folder_id, account_id, safe_id)
-        
+
         results["success"].append(uid)
-        
+
         # Track for post-commit actions
         if account_id not in committed_emails:
             committed_emails[account_id] = {}
         if source_folder not in committed_emails[account_id]:
             committed_emails[account_id][source_folder] = []
         committed_emails[account_id][source_folder].append((uid, folder_id))
-        
+
         return {"status": "success", "subject": subject, "uid": uid}
-        
+
     except Exception as e:
         results["failed"].append({"uid": uid, "error": str(e)})
         return {"status": "failed", "subject": subject, "uid": uid, "error": str(e)}
 
 
-def commit_import_folder(folder_item: dict, target_folder_id: int, folder_idx: int, 
+def commit_import_folder(folder_item: dict, target_folder_id: int, folder_idx: int,
                          folder_count: int, results: dict):
     """
     Generator that commits all emails from an import folder.
@@ -246,7 +244,7 @@ def commit_import_folder(folder_item: dict, target_folder_id: int, folder_idx: i
     import_type = folder_item.get("importType", "apple-mbox")
     archive_path = folder_item.get("archivePath", "")
     folder_name = archive_path.split('/')[-1] if archive_path else "folder"
-    
+
     emails = get_emails_from_import_folder(import_path, folder_path, import_type)
     folder_email_count = len(emails)
 
@@ -258,18 +256,18 @@ def commit_import_folder(folder_item: dict, target_folder_id: int, folder_idx: i
         "folderIndex": folder_idx + 1,
         "folderCount": folder_count,
     }
-    
+
     for i, (uid, raw_email) in enumerate(emails):
         try:
             subject = parse_email_metadata(raw_email).get("subject", "(no subject)")[:50]
             safe_id = f"import_{uid.replace('/', '_').replace(':', '_')}"
             _save_email_to_archive(raw_email, target_folder_id, None, safe_id)
             results["success"].append(uid)
-            
+
             # Commit every 10 emails for durability
             if (i + 1) % 10 == 0:
                 Database.commit()
-            
+
             yield {
                 "type": "progress",
                 "current": i + 1,
@@ -310,22 +308,22 @@ def commit_imap_folder(folder_item: dict, target_folder_id: int, folder_idx: int
     imap_folder = folder_item.get("folder")
     archive_path = folder_item.get("archivePath", "")
     folder_name = archive_path.split('/')[-1] if archive_path else "folder"
-    
+
     account = Database.fetchone(
         "SELECT credentials_encrypted FROM accounts WHERE id = ?", (account_id,)
     )
     if not account:
         raise ValueError(f"Account {account_id} not found")
-    
+
     client = IMAP.connect_with_credentials(account["credentials_encrypted"])
     try:
         folder_info = client.select_folder(imap_folder)
         if folder_info.get("message_count", 0) == 0:
             return
-            
+
         uids = client.search(criteria="ALL", limit=0)
         folder_email_count = len(uids)
-        
+
         # Yield folder start status
         yield {
             "type": "status",
@@ -338,7 +336,7 @@ def commit_imap_folder(folder_item: dict, target_folder_id: int, folder_idx: int
         for i, uid in enumerate(uids):
             try:
                 raw_email = client.fetch_raw(uid)
-                
+
                 if not raw_email:
                     results["failed"].append({"uid": uid, "error": "Empty"})
                     yield {
@@ -354,11 +352,11 @@ def commit_imap_folder(folder_item: dict, target_folder_id: int, folder_idx: int
                         "commitPhase": "folders",
                     }
                     continue
-                
+
                 metadata = parse_email_metadata(raw_email)
                 subject = (metadata.get("subject", "") or "(no subject)")[:50]
                 message_id = metadata.get("message_id", "")
-                
+
                 if _check_duplicate(target_folder_id, message_id):
                     results["skipped"].append({"uid": uid})
                     yield {
@@ -374,15 +372,15 @@ def commit_imap_folder(folder_item: dict, target_folder_id: int, folder_idx: int
                         "commitPhase": "folders",
                     }
                     continue
-                
+
                 safe_id = f"{account_id}_{uid}"
                 _save_email_to_archive(raw_email, target_folder_id, account_id, safe_id)
                 results["success"].append(uid)
-                
+
                 # Commit every 10 emails for durability
                 if (i + 1) % 10 == 0:
                     Database.commit()
-                
+
                 yield {
                     "type": "progress",
                     "current": i + 1,
@@ -427,13 +425,13 @@ def apply_post_commit_actions(committed_emails: dict, source_actions: dict, resu
     """
     if not committed_emails or not source_actions:
         return
-    
+
     yield {
         "type": "status",
         "phase": "post_actions",
         "message": "Applying post-commit actions on server...",
     }
-    
+
     for account_id, folders_data in committed_emails.items():
         account = Database.fetchone(
             "SELECT id, credentials_encrypted FROM accounts WHERE id = ?",
@@ -441,17 +439,17 @@ def apply_post_commit_actions(committed_emails: dict, source_actions: dict, resu
         )
         if not account or not account["credentials_encrypted"]:
             continue
-        
+
         client = None
         try:
             client = IMAP.connect_with_credentials(account["credentials_encrypted"])
-            
+
             for source_folder, email_list in folders_data.items():
                 action = _find_action_for_source(source_actions, account_id, source_folder)
-                
+
                 if not action or action == 'leave':
                     continue
-                
+
                 try:
                     client.select_folder(source_folder)
 
@@ -470,7 +468,7 @@ def apply_post_commit_actions(committed_emails: dict, source_actions: dict, resu
                             results["post_actions"]["failed"] += 1
                 except IMAPError:
                     results["post_actions"]["failed"] += len(email_list)
-        
+
         except Exception:
             for folder_emails in folders_data.values():
                 results["post_actions"]["failed"] += len(folder_emails)
@@ -493,7 +491,7 @@ def _find_action_for_source(source_actions: dict, account_id: int, source_folder
     for key, action in source_actions.items():
         if not key.startswith(f"account:{account_id}"):
             continue
-        
+
         parts = key.split(':')
         if len(parts) == 3:
             # "account:1:5" format - applies to all folders for this dest
@@ -503,14 +501,14 @@ def _find_action_for_source(source_actions: dict, account_id: int, source_folder
             folder_part = ':'.join(parts[2:-1])
             if folder_part == source_folder:
                 return action
-    
+
     return None
 
 
 def build_commit_summary(results: dict) -> str:
     """Build a human-readable summary message from commit results."""
     msg_parts = []
-    
+
     if results["success"]:
         msg_parts.append(f"{len(results['success'])} emails filed")
     if results["folders_success"]:
@@ -537,5 +535,5 @@ def build_commit_summary(results: dict) -> str:
     if results["post_actions"]["failed"]:
         count = results["post_actions"]["failed"]
         msg_parts.append(f"{count} server update{'s' if count != 1 else ''} failed — your emails are archived safely, but you may need to remove them from the server manually")
-    
+
     return ". ".join(msg_parts) + "." if msg_parts else "Nothing committed."

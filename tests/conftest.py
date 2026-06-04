@@ -32,18 +32,18 @@ def reset_singletons(temp_data_dir, monkeypatch):
     """Reset all singleton state before each test."""
     # Set environment variable BEFORE importing modules
     monkeypatch.setenv("MAILREPO_DATA_DIR", str(temp_data_dir))
-    
+
     # Reset Config's cached path
     from core.config import Config
     Config._base_path = None
-    
+
     # Force Config to use our temp dir
     Config.set_base_path(temp_data_dir)
-    
+
     # Reset Encryption state
     from core.encryption import Encryption
     Encryption.lock()
-    
+
     # Reset Database state
     from core.database import Database
     if Database._connection is not None:
@@ -53,9 +53,9 @@ def reset_singletons(temp_data_dir, monkeypatch):
             pass
     Database._connection = None
     Database._db_key = None
-    
+
     yield
-    
+
     # Cleanup after test
     if Database._connection is not None:
         try:
@@ -72,11 +72,11 @@ def reset_singletons(temp_data_dir, monkeypatch):
 def app(temp_data_dir):
     """Create a test Flask application."""
     from web import create_app
-    
+
     app = create_app()
     app.config["TESTING"] = True
     app.config["WTF_CSRF_ENABLED"] = False
-    
+
     return app
 
 
@@ -89,19 +89,19 @@ def client(app):
 @pytest.fixture
 def initialized_app(app, temp_data_dir):
     """Create an app with encryption initialized and database set up."""
-    from core.encryption import Encryption
     from core.database import Database
-    
+    from core.encryption import Encryption
+
     test_password = "TestPassword123!"
-    
+
     with app.app_context():
         # Initialize encryption
         Encryption.initialize(test_password)
-        
+
         # Set database key and initialize
         Database.set_key(Encryption.get_db_key())
         Database.initialize()
-        
+
         yield app, test_password
 
 
@@ -109,54 +109,54 @@ def initialized_app(app, temp_data_dir):
 def authenticated_client(initialized_app):
     """Create a test client that's already authenticated with CSRF token."""
     app, password = initialized_app
-    
+
     # Create test client with session support
     client = app.test_client()
-    
+
     # Generate a CSRF token
     csrf_token = secrets.token_hex(32)
-    
+
     # Set up session with authentication and CSRF token
     with client.session_transaction() as sess:
         sess["authenticated"] = True
         sess["csrf_token"] = csrf_token
-    
+
     # Create a wrapper that automatically adds CSRF header
     class AuthenticatedClient:
         def __init__(self, client, csrf_token):
             self._client = client
             self._csrf_token = csrf_token
-        
+
         def get(self, *args, **kwargs):
             return self._client.get(*args, **kwargs)
-        
+
         def post(self, *args, **kwargs):
             headers = kwargs.pop("headers", {})
             headers["X-CSRF-Token"] = self._csrf_token
             kwargs["headers"] = headers
             return self._client.post(*args, **kwargs)
-        
+
         def put(self, *args, **kwargs):
             headers = kwargs.pop("headers", {})
             headers["X-CSRF-Token"] = self._csrf_token
             kwargs["headers"] = headers
             return self._client.put(*args, **kwargs)
-        
+
         def patch(self, *args, **kwargs):
             headers = kwargs.pop("headers", {})
             headers["X-CSRF-Token"] = self._csrf_token
             kwargs["headers"] = headers
             return self._client.patch(*args, **kwargs)
-        
+
         def delete(self, *args, **kwargs):
             headers = kwargs.pop("headers", {})
             headers["X-CSRF-Token"] = self._csrf_token
             kwargs["headers"] = headers
             return self._client.delete(*args, **kwargs)
-        
+
         def session_transaction(self):
             return self._client.session_transaction()
-    
+
     return AuthenticatedClient(client, csrf_token)
 
 

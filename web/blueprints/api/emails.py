@@ -5,16 +5,17 @@ Handles search and archived email retrieval endpoints.
 """
 
 import base64
-import time
 import email as email_lib
-from flask import request, jsonify, Response
-from core import Database
-from core import Config
-from core import Encryption
-from utils.log import get_logger
-from .email_parser import decode_email_header, extract_body_text
-from . import api_bp
 import re
+import time
+
+from flask import Response, jsonify, request
+
+from core import Config, Database, Encryption
+from utils.log import get_logger
+
+from . import api_bp
+from .email_parser import decode_email_header, extract_body_text
 
 log = get_logger()
 
@@ -27,7 +28,7 @@ def _linkify_html(html):
     # Split HTML into parts: inside tags vs text content
     # This regex captures HTML tags (including their content) as separate groups
     parts = re.split(r'(<a\s[^>]*>.*?</a>|<[^>]+>)', html, flags=re.IGNORECASE | re.DOTALL)
-    
+
     result = []
     for part in parts:
         # Skip empty parts
@@ -37,7 +38,7 @@ def _linkify_html(html):
         if part.startswith('<'):
             result.append(part)
             continue
-        
+
         # This is text content - linkify URLs and emails
         # URL pattern: match until we hit whitespace, quotes, angle brackets, or HTML entities
         # The negative lookahead stops at &nbsp; &amp; &lt; etc but allows & in query strings
@@ -53,7 +54,7 @@ def _linkify_html(html):
             part
         )
         result.append(part)
-    
+
     return ''.join(result)
 
 
@@ -68,7 +69,7 @@ def _get_folder_and_descendants(folder_id: int) -> list[int]:
         if parent not in folder_map:
             folder_map[parent] = []
         folder_map[parent].append(f["id"])
-    
+
     result = [folder_id]
     queue = [folder_id]
     while queue:
@@ -123,12 +124,12 @@ def search_emails():
     # Defaults to True to preserve previous behavior.
     include_subfolders_arg = request.args.get("include_subfolders", "true").lower()
     include_subfolders = include_subfolders_arg not in ("0", "false", "no")
-    
+
     if not query:
         return jsonify({"error": "Search query is required"}), 400
-    
+
     fts_query = query.replace('"', '""')
-    
+
     if folder_id:
         # Either the folder alone, or the folder + all descendants
         if include_subfolders:
@@ -192,7 +193,7 @@ def search_emails():
         "date": r["date"],
         "flagged_at": r["flagged_at"],
     } for r in results]
-    
+
     return jsonify({"query": query, "count": len(emails), "emails": emails})
 
 
@@ -202,7 +203,7 @@ def get_folder_emails(folder_id):
     folder = Database.fetchone("SELECT id FROM folders WHERE id = ?", (folder_id,))
     if not folder:
         return jsonify({"error": "Folder not found"}), 404
-    
+
     messages = Database.fetchall(
         """
         SELECT id, subject, sender, date, filepath, flagged_at
@@ -211,7 +212,7 @@ def get_folder_emails(folder_id):
         """,
         (folder_id,)
     )
-    
+
     emails = [{
         "id": m["id"],
         "subject": m["subject"],
@@ -219,7 +220,7 @@ def get_folder_emails(folder_id):
         "date": m["date"],
         "flagged_at": m["flagged_at"],
     } for m in messages]
-    
+
     return jsonify({"emails": emails})
 
 
@@ -240,7 +241,7 @@ def get_archived_email(folder_id, message_id):
     )
     if not message:
         return jsonify({"error": "Message not found"}), 404
-    
+
     filepath = Config.get_base_path() / message["filepath"]
     if not filepath.exists():
         return jsonify({"error": "Email file not found"}), 404
@@ -249,7 +250,7 @@ def get_archived_email(folder_id, message_id):
         raw_bytes = filepath.read_bytes()
         raw_bytes = Encryption.decrypt(raw_bytes)
         msg = email_lib.message_from_bytes(raw_bytes)
-        
+
         result = {
             "id": message["id"],
             "subject": _decode_header(msg.get("Subject", "")),
@@ -262,7 +263,7 @@ def get_archived_email(folder_id, message_id):
             "html_body": None,
             "attachments": [],
         }
-        
+
         # Pre-scan: find every cid: reference that appears in the html
         # body(ies). A part with a Content-ID is only truly "inline" if
         # its id is actually referenced by the html. Without this,
@@ -315,7 +316,7 @@ def get_archived_email(folder_id, message_id):
                             "size": len(part.get_payload(decode=True) or b""),
                         })
                     continue
-                
+
                 payload = part.get_payload(decode=True)
                 if payload:
                     charset = part.get_content_charset() or "utf-8"
@@ -334,24 +335,24 @@ def get_archived_email(folder_id, message_id):
                     result["html_body"] = body
                 else:
                     result["text_body"] = body
-        
+
         # Replace cid: references in HTML body with data URLs
         if result["html_body"] and inline_images:
             def replace_cid(match):
                 cid = match.group(1)
                 return inline_images.get(cid, match.group(0))
-            
+
             # Match cid:xxx in src attributes (handles quoted and unquoted)
             result["html_body"] = re.sub(
                 r'cid:([^"\'\s>]+)',
                 replace_cid,
                 result["html_body"]
             )
-        
+
         # Linkify URLs and emails in HTML body that aren't already links
         if result["html_body"]:
             result["html_body"] = _linkify_html(result["html_body"])
-        
+
         return jsonify({"email": result})
     except Exception as e:
         return jsonify({"error": f"Failed to read email: {e}"}), 500
@@ -468,7 +469,7 @@ def permanently_delete_message(message_id):
         return jsonify({"error": "Message not found"}), 404
     if not message["deleted_at"]:
         return jsonify({"error": "Message must be in trash before permanent deletion"}), 400
-    
+
     # Delete the email file
     try:
         filepath = Config.get_base_path() / message["filepath"]
@@ -476,7 +477,7 @@ def permanently_delete_message(message_id):
             filepath.unlink()
     except Exception as e:
         log.warning(f"Could not delete file {message['filepath']}: {e}")
-    
+
     Database.execute("DELETE FROM messages WHERE id = ?", (message_id,))
     Database.commit()
     return jsonify({"success": True})
@@ -581,9 +582,9 @@ def update_message(message_id):
     )
     if not message:
         return jsonify({"error": "Message not found"}), 404
-    
+
     data = request.get_json()
-    
+
     if "folder_id" in data:
         new_folder_id = data["folder_id"]
         # Verify destination folder exists
@@ -593,13 +594,13 @@ def update_message(message_id):
         )
         if not folder:
             return jsonify({"error": "Destination folder not found"}), 404
-        
+
         Database.execute(
             "UPDATE messages SET folder_id = ? WHERE id = ?",
             (new_folder_id, message_id)
         )
         Database.commit()
-    
+
     return jsonify({"success": True})
 
 
@@ -658,7 +659,7 @@ def download_archived_email(folder_id, message_id):
     )
     if not message:
         return jsonify({"error": "Message not found"}), 404
-    
+
     filepath = Config.get_base_path() / message["filepath"]
     if not filepath.exists():
         return jsonify({"error": "Email file not found"}), 404
@@ -666,12 +667,12 @@ def download_archived_email(folder_id, message_id):
     try:
         raw_bytes = filepath.read_bytes()
         raw_bytes = Encryption.decrypt(raw_bytes)
-        
+
         # Clean subject for filename
         subject = message["subject"] or "email"
         safe_filename = "".join(c for c in subject if c.isalnum() or c in " -_")[:50].strip() or "email"
         filename = f"{safe_filename}.eml"
-        
+
         return Response(
             raw_bytes,
             mimetype="message/rfc822",
@@ -693,7 +694,7 @@ def download_archived_attachment(folder_id, message_id, index):
     )
     if not message:
         return jsonify({"error": "Message not found"}), 404
-    
+
     filepath = Config.get_base_path() / message["filepath"]
     if not filepath.exists():
         return jsonify({"error": "Email file not found"}), 404
@@ -702,7 +703,7 @@ def download_archived_attachment(folder_id, message_id, index):
         raw_bytes = filepath.read_bytes()
         raw_bytes = Encryption.decrypt(raw_bytes)
         msg = email_lib.message_from_bytes(raw_bytes)
-        
+
         # Find attachments. Must match the filtering in get_archived_email
         # exactly, or attachment indices in the JSON response won\'t line
         # up with what this route returns when the user clicks Download.
@@ -729,16 +730,16 @@ def download_archived_attachment(folder_id, message_id, index):
                             "content_type": content_type,
                             "payload": part.get_payload(decode=True),
                         })
-        
+
         if index < 0 or index >= len(attachments):
             return jsonify({"error": "Attachment not found"}), 404
-        
+
         att = attachments[index]
-        
+
         # Check if user wants to view inline (for PDFs, images, etc.)
         view_inline = request.args.get("view") == "1"
         disposition = "inline" if view_inline else "attachment"
-        
+
         return Response(
             att["payload"],
             mimetype=att["content_type"],
@@ -760,7 +761,7 @@ def get_archived_email_source(folder_id, message_id):
     )
     if not message:
         return jsonify({"error": "Message not found"}), 404
-    
+
     filepath = Config.get_base_path() / message["filepath"]
     if not filepath.exists():
         return jsonify({"error": "Email file not found"}), 404
@@ -768,13 +769,13 @@ def get_archived_email_source(folder_id, message_id):
     try:
         raw_bytes = filepath.read_bytes()
         raw_bytes = Encryption.decrypt(raw_bytes)
-        
+
         # Try to decode as text, fallback to latin-1 if UTF-8 fails
         try:
             source = raw_bytes.decode('utf-8')
         except UnicodeDecodeError:
             source = raw_bytes.decode('latin-1')
-        
+
         return jsonify({"source": source})
     except Exception as e:
         return jsonify({"error": f"Failed to read email source: {e}"}), 500
@@ -788,10 +789,10 @@ def reindex_search():
             "SELECT id, filepath FROM messages WHERE deleted_at IS NULL",
             ()
         )
-        
+
         updated = 0
         errors = 0
-        
+
         for msg in messages:
             try:
                 filepath = Config.get_base_path() / msg["filepath"]
@@ -809,10 +810,10 @@ def reindex_search():
             except Exception as e:
                 log.warning(f"Failed to reindex message {msg['id']}: {e}")
                 errors += 1
-        
+
         # Rebuild FTS index
         Database.execute("INSERT INTO messages_fts(messages_fts) VALUES('rebuild')", ())
-        
+
         return jsonify({
             "message": f"Reindexed {updated} emails ({errors} errors)",
             "updated": updated,

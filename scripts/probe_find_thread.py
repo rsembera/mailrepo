@@ -17,9 +17,9 @@ Examples:
 Used during Stage Thread development to confirm header-walk works on
 real accounts before wiring up the HTTP endpoint.
 """
+import getpass
 import os
 import sys
-import getpass
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)

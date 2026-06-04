@@ -23,7 +23,7 @@ import zipfile
 import pytest
 import pyzipper
 
-from core import Database, Config, Encryption
+from core import Config, Database, Encryption
 from web.blueprints.api import exports as ex
 
 

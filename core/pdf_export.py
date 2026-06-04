@@ -37,7 +37,6 @@ from typing import Iterable, Iterator
 
 from core import Config, Database, Encryption
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -831,7 +830,7 @@ def build_combined_pdf(
         Progress dicts. Event names: ``status``, ``progress``, ``complete``,
         ``error``.
     """
-    from weasyprint import HTML, CSS
+    from weasyprint import CSS, HTML
 
     ids = list(message_ids)
     total = len(ids)

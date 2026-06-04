@@ -10,9 +10,9 @@ returns (the same data the email viewer gets), so we can see whether
 the issue is upstream (server returned empty body) or downstream (viewer
 mishandled non-empty body).
 """
+import getpass
 import os
 import sys
-import getpass
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)

@@ -13,6 +13,7 @@ These tests verify:
 
 import threading
 import time
+
 import pytest
 
 from core.database import Database
@@ -55,10 +56,10 @@ class TestConcurrentNormalAccess:
         Database.execute("CREATE TABLE IF NOT EXISTS thread_test (id INTEGER PRIMARY KEY, val INTEGER)")
         Database.execute("DELETE FROM thread_test")
         Database.commit()
-        
+
         results = []
         errors = []
-        
+
         def worker(start, end):
             try:
                 for i in range(start, end):
@@ -68,14 +69,14 @@ class TestConcurrentNormalAccess:
                 results.append(rows[0]["c"])
             except Exception as e:
                 errors.append(e)
-        
+
         t1 = threading.Thread(target=worker, args=(0, 50))
         t2 = threading.Thread(target=worker, args=(100, 150))
         t1.start()
         t2.start()
         t1.join()
         t2.join()
-        
+
         assert errors == [], f"thread errors: {errors}"
         # Each thread saw at least its own 50 rows committed.
         assert all(r >= 50 for r in results)
@@ -94,9 +95,9 @@ class TestMigrationLock:
     def test_acquire_blocks_other_thread_queries(self):
         Database.execute("CREATE TABLE IF NOT EXISTS lock_test (id INTEGER PRIMARY KEY)")
         Database.commit()
-        
+
         other_thread_result = {"raised": None, "elapsed": None}
-        
+
         def blocked_worker():
             t0 = time.perf_counter()
             try:
@@ -106,7 +107,7 @@ class TestMigrationLock:
                 other_thread_result["raised"] = True
                 other_thread_result["error"] = str(e)
             other_thread_result["elapsed"] = time.perf_counter() - t0
-        
+
         # Acquire migration exclusivity on the main thread.
         Database.acquire_for_migration()
         try:
@@ -120,7 +121,7 @@ class TestMigrationLock:
             assert other_thread_result["elapsed"] is None
         finally:
             Database.release_after_migration()
-        
+
         # After release, the worker proceeds. Since we cleared the migration
         # flag before releasing, the worker should succeed (not raise).
         t.join(timeout=5.0)
@@ -136,7 +137,7 @@ class TestMigrationLock:
         checkpoint, credential re-encryption queries, etc.)."""
         Database.execute("CREATE TABLE IF NOT EXISTS migration_self_test (id INTEGER PRIMARY KEY)")
         Database.commit()
-        
+
         Database.acquire_for_migration()
         try:
             # Same thread that acquired: should be able to query freely.
@@ -146,7 +147,7 @@ class TestMigrationLock:
             Database.commit()
         finally:
             Database.release_after_migration()
-        
+
         # And after release, ordinary queries still work.
         assert Database.fetchone("SELECT COUNT(*) AS c FROM migration_self_test")["c"] >= 1
 
@@ -155,10 +156,10 @@ class TestMigrationLock:
         release_after_migration() is called."""
         Database.execute("CREATE TABLE IF NOT EXISTS release_test (id INTEGER PRIMARY KEY)")
         Database.commit()
-        
+
         worker_done = threading.Event()
         worker_error = {"err": None}
-        
+
         def worker():
             try:
                 Database.execute("INSERT INTO release_test DEFAULT VALUES")
@@ -166,13 +167,13 @@ class TestMigrationLock:
             except Exception as e:
                 worker_error["err"] = e
             worker_done.set()
-        
+
         Database.acquire_for_migration()
         t = threading.Thread(target=worker)
         t.start()
         time.sleep(0.1)
         assert not worker_done.is_set(), "worker should be blocked"
-        
+
         Database.release_after_migration()
         # Worker should complete promptly (well under a second).
         assert worker_done.wait(timeout=2.0), "worker did not complete after release"

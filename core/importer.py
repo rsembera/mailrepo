@@ -11,8 +11,8 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 from .config import Config
-from .encryption import Encryption
 from .database import Database
+from .encryption import Encryption
 
 
 class ImportError(Exception):
@@ -24,7 +24,7 @@ def decode_header_value(header: str) -> str:
     """Decode RFC 2047 encoded header."""
     if not header:
         return ""
-    
+
     try:
         parts = decode_header(header)
         decoded = []
@@ -49,12 +49,12 @@ def parse_email_metadata(raw_bytes: bytes) -> dict:
         Dict with subject, sender, date, message_id.
     """
     msg = message_from_bytes(raw_bytes)
-    
+
     subject = decode_header_value(msg.get("Subject", "(no subject)"))
     sender = decode_header_value(msg.get("From", ""))
     date_str = msg.get("Date", "")
     message_id = msg.get("Message-ID", "")
-    
+
     # Parse date to timestamp
     date_ts = None
     if date_str:
@@ -63,7 +63,7 @@ def parse_email_metadata(raw_bytes: bytes) -> dict:
             date_ts = int(dt.timestamp())
         except Exception:
             pass
-    
+
     return {
         "subject": subject[:500] if subject else "(no subject)",  # Truncate long subjects
         "sender": sender[:500] if sender else "",
@@ -92,7 +92,7 @@ def import_eml_file(
     try:
         raw_bytes = filepath.read_bytes()
         metadata = parse_email_metadata(raw_bytes)
-        
+
         # Generate unique filename based on message-id or hash
         if metadata["message_id"]:
             # Clean message-id for filename
@@ -101,15 +101,15 @@ def import_eml_file(
             # Use hash of content
             import hashlib
             safe_id = hashlib.sha256(raw_bytes).hexdigest()[:20]
-        
+
         # Save to archive (always encrypted)
         archive_path = Config.get_archive_path() / str(folder_id)
         archive_path.mkdir(parents=True, exist_ok=True)
-        
+
         encrypted_data = Encryption.encrypt(raw_bytes)
         dest_path = archive_path / f"{safe_id}.eml.enc"
         dest_path.write_bytes(encrypted_data)
-        
+
         # Create database record
         Database.execute(
             """
@@ -127,13 +127,13 @@ def import_eml_file(
                 str(dest_path.relative_to(Config.get_base_path())),
             )
         )
-        
+
         return {
             "success": True,
             "subject": metadata["subject"],
             "message_id": metadata["message_id"],
         }
-        
+
     except Exception as e:
         return {
             "success": False,
@@ -163,29 +163,29 @@ def import_mbox_file(
     try:
         mbox = mailbox.mbox(str(mbox_path))
         total = len(mbox)
-        
+
         results = {
             "total": total,
             "success_count": 0,
             "failed_count": 0,
             "errors": [],
         }
-        
+
         archive_path = Config.get_archive_path() / str(folder_id)
         archive_path.mkdir(parents=True, exist_ok=True)
-        
+
         for i, message in enumerate(mbox):
             try:
                 raw_bytes = message.as_bytes()
                 metadata = parse_email_metadata(raw_bytes)
-                
+
                 # Generate unique filename
                 if metadata["message_id"]:
                     safe_id = metadata["message_id"].strip("<>").replace("/", "_")[:100]
                 else:
                     import hashlib
                     safe_id = hashlib.sha256(raw_bytes).hexdigest()[:20]
-                
+
                 # Ensure unique filename
                 base_id = safe_id
                 counter = 0
@@ -195,11 +195,11 @@ def import_mbox_file(
                         break
                     counter += 1
                     safe_id = f"{base_id}_{counter}"
-                
+
                 # Save file (always encrypted)
                 encrypted_data = Encryption.encrypt(raw_bytes)
                 dest_path.write_bytes(encrypted_data)
-                
+
                 # Create database record
                 Database.execute(
                     """
@@ -217,23 +217,23 @@ def import_mbox_file(
                         str(dest_path.relative_to(Config.get_base_path())),
                     )
                 )
-                
+
                 results["success_count"] += 1
-                
+
             except Exception as e:
                 results["failed_count"] += 1
                 results["errors"].append({
                     "index": i,
                     "error": str(e),
                 })
-            
+
             # Progress callback
             if progress_callback:
                 progress_callback(i + 1, total)
-        
+
         Database.commit()
         return results
-        
+
     except Exception as e:
         raise ImportError(f"Failed to read mbox file: {e}")
 
@@ -251,7 +251,7 @@ def scan_mbox_file(mbox_path: Path) -> dict:
     try:
         mbox = mailbox.mbox(str(mbox_path))
         total = len(mbox)
-        
+
         # Get a few sample subjects
         samples = []
         for i, message in enumerate(mbox):
@@ -263,11 +263,11 @@ def scan_mbox_file(mbox_path: Path) -> dict:
                 "subject": subject[:100],
                 "sender": sender[:100],
             })
-        
+
         return {
             "message_count": total,
             "samples": samples,
         }
-        
+
     except Exception as e:
         raise ImportError(f"Failed to scan mbox file: {e}")

@@ -13,8 +13,8 @@ real destination folder via the `pc_env` fixture.
 
 import pytest
 
-from core.database import Database
 from core import pending_commit as pc
+from core.database import Database
 
 
 @pytest.fixture

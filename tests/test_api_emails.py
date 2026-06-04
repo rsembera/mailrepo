@@ -11,9 +11,7 @@ not mocked.
 
 import secrets
 
-
-from core import Database, Config, Encryption
-
+from core import Config, Database, Encryption
 
 # ---------------------------------------------------------------------------
 # Seeding helpers

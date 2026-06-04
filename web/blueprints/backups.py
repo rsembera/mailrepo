@@ -7,10 +7,11 @@ Note: Authentication is handled by the app's before_request hook,
 so no @login_required decorator is needed on these routes.
 """
 
-from flask import Blueprint, request, jsonify
 from pathlib import Path
 
-from core.database import get_setting, set_setting, Database
+from flask import Blueprint, jsonify, request
+
+from core.database import Database, get_setting, set_setting
 from utils.log import get_logger
 
 log = get_logger()
@@ -27,26 +28,26 @@ backups_bp = Blueprint('backups', __name__)
 def backup_status():
     """Get current backup status."""
     from utils import backup
-    
+
     status = backup.get_backup_status()
-    
+
     # Get settings from database
     status['frequency'] = get_setting('backup_frequency', 'daily')
     status['retention'] = get_setting('backup_retention', 'forever')
     status['post_backup_command'] = get_setting('post_backup_command', '')
-    
+
     # Return saved location, or empty string if using default
     location = get_setting('backup_location', '')
     status['location'] = location
-    
+
     status['cloud_folders'] = backup.detect_cloud_folders()
-    
+
     # Check if restore is pending
     pending = backup.check_restore_pending()
     status['restore_pending'] = pending is not None
     if pending:
         status['restore_point'] = pending.get('point_info', {}).get('display_name', 'Unknown')
-    
+
     return jsonify(status)
 
 
@@ -54,16 +55,16 @@ def backup_status():
 def save_backup_settings():
     """Save backup settings."""
     data = request.get_json()
-    
+
     if 'frequency' in data:
         set_setting('backup_frequency', data['frequency'])
-    
+
     if 'retention' in data:
         set_setting('backup_retention', data['retention'])
-    
+
     if 'post_backup_command' in data:
         set_setting('post_backup_command', data['post_backup_command'])
-    
+
     # Handle location
     if 'location' in data:
         location_value = data['location']
@@ -77,7 +78,7 @@ def save_backup_settings():
                 return jsonify({'success': False, 'error': f'Cannot create backup folder: {e}'}), 400
         else:  # Empty string = clear custom location, use default
             set_setting('backup_location', '')
-    
+
     return jsonify({'success': True})
 
 
@@ -89,33 +90,33 @@ def save_backup_settings():
 def backup_now():
     """Trigger immediate backup. System auto-decides full vs incremental."""
     from utils import backup
-    
+
     # Checkpoint WAL to ensure all changes are in main database file
     Database.checkpoint()
-    
+
     # Note: No need to call refresh_hash_baseline() here.
     # The backup system handles baseline updates internally.
-    
+
     location = get_setting('backup_location', '')
     if not location:
         location = None  # Use default
-    
+
     try:
         # Use create_backup() which auto-decides full vs incremental
         result = backup.create_backup(location)
-        
+
         if result is None:
             return jsonify({
                 'success': True,
                 'message': 'No changes since last backup',
                 'backup': None
             })
-        
+
         # Run retention cleanup
         retention = get_setting('backup_retention', 'forever')
         if retention != 'forever':
             backup.cleanup_old_backups(retention, location)
-        
+
         # Run post-backup command if configured
         post_cmd = get_setting('post_backup_command', '')
         if post_cmd:
@@ -124,7 +125,7 @@ def backup_now():
             if not success:
                 # Log but don't fail the backup
                 log.warning(f"Post-backup command error: {msg}")
-        
+
         return jsonify({
             'success': True,
             'message': 'Backup created',
@@ -138,7 +139,7 @@ def backup_now():
 def list_backups():
     """List all available backups."""
     from utils import backup
-    
+
     location = get_setting('backup_location', '')
     backups_list = backup.list_backups(location if location else None)
     return jsonify({'backups': backups_list})
@@ -152,7 +153,7 @@ def list_backups():
 def restore_points():
     """Get available restore points."""
     from utils import backup
-    
+
     points = backup.get_restore_points()
     return jsonify({'restore_points': points})
 
@@ -161,13 +162,13 @@ def restore_points():
 def prepare_restore():
     """Prepare restore from a specific point."""
     from utils import backup
-    
+
     data = request.get_json()
     restore_point = data.get('restore_point') or data.get('restore_point_id')
-    
+
     if not restore_point:
         return jsonify({'success': False, 'error': 'No restore point specified'}), 400
-    
+
     try:
         staging_path = backup.prepare_restore(restore_point)
         return jsonify({
@@ -183,7 +184,7 @@ def prepare_restore():
 def cancel_restore():
     """Cancel pending restore."""
     from utils import backup
-    
+
     cancelled = backup.cancel_restore()
     return jsonify({
         'success': True,
@@ -199,7 +200,7 @@ def cancel_restore():
 def cloud_folders():
     """Detect available cloud sync folders."""
     from utils import backup
-    
+
     folders = backup.detect_cloud_folders()
     return jsonify({'folders': folders})
 
@@ -224,29 +225,29 @@ def list_folders():
     """
     # Get requested path, default to home directory
     requested_path = request.args.get('path', '')
-    
+
     # Default to home directory if no path provided
     if not requested_path:
         requested_path = str(Path.home())
-    
+
     # Resolve to absolute path
     try:
         current_path = Path(requested_path).expanduser().resolve()
     except Exception as e:
         return jsonify({'error': f'Invalid path: {e}'}), 400
-    
+
     # Check if path exists and is a directory
     if not current_path.exists():
         return jsonify({'error': 'Path does not exist'}), 400
-    
+
     if not current_path.is_dir():
         return jsonify({'error': 'Path is not a directory'}), 400
-    
+
     # Get parent path (null if at filesystem root)
     parent_path = None
     if current_path.parent != current_path:  # Not at root
         parent_path = str(current_path.parent)
-    
+
     # List subdirectories, excluding hidden folders (starting with .)
     folders = []
     try:
@@ -272,7 +273,7 @@ def list_folders():
                     })
     except PermissionError:
         return jsonify({'error': 'Permission denied'}), 403
-    
+
     return jsonify({
         'current_path': str(current_path),
         'parent_path': parent_path,

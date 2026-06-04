@@ -19,18 +19,17 @@ import pytest
 
 from core.config import Config
 from core.encryption import (
+    VERSION_BYTE_V2,
     Encryption,
     InvalidPasswordError,
-    VERSION_BYTE_V2,
 )
 from core.password_change import (
-    change_master_password,
-    PasswordChangeError,
     PasswordChangeCorruptionError,
-    _rekey_file,
+    PasswordChangeError,
     _atomic_write_file,
+    _rekey_file,
+    change_master_password,
 )
-
 
 # ============================================================
 # FIXTURES

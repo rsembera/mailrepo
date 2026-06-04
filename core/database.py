@@ -17,7 +17,6 @@ from typing import Generator, Optional
 
 from .config import Config
 
-
 # Current schema version (increment when schema changes)
 SCHEMA_VERSION = 5
 
@@ -38,16 +37,16 @@ class Database:
     immediately. The migration's own DB calls bypass the flag check by
     matching thread id.
     """
-    
+
     _connection: Optional[sqlite3.Connection] = None
     _db_key: Optional[str] = None
-    
+
     # Threading primitives (added in the crypto refactor; see
     # docs/Crypto_Refactor_Plan.md scope item 5).
     _lock: threading.RLock = threading.RLock()
     _migration_active: bool = False
     _migration_thread_id: Optional[int] = None
-    
+
     @classmethod
     def _check_migration(cls) -> None:
         """Raise if Phase 2 of the crypto migration is active in a different
@@ -58,7 +57,7 @@ class Database:
                 "Database access blocked: crypto migration Phase 2 in progress. "
                 "All other DB operations are paused until the rekey completes."
             )
-    
+
     @classmethod
     def acquire_for_migration(cls) -> None:
         """Take exclusive ownership of the database for Phase 2 of the crypto
@@ -67,7 +66,7 @@ class Database:
         cls._lock.acquire()
         cls._migration_active = True
         cls._migration_thread_id = threading.get_ident()
-    
+
     @classmethod
     def release_after_migration(cls) -> None:
         """Release exclusive ownership taken by acquire_for_migration(). Clears
@@ -75,7 +74,7 @@ class Database:
         cls._migration_thread_id = None
         cls._migration_active = False
         cls._lock.release()
-    
+
     @classmethod
     def set_key(cls, key: str) -> None:
         """
@@ -93,7 +92,7 @@ class Database:
             # Close existing connection if key changes
             if cls._connection is not None:
                 cls.close()
-    
+
     @classmethod
     def get_connection(cls) -> sqlite3.Connection:
         """
@@ -107,28 +106,28 @@ class Database:
             if cls._connection is None:
                 if cls._db_key is None:
                     raise RuntimeError("Database key not set. Call set_key() first.")
-                
+
                 db_path = Config.get_database_path()
                 db_path.parent.mkdir(parents=True, exist_ok=True)
-                
+
                 cls._connection = sqlite3.connect(
                     str(db_path),
                     check_same_thread=False,
                 )
                 cls._connection.row_factory = sqlite3.Row
-                
+
                 # Set encryption key (SQLCipher)
                 if SQLCIPHER_AVAILABLE:
                     cls._connection.execute(f"PRAGMA key = \"x'{cls._db_key}'\"")
-                
+
                 # Enable foreign keys
                 cls._connection.execute("PRAGMA foreign_keys = ON")
-                
+
                 # Enable WAL mode for better concurrency
                 cls._connection.execute("PRAGMA journal_mode = WAL")
-            
+
             return cls._connection
-    
+
     @classmethod
     @contextmanager
     def transaction(cls) -> Generator[sqlite3.Connection, None, None]:
@@ -148,42 +147,42 @@ class Database:
             except Exception:
                 conn.rollback()
                 raise
-    
+
     @classmethod
     def execute(cls, sql: str, params: tuple = ()) -> sqlite3.Cursor:
         """Execute a SQL statement and return the cursor."""
         with cls._lock:
             cls._check_migration()
             return cls.get_connection().execute(sql, params)
-    
+
     @classmethod
     def executemany(cls, sql: str, params_list: list[tuple]) -> sqlite3.Cursor:
         """Execute a SQL statement with multiple parameter sets."""
         with cls._lock:
             cls._check_migration()
             return cls.get_connection().executemany(sql, params_list)
-    
+
     @classmethod
     def fetchone(cls, sql: str, params: tuple = ()) -> Optional[sqlite3.Row]:
         """Execute a query and return the first row."""
         with cls._lock:
             cls._check_migration()
             return cls.execute(sql, params).fetchone()
-    
+
     @classmethod
     def fetchall(cls, sql: str, params: tuple = ()) -> list[sqlite3.Row]:
         """Execute a query and return all rows."""
         with cls._lock:
             cls._check_migration()
             return cls.execute(sql, params).fetchall()
-    
+
     @classmethod
     def commit(cls) -> None:
         """Commit the current transaction."""
         with cls._lock:
             cls._check_migration()
             cls.get_connection().commit()
-    
+
     @classmethod
     def close(cls) -> None:
         """Close the database connection."""
@@ -193,7 +192,7 @@ class Database:
             if cls._connection is not None:
                 cls._connection.close()
                 cls._connection = None
-    
+
     @classmethod
     def checkpoint(cls) -> None:
         """
@@ -205,7 +204,7 @@ class Database:
             cls._check_migration()
             conn = cls.get_connection()
             conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-    
+
     @classmethod
     def initialize(cls) -> None:
         """
@@ -214,10 +213,10 @@ class Database:
         Creates tables if they don't exist, runs migrations if needed.
         """
         conn = cls.get_connection()
-        
+
         # Check current schema version
         current_version = cls._get_schema_version()
-        
+
         if current_version == 0:
             # Fresh install - create all tables
             cls._create_schema(conn)
@@ -226,9 +225,9 @@ class Database:
             # Need to migrate
             cls._migrate(conn, current_version, SCHEMA_VERSION)
             cls._set_schema_version(SCHEMA_VERSION)
-        
+
         conn.commit()
-    
+
     @classmethod
     def _get_schema_version(cls) -> int:
         """Get the current schema version from the database."""
@@ -240,7 +239,7 @@ class Database:
         except sqlite3.OperationalError:
             # Settings table doesn't exist yet
             return 0
-    
+
     @classmethod
     def _set_schema_version(cls, version: int) -> None:
         """Set the schema version in the database."""
@@ -248,12 +247,12 @@ class Database:
             "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
             ("schema_version", str(version)),
         )
-    
+
     @classmethod
     def _create_schema(cls, conn: sqlite3.Connection) -> None:
         """Create the initial database schema."""
         conn.executescript(SCHEMA_SQL)
-    
+
     @classmethod
     def _migrate(cls, conn: sqlite3.Connection, from_version: int, to_version: int) -> None:
         """
@@ -271,11 +270,11 @@ class Database:
             # Add migrations here when needed post-release:
             # 6: cls._migrate_to_v6,
         }
-        
+
         for version in range(from_version + 1, to_version + 1):
             if version in migrations:
                 migrations[version](conn)
-    
+
     # Migration functions — add new ones here post-release
     # @classmethod
     # def _migrate_to_v6(cls, conn: sqlite3.Connection) -> None:

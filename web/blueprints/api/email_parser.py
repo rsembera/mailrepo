@@ -8,10 +8,10 @@ Handles parsing of various email formats:
 - Individual .emlx files (Apple Mail format)
 """
 
+import email as email_lib
+import mailbox
 import os
 import re
-import mailbox
-import email as email_lib
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
 
@@ -33,14 +33,14 @@ def get_emails_from_import_folder(source_path: str, folder_path: str, import_typ
         List of (uid, raw_email_bytes) tuples
     """
     results = []
-    
+
     if import_type == 'eml':
         results = _parse_eml_directory(source_path)
     elif import_type == 'apple-mbox':
         results = _parse_apple_mbox(folder_path)
     elif import_type == 'mbox' and os.path.isfile(source_path):
         results = _parse_standard_mbox(source_path, folder_path)
-    
+
     return results
 
 
@@ -69,7 +69,7 @@ def _parse_apple_mbox(folder_path: str) -> list:
     - A 'Messages' subdirectory with .emlx files
     """
     results = []
-    
+
     # Try standard mbox file inside the .mbox directory
     mbox_internal = os.path.join(folder_path, 'mbox')
     if os.path.exists(mbox_internal):
@@ -80,7 +80,7 @@ def _parse_apple_mbox(folder_path: str) -> list:
         except Exception:
             pass  # Skip unreadable mbox
         return results
-    
+
     # Check for emlx files in Messages subdirectory
     messages_dir = os.path.join(folder_path, 'Messages')
     if os.path.isdir(messages_dir):
@@ -90,7 +90,7 @@ def _parse_apple_mbox(folder_path: str) -> list:
                 email_content = _parse_emlx_file(filepath)
                 if email_content:
                     results.append((f"emlx-{filename}", email_content))
-    
+
     return results
 
 
@@ -108,13 +108,13 @@ def _parse_standard_mbox(source_path: str, folder_path: str) -> list:
         for i, message in enumerate(mbox):
             # Check if email belongs to this folder
             email_folder = message.get("X-Folder") or message.get("X-Gmail-Labels") or ""
-            
+
             # If folder_path is empty/root, include emails without folder or match exactly
             if not folder_path or email_folder == folder_path:
                 results.append((f"mbox-{i}", message.as_bytes()))
     except Exception:
         pass  # Skip unreadable mbox
-    
+
     return results
 
 
@@ -130,7 +130,7 @@ def _parse_emlx_file(filepath: str) -> bytes | None:
     try:
         with open(filepath, 'rb') as f:
             content = f.read()
-        
+
         # Skip the byte count line
         first_newline = content.find(b'\n')
         if first_newline > 0:
@@ -160,15 +160,15 @@ def get_raw_email_from_import(source_path: str, uid: str) -> bytes | None:
     """
     if not source_path or not os.path.exists(source_path):
         return None
-    
+
     # Handle .emlx files (Apple Mail format)
     if source_path.endswith('.emlx'):
         return _parse_emlx_file(source_path)
-    
+
     # Handle mbox files
     if uid.startswith('mbox-') or uid.startswith('apple-'):
         return _get_email_from_mbox_by_index(source_path, uid)
-    
+
     # Handle standalone .eml files
     if source_path.endswith('.eml'):
         try:
@@ -176,7 +176,7 @@ def get_raw_email_from_import(source_path: str, uid: str) -> bytes | None:
                 return f.read()
         except Exception:
             return None
-    
+
     return None
 
 
@@ -212,7 +212,7 @@ def extract_body_text(raw_email: bytes) -> str:
     try:
         msg = email_lib.message_from_bytes(raw_email)
         text_parts = []
-        
+
         def decode_part(part):
             payload = part.get_payload(decode=True)
             if payload:
@@ -222,7 +222,7 @@ def extract_body_text(raw_email: bytes) -> str:
                 except Exception:
                     return payload.decode('utf-8', errors='replace')
             return ""
-        
+
         def strip_html(html):
             """Strip HTML tags and entities, adding spaces for proper tokenization."""
             text = re.sub(r'<style[^>]*>[\s\S]*?</style>', '', html, flags=re.IGNORECASE)
@@ -232,10 +232,10 @@ def extract_body_text(raw_email: bytes) -> str:
             text = re.sub(r'&[a-zA-Z]+;', ' ', text)
             text = re.sub(r'\s+', ' ', text).strip()
             return text
-        
+
         plain_parts = []
         html_parts = []
-        
+
         if msg.is_multipart():
             for part in msg.walk():
                 if part.get_content_type() == 'text/plain':
@@ -247,11 +247,11 @@ def extract_body_text(raw_email: bytes) -> str:
                 plain_parts.append(decode_part(msg))
             elif msg.get_content_type() == 'text/html':
                 html_parts.append(strip_html(decode_part(msg)))
-        
+
         # Prefer HTML-derived text (better tokenization from tag boundaries)
         # Fall back to plain text if no HTML
         text_parts = html_parts if html_parts else plain_parts
-        
+
         return "\n".join(text_parts)[:10000]
     except Exception:
         return ""
@@ -293,17 +293,17 @@ def parse_email_metadata(raw_email: bytes) -> dict:
     """
     try:
         msg = email_lib.message_from_bytes(raw_email)
-        
+
         subject = decode_email_header(msg.get("Subject", ""))[:500] or "(no subject)"
         sender = decode_email_header(msg.get("From", ""))
         message_id = msg.get("Message-ID", "")
         date_str = msg.get("Date", "")
-        
+
         # Extract all recipient fields
         to_addr = decode_email_header(msg.get("To", ""))
         cc_addr = decode_email_header(msg.get("Cc", ""))
         bcc_addr = decode_email_header(msg.get("Bcc", ""))
-        
+
         # Combine recipients for storage and searching
         recipients_parts = []
         if to_addr:
@@ -313,12 +313,12 @@ def parse_email_metadata(raw_email: bytes) -> dict:
         if bcc_addr:
             recipients_parts.append(f"Bcc: {bcc_addr}")
         recipients = "\n".join(recipients_parts)
-        
+
         try:
             date_ts = int(parsedate_to_datetime(date_str).timestamp()) if date_str else None
         except Exception:
             date_ts = None
-        
+
         return {
             "subject": subject,
             "sender": sender,

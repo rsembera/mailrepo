@@ -9,12 +9,13 @@ button in the live email viewer.
 See docs/Stage_Thread_Plan.md for the design rationale.
 """
 
-from flask import request, jsonify
-from core import Database
-from core import IMAP, IMAPError
+from flask import jsonify, request
+
+from core import IMAP, Database, IMAPError
 from core.database import get_setting
 from core.imap import THREAD_MAX_MESSAGES_DEFAULT
 from utils.log import get_logger
+
 from . import api_bp
 
 log = get_logger()

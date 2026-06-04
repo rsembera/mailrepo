@@ -12,8 +12,8 @@ cleared around every test.
 
 import pytest
 
-from web.blueprints import auth
 from core.encryption import Encryption, InvalidPasswordError
+from web.blueprints import auth
 
 
 @pytest.fixture(autouse=True)
