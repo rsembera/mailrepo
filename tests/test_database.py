@@ -134,7 +134,7 @@ class TestFTSIndex:
 
             # Insert a message
             Database.execute(
-                """INSERT INTO messages 
+                """INSERT INTO messages
                    (folder_id, message_id, subject, sender, recipients, body_text, filepath)
                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
                 (folder_id, "<test@example.com>", "Important Meeting",
@@ -173,7 +173,7 @@ class TestFTSIndex:
 
             for msg_id, subject, sender, recipients, body in messages:
                 Database.execute(
-                    """INSERT INTO messages 
+                    """INSERT INTO messages
                        (folder_id, message_id, subject, sender, recipients, body_text, filepath)
                        VALUES (?, ?, ?, ?, ?, ?, ?)""",
                     (folder_id, msg_id, subject, sender, recipients, body, f"/fake/{msg_id}.eml")

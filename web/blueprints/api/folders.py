@@ -384,8 +384,8 @@ def list_vault_folders():
     # Get top-level vault folders (those with retention_date set, not deleted)
     # We need to return the full tree for each, so get all folders first
     all_folders = Database.fetchall(
-        """SELECT id, name, parent_id, color, retention_date, deleted_at 
-           FROM folders 
+        """SELECT id, name, parent_id, color, retention_date, deleted_at
+           FROM folders
            WHERE deleted_at IS NULL"""
     )
 
@@ -438,8 +438,8 @@ def vault_overdue_count():
 
     # Count top-level vault folders that are overdue
     all_folders = Database.fetchall(
-        """SELECT id, parent_id, retention_date 
-           FROM folders 
+        """SELECT id, parent_id, retention_date
+           FROM folders
            WHERE retention_date IS NOT NULL AND deleted_at IS NULL"""
     )
 

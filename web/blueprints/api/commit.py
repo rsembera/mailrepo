@@ -18,14 +18,14 @@ from .email_parser import (
 def create_archive_folder_from_path(archive_path: str, parent_folder_id: int) -> int:
     """
     Create archive folder(s) from a path string.
-    
+
     Args:
         archive_path: Path like "Parent/Child" or just "Child"
         parent_folder_id: Destination folder ID (the folder user selected)
-        
+
     Returns:
         ID of the deepest folder created/found
-    
+
     Example:
         archive_path="Fan Mail/2024", parent_folder_id=5
         Creates: [5] -> "Fan Mail" -> "2024"
@@ -78,10 +78,10 @@ def _save_email_to_archive(raw_email: bytes, folder_id: int, account_id: int | N
                            uid_prefix: str) -> None:
     """
     Encrypt and save a raw email to the archive, inserting a DB row.
-    
+
     This operation is made atomic: if the DB insert fails, the file is deleted.
     If the file write fails, no DB record is created.
-    
+
     Args:
         raw_email: Raw RFC 2822 email bytes.
         folder_id: Destination archive folder ID.
@@ -130,11 +130,11 @@ def _save_email_to_archive(raw_email: bytes, folder_id: int, account_id: int | N
 def commit_import_email(item: dict, results: dict) -> dict:
     """
     Commit a single email from an import source.
-    
+
     Args:
         item: Staged item dict with email data and destinationFolderId
         results: Results dict to update with success/failed/skipped
-        
+
     Returns:
         Progress event dict with status
     """
@@ -181,7 +181,7 @@ def commit_imap_email(client, account_id: int, email_data: dict, folder_id: int,
                       source_folder: str, results: dict, committed_emails: dict) -> dict:
     """
     Commit a single email from IMAP.
-    
+
     Args:
         client: Connected IMAP client
         account_id: IMAP account ID
@@ -190,7 +190,7 @@ def commit_imap_email(client, account_id: int, email_data: dict, folder_id: int,
         source_folder: IMAP source folder name
         results: Results dict to update
         committed_emails: Dict tracking committed emails for post-actions
-        
+
     Returns:
         Progress event dict with status
     """
@@ -236,7 +236,7 @@ def commit_import_folder(folder_item: dict, target_folder_id: int, folder_idx: i
                          folder_count: int, results: dict):
     """
     Generator that commits all emails from an import folder.
-    
+
     Yields progress events for each email.
     """
     import_path = folder_item.get("importPath")
@@ -301,7 +301,7 @@ def commit_imap_folder(folder_item: dict, target_folder_id: int, folder_idx: int
                        folder_count: int, results: dict):
     """
     Generator that commits all emails from an IMAP folder.
-    
+
     Yields progress events for each email.
     """
     account_id = folder_item.get("accountId")
@@ -415,12 +415,12 @@ def commit_imap_folder(folder_item: dict, target_folder_id: int, folder_idx: int
 def apply_post_commit_actions(committed_emails: dict, source_actions: dict, results: dict):
     """
     Apply post-commit actions (archive, trash, delete) on IMAP server.
-    
+
     Args:
         committed_emails: Dict of {account_id: {folder: [(uid, dest_folder_id), ...]}}
         source_actions: Dict of action keys to action type
         results: Results dict with post_actions counters
-    
+
     Yields status events.
     """
     if not committed_emails or not source_actions:
@@ -483,7 +483,7 @@ def apply_post_commit_actions(committed_emails: dict, source_actions: dict, resu
 def _find_action_for_source(source_actions: dict, account_id: int, source_folder: str) -> str | None:
     """
     Find the action for a specific source folder.
-    
+
     Source action keys can be in various formats:
     - "account:1:5" (account:account_id:dest_folder_id)
     - "account:1:INBOX:5" (account:account_id:source_folder:dest_folder_id)

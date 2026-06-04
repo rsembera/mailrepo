@@ -138,7 +138,7 @@ def get_file_hashes():
     """
     Calculate hashes for all backup files.
     Returns tuple: (hashes_dict, file_info_dict)
-    
+
     Uses smart change detection: only rehashes files where mtime/size changed.
     """
     files = get_all_backup_files()
@@ -175,7 +175,7 @@ def get_file_hashes():
 def has_file_changes():
     """
     Quick check if any files have changed since last backup.
-    
+
     Uses mtime/size comparison only - no hashing required.
     Returns True if any file appears changed or is new/deleted.
     """
@@ -288,7 +288,7 @@ def _get_baseline_hashes():
 def _save_baseline_hashes(hashes, file_info=None):
     """
     Save hash baseline to external state file.
-    
+
     Args:
         hashes: Dict of {relative_path: hash}
         file_info: Optional dict of {relative_path: {hash, mtime, size}}
@@ -319,7 +319,7 @@ def _save_baseline_hashes(hashes, file_info=None):
 def refresh_hash_baseline():
     """
     DEPRECATED: This function exists for backward compatibility only.
-    
+
     The new system automatically updates the baseline in create_backup(),
     so manual refresh is no longer needed.
     """
@@ -378,15 +378,15 @@ def validate_backup_location(backup_dir):
 def create_backup(backup_dir=None):
     """
     Create a backup, automatically deciding between full and incremental.
-    
+
     Decision logic:
     - No previous backups → full
     - Last full backup > 7 days old → full
     - Otherwise → incremental (only changed files)
-    
+
     Args:
         backup_dir: Optional custom backup directory (for cloud folders)
-    
+
     Returns:
         dict with backup info, or None if no changes (for incremental)
     """
@@ -419,10 +419,10 @@ def create_backup(backup_dir=None):
 def create_full_backup(backup_dir=None):
     """
     Create a full backup of all data.
-    
+
     Args:
         backup_dir: Optional custom backup directory (for cloud folders)
-    
+
     Returns:
         dict with backup info or raises exception
     """
@@ -499,10 +499,10 @@ def create_full_backup(backup_dir=None):
 def create_incremental_backup(backup_dir=None):
     """
     Create an incremental backup (only changed files since last backup).
-    
+
     Args:
         backup_dir: Optional custom backup directory
-    
+
     Returns:
         dict with backup info, or None if no changes
     """
@@ -617,7 +617,7 @@ def list_backups(location: str | Path | None = None):
     """
     List all available backups with details.
     Returns list sorted by date (newest first).
-    
+
     Args:
         location: Ignored (kept for API compatibility). Each backup's
                   stored location is used to check if file exists.
@@ -649,12 +649,12 @@ def list_backups(location: str | Path | None = None):
 def get_restore_points():
     """
     Get available restore points.
-    
+
     ALL backups are valid restore points:
     - Full backups restore directly
     - Incremental backups restore by applying chain (full + incrementals)
     - Pre-restore backups are also valid restore points
-    
+
     Returns list of restore points with display info.
     """
     manifest = load_manifest()
@@ -762,7 +762,7 @@ def prepare_restore(restore_point_id):
     """
     Prepare for restore by extracting to staging folder.
     Does NOT replace production files yet.
-    
+
     Returns path to staging folder.
     """
     restore_points = get_restore_points()
@@ -862,7 +862,7 @@ def complete_restore():
     """
     Complete a pending restore by replacing production files.
     Should be called at startup before database is opened.
-    
+
     Returns dict with restore info or None if no restore pending.
     """
     staging_dir = get_restore_staging_dir()
@@ -920,13 +920,13 @@ def cancel_restore():
 def cleanup_old_backups(retention, custom_location=None):
     """
     Delete backups older than the retention period.
-    
+
     Retention periods:
     - '1_month': 30 days
-    - '6_months': 180 days  
+    - '6_months': 180 days
     - '1_year': 365 days
     - 'forever': no deletion
-    
+
     Rules:
     - Always keep at least one valid restore point
     - Delete entire chains when their newest incremental exceeds retention
@@ -1139,15 +1139,15 @@ def detect_cloud_folders():
 def check_backup_needed(frequency='daily'):
     """
     Check if an automatic backup should run.
-    
+
     Uses CALENDAR DATE comparison against last check date, not hours:
     - 'daily': check if last check was on a different calendar date
     - 'weekly': check if last check was 7+ calendar days ago
     - 'session': always run on logout
-    
+
     Args:
         frequency: 'session', 'daily', 'weekly', or 'manual'
-    
+
     Returns:
         True if backup should run, False otherwise
     """

@@ -19,16 +19,16 @@ from email.utils import parsedate_to_datetime
 def get_emails_from_import_folder(source_path: str, folder_path: str, import_type: str) -> list:
     """
     Get emails belonging DIRECTLY to a specific folder in an import.
-    
+
     IMPORTANT: Only returns emails that are direct children of the folder,
     NOT emails from nested subfolders. This ensures that staging a parent
     folder without its children only archives the parent's direct emails.
-    
+
     Args:
         source_path: Path to the mbox file or Apple Mail export root
         folder_path: Full path to the specific folder (e.g., "/path/to/Parent.mbox/Child.mbox")
         import_type: 'mbox', 'apple-mbox', or 'eml'
-        
+
     Returns:
         List of (uid, raw_email_bytes) tuples
     """
@@ -63,7 +63,7 @@ def _parse_eml_directory(source_path: str) -> list:
 def _parse_apple_mbox(folder_path: str) -> list:
     """
     Parse Apple Mail export (.mbox directory).
-    
+
     Apple Mail .mbox directories can contain either:
     - An 'mbox' file (standard mbox format)
     - A 'Messages' subdirectory with .emlx files
@@ -97,7 +97,7 @@ def _parse_apple_mbox(folder_path: str) -> list:
 def _parse_standard_mbox(source_path: str, folder_path: str) -> list:
     """
     Parse a standard mbox file, filtering by folder header for exact match.
-    
+
     Args:
         source_path: Path to the mbox file
         folder_path: Folder path to filter by (emails in child folders excluded)
@@ -121,7 +121,7 @@ def _parse_standard_mbox(source_path: str, folder_path: str) -> list:
 def _parse_emlx_file(filepath: str) -> bytes | None:
     """
     Parse an Apple Mail .emlx file.
-    
+
     .emlx format:
     - First line: byte count of email content
     - Email content (RFC 822 format)
@@ -148,13 +148,13 @@ def _parse_emlx_file(filepath: str) -> bytes | None:
 def get_raw_email_from_import(source_path: str, uid: str) -> bytes | None:
     """
     Get raw email content from an imported source by UID.
-    
+
     Used during commit to fetch specific emails for archiving.
-    
+
     Args:
         source_path: Path to mbox file or emlx/eml file
         uid: Email UID (e.g., "mbox-5", "emlx-12345.emlx", "eml-0")
-        
+
     Returns:
         Raw email bytes or None if not found
     """
@@ -199,13 +199,13 @@ def _get_email_from_mbox_by_index(source_path: str, uid: str) -> bytes | None:
 def extract_body_text(raw_email: bytes) -> str:
     """
     Extract plain text from email for full-text search indexing.
-    
+
     Walks multipart messages to find text/plain parts and concatenates them.
     Limits output to 10,000 characters for database storage.
-    
+
     Args:
         raw_email: Raw email bytes (RFC 822 format)
-        
+
     Returns:
         Plain text content, truncated to 10,000 chars
     """
@@ -260,10 +260,10 @@ def extract_body_text(raw_email: bytes) -> str:
 def decode_email_header(header_value: str) -> str:
     """
     Decode an email header that may contain encoded words (RFC 2047).
-    
+
     Args:
         header_value: Raw header value
-        
+
     Returns:
         Decoded string
     """
@@ -282,12 +282,12 @@ def decode_email_header(header_value: str) -> str:
 def parse_email_metadata(raw_email: bytes) -> dict:
     """
     Parse email metadata from raw bytes.
-    
+
     Returns a dict with: subject, sender, recipients, message_id, date
-    
+
     Args:
         raw_email: Raw email bytes
-        
+
     Returns:
         Dict with parsed metadata fields
     """

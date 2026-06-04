@@ -6,11 +6,11 @@ import subprocess
 def run_shell_command(command: str, timeout: int = 300) -> tuple[bool, str]:
     """
     Run a shell command.
-    
+
     Args:
         command: Command string to run (supports pipes, redirects, etc.)
         timeout: Timeout in seconds (default 300)
-        
+
     Returns:
         Tuple of (success: bool, message: str)
     """

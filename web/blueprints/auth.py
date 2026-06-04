@@ -63,7 +63,7 @@ def _gc_pw_change_jobs():
 def _check_rate_limit(ip: str) -> tuple[bool, int]:
     """
     Check if IP is rate limited.
-    
+
     Returns:
         (allowed: bool, seconds_remaining: int)
     """
@@ -158,7 +158,7 @@ def cleanup_expired_trash():
 def setup():
     """
     First-run setup: create master password.
-    
+
     Only accessible if encryption hasn't been initialized yet.
     """
     # Redirect if already set up
@@ -206,7 +206,7 @@ def setup():
 def login():
     """
     Login with master password.
-    
+
     Redirects to setup if not initialized.
     Rate limited to prevent brute-force attacks.
     """

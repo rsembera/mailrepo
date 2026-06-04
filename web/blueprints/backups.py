@@ -212,10 +212,10 @@ def cloud_folders():
 @backups_bp.route('/api/backup/list-folders')
 def list_folders():
     """List folders at a given path for the folder picker modal.
-    
+
     Query params:
         path: Directory path to list (defaults to home directory)
-    
+
     Returns:
         JSON with:
             - current_path: The resolved absolute path

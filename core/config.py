@@ -23,7 +23,7 @@ class Config:
     def get_base_path(cls) -> Path:
         """
         Get the base path for all MailRepo data.
-        
+
         Defaults to the application directory, can be overridden with MAILREPO_DATA_DIR.
         """
         if cls._base_path is None:

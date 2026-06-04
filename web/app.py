@@ -16,10 +16,10 @@ from core.database import get_setting
 def create_app(test_config: dict = None) -> Flask:
     """
     Application factory for MailRepo.
-    
+
     Args:
         test_config: Optional configuration dict for testing.
-        
+
     Returns:
         Configured Flask application.
     """

@@ -11,12 +11,12 @@ from core import Database
 def get_cached_emails(account_id: int, folder: str, uidvalidity: int) -> list[dict]:
     """
     Get cached email headers for a folder.
-    
+
     Args:
         account_id: IMAP account ID
         folder: Folder name (e.g., "INBOX")
         uidvalidity: IMAP UIDVALIDITY value for cache validation
-        
+
     Returns:
         List of email header dicts sorted by UID descending
     """
@@ -43,7 +43,7 @@ def get_cached_emails(account_id: int, folder: str, uidvalidity: int) -> list[di
 def get_highest_cached_uid(account_id: int, folder: str, uidvalidity: int) -> int:
     """
     Get the highest UID in cache for incremental sync.
-    
+
     Used to determine which emails are new since last sync.
     """
     row = Database.fetchone(
@@ -73,7 +73,7 @@ def clear_folder_cache(account_id: int, folder: str):
 def get_any_cached_emails(account_id: int, folder: str) -> list[dict]:
     """
     Get cached emails regardless of UIDVALIDITY (for offline mode).
-    
+
     Used when IMAP connection fails but we have cached data.
     """
     rows = Database.fetchall(
@@ -99,7 +99,7 @@ def get_any_cached_emails(account_id: int, folder: str) -> list[dict]:
 def cache_email(account_id: int, folder: str, uidvalidity: int, email: dict):
     """
     Cache a single email header.
-    
+
     Uses INSERT OR REPLACE to handle both new and updated emails.
     """
     Database.execute(
@@ -123,13 +123,13 @@ def cache_email(account_id: int, folder: str, uidvalidity: int, email: dict):
 def remove_stale_cache_entries(account_id: int, folder: str, uidvalidity: int, valid_uids: list) -> int:
     """
     Remove cached emails that no longer exist on the server.
-    
+
     Args:
         account_id: IMAP account ID
         folder: Folder name
         uidvalidity: Current UIDVALIDITY
         valid_uids: List of UIDs that currently exist on server
-        
+
     Returns:
         Number of stale entries removed
     """

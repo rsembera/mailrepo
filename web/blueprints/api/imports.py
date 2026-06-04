@@ -143,13 +143,13 @@ def import_eml():
 def get_import_email():
     """
     Fetch full email content from an import source.
-    
+
     Request body:
         sourcePath: Path to mbox file or directory
         uid: Email UID (e.g., "mbox-5", "eml-0", "apple-3")
         importType: 'mbox', 'apple-mbox', or 'eml'
         folderPath: (optional) For apple-mbox, path to specific .mbox folder
-    
+
     Returns:
         email: Full email data including body
     """
@@ -428,7 +428,7 @@ def get_import_email():
 def download_import_attachment():
     """
     Download an attachment from an import source email.
-    
+
     Request body:
         sourcePath: Path to mbox file or directory
         uid: Email UID
@@ -437,7 +437,7 @@ def download_import_attachment():
         emailSourcePath: (optional) Direct path to email file
         index: Attachment index (0-based)
         inline: (optional) If true, display inline instead of download
-    
+
     Returns:
         Attachment file data
     """

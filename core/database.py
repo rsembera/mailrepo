@@ -24,10 +24,10 @@ SCHEMA_VERSION = 5
 class Database:
     """
     SQLCipher encrypted database manager for MailRepo.
-    
+
     Provides connection management, schema creation, and query helpers.
     The entire database is encrypted at rest using the master password.
-    
+
     Thread safety: every public method acquires _lock (an RLock, so a
     single thread can re-acquire across nested calls). During the crypto
     migration's Phase 2, the migration thread acquires the lock once,
@@ -79,10 +79,10 @@ class Database:
     def set_key(cls, key: str) -> None:
         """
         Set the database encryption key.
-        
+
         Must be called before any database operations.
         The key should be derived from the master password.
-        
+
         Args:
             key: Hex-encoded encryption key.
         """
@@ -97,7 +97,7 @@ class Database:
     def get_connection(cls) -> sqlite3.Connection:
         """
         Get the database connection, creating it if necessary.
-        
+
         Returns:
             SQLite/SQLCipher connection with row factory set.
         """
@@ -133,7 +133,7 @@ class Database:
     def transaction(cls) -> Generator[sqlite3.Connection, None, None]:
         """
         Context manager for database transactions.
-        
+
         Automatically commits on success, rolls back on exception.
         Holds the database lock for the full transaction so nested DB
         operations all execute under the same critical section.
@@ -197,7 +197,7 @@ class Database:
     def checkpoint(cls) -> None:
         """
         Checkpoint the WAL file to ensure all changes are in main database.
-        
+
         Important to call before backup to ensure backup includes all data.
         """
         with cls._lock:
@@ -209,7 +209,7 @@ class Database:
     def initialize(cls) -> None:
         """
         Initialize the database schema.
-        
+
         Creates tables if they don't exist, runs migrations if needed.
         """
         conn = cls.get_connection()
@@ -257,10 +257,10 @@ class Database:
     def _migrate(cls, conn: sqlite3.Connection, from_version: int, to_version: int) -> None:
         """
         Run database migrations.
-        
+
         Each migration is a function that takes a connection and applies changes
         for that version. Migrations run sequentially from from_version+1 to to_version.
-        
+
         Args:
             conn: Database connection.
             from_version: Current schema version.

@@ -41,10 +41,10 @@ def decode_header_value(header: str) -> str:
 def parse_email_metadata(raw_bytes: bytes) -> dict:
     """
     Extract metadata from raw email bytes.
-    
+
     Args:
         raw_bytes: Raw RFC 2822 email.
-        
+
     Returns:
         Dict with subject, sender, date, message_id.
     """
@@ -79,13 +79,13 @@ def import_eml_file(
 ) -> dict:
     """
     Import a single .eml file into the archive.
-    
+
     All imported files are encrypted at rest.
-    
+
     Args:
         filepath: Path to .eml file.
         folder_id: Destination folder ID.
-        
+
     Returns:
         Dict with import result (success, message_id, error).
     """
@@ -113,7 +113,7 @@ def import_eml_file(
         # Create database record
         Database.execute(
             """
-            INSERT INTO messages 
+            INSERT INTO messages
             (folder_id, source_account_id, message_id, subject, sender, date, filepath)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
@@ -149,14 +149,14 @@ def import_mbox_file(
 ) -> dict:
     """
     Import all emails from an .mbox file into the archive.
-    
+
     All imported files are encrypted at rest.
-    
+
     Args:
         mbox_path: Path to .mbox file.
         folder_id: Destination folder ID.
         progress_callback: Optional callback(current, total) for progress updates.
-        
+
     Returns:
         Dict with import results (total, success_count, failed_count, errors).
     """
@@ -203,7 +203,7 @@ def import_mbox_file(
                 # Create database record
                 Database.execute(
                     """
-                    INSERT INTO messages 
+                    INSERT INTO messages
                     (folder_id, source_account_id, message_id, subject, sender, date, filepath)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
@@ -241,10 +241,10 @@ def import_mbox_file(
 def scan_mbox_file(mbox_path: Path) -> dict:
     """
     Scan an mbox file and return summary without importing.
-    
+
     Args:
         mbox_path: Path to .mbox file.
-        
+
     Returns:
         Dict with message_count and sample subjects.
     """

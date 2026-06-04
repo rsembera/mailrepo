@@ -78,12 +78,12 @@ def is_mbox_file(filepath, name):
 def browse_filesystem():
     """
     Browse a directory and return its contents.
-    
+
     Request body:
         path: Directory path to browse (default: home)
         show_hidden: Whether to show hidden files (default: false)
         filter: Optional filter - 'dirs_only', 'mbox', 'eml'
-    
+
     Returns:
         path: Current path
         parent: Parent path (null if at root)
@@ -171,10 +171,10 @@ def browse_filesystem():
 def scan_eml_folder():
     """
     Scan a folder for .eml files.
-    
+
     Request body:
         path: Directory path to scan
-    
+
     Returns:
         path: Scanned path
         folder_name: Name of the folder
@@ -229,10 +229,10 @@ def scan_eml_folder():
 def read_file_content():
     """
     Read a file's content (for parsing emails client-side).
-    
+
     Request body:
         path: File path to read
-    
+
     Returns:
         content: File content as text
     """
@@ -280,10 +280,10 @@ def read_file_content():
 def parse_mbox_file():
     """
     Parse an mbox file and return email metadata with proper encoding.
-    
+
     Request body:
         path: Path to mbox file
-    
+
     Returns:
         emails: List of {uid, subject, from, to, date, message_id}
         count: Number of emails
@@ -377,10 +377,10 @@ def parse_mbox_file():
 def parse_eml_file():
     """
     Parse an eml file and return email metadata with proper encoding.
-    
+
     Request body:
         path: Path to eml file
-    
+
     Returns:
         email: {uid, subject, from, to, date, message_id}
     """
@@ -435,14 +435,14 @@ def parse_eml_file():
 def scan_apple_mbox_folder():
     """
     Scan a folder for Apple Mail mbox export structure.
-    
+
     Apple Mail exports create:
     - FolderName.mbox/ (contains mbox file + table_of_contents)
     - FolderName/ (contains SubFolder.mbox/ for each subfolder)
-    
+
     Request body:
         path: Path to the export folder
-    
+
     Returns:
         tree: Nested structure of folders with email counts
     """
@@ -604,7 +604,7 @@ def scan_apple_mbox_folder():
 def check_pst_support():
     """
     Check if PST import is supported (readpst is installed).
-    
+
     Returns:
         supported: Boolean indicating if PST import is available
         message: Status message
@@ -630,10 +630,10 @@ def check_pst_support():
 def convert_pst_to_mbox():
     """
     Convert a PST file to mbox format using readpst.
-    
+
     Request body:
         path: Path to .pst file
-    
+
     Returns:
         mbox_path: Path to the converted mbox file
         folder_count: Number of folders extracted
@@ -741,7 +741,7 @@ def convert_pst_to_mbox():
 def cleanup_pst_temp():
     """
     Clean up temporary files from PST conversion.
-    
+
     Request body:
         temp_dir: Path to temporary directory to remove
     """

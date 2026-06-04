@@ -15,7 +15,7 @@ main_bp = Blueprint("main", __name__)
 def index():
     """
     Main dashboard / inbox view.
-    
+
     Shows email list from selected account, folder sidebar, staging controls.
     """
     # Check if any folders exist
@@ -39,7 +39,7 @@ def index():
 def create_archive():
     """
     Create a new archive folder.
-    
+
     First-run experience lands here after password setup.
     """
     if request.method == "POST":

@@ -58,14 +58,14 @@ class IMAPError(Exception):
 class IMAP:
     """
     IMAP client for MailRepo.
-    
+
     Handles connection, authentication, and email fetching from any IMAP server.
     """
 
     def __init__(self, host: str, port: int = 993, use_ssl: bool = True):
         """
         Initialize IMAP connection.
-        
+
         Args:
             host: IMAP server hostname.
             port: IMAP port (default 993 for SSL).
@@ -80,10 +80,10 @@ class IMAP:
     def detect_server(cls, email_address: str) -> tuple[str, int] | None:
         """
         Auto-detect IMAP server from email domain.
-        
+
         Args:
             email_address: User's email address.
-            
+
         Returns:
             Tuple of (host, port) or None if not found.
         """
@@ -113,7 +113,7 @@ class IMAP:
     def login(self, email_address: str, password: str) -> None:
         """
         Authenticate with IMAP server.
-        
+
         Args:
             email_address: Email address (username).
             password: Password or app-specific password.
@@ -138,7 +138,7 @@ class IMAP:
     def list_folders(self) -> list[dict]:
         """
         Get list of IMAP folders (mailboxes).
-        
+
         Returns:
             List of folder dicts with 'name', 'delimiter', and 'raw'.
         """
@@ -186,10 +186,10 @@ class IMAP:
     def select_folder(self, folder: str = "INBOX") -> dict:
         """
         Select a folder for operations.
-        
+
         Args:
             folder: Folder name (default INBOX).
-            
+
         Returns:
             Dict with folder info (message_count, uidvalidity, highestmodseq).
         """
@@ -245,11 +245,11 @@ class IMAP:
     def search(self, criteria: str = "ALL", limit: int = 0) -> list[str]:
         """
         Search for messages in selected folder.
-        
+
         Args:
             criteria: IMAP search criteria (default ALL).
             limit: Maximum messages to return (0 = no limit).
-            
+
         Returns:
             List of message UIDs.
         """
@@ -280,10 +280,10 @@ class IMAP:
     def fetch_headers(self, uid: str) -> dict:
         """
         Fetch message headers (lightweight).
-        
+
         Args:
             uid: Message UID.
-            
+
         Returns:
             Dict with subject, from, to, date, etc.
         """
@@ -319,10 +319,10 @@ class IMAP:
     def fetch_raw(self, uid: str) -> bytes:
         """
         Fetch complete raw message (for saving as .eml).
-        
+
         Args:
             uid: Message UID.
-            
+
         Returns:
             Raw RFC 2822 email bytes.
         """
@@ -341,10 +341,10 @@ class IMAP:
     def fetch_full(self, uid: str) -> dict:
         """
         Fetch complete message with parsed body for viewing.
-        
+
         Args:
             uid: Message UID.
-            
+
         Returns:
             Dict with headers and body (text and/or html).
         """
@@ -855,7 +855,7 @@ class IMAP:
                          host: str, port: int, use_ssl: bool = True) -> None:
         """
         Save encrypted IMAP credentials to database.
-        
+
         Args:
             account_id: Database account ID.
             email: Email address.
@@ -886,10 +886,10 @@ class IMAP:
     def load_credentials(cls, encrypted_creds: str) -> dict | None:
         """
         Load and decrypt IMAP credentials.
-        
+
         Args:
             encrypted_creds: Encrypted credentials from database.
-            
+
         Returns:
             Dict with email, password, host, port, use_ssl or None.
         """
@@ -907,10 +907,10 @@ class IMAP:
     def connect_with_credentials(cls, encrypted_creds: str) -> "IMAP":
         """
         Create connected and authenticated IMAP client from stored credentials.
-        
+
         Args:
             encrypted_creds: Encrypted credentials from database.
-            
+
         Returns:
             Connected IMAP instance.
         """
@@ -929,14 +929,14 @@ class IMAP:
                         host: str, port: int, use_ssl: bool = True) -> dict:
         """
         Test IMAP connection without saving credentials.
-        
+
         Args:
             email: Email address.
             password: Password.
             host: IMAP server.
             port: IMAP port.
             use_ssl: Use SSL.
-            
+
         Returns:
             Dict with success status and folder count or error.
         """
@@ -1024,11 +1024,11 @@ class IMAP:
     def move_email(self, uid: str, destination_folder: str) -> bool:
         """
         Move an email to another folder (copy + delete from source).
-        
+
         Args:
             uid: Message UID.
             destination_folder: Destination folder name.
-            
+
         Returns:
             True if successful.
         """
@@ -1056,10 +1056,10 @@ class IMAP:
     def archive_email(self, uid: str) -> bool:
         """
         Move email to Archive folder.
-        
+
         Args:
             uid: Message UID.
-            
+
         Returns:
             True if successful, raises IMAPError if archive folder not found.
         """
@@ -1072,10 +1072,10 @@ class IMAP:
     def trash_email(self, uid: str) -> bool:
         """
         Move email to Trash folder.
-        
+
         Args:
             uid: Message UID.
-            
+
         Returns:
             True if successful, raises IMAPError if trash folder not found.
         """
@@ -1088,10 +1088,10 @@ class IMAP:
     def delete_email(self, uid: str) -> bool:
         """
         Permanently delete email (mark deleted + expunge).
-        
+
         Args:
             uid: Message UID.
-            
+
         Returns:
             True if successful.
         """

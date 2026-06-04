@@ -15,10 +15,10 @@ _logger = None
 def get_logger(name: str = "mailrepo") -> logging.Logger:
     """
     Get a configured logger instance.
-    
+
     Args:
         name: Logger name (typically module name)
-        
+
     Returns:
         Configured logger instance
     """
