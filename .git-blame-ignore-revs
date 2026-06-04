@@ -1,0 +1,8 @@
+# Revisions to ignore when running `git blame`.
+#
+# Configure once per clone with:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub's blame UI honours this file automatically.
+
+# Style: apply ruff format across the Python codebase
+27ac2357db2d6328ed04a5bad40ead247e91d038
