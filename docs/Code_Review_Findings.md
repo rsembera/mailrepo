@@ -237,3 +237,36 @@ completed cleanly, and the archive re-locked and re-opened with the new
 password with mail bodies decrypting correctly. All nine findings plus this
 manual verification are now closed; no code-review items remain open
 pre-tag.
+
+---
+
+## Addendum — June 4, 2026 (Session 43): repo-wide lint pass
+
+Re-verifying the findings against source before the tag surfaced a
+mismatch on **#9**: the doc recorded the bare `except:` as fixed (it cited
+one line in `accounts.py`), but the file had since grown new bare excepts,
+and a full ruff sweep found **32** of them across 11 files — a long-standing
+codebase style, not a regression. Rather than spot-fix the one, the whole
+class was cleaned and a broader ruff pass run (`select = E, F, W, I`).
+
+What changed (two commits, full suite green at 320 throughout):
+- **E722 (32):** every bare `except:` → `except Exception:`. Net
+  correctness gain in the SSE generators, where a bare except had been
+  swallowing `GeneratorExit` and could interfere with stream cleanup.
+- **F401 / F841 / F811 / F541 (37):** removed genuinely-unused imports and
+  locals, a duplicate `parsedate_to_datetime` import, and empty f-strings.
+  Among these, a dead `old_db_key_hex` derivation in the password-change
+  verify path (verification uses the file key; the DB rekey uses the live
+  connection, so the old DB key was never needed — consistent with #1's
+  manual test passing).
+- **E702 (2):** split a semicolon idiom in the threading test.
+- **W291 / W293 / I001 (1119):** trailing/blank-line whitespace and import
+  ordering — mechanical, behavior-preserving.
+- **Intentional patterns documented, not broken,** via `per-file-ignores`
+  in `pyproject.toml`: the `api/__init__.py` route-registration imports
+  (`F401` + `E402` — must follow the `Blueprint()` definition) and the
+  `sys.path`-insert-then-import entry point + dev probe scripts (`E402`).
+
+The codebase is now ruff-clean except for 171 whitespace-inside-string
+findings (e.g. the `SCHEMA_SQL` block), left untouched on purpose because
+fixing them would alter string contents rather than formatting.

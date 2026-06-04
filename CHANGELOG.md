@@ -43,6 +43,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   FTS5's default is whole-word matching.
 
 ### Refactored (no behavior change)
+- **Repo-wide lint pass (Session 43, ruff E/F/W/I).** Converted all 32
+  bare `except:` to `except Exception:` (also stops the SSE generators
+  swallowing `GeneratorExit`), removed unused imports/locals and empty
+  f-strings, split a semicolon idiom, and applied whitespace + import
+  ordering. Intentional patterns (route-registration imports, the
+  `sys.path` entry point and dev scripts) are documented via
+  `per-file-ignores` rather than altered. Suite green at 320; codebase
+  is ruff-clean apart from intentional whitespace inside string literals.
 - **Frontend dispatch model unified.** Replaced every inline
   `onclick="..."` attribute (in render-generated HTML and the
   `index.html` template) and every cross-module `window.X = X`

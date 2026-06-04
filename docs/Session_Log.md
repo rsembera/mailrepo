@@ -2396,3 +2396,75 @@ design). Remaining before the tag: the pre-tag items still open in the
 code review, then the dogfooding period itself, then `git tag v1.0.0`
 paired with the website update. Packaging (`.deb` / `.dmg`) is the
 flagged next focus after the tag.
+
+
+---
+
+## Session 43 — June 4, 2026 (Apollo)
+
+### Pre-tag verification + repo-wide lint pass
+
+Verified the three pre-tag blockers and the cleanup items against actual
+source (not the findings doc), then did a full ruff pass. Worked on
+Apollo this session; it was 5 commits behind origin at the start (the
+Session 42 test commits + the June 2 password-change confirmation) — Rick
+pulled it current before the code changes.
+
+**Verification result:**
+- **#1 (master password in cookie):** fixed, confirmed in source —
+  `auth.py` holds passwords in a server-side `_pw_change_jobs` dict keyed
+  by `secrets.token_urlsafe(32)`, TTL-GC'd; nothing in the session.
+- **#3 (JSON 500 handler):** fixed — `@app.errorhandler(Exception)` in
+  `app.py`.
+- **#4 (modal listener accumulation):** fixed — `actionsBound` guard in
+  `move-email-modal.js` and `vault.js`.
+- **#7, #8:** fixed (schema block, test label).
+- **#9 (bare except in accounts.py):** the doc said fixed, the code
+  disagreed. The originally-cited line was addressed, but the file had
+  grown new bare excepts and a ruff sweep found **32** across 11 files.
+  This is exactly the doc-vs-source mismatch worth catching pre-tag —
+  the lesson reinforced: verify claims against source, the doc can drift.
+
+**Lint pass (ruff E/F/W/I), two commits, suite green at 320 throughout:**
+- `56639a1` — substantive: all 32 bare `except:` → `except Exception:`
+  (also a real fix in the SSE generators, which had been swallowing
+  `GeneratorExit`); 37 F-rule removals (unused imports/locals, a
+  duplicate `parsedate_to_datetime` import, empty f-strings, the dead
+  `old_db_key_hex` derivation in the password-change verify path); split
+  a semicolon idiom; `per-file-ignores` documenting the intentional
+  route-registration imports and `sys.path` entry point / dev scripts.
+- `31f921b` — cosmetic: 1119 whitespace + import-ordering fixes,
+  behavior-preserving.
+
+Codebase is now ruff-clean except for 171 whitespace-inside-string
+findings (e.g. the `SCHEMA_SQL` block), deliberately left — fixing them
+would edit string contents, not formatting.
+
+### Notes
+
+- Confirmed `except Exception:` is the right call everywhere here: no
+  spot legitimately wants to swallow `KeyboardInterrupt`/`SystemExit`,
+  and in the SSE generators it's strictly safer (lets `GeneratorExit`
+  propagate for cleanup).
+- Did **not** blind-run `ruff --fix`: the 11 `F401`s in
+  `web/blueprints/api/__init__.py` are side-effect imports that register
+  every API route — ruff correctly marks them unfixable; removing them
+  would 404 the whole API. Left them, added a documented per-file-ignore.
+- Ran the full suite (5 min) after the substantive changes and again
+  after the import-reordering pass, since `I001` reorders across ~50
+  files and reordering can in principle change side-effect order. Clean
+  both times.
+
+### Commits
+- `56639a1` — Lint: eliminate bare excepts + dead code; document intentional ignores
+- `31f921b` — Lint: whitespace + import ordering (ruff W291/W293/I001)
+- (this entry) — Docs: Session 43 log; Code_Review_Findings addendum; changelog
+
+### On the horizon
+
+Engineering checklist for the tag is now genuinely clear: all code-review
+items closed (and re-verified against source), #1's re-encryption path
+manually confirmed (Session 42), test suite at 320 covering every path
+worth covering, and the codebase ruff-clean. What remains is non-code:
+the dogfooding stretch, then `git tag v1.0.0` paired with the website
+update, then `.deb`/`.dmg` packaging.
