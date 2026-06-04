@@ -2468,3 +2468,110 @@ manually confirmed (Session 42), test suite at 320 covering every path
 worth covering, and the codebase ruff-clean. What remains is non-code:
 the dogfooding stretch, then `git tag v1.0.0` paired with the website
 update, then `.deb`/`.dmg` packaging.
+
+---
+
+## Session 44 — June 4, 2026 (Apollo)
+
+### Frontend JS audit + final lint, format, and blame-ignore tooling
+
+A cleanup session triggered by Rick reviewing a transcript of an
+earlier Opus 4.8 session that had hedged its way around two questions:
+"do we need to lint the JS?" and "what about the 93 console.* calls?"
+Re-examined both against actual source, then continued through the
+remaining "neat and tidy" items — whitespace cleanup, the formatter
+pass, and blame-ignore tooling.
+
+**Frontend JS audit (no changes):**
+
+- `console.*` calls: the prior framing of "93 debug logging calls worth
+  cleaning up" was wrong. A careful pass found **0 `console.log`**, 81
+  `console.error`, and 12 `console.warn` — all inside `catch` blocks or
+  guarding missing/invalid conditions. This is correct error reporting,
+  not debug noise. A `?debug=1` flag pattern would have been actively
+  harmful — silencing error output is the opposite of what you want.
+  Decision: leave them alone.
+- `var` keyword: 0 occurrences. The prior count of "1 var" was a false
+  positive from grepping inside strings/comments.
+- Loose `==`/`!=`: 68 total. Dominant patterns are the safe `== null`
+  idiom and intentional string-vs-number coercion on DOM data
+  attributes. No bugs, style-only.
+- eslint setup: deferred to post-tag. Adding a Node/npm dev toolchain
+  to a deliberately Node-free project is a real architectural change
+  better made deliberately than reflexively, and eslint wouldn't catch
+  the bug class that actually bites this codebase (the missing-`export`-
+  after-dropping-`window.X` failure mode is a module-link issue at
+  runtime, not a syntax issue).
+
+Lesson reinforced: count-based summaries ("93 console calls") are not
+findings. Look at the calls.
+
+**Whitespace cleanup (commit `268a45a`):**
+
+Reversed Session 43's deliberate decision to leave the 171 W291/W293
+findings on string-literal-internal whitespace. With the dry-run
+`--diff` in hand showing the changes are pure trailing-whitespace
+removal inside docstrings and inside multi-line SQL query strings, and
+with SQL being whitespace-insensitive at token boundaries, the
+"editing string contents" worry is technically real but practically
+empty. Applied via `ruff check --fix --unsafe-fixes`. 19 files, 171
+insertions / 171 deletions, all whitespace. `ruff check` now reports
+**All checks passed!** with no remaining errors. `pytest`: 320 passed
+in 5m08s, unchanged.
+
+**Formatter pass (commit `27ac235`):**
+
+Ran `ruff format` for the first time on the codebase. 51 of 59 files
+reformatted; 8 already conformant. The changes are stylistic only:
+quote-style normalization (single → double), multi-line dict/call
+literals collapsed onto one line where they fit within line-length,
+function-call argument formatting normalized. No behavior changes.
+
+One regression introduced by the formatter and fixed in the same
+commit: `core/pdf_export.py` had an f-string with outer single quotes
+containing inner double quotes (`f'...{_esc(email.get("cc"))}...'`).
+The formatter flipped the outer to double, creating same-quote
+nesting that only parses on py3.12+ per PEP 701. Since
+`pyproject.toml` targets py3.11, changed the inner quote-style
+instead (`email.get('cc')`) — same dict lookup, py3.11-valid syntax.
+This is a known ruff format edge case worth noting; the fix is one
+character.
+
+Final state: `ruff check` clean, `ruff format --check` clean,
+`pytest` 320 passed in 5m10s.
+
+**Blame-ignore tooling (commit `fcd3f71`):**
+
+Added `.git-blame-ignore-revs` referencing the format commit, so
+the 51-file reformat doesn't obscure `git blame` six months from
+now. GitHub honours this file automatically; local clones need a
+one-time `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
+
+### Notes
+
+- The earlier Opus 4.8 session's `node --check` "syntax errors" had
+  been `node: command not found` (no Node on Apollo) — counted as
+  findings rather than tool-availability misses. Verified directly
+  this session that Node is not on the box.
+- Two false starts on the first test re-run (one tool timeout, one
+  accidental re-run) burned extra time. Real test duration is
+  ~5m10s; Argon2id is the dominant cost. Three full pytest runs
+  this session, all green at 320.
+- README contributing/development note deliberately skipped — no
+  contributor plans right now.
+
+### Commits
+
+- `268a45a` — Lint: strip trailing whitespace in docstrings (ruff W291/W293)
+- `27ac235` — Style: apply ruff format across the Python codebase
+- `fcd3f71` — Tooling: add .git-blame-ignore-revs for the ruff format commit
+- (this entry) — Docs: Session 44 log; changelog
+
+### On the horizon
+
+Unchanged from Session 43: dogfooding, then `git tag v1.0.0` paired
+with the website update, then `.deb`/`.dmg` packaging. The repo is
+now ruff-check clean, ruff-format conformant, with blame-ignore
+tooling in place, 320 tests green, and the pre-tag blockers
+verified against source. Code-side, this is as neat as it goes
+short of larger refactors that aren't tag-blocking.

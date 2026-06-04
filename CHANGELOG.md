@@ -43,6 +43,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   FTS5's default is whole-word matching.
 
 ### Refactored (no behavior change)
+- **Repo-wide formatter pass (Session 44, `ruff format`).** First
+  application of the formatter on the codebase: 51 of 59 files
+  reformatted, 8 already conformant. Changes are stylistic only —
+  quote normalization, dict/call literal layout, argument formatting.
+  One manual fix in `core/pdf_export.py` to preserve py3.11
+  compatibility where the formatter would have created same-quote
+  f-string nesting (only valid on py3.12+ per PEP 701).
+  `.git-blame-ignore-revs` added so the reformat doesn't obscure
+  `git blame`. Suite green at 320 throughout.
+- **Final whitespace cleanup (Session 44, ruff W291/W293).** The 171
+  trailing-whitespace findings inside docstrings and multi-line SQL
+  strings that Session 43 left as "would edit string contents":
+  applied. Dry-run `--diff` confirmed the changes are pure
+  whitespace-only and SQL is whitespace-insensitive at token
+  boundaries. `ruff check` now reports zero errors.
 - **Repo-wide lint pass (Session 43, ruff E/F/W/I).** Converted all 32
   bare `except:` to `except Exception:` (also stops the SSE generators
   swallowing `GeneratorExit`), removed unused imports/locals and empty
