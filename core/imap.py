@@ -1042,35 +1042,119 @@ class IMAP:
             log.debug(f"Could not find {folder_type} folder: {e}")
             return None
 
-    def move_email(self, uid: str, destination_folder: str) -> bool:
+    def _has_capability(self, name: str) -> bool:
+        """Return True if the server advertised the given IMAP capability.
+
+        Reads imaplib's cached capability tuple (populated at connect/login,
+        no extra round-trip); falls back to an explicit CAPABILITY command.
         """
-        Move an email to another folder (copy + delete from source).
+        try:
+            caps = getattr(self.connection, "capabilities", None)
+            if caps:
+                return name.upper() in {str(c).upper() for c in caps}
+            status, data = self.connection.capability()
+            if status != "OK" or not data:
+                return False
+            decoded = b" ".join(data).decode("ascii", "ignore").upper().split()
+            return name.upper() in decoded
+        except Exception:
+            return False
+
+    def _parse_copyuid(self, data) -> Optional[str]:
+        """Extract the destination UID from a COPYUID response code.
+
+        COPYUID has the form: COPYUID <uidvalidity> <src-uids> <dst-uids>.
+        Returns the destination UID, or None if the code is absent (server
+        lacks UIDPLUS). None is not an error — callers may fall back to a
+        Message-ID search in the destination folder.
+        """
+        candidates: list[str] = []
+
+        def _collect(obj):
+            if isinstance(obj, bytes):
+                candidates.append(obj.decode("ascii", "ignore"))
+            elif isinstance(obj, str):
+                candidates.append(obj)
+            elif isinstance(obj, (list, tuple)):
+                for sub in obj:
+                    _collect(sub)
+
+        # imaplib stores the COPYUID response code's *arguments* here, with the
+        # keyword stripped: "<uidvalidity> <src-set> <dst-set>". Check it first.
+        try:
+            resp = self.connection.untagged_responses.get("COPYUID")
+            if resp:
+                for item in resp:
+                    text = item.decode("ascii", "ignore") if isinstance(item, bytes) else str(item)
+                    m = re.search(r"\d+\s+\S+\s+(\d+)", text)
+                    if m:
+                        return m.group(1)
+        except Exception:
+            pass
+
+        # Otherwise scan the returned data for the full bracketed form,
+        # e.g. "[COPYUID 12 100 200]" carried in the tagged completion line.
+        _collect(data)
+        for text in candidates:
+            m = re.search(r"COPYUID\s+\d+\s+\S+\s+(\d+)", text, re.IGNORECASE)
+            if m:
+                return m.group(1)
+        return None
+
+    def _expunge_uid(self, uid: str) -> None:
+        """Expunge a single message by UID when UIDPLUS is available.
+
+        Falls back to a bare EXPUNGE (removes every \\Deleted-flagged message
+        in the selected folder) on servers without UIDPLUS, preserving the
+        previous behaviour exactly.
+        """
+        if self._has_capability("UIDPLUS"):
+            self.connection.uid("EXPUNGE", uid)
+        else:
+            self.connection.expunge()
+
+    def move_email(self, uid: str, destination_folder: str) -> Optional[str]:
+        """
+        Move an email to another folder.
+
+        Uses IMAP MOVE (RFC 6851) when the server supports it — atomic, and
+        avoids the copy/expunge race. Otherwise falls back to COPY + STORE
+        \\Deleted + UID-scoped EXPUNGE.
 
         Args:
-            uid: Message UID.
+            uid: Message UID in the currently-selected folder.
             destination_folder: Destination folder name.
 
         Returns:
-            True if successful.
+            The new UID of the message in the destination folder, parsed from
+            the COPYUID response code, or None if the server did not report it.
+            None does NOT indicate failure — failures raise IMAPError.
         """
         if not self.connection:
             raise IMAPError("Not connected")
 
+        dest = f'"{destination_folder}"'
         try:
-            # Copy to destination
-            status, _ = self.connection.uid("COPY", uid, f'"{destination_folder}"')
+            if self._has_capability("MOVE"):
+                status, data = self.connection.uid("MOVE", uid, dest)
+                if status != "OK":
+                    raise IMAPError(f"Failed to MOVE message {uid} to {destination_folder}")
+                return self._parse_copyuid(data)
+
+            # Fallback: COPY + mark deleted + scoped expunge.
+            status, data = self.connection.uid("COPY", uid, dest)
             if status != "OK":
                 raise IMAPError(f"Failed to copy message {uid} to {destination_folder}")
+            new_uid = self._parse_copyuid(data)
 
-            # Mark original as deleted
             status, _ = self.connection.uid("STORE", uid, "+FLAGS", "(\\Deleted)")
             if status != "OK":
                 raise IMAPError(f"Failed to mark message {uid} as deleted")
 
-            # Expunge to remove from source folder
-            self.connection.expunge()
-
-            return True
+            self._expunge_uid(uid)
+            return new_uid
+        except IMAPError:
+            raise
         except Exception as e:
             raise IMAPError(f"Failed to move message {uid}: {e}")
 
@@ -1088,7 +1172,10 @@ class IMAP:
         if not archive_folder:
             raise IMAPError("Archive folder not found on server")
 
-        return self.move_email(uid, archive_folder)
+        # move_email returns the new UID (or None); success is signalled by
+        # not raising, so we ignore the return and report a plain bool.
+        self.move_email(uid, archive_folder)
+        return True
 
     def trash_email(self, uid: str) -> bool:
         """
@@ -1104,7 +1191,8 @@ class IMAP:
         if not trash_folder:
             raise IMAPError("Trash folder not found on server")
 
-        return self.move_email(uid, trash_folder)
+        self.move_email(uid, trash_folder)
+        return True
 
     def delete_email(self, uid: str) -> bool:
         """
