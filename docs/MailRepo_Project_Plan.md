@@ -54,7 +54,7 @@ Solo practitioners (therapists, lawyers, accountants, doctors, consultants) need
 | Inbox Browser | ✅ Done | View emails in a clean web interface |
 | Folder System | ✅ Done | Create/manage archive folders with hierarchy |
 | Stage → Review → Commit | ✅ Done | Batch filing workflow with review step |
-| Full Encryption | ✅ Done | SQLCipher database + Fernet email files |
+| Full Encryption | ✅ Done | SQLCipher database + AES-256-GCM email files |
 | Full-Text Search | ✅ Done | FTS5 search across subject, sender, body |
 | Duplicate Detection | ✅ Done | Skip emails already in destination folder |
 | Multi-Account | ✅ Done | Support multiple IMAP accounts |
@@ -90,7 +90,7 @@ Solo practitioners (therapists, lawyers, accountants, doctors, consultants) need
 |-----------|------------|
 | Backend | Python 3.13, Flask |
 | Database | SQLCipher (encrypted SQLite) |
-| Encryption | Fernet (cryptography library) + SQLCipher (AES-256) |
+| Encryption | AES-256-GCM (cryptography library) + SQLCipher (AES-256), keys via Argon2id + HKDF |
 | Email Access | imaplib (IMAP) |
 | Frontend | HTML, CSS, vanilla JavaScript |
 | Search | FTS5 (inside encrypted database) |
@@ -106,14 +106,14 @@ mailrepo/                    # Application directory
 │   └── .secret_key          # Flask session key
 ├── archive/
 │   └── {folder_id}/
-│       └── *.eml.enc        # Fernet encrypted .eml files
+│       └── *.eml.enc        # AES-256-GCM encrypted .eml files
 ├── config/                  # (reserved for future use)
 └── backups/
 ```
 
 Data location can be overridden with `MAILREPO_DATA_DIR` environment variable.
 
-**Note:** All emails are encrypted. The database stores metadata (subject, sender, body text for search) and is fully encrypted with SQLCipher. Email files are encrypted with Fernet.
+**Note:** All emails are encrypted. The database stores metadata (subject, sender, body text for search) and is fully encrypted with SQLCipher. Email files are encrypted with AES-256-GCM.
 
 ### Database Schema
 
@@ -124,7 +124,7 @@ CREATE TABLE accounts (
     name TEXT NOT NULL,           -- "Work Gmail", "Personal"
     email TEXT NOT NULL,
     provider TEXT NOT NULL,       -- 'imap'
-    credentials_encrypted TEXT,   -- Fernet-encrypted IMAP credentials
+    credentials_encrypted TEXT,   -- AES-256-GCM-encrypted IMAP credentials
     cached_folders TEXT,          -- JSON array of folder names
     cached_folders_at INTEGER,    -- Cache timestamp
     created_at INTEGER,
@@ -252,17 +252,17 @@ CREATE TABLE settings (
 | Data | Protection |
 |------|------------|
 | Database | SQLCipher (AES-256) — entire DB encrypted at rest |
-| Archived emails | Fernet encryption (AES-128-CBC) |
-| IMAP credentials | Fernet encrypted in database |
+| Archived emails | AES-256-GCM (authenticated encryption) |
+| IMAP credentials | AES-256-GCM encrypted in database |
 | FTS index | Inside SQLCipher — encrypted with database |
 | In transit | TLS (IMAP) |
 
 ### Master Password
 
 - **Always required** on startup (modal before anything loads)
-- Derives two separate keys via PBKDF2 (480,000 iterations):
-  - Fernet key for email/credential encryption
-  - SQLCipher key for database encryption
+- Derives two separate keys via Argon2id (m=256 MiB, t=6) + HKDF-Expand:
+  - File key for email/credential encryption (AES-256-GCM)
+  - SQLCipher raw key for database encryption
 - Password never stored; only verification token
 
 ### Access Control
@@ -292,7 +292,7 @@ CREATE TABLE settings (
 | EdgeCase integration | Build later | Standalone first |
 | Filing UX | Stage → Review → Commit | Batch-first, matches real workflow |
 | Folder creation | Modal-in-modal | Stay in flow when staging |
-| Encryption scope | Everything encrypted | SQLCipher DB + Fernet files; no unencrypted option |
+| Encryption scope | Everything encrypted | SQLCipher DB + AES-256-GCM files; no unencrypted option |
 | Password requirement | Always required | Needed to decrypt database |
 | First-run flow | Create archive first | Forces deliberate decision before filing |
 | Email protocol | IMAP only | Simpler than OAuth; works with any provider |
