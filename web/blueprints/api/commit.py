@@ -6,6 +6,7 @@ Supports post-commit actions (archive, trash, delete) for IMAP emails.
 """
 
 from core import IMAP, Config, Database, Encryption, IMAPError
+from core.account_utils import is_gmail_host
 
 from .email_parser import (
     extract_body_text,
@@ -451,6 +452,9 @@ def apply_post_commit_actions(committed_emails: dict, source_actions: dict, resu
         client = None
         try:
             client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+            # Gmail needs a provider-aware delete (its IMAP delete only removes
+            # a label, not the message); detected from the connected host.
+            is_gmail = is_gmail_host(client.host)
 
             for source_folder, email_list in folders_data.items():
                 action = _find_action_for_source(source_actions, account_id, source_folder)
@@ -470,7 +474,14 @@ def apply_post_commit_actions(committed_emails: dict, source_actions: dict, resu
                                 client.trash_email(uid)
                                 results["post_actions"]["success"] += 1
                             elif action == "delete":
-                                client.delete_email(uid)
+                                if is_gmail:
+                                    # delete_email_via_trash changes the
+                                    # selected folder, so re-select the source
+                                    # before each message.
+                                    client.select_folder(source_folder)
+                                    client.delete_email_via_trash(uid, source_folder)
+                                else:
+                                    client.delete_email(uid)
                                 results["post_actions"]["success"] += 1
                         except IMAPError:
                             results["post_actions"]["failed"] += 1

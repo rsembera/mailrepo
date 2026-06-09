@@ -20,6 +20,14 @@ from .encryption import Encryption
 log = get_logger()
 
 
+def _imap_escape(value: str) -> str:
+    """Escape a value for use inside an IMAP SEARCH string literal.
+
+    Escapes backslash and double-quote, per the IMAP quoted-string grammar.
+    """
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
 # Common IMAP servers (for auto-detection)
 IMAP_SERVERS = {
     "gmail.com": ("imap.gmail.com", 993),
@@ -655,10 +663,6 @@ class IMAP:
         truncated = False
         timed_out = False
 
-        def _imap_escape(value: str) -> str:
-            """IMAP SEARCH string literal: escape backslash and double-quote."""
-            return value.replace("\\", "\\\\").replace('"', '\\"')
-
         iteration = 0
         while iteration < max_iterations:
             iteration += 1
@@ -990,7 +994,7 @@ class IMAP:
         Find special folder name (Archive, Trash, Sent) for this IMAP server.
 
         Args:
-            folder_type: 'archive', 'trash', or 'sent'
+            folder_type: 'archive', 'trash', 'spam', or 'sent'
 
         Returns:
             Folder name or None if not found.
@@ -1003,6 +1007,15 @@ class IMAP:
         # generic "Sent" if both somehow exist.
         archive_names = ["Archive", "[Gmail]/All Mail", "Archives", "INBOX.Archive"]
         trash_names = ["Trash", "[Gmail]/Trash", "Deleted Items", "Deleted Messages", "INBOX.Trash"]
+        spam_names = [
+            "[Gmail]/Spam",  # Gmail
+            "Spam",  # Fastmail, generic
+            "Junk",  # Apple Mail, generic
+            "Junk E-mail",  # Outlook / Exchange
+            "Junk Email",
+            "INBOX.Junk",  # cPanel / Courier-style nested
+            "INBOX.spam",
+        ]
         sent_names = [
             "[Gmail]/Sent Mail",  # Gmail
             "Sent Mail",  # some clients
@@ -1016,6 +1029,8 @@ class IMAP:
             search_names = archive_names
         elif folder_type == "trash":
             search_names = trash_names
+        elif folder_type == "spam":
+            search_names = spam_names
         elif folder_type == "sent":
             search_names = sent_names
         else:
@@ -1219,3 +1234,104 @@ class IMAP:
             return True
         except Exception as e:
             raise IMAPError(f"Failed to delete message {uid}: {e}")
+
+    def _find_uid_in_folder_by_message_id(self, folder: str, message_id: str) -> Optional[str]:
+        """Locate a message by Message-ID in the given folder.
+
+        Selects the folder and returns the first matching UID, or None if not
+        found or message_id is empty. Message-ID is meant to be unique, so the
+        first match is taken (mirrors find_thread's behaviour).
+        """
+        if not message_id:
+            return None
+        try:
+            self.select_folder(folder)
+            status, data = self.connection.uid(
+                "SEARCH", None, f'HEADER Message-ID "{_imap_escape(message_id)}"'
+            )
+            if status != "OK" or not data or not data[0]:
+                return None
+            uids = data[0].split()
+            if not uids:
+                return None
+            first = uids[0]
+            return first.decode() if isinstance(first, bytes) else str(first)
+        except Exception as e:
+            log.debug(f"Message-ID lookup failed in {folder}: {e}")
+            return None
+
+    def delete_email_via_trash(self, uid: str, source_folder: str) -> bool:
+        """Permanently delete an email on Gmail-style label servers.
+
+        Gmail's IMAP delete (STORE \\Deleted + EXPUNGE) in a regular folder
+        only removes that folder's *label*; the message survives in All Mail.
+        It honours real delete only in Trash and Spam. So:
+
+        - If the message is already in Trash or Spam, delete it in place.
+        - Otherwise move it to Trash, then expunge it there.
+
+        Caller contract: ``source_folder`` must currently be SELECTed. This
+        method changes the selected folder, so callers iterating multiple UIDs
+        must re-SELECT the source folder before each call.
+
+        Returns:
+            True on permanent deletion. Also True (with a logged warning) if
+            the message reached Trash but could not be expunged there — Gmail
+            auto-purges Trash within ~30 days, which satisfies the user's
+            intent of "make it disappear".
+        """
+        if not self.connection:
+            raise IMAPError("Not connected")
+
+        trash = self.get_special_folder("trash")
+        if not trash:
+            raise IMAPError("Trash folder not found on server")
+        spam = self.get_special_folder("spam")
+
+        # In-place: source is already a folder where Gmail honours real delete.
+        if source_folder == trash or (spam and source_folder == spam):
+            status, _ = self.connection.uid("STORE", uid, "+FLAGS", "(\\Deleted)")
+            if status != "OK":
+                raise IMAPError(f"Failed to mark message {uid} as deleted")
+            self._expunge_uid(uid)
+            return True
+
+        # If the server can't report the moved message's new UID via COPYUID
+        # (no UIDPLUS), capture its Message-ID now so we can find it in Trash
+        # afterwards. Gmail supports UIDPLUS, so this path is rare in practice.
+        message_id = None
+        if not self._has_capability("UIDPLUS"):
+            try:
+                message_id = self.fetch_headers(uid).get("message_id", "")
+            except Exception:
+                message_id = None
+
+        new_uid = self.move_email(uid, trash)  # raises IMAPError on move failure
+        if new_uid is None and message_id:
+            new_uid = self._find_uid_in_folder_by_message_id(trash, message_id)
+
+        if new_uid is None:
+            # The message is in Trash but we can't pinpoint it to expunge now.
+            # Gmail auto-purges Trash within ~30 days.
+            log.warning(
+                "Gmail delete: message uid=%s reached Trash but its new UID "
+                "could not be determined; relying on Gmail's ~30-day auto-purge",
+                uid,
+            )
+            return True
+
+        try:
+            self.select_folder(trash)
+            status, _ = self.connection.uid("STORE", new_uid, "+FLAGS", "(\\Deleted)")
+            if status != "OK":
+                raise IMAPError(f"Failed to mark trashed message {new_uid} as deleted")
+            self._expunge_uid(new_uid)
+            return True
+        except Exception as e:
+            log.warning(
+                "Gmail delete: message uid=%s reached Trash but expunge failed "
+                "(%s); relying on Gmail's ~30-day auto-purge",
+                uid,
+                e,
+            )
+            return True

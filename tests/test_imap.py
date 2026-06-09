@@ -139,3 +139,101 @@ class TestHasCapability:
         assert client._has_capability("uidplus") is True  # case-insensitive
         assert client._has_capability("IDLE") is False
         conn.capability.assert_not_called()  # used cached tuple
+
+
+class TestGetSpecialFolderSpam:
+    def test_resolves_gmail_spam(self, monkeypatch):
+        client, _ = make_client()
+        monkeypatch.setattr(
+            client,
+            "list_folders",
+            lambda: [{"name": "INBOX"}, {"name": "[Gmail]/Spam"}],
+        )
+        assert client.get_special_folder("spam") == "[Gmail]/Spam"
+
+    def test_resolves_generic_junk(self, monkeypatch):
+        client, _ = make_client()
+        monkeypatch.setattr(client, "list_folders", lambda: [{"name": "INBOX"}, {"name": "Junk"}])
+        assert client.get_special_folder("spam") == "Junk"
+
+
+def _trash_spam(t):
+    return {"trash": "[Gmail]/Trash", "spam": "[Gmail]/Spam"}.get(t)
+
+
+class TestDeleteViaTrash:
+    def test_happy_path_move_then_expunge(self, monkeypatch):
+        client, conn = make_client(("IMAP4REV1", "MOVE", "UIDPLUS"))
+        monkeypatch.setattr(client, "get_special_folder", _trash_spam)
+        monkeypatch.setattr(client, "select_folder", MagicMock())
+        conn.uid.side_effect = _uid_dispatch(
+            {
+                "MOVE": ("OK", [b"[COPYUID 1 100 200]"]),
+                "STORE": ("OK", [b""]),
+                "EXPUNGE": ("OK", [b""]),
+            }
+        )
+        assert client.delete_email_via_trash("100", "INBOX") is True
+        verbs = [c.args[0] for c in conn.uid.call_args_list]
+        assert verbs == ["MOVE", "STORE", "EXPUNGE"]
+        # expunge was UID-scoped against the moved message's new UID
+        assert conn.uid.call_args_list[-1].args[1] == "200"
+
+    def test_in_place_when_source_is_trash(self, monkeypatch):
+        client, conn = make_client(("IMAP4REV1", "UIDPLUS"))
+        monkeypatch.setattr(client, "get_special_folder", _trash_spam)
+        conn.uid.side_effect = _uid_dispatch({"STORE": ("OK", [b""]), "EXPUNGE": ("OK", [b""])})
+        assert client.delete_email_via_trash("100", "[Gmail]/Trash") is True
+        verbs = [c.args[0] for c in conn.uid.call_args_list]
+        assert verbs == ["STORE", "EXPUNGE"]  # no MOVE/COPY
+
+    def test_in_place_when_source_is_spam(self, monkeypatch):
+        client, conn = make_client(("IMAP4REV1", "UIDPLUS"))
+        monkeypatch.setattr(client, "get_special_folder", _trash_spam)
+        conn.uid.side_effect = _uid_dispatch({"STORE": ("OK", [b""]), "EXPUNGE": ("OK", [b""])})
+        assert client.delete_email_via_trash("100", "[Gmail]/Spam") is True
+        verbs = [c.args[0] for c in conn.uid.call_args_list]
+        assert verbs == ["STORE", "EXPUNGE"]
+
+    def test_move_failure_propagates(self, monkeypatch):
+        client, conn = make_client(("IMAP4REV1", "MOVE"))
+        monkeypatch.setattr(client, "get_special_folder", _trash_spam)
+        monkeypatch.setattr(client, "select_folder", MagicMock())
+        conn.uid.side_effect = _uid_dispatch({"MOVE": ("NO", [b"over quota"])})
+        with pytest.raises(IMAPError):
+            client.delete_email_via_trash("100", "INBOX")
+
+    def test_expunge_failure_after_move_is_success_with_warning(self, monkeypatch):
+        client, conn = make_client(("IMAP4REV1", "MOVE", "UIDPLUS"))
+        monkeypatch.setattr(client, "get_special_folder", _trash_spam)
+        monkeypatch.setattr(client, "select_folder", MagicMock())
+
+        def _side_effect(verb, *args):
+            if verb == "MOVE":
+                return ("OK", [b"[COPYUID 1 100 200]"])
+            if verb == "STORE":
+                return ("OK", [b""])
+            if verb == "EXPUNGE":
+                raise OSError("connection dropped")
+            return ("OK", [b""])
+
+        conn.uid.side_effect = _side_effect
+        # Reached Trash; expunge failed -> still True (Gmail auto-purges).
+        assert client.delete_email_via_trash("100", "INBOX") is True
+
+    def test_message_id_fallback_when_no_copyuid(self, monkeypatch):
+        # No UIDPLUS, no MOVE: COPY reports no COPYUID, so the new UID is
+        # located by Message-ID search in Trash.
+        client, conn = make_client(("IMAP4REV1",))
+        monkeypatch.setattr(client, "get_special_folder", _trash_spam)
+        monkeypatch.setattr(client, "select_folder", MagicMock())
+        monkeypatch.setattr(
+            client, "fetch_headers", lambda uid: {"message_id": "<abc@example.com>"}
+        )
+        find_mock = MagicMock(return_value="555")
+        monkeypatch.setattr(client, "_find_uid_in_folder_by_message_id", find_mock)
+        conn.uid.side_effect = _uid_dispatch(
+            {"COPY": ("OK", [b"Copy done"]), "STORE": ("OK", [b""])}
+        )
+        assert client.delete_email_via_trash("100", "INBOX") is True
+        find_mock.assert_called_once_with("[Gmail]/Trash", "<abc@example.com>")

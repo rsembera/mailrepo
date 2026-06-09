@@ -12,6 +12,7 @@ from email.header import decode_header
 from flask import Response, jsonify, request
 
 from core import IMAP, Database, IMAPError
+from core.account_utils import is_gmail_host
 
 from . import api_bp
 
@@ -54,7 +55,7 @@ def list_accounts():
         if a["credentials_encrypted"]:
             try:
                 creds = IMAP.load_credentials(a["credentials_encrypted"])
-                if creds and creds.get("host", "").lower() == "imap.gmail.com":
+                if creds and is_gmail_host(creds.get("host")):
                     account_dict["is_gmail"] = True
             except Exception:
                 pass  # If decryption fails, default to False
