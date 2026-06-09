@@ -62,7 +62,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `imap.py` | 1,112 | IMAP client: connect, auth, folders, email fetch, SSL/TLS, CONDSTORE |
+| `imap.py` | 1,337 | IMAP client: connect, auth, folders, fetch, MOVE/COPY + UID-scoped expunge, Gmail-aware delete, CONDSTORE |
 | `pdf_export.py` | 1,020 | PDF export: per-email PDFs, attachment merging, WeasyPrint |
 | `database.py` | 434 | SQLCipher connection, schema v5, FTS5, migrations, threading lock |
 | `encryption.py` | 373 | Argon2id KDF + HKDF + AES-256-GCM file/DB encryption (v2) |
@@ -72,6 +72,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `config.py` | 114 | Paths, constants, Flask config |
 | `sync_cache.py` | 109 | Two-layer IMAP folder cache (TTL + CONDSTORE/HIGHESTMODSEQ) |
 | `__init__.py` | 30 | Module exports |
+| `account_utils.py` | 18 | Shared account helpers (`is_gmail_host` — Gmail provider detection) |
 
 ### Web App (`/web/`)
 
@@ -280,7 +281,7 @@ python main.py
 
 ---
 
-## Test Suite (320 tests)
+## Test Suite (346 tests)
 
 | File | Coverage |
 |------|----------|
@@ -303,6 +304,9 @@ python main.py
 | `tests/test_api_exports.py` | Export pipeline: scope resolution (folder/messages/search + subfolders + FTS), job state machine (save-to-disk, disambiguation, TTL GC), plain + AES-256 ZIP decrypt round-trips, endpoint contracts (39 tests, Session 42) |
 | `tests/test_importer.py` | Importer: header decode + metadata, mbox/eml import driven by `test_files/` edge cases; malformed mail archived byte-for-byte, corrupt mbox handled per-message (29 tests, Session 42) |
 | `tests/test_sync_cache.py` | Sync-cache state + TTL freshness logic, and the pure `IMAP.detect_server` domain lookup (14 tests, Session 42) |
+| `tests/test_imap.py` | `core/imap.py` dispatch logic via a mocked connection (no real IMAP): MOVE-vs-COPY, UID-scoped vs bare expunge, COPYUID parsing, Gmail delete-via-trash, spam-folder resolution, call-site contract (20 tests, Session 45) |
+| `tests/test_account_utils.py` | `is_gmail_host` host detection (4 tests, Session 45) |
+| `tests/test_commit_dispatch.py` | Post-commit dispatch: Gmail vs standard delete routing, per-iteration source re-select over multiple UIDs (2 tests, Session 45) |
 
 Run with `pytest -q` from project root.
 

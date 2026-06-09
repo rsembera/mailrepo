@@ -9,7 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Permanent delete for Gmail accounts (Session 45).** The Delete
+  post-commit action is now available for Gmail/Google Workspace
+  accounts. Gmail's IMAP delete only removes a folder label rather than
+  the message, so it had been hidden for Gmail; it is now routed through
+  a provider-aware path (`delete_email_via_trash`) that deletes in place
+  when the source is already Trash/Spam, and otherwise moves the message
+  to Trash and expunges it there. If the message reaches Trash but cannot
+  be expunged, it is left for Gmail's ~30-day auto-purge. Added a `spam`
+  folder type to `get_special_folder` and a shared `is_gmail_host` helper
+  (`core/account_utils.py`).
+
 ### Tests
+- **IMAP move/delete + dispatch coverage (Session 45).** Test suite
+  320 → 346. First direct unit coverage of `core/imap.py`
+  (`test_imap.py`, 20) — MOVE-vs-COPY selection, UID-scoped vs bare
+  expunge, COPYUID parsing in both response forms, delete-via-trash
+  (in-place Trash/Spam, move failure, expunge-fail-after-move,
+  Message-ID fallback), and the call-site contract. Mocks the
+  connection object only (no real IMAP, no Argon2id). Plus
+  `test_account_utils.py` (4) and `test_commit_dispatch.py` (2 —
+  provider routing and the per-iteration source re-select that
+  single-call tests can't catch). Stays within the "no real IMAP
+  protocol tests" principle: these exercise MailRepo's dispatch/parsing
+  logic, not the protocol against a server.
 - **Tier 3 + IMAP-helper coverage (Session 42).** Test suite 238 → 320.
   Added the export pipeline (`test_api_exports.py`, 39 — scope
   resolution, job state machine, plain + AES-256 ZIP decrypt
@@ -32,6 +56,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   covered only at their pre-connection validation boundary.
 
 ### Changed
+- **`move_email` hardened (Session 45).** Now prefers IMAP MOVE
+  (RFC 6851, atomic) when the server supports it, falling back to
+  COPY + STORE + EXPUNGE; the expunge is UID-scoped (RFC 4315/UIDPLUS)
+  when available instead of a bare EXPUNGE that sweeps every
+  `\Deleted`-flagged message in the folder (bare expunge preserved as
+  the no-UIDPLUS fallback — no behaviour change on older servers). It
+  now returns the moved message's new UID (from the COPYUID response)
+  rather than a bool. Benefits the existing Archive and Trash
+  post-commit actions, not just the new Gmail delete.
 - **Search view (Archive Search).** Reworked the search interface to
   match the rest of the app's filter-input pattern. Live search with a
   300ms debounce replaces the explicit "Search" button; an X clear

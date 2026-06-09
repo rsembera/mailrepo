@@ -2575,3 +2575,97 @@ now ruff-check clean, ruff-format conformant, with blame-ignore
 tooling in place, 320 tests green, and the pre-tag blockers
 verified against source. Code-side, this is as neat as it goes
 short of larger refactors that aren't tag-blocking.
+
+
+## Session 45 — June 8, 2026 (MacBook)
+
+### Gmail provider-aware permanent delete (post-1.0 feature)
+
+Implemented the long-deferred Gmail delete path from
+`docs/Gmail_Delete_Implementation_Plan.md`. Gmail's IMAP delete only
+removes a folder's *label*, leaving the message in All Mail; real
+delete is honoured only in Trash and Spam. The Delete post-commit
+action had been hidden for Gmail accounts because of this. It is now
+re-enabled with a provider-aware path.
+
+Started by reviewing the plan against actual source. The plan was
+sound but three issues surfaced from reading the code:
+
+- **Loop selection bug.** The post-commit dispatch selects the source
+  folder once, then iterates UIDs. The Gmail delete path changes the
+  selected folder as a side effect (it must, to expunge in Trash), so
+  from the second UID onward the move would run against the wrong
+  folder. Single-call unit tests would never catch this. Fixed by
+  re-selecting the source folder before each message, and added a
+  dispatch test over 3 UIDs that asserts the re-select count.
+- **UID discovery.** Plan floated Message-ID search as primary; that's
+  fragile. Switched to COPYUID (UIDPLUS) as primary, Message-ID search
+  as fallback only (and Gmail supports UIDPLUS, so the fallback is rare).
+- **Over-broad expunge.** The shared `move_email` used a bare EXPUNGE
+  that sweeps every `\Deleted` message in the folder. Now UID-scoped
+  when UIDPLUS is present, bare-expunge preserved as the fallback.
+
+The plan doc was rewritten to split the work into two commits and fold
+in these fixes before any code was written.
+
+**Commit 1 — `move_email` hardening (provider-agnostic):**
+
+Upgraded the shared primitive: prefers IMAP MOVE (RFC 6851, atomic)
+when the server advertises it, falls back to COPY + STORE + scoped
+EXPUNGE; returns the destination UID parsed from the COPYUID response
+code (Optional[str]; None means "moved but UID unreported", not
+failure). New helpers `_has_capability` (reads imaplib's cached
+capability tuple — no extra round-trip), `_parse_copyuid` (handles
+both the bracketed data form and imaplib's keyword-stripped
+`untagged_responses` form — a test caught that second form), and
+`_expunge_uid`. `archive_email`/`trash_email` moved to the
+success-not-raising contract (NOT `is not None`, which would misread a
+successful no-COPYUID move as failure).
+
+**Commit 2 — Gmail delete path:**
+
+`delete_email_via_trash(uid, source_folder)`: in-place delete when the
+source is already Trash/Spam, otherwise move-to-Trash-then-expunge.
+Returns True-with-warning if the message reached Trash but couldn't be
+expunged (Gmail auto-purges in ~30 days). Added a `spam` type to
+`get_special_folder`. Hoisted `_imap_escape` to module scope (was
+nested in `find_thread`) so the Message-ID search reuses it. New
+`core/account_utils.py::is_gmail_host` as the single source of truth
+for the host check; `accounts.py` refactored onto it. Dispatch in
+`commit.py` routes by host and re-selects per iteration. `review.js`
+always offers Delete now; removed the dead `isGmail` plumbing and the
+`isGmailAccount` helper (verified no dangling refs; `node --check`
+clean).
+
+### Tests
+
+Added `tests/test_imap.py` (20 tests — mock the connection object only,
+no real IMAP, no Argon2id, ~0.2s), `tests/test_account_utils.py` (4),
+and `tests/test_commit_dispatch.py` (2, including the per-iteration
+re-select guard). Full suite: **346 passed** (was 320). ruff check and
+format clean.
+
+### Notes
+
+- This is the project's first direct unit coverage of `core/imap.py`.
+  It stays within the "no real IMAP protocol tests" principle — these
+  exercise MailRepo's own dispatch/parsing logic against a mock
+  connection, not the protocol against a server.
+- Still requires live-Gmail dogfooding before the feature is signed
+  off: delete from Inbox → confirm gone from All Mail; multi-email
+  commit deletes all (guards the loop fix in production); non-Gmail
+  account still deletes correctly (guards the Commit 1 change).
+
+### Commits
+
+- `88f230e` — docs: revise Gmail permanent-delete implementation plan
+- `1c918d4` — feat(imap): harden move_email with IMAP MOVE, COPYUID, scoped expunge
+- `e0d0ee0` — feat(imap): provider-aware permanent delete for Gmail
+- (this entry) — Docs: Session 45 log; changelog; navigation map
+
+### On the horizon
+
+Gmail delete is code-complete and pushed; live dogfooding is the
+remaining sign-off. Otherwise unchanged from Session 44: the release
+sequence (version label is open — nothing shipped yet), website update,
+then `.deb`/`.dmg` packaging.
