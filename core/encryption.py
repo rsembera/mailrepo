@@ -18,6 +18,21 @@ era and its migration code were removed after every archive reached v2.
 See docs/Session_Log.md for the May 29, 2026 migration; the migration
 itself lives in git history as commits b7db944 / 39e0ce2 / 944b0aa /
 3f0e67a if it ever needs to be referenced for pattern.
+
+Key management & threat model:
+  Keys are held as class-level attributes on Encryption for the
+  lifetime of an unlocked session. This is deliberate, not an
+  oversight. MailRepo is architecturally single-user and
+  single-archive: there is exactly one master key per process, ever,
+  so module-global state models a genuinely global fact. Instance-based
+  injection would not change the security posture - the keys must live
+  in process memory while the archive is unlocked regardless of which
+  object holds the reference, and CPython offers no reliable
+  mlock/zeroize for bytes objects (the interpreter copies immutable
+  data freely). Memory-disclosure attacks against the running process
+  (debugger attach, /proc/<pid>/mem, swap, core dumps) are outside the
+  threat model, which defends data at rest. lock() drops all key
+  references when the session ends.
 """
 
 import base64

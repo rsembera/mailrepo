@@ -7,6 +7,10 @@
 
 ---
 
+> **Addendum (June 9, 2026):** This audit is a point-in-time record and predates the v2 crypto migration of May 29, 2026. References to PBKDF2 and Fernet below describe the retired v1 scheme. The current scheme is Argon2id (m=256 MiB, t=6) → HKDF-Expand with domain-separated info strings → AES-256-GCM, with SQLCipher unlocked via raw-key PRAGMA. See the module docstring in `core/encryption.py` for the authoritative description, and `docs/Code_Review_Findings.md` (Session 38) for the current pre-tag code review. The class-level key management pattern noted below remains in place and is documented as a deliberate design decision, with rationale, in the encryption module docstring.
+
+---
+
 ## Summary
 
 Comprehensive review of all security-critical code paths: encryption, authentication, database, API endpoints, file handling, IMAP connectivity, and frontend XSS protection. The security posture is solid for a localhost single-user application.
