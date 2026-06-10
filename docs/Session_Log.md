@@ -2669,3 +2669,101 @@ Gmail delete is code-complete and pushed; live dogfooding is the
 remaining sign-off. Otherwise unchanged from Session 44: the release
 sequence (version label is open — nothing shipped yet), website update,
 then `.deb`/`.dmg` packaging.
+
+## Session 46 — June 9, 2026 (Apollo morning, MacBook evening)
+
+### Morning: docs sweep for stale v1 crypto references
+
+A drive-by question about the class-level key state in `Encryption`
+led to documenting the key-management threat model in the module
+docstring (deliberate design: single-user/single-archive, instance
+injection changes nothing, CPython can't mlock/zeroize, memory
+disclosure out of scope). While adding the planned pointer to
+`Security_Audit.md`, found the February audit still described the
+retired v1 crypto (PBKDF2/Fernet) — added a dated addendum rather
+than rewriting the historical record. A follow-up sweep found
+`MailRepo_Project_Plan.md` (a living doc) described v1 in eight
+places; all corrected to Argon2id/HKDF/AES-256-GCM. Session_Log,
+Code_Review_Prompt, Post_1_0_Backlog, and docs/archive references
+are historical and were left as-is.
+
+### Morning: website accuracy review
+
+Reviewed all five pages of the draft site against the codebase.
+Verified accurate: v2 crypto description, themes, fonts, search
+operators, all defaults, shortcuts, Gmail delete description. Fixed:
+the folder-caching section claimed background polling (actual:
+120s cache TTL + re-check on access); staging note now distinguishes
+ephemeral pre-commit staging from interrupted commits (which persist
+and resume); Ubuntu floor 20.04 → 22.04 (Python 3.13; 20.04 past
+standard EOL); `index_final.html` nav self-links → `index.html` so
+go-live is a pure rename. GitHub footer links deferred to go-live.
+
+### Evening: targeted review of IMAP move/delete/expunge (pre-tag)
+
+The review scoped in the morning. **Critical finding:** the Session
+44–45 Gmail-aware delete was wired into `apply_post_commit_actions()`
+in `commit.py` — a function with **no route and no caller**. The live
+workflow (`/api/commit/stream` in `progress_commit.py`) still called
+plain `delete_email()` on Gmail, which only strips the label and
+leaves the message in All Mail — silent false assurance of permanent
+deletion, and a direct contradiction of the docs page shipped that
+morning. The dispatch tests drove the dead function, which is how it
+appeared covered. Session 45's "live dogfooding before sign-off"
+caveat would have caught it; the review caught it first.
+
+Two further findings: `delete_email()` used a bare `EXPUNGE`
+(removes every \Deleted-flagged message in the folder, including
+ones flagged by other clients — MailRepo had `_expunge_uid()` but
+this one method didn't use it), and `_parse_copyuid()` read
+`untagged_responses` without consuming, so a stale COPYUID could be
+misattributed to a later move (worst case: expunging the wrong
+message in Trash).
+
+Verified safe: UID stability across expunging loops (all UID-based
+commands), COPY-fallback halfway-failures all land on "message still
+on server", and the re-select caller contract.
+
+### Fixes
+
+- New `apply_email_action()` in `commit.py` — the single shared
+  dispatcher for post-commit server actions, with Gmail routing and
+  the per-message source re-select. Both live call sites in
+  `progress_commit.py` now use it. The dead
+  `apply_post_commit_actions()` and `_find_action_for_source()`
+  were removed — the duplication is *why* the bug happened.
+- `delete_email()` → `_expunge_uid()` (scoped UID EXPUNGE under
+  UIDPLUS).
+- `_parse_copyuid()` → `connection.response("COPYUID")`, which pops
+  the entry.
+- `test_commit_dispatch.py` rewritten against `apply_email_action`
+  (the code the app actually runs), keeping the per-message
+  re-select ordering assertion; `test_imap.py` gains a
+  stale-COPYUID regression test. Full suite: **345 passed**
+  (net −1: removed 6 dead-code tests, added 5).
+
+### Notes
+
+- Root-cause lesson for the log: tests that drive a parallel
+  implementation create false confidence — coverage must target the
+  code the routes actually execute. The new dispatch tests import
+  the helper that `progress_commit.py` imports.
+- Session 45's dogfooding checklist (delete from Inbox → confirm
+  gone from All Mail, multi-email commit, non-Gmail delete) still
+  stands and is now testing the right code path.
+
+### Commits
+
+- `32102ae` — docs: document key-management threat model; flag v1 crypto in audit
+- `103d62f` — docs: update project plan to v2 crypto (Argon2id/HKDF/AES-256-GCM)
+- `2b73d81` (website repo) — accuracy fixes from pre-launch review
+- `c0f01b8` — fix(imap): wire Gmail-aware delete into live commit path; scope expunge; consume COPYUID
+- (this entry) — docs: Session 46 log; changelog
+
+### On the horizon
+
+Unchanged: live-Gmail dogfooding (now exercising the correct path),
+then tag + website go-live (rename `index_final.html`, real GitHub
+URLs, download links, screenshots), then `.deb`/`.dmg` packaging.
+Backlog addition from review: none — Finding 3 was fixed rather than
+deferred.

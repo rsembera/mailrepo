@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Gmail-aware delete now runs in the live commit path (Session 46).**
+  The Session 45 provider-aware delete had been wired into a dispatch
+  function (`apply_post_commit_actions`) that no route called; the live
+  `/api/commit/stream` workflow still ran a plain `delete_email()` on
+  Gmail, which only strips the folder label and leaves the message in
+  All Mail. Post-commit server actions now go through a single shared
+  dispatcher, `apply_email_action()`, used by both live call sites in
+  `progress_commit.py`; the dead duplicate dispatch code was removed.
+- **`delete_email()` no longer issues a bare EXPUNGE (Session 46).**
+  It now uses the UID-scoped expunge (`UID EXPUNGE` under UIDPLUS), so
+  messages that *other* clients have flagged `\Deleted` but not yet
+  expunged are left untouched.
+- **Stale COPYUID can no longer be misattributed (Session 46).**
+  `_parse_copyuid()` reads the COPYUID response code via
+  `connection.response()`, which consumes the entry; previously a
+  leftover COPYUID from an earlier command could be returned for a
+  later move (worst case: expunging the wrong message in Trash).
+
 ### Added
 - **Permanent delete for Gmail accounts (Session 45).** The Delete
   post-commit action is now available for Gmail/Google Workspace
