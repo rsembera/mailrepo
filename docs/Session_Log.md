@@ -2762,8 +2762,13 @@ on server", and the re-select caller contract.
 
 ### On the horizon
 
-Unchanged: live-Gmail dogfooding (now exercising the correct path),
-then tag + website go-live (rename `index_final.html`, real GitHub
-URLs, download links, screenshots), then `.deb`/`.dmg` packaging.
-Backlog addition from review: none — Finding 3 was fixed rather than
-deferred.
+**Late-evening addendum:** Live-Gmail dogfooding completed and PASSED.
+Three test emails staged from Inbox, committed with Delete action —
+"3 deleted on server", and a Gmail search (which includes All Mail)
+returned no matches. Archive and Trash actions and a non-Gmail delete
+also verified working. Sessions 44–46's Gmail delete is signed off.
+
+Remaining: general dogfooding, then tag + website go-live (rename
+`index_final.html`, real GitHub URLs, download links, screenshots),
+then `.deb`/`.dmg` packaging. Backlog addition from review: none —
+Finding 3 was fixed rather than deferred.
