@@ -22,6 +22,7 @@ import socket
 from flask import Response, request, stream_with_context
 
 from core import IMAP, Database, IMAPError
+from core.account_utils import is_gmail_host
 from core.pending_commit import (
     clear_commit_session,
     create_commit_session,
@@ -34,6 +35,7 @@ from core.pending_commit import (
 
 from . import api_bp
 from .commit import (
+    apply_email_action,
     build_commit_summary,
     commit_imap_email,
     commit_imap_folder,
@@ -443,6 +445,9 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
         client = None
         try:
             client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+            # Gmail needs a provider-aware delete (its IMAP delete only
+            # removes a label, not the message); detected from the host.
+            is_gmail = is_gmail_host(client.host)
 
             # Group by source folder
             by_folder = {}
@@ -468,12 +473,7 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
                             continue
 
                         try:
-                            if action == "archive":
-                                client.archive_email(uid)
-                            elif action == "trash":
-                                client.trash_email(uid)
-                            elif action == "delete":
-                                client.delete_email(uid)
+                            apply_email_action(client, action, uid, source_folder, is_gmail)
 
                             results["post_actions"]["success"] += 1
                             results["post_actions"]["by_action"][action] = (
@@ -544,17 +544,15 @@ def _apply_folder_post_action(folder_item: dict, action: str, results: dict):
     client = None
     try:
         client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+        # Gmail needs a provider-aware delete (its IMAP delete only removes
+        # a label, not the message); detected from the connected host.
+        is_gmail = is_gmail_host(client.host)
         client.select_folder(imap_folder)
         uids = client.search(criteria="ALL", limit=0)
 
         for uid in uids:
             try:
-                if action == "archive":
-                    client.archive_email(uid)
-                elif action == "trash":
-                    client.trash_email(uid)
-                elif action == "delete":
-                    client.delete_email(uid)
+                apply_email_action(client, action, uid, imap_folder, is_gmail)
                 results["post_actions"]["success"] += 1
                 results["post_actions"]["by_action"][action] = (
                     results["post_actions"]["by_action"].get(action, 0) + 1

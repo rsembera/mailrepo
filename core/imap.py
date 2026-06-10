@@ -1095,10 +1095,13 @@ class IMAP:
                     _collect(sub)
 
         # imaplib stores the COPYUID response code's *arguments* here, with the
-        # keyword stripped: "<uidvalidity> <src-set> <dst-set>". Check it first.
+        # keyword stripped: "<uidvalidity> <src-set> <dst-set>". Read it via
+        # response(), which POPS the entry — .untagged_responses.get() would
+        # leave it in place, and a stale COPYUID from an earlier command could
+        # be misread as this one's on a later call.
         try:
-            resp = self.connection.untagged_responses.get("COPYUID")
-            if resp:
+            _typ, resp = self.connection.response("COPYUID")
+            if resp and resp[0] is not None:
                 for item in resp:
                     text = item.decode("ascii", "ignore") if isinstance(item, bytes) else str(item)
                     m = re.search(r"\d+\s+\S+\s+(\d+)", text)
@@ -1228,8 +1231,10 @@ class IMAP:
             if status != "OK":
                 raise IMAPError(f"Failed to mark message {uid} as deleted")
 
-            # Expunge to permanently remove
-            self.connection.expunge()
+            # Expunge to permanently remove — scoped to this UID where the
+            # server supports UIDPLUS, so messages other clients have flagged
+            # \Deleted (but not yet expunged) are left untouched.
+            self._expunge_uid(uid)
 
             return True
         except Exception as e:

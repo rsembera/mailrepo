@@ -1,61 +1,66 @@
 """
-Dispatch-level tests for apply_post_commit_actions (web/blueprints/api/commit.py).
+Tests for apply_email_action (web/blueprints/api/commit.py) — the single
+shared dispatcher for post-commit server actions, called per message by the
+live /api/commit/stream workflow (progress_commit.py).
 
-Mocks the IMAP client and DB at the boundary — no real server, no Argon2id.
-These cover provider routing and, critically, the per-iteration source
-re-select that single-call unit tests cannot catch.
+Mocks the IMAP client at the boundary — no real server, no Argon2id.
+Covers provider routing and, critically, the source re-select before each
+Gmail delete (delete_email_via_trash changes the selected folder).
+
+History note: a previous version of these tests drove a near-identical
+dispatch loop in commit.py that nothing in the live app called, which let
+the Gmail-aware delete sit unwired while appearing tested. These tests
+target the helper the live workflow imports; if the import in
+progress_commit.py disappears, ruff's unused-import check will flag it.
 """
 
 from unittest.mock import MagicMock, call
 
-import web.blueprints.api.commit as commit_mod
-
-
-def _run(committed, source_actions, client):
-    """Drive apply_post_commit_actions to completion with a mocked client/DB."""
-    results = {"post_actions": {"success": 0, "failed": 0}}
-    orig_db = commit_mod.Database.fetchone
-    orig_connect = commit_mod.IMAP.connect_with_credentials
-    try:
-        commit_mod.Database.fetchone = staticmethod(
-            lambda *a, **k: {"id": 1, "credentials_encrypted": "enc"}
-        )
-        commit_mod.IMAP.connect_with_credentials = staticmethod(lambda creds: client)
-        list(commit_mod.apply_post_commit_actions(committed, source_actions, results))
-    finally:
-        commit_mod.Database.fetchone = orig_db
-        commit_mod.IMAP.connect_with_credentials = orig_connect
-    return results
+from web.blueprints.api.commit import apply_email_action
 
 
 def test_gmail_delete_reselects_source_before_each_uid():
     client = MagicMock()
-    client.host = "imap.gmail.com"
-    committed = {1: {"INBOX": [("100", 5), ("101", 5), ("102", 5)]}}
-    source_actions = {"account:1:5": "delete"}
 
-    results = _run(committed, source_actions, client)
+    for uid in ("100", "101", "102"):
+        apply_email_action(client, "delete", uid, "INBOX", is_gmail=True)
 
     # All three routed through the Gmail-aware path.
     assert client.delete_email_via_trash.call_count == 3
     client.delete_email.assert_not_called()
-    # Source folder re-selected before EACH message (1 initial + 3 per-uid).
-    select_calls = [c for c in client.select_folder.call_args_list if c == call("INBOX")]
-    assert len(select_calls) == 4
-    assert results["post_actions"]["success"] == 3
+    # Source folder re-selected before EACH message, in order.
+    expected = []
+    for uid in ("100", "101", "102"):
+        expected.append(call.select_folder("INBOX"))
+        expected.append(call.delete_email_via_trash(uid, "INBOX"))
+    assert client.mock_calls == expected
 
 
 def test_non_gmail_delete_uses_standard_delete():
     client = MagicMock()
-    client.host = "imap.fastmail.com"
-    committed = {1: {"INBOX": [("100", 5), ("101", 5)]}}
-    source_actions = {"account:1:5": "delete"}
 
-    results = _run(committed, source_actions, client)
+    for uid in ("100", "101"):
+        apply_email_action(client, "delete", uid, "INBOX", is_gmail=False)
 
     assert client.delete_email.call_count == 2
     client.delete_email_via_trash.assert_not_called()
-    # No extra per-iteration re-selects on the standard path (just the initial).
-    select_calls = [c for c in client.select_folder.call_args_list if c == call("INBOX")]
-    assert len(select_calls) == 1
-    assert results["post_actions"]["success"] == 2
+    # Standard path never re-selects; selection is the caller's business.
+    client.select_folder.assert_not_called()
+
+
+def test_archive_routes_to_archive_email_regardless_of_provider():
+    for is_gmail in (True, False):
+        client = MagicMock()
+        apply_email_action(client, "archive", "7", "INBOX", is_gmail=is_gmail)
+        client.archive_email.assert_called_once_with("7")
+        client.delete_email.assert_not_called()
+        client.delete_email_via_trash.assert_not_called()
+
+
+def test_trash_routes_to_trash_email_regardless_of_provider():
+    for is_gmail in (True, False):
+        client = MagicMock()
+        apply_email_action(client, "trash", "7", "INBOX", is_gmail=is_gmail)
+        client.trash_email.assert_called_once_with("7")
+        client.delete_email.assert_not_called()
+        client.delete_email_via_trash.assert_not_called()

@@ -5,8 +5,7 @@ Handles committing staged emails and folders to the archive.
 Supports post-commit actions (archive, trash, delete) for IMAP emails.
 """
 
-from core import IMAP, Config, Database, Encryption, IMAPError
-from core.account_utils import is_gmail_host
+from core import IMAP, Config, Database, Encryption
 
 from .email_parser import (
     extract_body_text,
@@ -422,108 +421,33 @@ def commit_imap_folder(
         client.disconnect()
 
 
-def apply_post_commit_actions(committed_emails: dict, source_actions: dict, results: dict):
+def apply_email_action(client, action: str, uid: str, source_folder: str, is_gmail: bool) -> None:
+    """Apply one post-commit action to one message on the IMAP server.
+
+    The single dispatcher for post-commit server actions, used by the live
+    /api/commit/stream workflow (progress_commit.py). Keep provider-aware
+    routing HERE — a previous version duplicated this logic per call site
+    and the Gmail-aware delete ended up wired into a function nothing called.
+
+    Caller contract: ``source_folder`` must be SELECTed before calling. On
+    the Gmail delete path this function re-selects it itself, because
+    delete_email_via_trash changes the selected folder; callers iterating
+    multiple UIDs therefore stay correct without re-selecting.
+
+    Raises IMAPError on failure (propagated from the client methods).
     """
-    Apply post-commit actions (archive, trash, delete) on IMAP server.
-
-    Args:
-        committed_emails: Dict of {account_id: {folder: [(uid, dest_folder_id), ...]}}
-        source_actions: Dict of action keys to action type
-        results: Results dict with post_actions counters
-
-    Yields status events.
-    """
-    if not committed_emails or not source_actions:
-        return
-
-    yield {
-        "type": "status",
-        "phase": "post_actions",
-        "message": "Applying post-commit actions on server...",
-    }
-
-    for account_id, folders_data in committed_emails.items():
-        account = Database.fetchone(
-            "SELECT id, credentials_encrypted FROM accounts WHERE id = ?", (account_id,)
-        )
-        if not account or not account["credentials_encrypted"]:
-            continue
-
-        client = None
-        try:
-            client = IMAP.connect_with_credentials(account["credentials_encrypted"])
-            # Gmail needs a provider-aware delete (its IMAP delete only removes
-            # a label, not the message); detected from the connected host.
-            is_gmail = is_gmail_host(client.host)
-
-            for source_folder, email_list in folders_data.items():
-                action = _find_action_for_source(source_actions, account_id, source_folder)
-
-                if not action or action == "leave":
-                    continue
-
-                try:
-                    client.select_folder(source_folder)
-
-                    for uid, dest_folder_id in email_list:
-                        try:
-                            if action == "archive":
-                                client.archive_email(uid)
-                                results["post_actions"]["success"] += 1
-                            elif action == "trash":
-                                client.trash_email(uid)
-                                results["post_actions"]["success"] += 1
-                            elif action == "delete":
-                                if is_gmail:
-                                    # delete_email_via_trash changes the
-                                    # selected folder, so re-select the source
-                                    # before each message.
-                                    client.select_folder(source_folder)
-                                    client.delete_email_via_trash(uid, source_folder)
-                                else:
-                                    client.delete_email(uid)
-                                results["post_actions"]["success"] += 1
-                        except IMAPError:
-                            results["post_actions"]["failed"] += 1
-                except IMAPError:
-                    results["post_actions"]["failed"] += len(email_list)
-
-        except Exception:
-            for folder_emails in folders_data.values():
-                results["post_actions"]["failed"] += len(folder_emails)
-        finally:
-            if client:
-                try:
-                    client.disconnect()
-                except Exception:
-                    pass
-
-
-def _find_action_for_source(
-    source_actions: dict, account_id: int, source_folder: str
-) -> str | None:
-    """
-    Find the action for a specific source folder.
-
-    Source action keys can be in various formats:
-    - "account:1:5" (account:account_id:dest_folder_id)
-    - "account:1:INBOX:5" (account:account_id:source_folder:dest_folder_id)
-    """
-    for key, action in source_actions.items():
-        if not key.startswith(f"account:{account_id}"):
-            continue
-
-        parts = key.split(":")
-        if len(parts) == 3:
-            # "account:1:5" format - applies to all folders for this dest
-            return action
-        elif len(parts) >= 4:
-            # "account:1:INBOX:5" format (folder name may contain colons)
-            folder_part = ":".join(parts[2:-1])
-            if folder_part == source_folder:
-                return action
-
-    return None
+    if action == "archive":
+        client.archive_email(uid)
+    elif action == "trash":
+        client.trash_email(uid)
+    elif action == "delete":
+        if is_gmail:
+            # delete_email_via_trash changes the selected folder; re-select
+            # the source before each message.
+            client.select_folder(source_folder)
+            client.delete_email_via_trash(uid, source_folder)
+        else:
+            client.delete_email(uid)
 
 
 def build_commit_summary(results: dict) -> str:

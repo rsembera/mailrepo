@@ -103,9 +103,25 @@ class TestCopyUidParsing:
 
     def test_parses_copyuid_from_untagged_responses(self):
         client, conn = make_client(("IMAP4REV1", "MOVE"))
-        conn.untagged_responses = {"COPYUID": [b"12 100 555"]}
+        # imaplib surfaces response-code arguments via response(), which POPS
+        # the entry from untagged_responses — emulate that pop.
+        store = {"COPYUID": [b"12 100 555"]}
+        conn.response.side_effect = lambda key: (key, store.pop(key, [None]))
         conn.uid.side_effect = _uid_dispatch({"MOVE": ("OK", [b"done"])})
         assert client.move_email("100", "Trash") == "555"
+
+    def test_stale_copyuid_not_reused_for_later_move(self):
+        # Regression (Session 46 review): a COPYUID left over from an earlier
+        # command must not be misattributed to a later move whose server
+        # response carries no COPYUID of its own.
+        client, conn = make_client(("IMAP4REV1", "MOVE"))
+        store = {"COPYUID": [b"12 100 555"]}
+        conn.response.side_effect = lambda key: (key, store.pop(key, [None]))
+        conn.uid.side_effect = _uid_dispatch({"MOVE": ("OK", [b"done"])})
+        assert client.move_email("100", "Trash") == "555"
+        # Second move: entry was consumed, server reports nothing -> None,
+        # never the previous message's UID.
+        assert client.move_email("101", "Trash") is None
 
 
 class TestCallSiteContract:

@@ -20,7 +20,6 @@ import pytest
 from core import Config, Database, Encryption
 from web.blueprints.api.commit import (
     _check_duplicate,
-    _find_action_for_source,
     _save_email_to_archive,
     build_commit_summary,
     create_archive_folder_from_path,
@@ -164,30 +163,6 @@ class TestBuildCommitSummary:
         r["post_actions"]["by_action"] = {"archive": 2, "trash": 1, "delete": 0}
         summary = build_commit_summary(r)
         assert "2 archived" in summary and "1 trashed" in summary and "on server" in summary
-
-
-# ---------------------------------------------------------------------------
-# _find_action_for_source
-# ---------------------------------------------------------------------------
-
-
-class TestFindActionForSource:
-    def test_three_part_key_applies_to_account(self):
-        actions = {"account:1:5": "archive"}
-        assert _find_action_for_source(actions, 1, "INBOX") == "archive"
-
-    def test_four_part_key_matches_folder(self):
-        actions = {"account:1:INBOX:5": "trash"}
-        assert _find_action_for_source(actions, 1, "INBOX") == "trash"
-        assert _find_action_for_source(actions, 1, "Sent") is None
-
-    def test_folder_name_with_colon(self):
-        actions = {"account:2:[Gmail]:All Mail:9": "delete"}
-        assert _find_action_for_source(actions, 2, "[Gmail]:All Mail") == "delete"
-
-    def test_wrong_account_returns_none(self):
-        actions = {"account:1:5": "archive"}
-        assert _find_action_for_source(actions, 2, "INBOX") is None
 
 
 # ---------------------------------------------------------------------------
