@@ -154,6 +154,13 @@ def main():
     if "--help" in sys.argv or "-h" in sys.argv:
         show_help()
 
+    # Console logging with timestamps (WARNING+). Console-only by design:
+    # error strings can contain folder names, which shouldn't hit disk.
+    logging.basicConfig(
+        level=logging.WARNING,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
     # Suppress polling endpoint logging
     werkzeug_logger = logging.getLogger("werkzeug")
     werkzeug_logger.addFilter(PollingFilter())

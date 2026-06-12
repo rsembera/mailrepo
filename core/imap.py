@@ -117,7 +117,9 @@ class IMAP:
             else:
                 self.connection = imaplib.IMAP4(self.host, self.port, timeout=60)
         except Exception as e:
-            raise IMAPError(f"Failed to connect to {self.host}:{self.port}: {e}")
+            # Chain the cause so callers can detect socket-level failures
+            # (e.g. progress_commit checks __cause__ for socket.timeout).
+            raise IMAPError(f"Failed to connect to {self.host}:{self.port}: {e}") from e
 
     def login(self, email_address: str, password: str) -> None:
         """
@@ -133,7 +135,7 @@ class IMAP:
         try:
             self.connection.login(email_address, password)
         except imaplib.IMAP4.error as e:
-            raise IMAPError(f"Authentication failed: {e}")
+            raise IMAPError(f"Authentication failed: {e}") from e
 
     def disconnect(self) -> None:
         """Close IMAP connection."""

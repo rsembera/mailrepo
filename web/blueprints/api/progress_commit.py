@@ -17,6 +17,7 @@ workflow lives in its own focused module. The sse_message() helper lives
 in progress.py (the coordinator).
 """
 
+import logging
 import socket
 
 from flask import Response, request, stream_with_context
@@ -45,6 +46,8 @@ from .commit import (
 )
 from .progress import sse_message
 from .streaming import clear_folder_cache
+
+logger = logging.getLogger(__name__)
 
 
 @api_bp.route("/commit/stream", methods=["POST"])
@@ -440,6 +443,11 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
         )
         if not account or not account["credentials_encrypted"]:
             results["post_actions"]["failed"] += len(account_items)
+            logger.warning(
+                "Post-commit actions skipped for account %s (%d items): no stored credentials",
+                account_id,
+                len(account_items),
+            )
             continue
 
         client = None
@@ -481,19 +489,42 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
                             )
                             mark_item_done(item["id"])
                             actions_applied = True
-                        except IMAPError:
+                        except IMAPError as e:
                             results["post_actions"]["failed"] += 1
+                            logger.warning(
+                                "Post-commit %s failed for UID %s in %s: %s",
+                                action,
+                                uid,
+                                source_folder,
+                                e,
+                            )
 
                     # Invalidate email cache so UI reflects changes
                     if actions_applied:
                         clear_folder_cache(int(account_id), source_folder)
-                except IMAPError:
+                except IMAPError as e:
                     results["post_actions"]["failed"] += len(folder_items)
+                    logger.warning(
+                        "Post-commit actions failed for folder %s (%d items): %s",
+                        source_folder,
+                        len(folder_items),
+                        e,
+                    )
 
         except Exception as e:
             results["post_actions"]["failed"] += len(account_items)
-            # Report connection issues to the user via SSE
-            if isinstance(e, (socket.timeout, OSError)):
+            logger.warning(
+                "Post-commit actions failed for account %s (%d items): %s",
+                account_id,
+                len(account_items),
+                e,
+            )
+            # Report connection issues to the user via SSE. IMAPError wraps
+            # the underlying socket error (see core/imap.py connect()), so
+            # check the chained cause as well as the exception itself.
+            if isinstance(e, (socket.timeout, OSError)) or isinstance(
+                e.__cause__, (socket.timeout, OSError)
+            ):
                 yield sse_message(
                     "status",
                     {
@@ -528,6 +559,11 @@ def _apply_folder_post_action(folder_item: dict, action: str, results: dict):
     )
     if not account or not account["credentials_encrypted"]:
         results["post_actions"]["failed"] += 1
+        logger.warning(
+            "Post-commit folder action skipped for account %s (%s): no stored credentials",
+            account_id,
+            imap_folder,
+        )
         return
 
     action_verb = {"archive": "Archiving", "trash": "Trashing", "delete": "Deleting"}.get(
@@ -557,14 +593,27 @@ def _apply_folder_post_action(folder_item: dict, action: str, results: dict):
                 results["post_actions"]["by_action"][action] = (
                     results["post_actions"]["by_action"].get(action, 0) + 1
                 )
-            except IMAPError:
+            except IMAPError as e:
                 results["post_actions"]["failed"] += 1
+                logger.warning(
+                    "Post-commit %s failed for UID %s in %s: %s",
+                    action,
+                    uid,
+                    imap_folder,
+                    e,
+                )
 
         # Invalidate email cache for this folder so UI reflects changes
         clear_folder_cache(int(account_id), imap_folder)
 
-    except Exception:
+    except Exception as e:
         results["post_actions"]["failed"] += 1
+        logger.warning(
+            "Post-commit folder action %s failed for %s: %s",
+            action,
+            imap_folder,
+            e,
+        )
     finally:
         if client:
             try:
