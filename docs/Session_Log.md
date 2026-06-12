@@ -2772,3 +2772,72 @@ Remaining: general dogfooding, then tag + website go-live (rename
 `index_final.html`, real GitHub URLs, download links, screenshots),
 then `.deb`/`.dmg` packaging. Backlog addition from review: none —
 Finding 3 was fixed rather than deferred.
+
+
+---
+
+## Session 47 — June 12, 2026 (MacBook)
+
+### Dogfooding failure: silent post-commit server failures
+
+First real-mail dogfooding hiccup. A 3-email Gmail commit with Delete
+action archived locally fine, then hung ~60s on "Updating server..."
+and reported "3 server updates failed" — with zero diagnostics
+anywhere. Not the console, not the summary, nowhere.
+
+Code reading found why: every failure handler in the post-commit
+action phase of `progress_commit.py` was a bare `except IMAPError`
+that incremented a counter and discarded the error string — six
+silent paths in all (per-email, per-folder, per-account, missing
+credentials, and both paths in `_apply_folder_post_action`).
+
+A second, related bug: the "Server not responding" SSE notice checked
+`isinstance(e, (socket.timeout, OSError))`, but `connect()` wraps all
+exceptions into `IMAPError` first — so the one scenario the friendly
+message was written for (a connect timeout) is precisely the one it
+could never fire on.
+
+Best guess at the actual cause: a transient connection failure to
+imap.gmail.com during the post-action phase (the 60s hang matches the
+socket timeout in `connect()`). The failure counted 3-at-once, which
+fits the connect or select_folder bulk paths. Unprovable after the
+fact — which is the point of the fix. Rick deleted the three emails
+manually in Apple Mail; the local archive copies were intact
+throughout, as designed.
+
+### Fixes
+
+- `progress_commit.py`: module logger; `logger.warning` with action,
+  UID, folder/account, and error text in all six silent failure
+  paths.
+- `progress_commit.py`: the socket-timeout check now also inspects
+  `e.__cause__`, so the "Server not responding" notice can fire on
+  wrapped connect failures.
+- `core/imap.py`: `connect()` and `login()` use `raise ... from e`
+  so the underlying socket error survives as `__cause__`.
+- `main.py`: `logging.basicConfig` (WARNING+, timestamps).
+  Console-only by design — error strings can contain folder names,
+  which shouldn't hit disk unencrypted.
+
+### Notes
+
+- Lesson for the log: failure *counters* without failure *reasons*
+  are a diagnosability dead end. The commit-phase handlers already
+  recorded `str(e)` per item; the post-action handlers never did.
+  Any new except-and-count handler should log the error text.
+- The 60s IMAP socket timeout is the floor on how long a dead-server
+  commit can hang. Acceptable for now; a shorter timeout or a
+  per-phase progress message could soften it post-1.0 if dogfooding
+  surfaces it again.
+
+### Commits
+
+- `e3bc914` — Add logging to post-commit server action failure paths
+- (this entry) — docs: Session 47 log; changelog
+
+### On the horizon
+
+Unchanged from Session 46: general dogfooding (now with working
+failure diagnostics), then tag + website go-live, then `.deb`/`.dmg`
+packaging. If the "3 failed" symptom recurs, the console will now
+name the failing path and Gmail's actual error.

@@ -97,8 +97,8 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `filesystem.py` | 769 | File browser for imports, path validation, PST conversion |
 | `imports.py` | 718 | Mount/unmount imports, browse imported emails/folders |
 | `folders.py` | 706 | Archive folder CRUD, trash, restore, vault, retention |
+| `progress_commit.py` | 622 | SSE streaming for commit operations; post-action failures logged with error text (Session 47) |
 | `commit.py` | 541 | Email/folder commit workflow |
-| `progress_commit.py` | 494 | SSE streaming for commit operations |
 | `accounts.py` | 493 | IMAP account CRUD, Gmail auto-detection, folder listing |
 | `email_parser.py` | 336 | Email parsing: headers, body, attachments, body text extraction |
 | `progress_emails.py` | 266 | SSE streaming for email operations |

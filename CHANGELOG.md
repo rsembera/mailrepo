@@ -9,7 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Post-commit server action failures are now logged (Session 47).**
+  All six failure paths in the post-commit action phase
+  (`progress_commit.py`) previously swallowed errors silently — a
+  failed commit reported "N server updates failed" with no
+  diagnostics. Each path now logs a warning with the action, UID,
+  folder/account, and the server's actual error text. `main.py` adds
+  a console logging config (WARNING+, timestamps); deliberately no
+  log file, since error strings can contain folder names.
+
 ### Fixed
+- **"Server not responding" notice can now actually fire on connect
+  failures (Session 47).** The SSE notice checked
+  `isinstance(e, (socket.timeout, OSError))`, but `connect()` wraps
+  all exceptions into `IMAPError`, so a connect timeout — the exact
+  scenario the message was written for — never matched. `connect()`
+  and `login()` now chain the cause (`raise ... from e`) and the
+  check inspects `e.__cause__`.
 - **Gmail-aware delete now runs in the live commit path (Session 46).**
   The Session 45 provider-aware delete had been wired into a dispatch
   function (`apply_post_commit_actions`) that no route called; the live
