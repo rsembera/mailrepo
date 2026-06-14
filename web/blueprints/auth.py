@@ -322,11 +322,7 @@ def _run_auto_backup_check():
             # Record that we checked today (whether backup created or not)
             backup.record_backup_check()
         else:
-            # Frequency check says no backup needed, but we still need to
-            # update the hash baseline after checkpoint to prevent false
-            # positives on the next check (WAL checkpoint can change db binary)
-            backup.refresh_hash_baseline()
-            log.debug("Backup not needed (frequency check), baseline updated")
+            log.debug("Backup not needed (frequency check)")
     except Exception as e:
         log.error(f"Auto-backup failed: {e}")
 

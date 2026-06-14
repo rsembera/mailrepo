@@ -324,18 +324,6 @@ def _save_baseline_hashes(hashes, file_info=None):
     _write_backup_state(state)
 
 
-def refresh_hash_baseline():
-    """
-    DEPRECATED: This function exists for backward compatibility only.
-
-    The new system automatically updates the baseline in create_backup(),
-    so manual refresh is no longer needed.
-    """
-    # Still works, but shouldn't be necessary
-    current_hashes = get_file_hashes()
-    _save_baseline_hashes(current_hashes)
-
-
 def generate_backup_filename(backup_type):
     """Generate unique backup filename."""
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")

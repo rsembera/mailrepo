@@ -108,10 +108,6 @@ def _cleanup(app):
                             except Exception as e:
                                 log.warning(f"Post-backup command error: {e}")
                     backup.record_backup_check()
-                else:
-                    # No backup needed, but checkpoint may have changed db binary
-                    # Update baseline so next check doesn't see spurious changes
-                    backup.refresh_hash_baseline()
             except Exception as e:
                 log.warning(f"Backup warning: {e}")
 
