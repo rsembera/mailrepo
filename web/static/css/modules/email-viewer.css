@@ -50,6 +50,17 @@
     gap: var(--space-sm);
 }
 
+/* While an email is loading, hide every action button. The close button
+   lives outside .email-viewer-actions, so it stays available the whole time.
+   This prevents the action buttons from being clickable before
+   currentViewerContext is set for the new email — which would otherwise
+   silently no-op (null context) or act on the previously-viewed email
+   (stale context). !important is required to override the inline display
+   that the per-button visibility helpers set on star/stage/prev/next. */
+.email-viewer-overlay.loading .email-viewer-actions button {
+    display: none !important;
+}
+
 .btn-icon {
     width: 36px;
     height: 36px;

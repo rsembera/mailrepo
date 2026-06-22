@@ -906,8 +906,11 @@ async function openSearchResult(messageId, folderId) {
         // Render email in viewer
         renderEmailContent(data.email, currentViewerContext);
         
-        // Show viewer overlay
-        document.getElementById('emailViewerOverlay').classList.add('active');
+        // Show viewer overlay (already fully loaded, so clear any stale
+        // loading state that an earlier failed load may have left on)
+        const searchOverlay = document.getElementById('emailViewerOverlay');
+        searchOverlay.classList.remove('loading');
+        searchOverlay.classList.add('active');
         
     } catch (error) {
         console.error('Error loading email:', error);
@@ -1217,6 +1220,14 @@ export async function openEmailViewer(emailId, options = {}) {
     
     const overlay = document.getElementById('emailViewerOverlay');
     overlay.classList.add('active');
+    // Hide the action buttons until the email has loaded and its context is
+    // set. Cleared after renderEmailContent below (and on error we leave it
+    // on, since a failed load has nothing to act on). Close stays available.
+    overlay.classList.add('loading');
+    // Clear the previous email's context immediately so that anything reading
+    // it during the load window — button handlers AND keyboard shortcuts —
+    // short-circuits on its null guard instead of acting on the prior email.
+    currentViewerContext = null;
     
     // In vault mode, hide any action buttons that modify emails
     if (vaultMode) {
@@ -1320,6 +1331,9 @@ export async function openEmailViewer(emailId, options = {}) {
         _updatePrevNextButtons(context);
         _updateStarButton(context);
         renderEmailContent(data.email, context);
+        // Email is loaded and context (incl. emailData) is set — reveal the
+        // action buttons now that they're safe to click.
+        overlay.classList.remove('loading');
         
     } catch (error) {
         console.error('Error loading email:', error);
@@ -1785,6 +1799,7 @@ function getAttachmentDownloadUrl(context, index) {
  */
 export function closeEmailViewer() {
     document.getElementById('emailViewerOverlay').classList.remove('active');
+    document.getElementById('emailViewerOverlay').classList.remove('loading');
     currentViewerContext = null;
     _updateStageThreadButton(null);
     _updatePrevNextButtons(null);
