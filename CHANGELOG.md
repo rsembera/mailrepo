@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Viewer action buttons are now gated on email load (Session 49).**
+  The email viewer's always-on action buttons (copy-as-reply,
+  view-source, download, print) had no visibility gating, so during the
+  multi-second IMAP fetch they were clickable against a
+  `currentViewerContext` that was either `null` (the click silently
+  no-op'd) or still the previously-viewed email (the action applied to
+  the *wrong* message). The whole action group is now hidden via a
+  `loading` class on the viewer overlay until the email has rendered;
+  the close button stays available throughout. The viewer context is
+  also cleared at load-start, so keyboard shortcuts (j/k/s)
+  short-circuit during the load as well. Side benefit: the "Stage
+  thread" button no longer appears in sync with the body, which had
+  looked like a background evaluation was gating it.
+
+### Removed
+- **Dead `refresh_hash_baseline()` and its callers (Session 48).** With
+  the backup system now frequency-first (calendar-based), the hash
+  baseline never gates whether a backup runs. The two surviving
+  `refresh_hash_baseline()` calls — both in the no-backup branch of the
+  auto-backup flow, in `web/blueprints/auth.py` and root `main.py` —
+  and the deprecated function itself (`utils/backup.py`) are removed.
+  No behavioural change; full suite green (345 tests).
+
 ### Added
 - **Post-commit server action failures are now logged (Session 47).**
   All six failure paths in the post-commit action phase

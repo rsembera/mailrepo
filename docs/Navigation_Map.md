@@ -84,7 +84,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `auth.py` | 413 | Setup, login, logout, rate limiting, session management |
+| `auth.py` | 465 | Setup, login, logout, rate limiting, session management |
 | `backups.py` | 280 | Backup/restore endpoints, folder picker |
 | `main.py` | 83 | Page routes: index, create_archive, settings |
 
@@ -111,13 +111,13 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `backup.py` | 1,179 | Full/incremental backup, restore, retention, external state file (Libram-style) |
+| `backup.py` | 1,211 | Full/incremental backup, restore, retention, external state file (Libram-style) |
 | `log.py` | 51 | Logging setup, polling filter |
 | `__init__.py` | 38 | Shell command runner, path utilities |
 
 ---
 
-## Frontend (JavaScript — 16,422 lines)
+## Frontend (JavaScript — 16,437 lines)
 
 ### Entry Point & Shared
 
@@ -134,7 +134,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `mail.js` | 2,284 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
+| `mail.js` | 2,299 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
 | `settings.js` | 1,216 | Settings: appearance, accounts, security, backup, reset |
 | `review.js` | 1,055 | Review staged items, destination editing, commit |
 | `backups.js` | 952 | Backup/restore UI, restore points, settings |
@@ -164,7 +164,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 ---
 
-## CSS (7,469 lines)
+## CSS (7,480 lines)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
@@ -174,7 +174,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 Per-module stylesheets in `/css/modules/`: settings-view (606), backups-view (603),
 email-list (599), modals (569), export (513), sidebar (441), vault (413),
-review-view (325), email-viewer (321), folder-mgmt (320), content (293),
+review-view (325), email-viewer (332), folder-mgmt (320), content (293),
 folder-selection (255), date-picker (242), trash (230), folder-tree (198),
 layout (169), custom-select (121), progress (120), responsive (84),
 context-menu (69).

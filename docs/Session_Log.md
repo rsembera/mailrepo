@@ -2841,3 +2841,128 @@ Unchanged from Session 46: general dogfooding (now with working
 failure diagnostics), then tag + website go-live, then `.deb`/`.dmg`
 packaging. If the "3 failed" symptom recurs, the console will now
 name the failing path and Gmail's actual error.
+
+
+---
+
+## Session 48 — June 14, 2026 (MacBook)
+
+*(Logged retroactively in Session 49 — this entry was missed at the time.)*
+
+### Backup state migration: final cleanup
+
+Closed out the last item in `docs/Backup_State_Cleanup.md`. The
+migration to the external `.backup_state.json` (Libram-style) pattern
+was already complete; what remained were two vestigial
+`refresh_hash_baseline()` calls and the now-dead function itself.
+
+Both calls lived in the *no-backup* branch of the auto-backup flow —
+`web/blueprints/auth.py` (`_run_auto_backup_check`) and the shutdown
+handler in root `main.py`. Their justifying comments reasoned from the
+old hash-gated model ("update the baseline so the next check doesn't
+see spurious changes"), but the backup decision is now frequency-first
+(calendar-based) and never gates on a hash, so a stale baseline can't
+produce a false "backup needed".
+
+### Verification (before deleting anything)
+
+Checked against source rather than trusting the planning doc:
+
+- `grep` confirmed exactly the three sites the doc named, and **zero**
+  references in `tests/` — so the "update or drop tests" step was a
+  no-op.
+- The doc called `create_incremental_backup` the *only* baseline
+  consumer; there's actually a second reader in `create_backup()` (the
+  full-vs-incremental dispatch), but it only checks whether a baseline
+  *exists* — never its contents — and an absent baseline just forces a
+  full backup. Conservative, so the safety argument holds: a stale
+  baseline can only mark *more* files changed, never fewer, so no
+  change is ever missed.
+
+Full suite: 345 passed.
+
+### Commits
+
+- `c363fba` — Remove dead refresh_hash_baseline() and its stale callers
+- `f8a5f75` — Mark Backup_State_Cleanup as implemented (kept the
+  planning note on file with an IMPLEMENTED banner rather than deleting it)
+
+
+---
+
+## Session 49 — June 22, 2026 (MacBook)
+
+### Investigation: why does the "Stage thread" button appear late?
+
+Started as a question, not a bug report. Rick noticed the "Stage
+thread to folder" button in the live email viewer appears in sync with
+the email body — every *other* toolbar button is already there — which
+reads as if some evaluation runs in the background before the button is
+allowed to show.
+
+It doesn't. The button's visibility (`_updateStageThreadButton` in
+`mail.js`) is a pure context check: show it for any live IMAP message
+(`type === 'account'` with accountId/folder/uid). It does no thread
+analysis. The actual conversation walk (`POST /api/threads/find`, a
+multi-second IMAP round-trip) only runs *on click*. The lateness was
+purely an ordering artifact — the show-call sat *after*
+`await fetchWithRetry(...)`, so it landed at the same instant as the
+rendered body. (This also explains the earlier surprise that the
+button staged a single email for a thread whose other members had been
+deleted: correct behaviour — thread size is only known post-walk.)
+
+### The real issue underneath
+
+Tracing that ordering surfaced a latent correctness problem with the
+*other* viewer buttons. The four always-on actions — copy-as-reply,
+view-source, download, print — have no visibility gating at all, so
+they're clickable during the load window. During that window
+`currentViewerContext` is either `null` (fresh open → the handlers'
+own guards make the click a silent no-op) or still pointing at the
+*previously-viewed* email (switching messages with the viewer open →
+the click acts on the wrong message). The Stage thread / star /
+prev-next buttons sidestepped this only because they were already
+hidden until their context was ready — so the button that looked
+*confusing* was in fact the correctly-behaved one.
+
+
+### Fix — gate the whole action group on load
+
+- `openEmailViewer` adds a `loading` class to the overlay before the
+  fetch. CSS hides every button inside `.email-viewer-actions` while
+  it's set; the close button lives *outside* that group, so it stays
+  available the entire time (you can always bail out of a slow load).
+- The class clears only after `renderEmailContent` runs (success path),
+  once context and `emailData` are populated. On a failed load it stays
+  on — nothing to act on — and `closeEmailViewer` resets it.
+- `currentViewerContext` is nulled at load-start, so button handlers
+  *and* the j/k/s keyboard shortcuts short-circuit on their existing
+  null guards during the load instead of acting on the prior email.
+  Escape stays unconditional.
+- `openSearchResult` (which builds an already-loaded viewer) clears any
+  stale `loading` before showing.
+
+Net: the toolbar now appears as one unit, after the body — no trickle,
+no "is it thinking?" — and the stale-/null-context window on the
+always-on buttons is closed.
+
+### Notes
+
+- Frontend only; `node --check` clean on `mail.js`. The Python suite
+  doesn't exercise this. Needs a hard browser refresh to clear cached
+  JS/CSS when testing.
+- The CSS rule uses `!important` deliberately: the per-button helpers
+  set inline `display`, which an external rule can't otherwise override.
+
+### Commits
+
+- `d35438a` — Hide viewer action buttons until the email finishes loading
+- (this entry) — docs: Session 48 backfill + Session 49 log; changelog;
+  navigation map
+
+### On the horizon
+
+Unchanged: dogfooding → `git tag v1.0.0` + website go-live →
+`.deb`/`.dmg` packaging. The printable-recovery-key feature
+(envelope-encryption model) remains the highest-leverage pre-launch
+item still on the board.
