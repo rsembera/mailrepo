@@ -38,15 +38,15 @@ and `CHANGELOG.md` for the user-facing changelog under
 
 ---
 
-## Codebase Overview (~38,200 lines)
+## Codebase Overview (~38,800 lines)
 
 | Language | Files | Lines |
 |----------|-------|-------|
-| Python | 33 | 12,964 |
-| JavaScript | 29 | 16,422 |
-| CSS | 23 | 7,469 |
+| Python | 35 | 13,553 |
+| JavaScript | 29 | 16,430 |
+| CSS | 23 | 7,480 |
 | HTML | 5 | 1,331 |
-| **Total** | **90** | **38,186** |
+| **Total** | **92** | **38,794** |
 
 Roughly doubled since the Feb 4, 2026 snapshot (was ~20,100 lines).
 Largest growth: encryption refactor (Sessions 36–37), retention vault
@@ -56,21 +56,21 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 ---
 
-## Backend (Python — 12,964 lines)
+## Backend (Python — 13,553 lines)
 
 ### Core (`/core/`)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `imap.py` | 1,337 | IMAP client: connect, auth, folders, fetch, MOVE/COPY + UID-scoped expunge, Gmail-aware delete, CONDSTORE |
-| `pdf_export.py` | 1,020 | PDF export: per-email PDFs, attachment merging, WeasyPrint |
-| `database.py` | 434 | SQLCipher connection, schema v5, FTS5, migrations, threading lock |
-| `encryption.py` | 373 | Argon2id KDF + HKDF + AES-256-GCM file/DB encryption (v2) |
-| `password_change.py` | 336 | v2-native password change with full file/DB re-encryption |
-| `importer.py` | 274 | mbox, Apple mbox, EML, PST import handling |
+| `imap.py` | 1,344 | IMAP client: connect, auth, folders, fetch, MOVE/COPY + UID-scoped expunge, Gmail-aware delete, CONDSTORE |
+| `pdf_export.py` | 1,052 | PDF export: per-email PDFs, attachment merging, WeasyPrint |
+| `database.py` | 432 | SQLCipher connection, schema v5, FTS5, migrations, threading lock |
+| `encryption.py` | 385 | Argon2id KDF + HKDF + AES-256-GCM file/DB encryption (v2) |
+| `password_change.py` | 344 | v2-native password change with full file/DB re-encryption |
+| `importer.py` | 280 | mbox, Apple mbox, EML, PST import handling |
 | `pending_commit.py` | 222 | Commit resume: save/restore interrupted commits |
 | `config.py` | 114 | Paths, constants, Flask config |
-| `sync_cache.py` | 109 | Two-layer IMAP folder cache (TTL + CONDSTORE/HIGHESTMODSEQ) |
+| `sync_cache.py` | 111 | Two-layer IMAP folder cache (TTL + CONDSTORE/HIGHESTMODSEQ) |
 | `__init__.py` | 30 | Module exports |
 | `account_utils.py` | 18 | Shared account helpers (`is_gmail_host` — Gmail provider detection) |
 
@@ -78,34 +78,34 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `app.py` | 156 | Flask factory, blueprint registration, auth/CSRF middleware |
+| `app.py` | 180 | Flask factory, blueprint registration, auth/CSRF middleware |
 
 ### Blueprints (`/web/blueprints/`)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
 | `auth.py` | 465 | Setup, login, logout, rate limiting, session management |
-| `backups.py` | 280 | Backup/restore endpoints, folder picker |
-| `main.py` | 83 | Page routes: index, create_archive, settings |
+| `backups.py` | 273 | Backup/restore endpoints, folder picker |
+| `main.py` | 81 | Page routes: index, create_archive, settings |
 
 ### API (`/web/blueprints/api/`)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `exports.py` | 954 | Bulk PDF/encrypted-ZIP export pipeline + SSE progress |
-| `emails.py` | 822 | Archived email operations: view, move, delete, batch, download |
-| `filesystem.py` | 769 | File browser for imports, path validation, PST conversion |
-| `imports.py` | 718 | Mount/unmount imports, browse imported emails/folders |
-| `folders.py` | 706 | Archive folder CRUD, trash, restore, vault, retention |
+| `exports.py` | 997 | Bulk PDF/encrypted-ZIP export pipeline + SSE progress |
+| `emails.py` | 824 | Archived email operations: view, move, delete, batch, download |
+| `filesystem.py` | 807 | File browser for imports, path validation, PST conversion |
+| `imports.py` | 744 | Mount/unmount imports, browse imported emails/folders |
+| `folders.py` | 670 | Archive folder CRUD, trash, restore, vault, retention |
 | `progress_commit.py` | 622 | SSE streaming for commit operations; post-action failures logged with error text (Session 47) |
-| `commit.py` | 541 | Email/folder commit workflow |
-| `accounts.py` | 493 | IMAP account CRUD, Gmail auto-detection, folder listing |
+| `commit.py` | 488 | Email/folder commit workflow |
+| `accounts.py` | 495 | IMAP account CRUD, Gmail auto-detection, folder listing |
 | `email_parser.py` | 336 | Email parsing: headers, body, attachments, body text extraction |
-| `progress_emails.py` | 266 | SSE streaming for email operations |
-| `settings.py` | 236 | App settings: timeout, retention, keepalive |
-| `streaming.py` | 160 | SSE helpers, heartbeat, connection management |
-| `threads.py` | 139 | Thread search and staging endpoints |
-| `progress.py` | 61 | Progress entry point (split into streams/state/handlers in Session 37) |
+| `progress_emails.py` | 286 | SSE streaming for email operations |
+| `settings.py` | 247 | App settings: timeout, retention, keepalive |
+| `streaming.py` | 162 | SSE helpers, heartbeat, connection management |
+| `threads.py` | 138 | Thread search and staging endpoints |
+| `progress.py` | 63 | Progress entry point (split into streams/state/handlers in Session 37) |
 
 ### Utilities (`/utils/`)
 
@@ -113,11 +113,11 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 |------|-------|--------------|
 | `backup.py` | 1,211 | Full/incremental backup, restore, retention, external state file (Libram-style) |
 | `log.py` | 51 | Logging setup, polling filter |
-| `__init__.py` | 38 | Shell command runner, path utilities |
+| `__init__.py` | 34 | Shell command runner, path utilities |
 
 ---
 
-## Frontend (JavaScript — 16,437 lines)
+## Frontend (JavaScript — 16,430 lines)
 
 ### Entry Point & Shared
 
@@ -135,11 +135,11 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | File | Lines | What It Does |
 |------|-------|--------------|
 | `mail.js` | 2,299 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
-| `settings.js` | 1,216 | Settings: appearance, accounts, security, backup, reset |
-| `review.js` | 1,055 | Review staged items, destination editing, commit |
+| `settings.js` | 1,217 | Settings: appearance, accounts, security, backup, reset |
+| `review.js` | 1,034 | Review staged items, destination editing, commit |
 | `backups.js` | 952 | Backup/restore UI, restore points, settings |
 | `folder-selection.js` | 895 | Bulk folder staging from IMAP/imports |
-| `vault.js` | 884 | Retention vault: move to vault, restore, permanent delete |
+| `vault.js` | 889 | Retention vault: move to vault, restore, permanent delete |
 | `trash.js` | 774 | Trash view: deleted folders, emails, restore, purge |
 | `folder-mgmt.js` | 667 | Manage folders: rename, color, create, delete |
 | `starred.js` | 368 | Starred email view |
@@ -160,7 +160,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `folder-tree.js` | 255 | Reusable folder tree renderer |
 | `custom-select.js` | 223 | Custom dropdown select component |
 | `thread-stage.js` | 197 | Stage-entire-thread modal from email viewer |
-| `move-email-modal.js` | 133 | Move archived emails between folders |
+| `move-email-modal.js` | 141 | Move archived emails between folders |
 
 ---
 
@@ -281,7 +281,7 @@ python main.py
 
 ---
 
-## Test Suite (346 tests)
+## Test Suite (345 tests)
 
 | File | Coverage |
 |------|----------|
