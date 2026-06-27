@@ -2966,3 +2966,77 @@ Unchanged: dogfooding → `git tag v1.0.0` + website go-live →
 `.deb`/`.dmg` packaging. The printable-recovery-key feature
 (envelope-encryption model) remains the highest-leverage pre-launch
 item still on the board.
+
+
+---
+
+## Session 50 — June 27, 2026 (MacBook)
+
+### Bug: bulk export silently did nothing
+
+Dogfooding turned up a broken export — selecting a couple of archived
+emails, choosing ".eml ZIP", and clicking Export did nothing. The JS
+console showed an unhandled rejection in `_startExport`
+(export-modal.js): `TypeError: Attempted to assign to readonly
+property` — WebKit's wording for reassigning a `const`.
+
+Root cause: `_exportPrefs` was declared `const` (line 45), but
+`_startExport` reassigns it wholesale to capture the validated form
+state (format / sort / include-subfolders / etc.) for the session. The
+per-property writes elsewhere (`_exportPrefs.format = …`) are legal on a
+const object, so only the wholesale reassignment threw — killing every
+export before the POST to `/api/export/start`. Introduced by an earlier
+frontend-cleanup "prefer const" pass (commit `5e798d6`, "export-modal.js
+converted"); only surfaced now because export isn't an everyday action.
+
+Fix: `const _exportPrefs` → `let _exportPrefs`. The reassigned object
+literal has the same five keys as the declaration, so nothing is
+dropped — restores the pre-cleanup behaviour exactly.
+
+### Why node --check missed it
+
+`node --check` only parses; const-reassignment is a runtime strict-mode
+error, not a syntax error — the same blind spot that lets missing
+`export` keywords through. The JS gate can't catch this class.
+
+
+### Swept for siblings
+
+Ran ESLint's read-only-binding rule family (`no-const-assign`,
+`no-import-assign`, `no-func-assign`, `no-class-assign`,
+`no-self-assign`) across all 29 files in `web/static/js`: zero
+violations. Validated the check with a positive control (a
+function-local const reassignment + an import reassignment, both
+correctly flagged), so the clean result is trustworthy and covers
+function-local scope, not just module-level. `_exportPrefs` was the only
+instance of this family in the frontend. ESLint was run one-off via npx
+— no config committed, no dependency added.
+
+### Commits
+
+- `8b4ae15` — Fix export: _exportPrefs must be 'let', not 'const'
+- (this entry) — docs: Session 50 log + changelog
+
+### Also this period (June 26–27 — diagnostic only, no code changes)
+
+- **Logout hang during backup (June 26):** ~60s logout spinner during an
+  incremental backup. Traced to the post-backup rsync to Sentinel —
+  buffered subprocess output (no live progress) plus the upload running
+  synchronously in the logout path. Confirmed normal: the ~12 MB
+  incremental (dominated by the whole re-included SQLCipher DB; only
+  ~11 KB of genuinely new email that round) at the evening's ~204 KB/s
+  uplink ≈ 60s. All three of the day's incrementals were ~12 MB, so it
+  was bandwidth, not data volume.
+- **Considered and declined:** making the DB backup truly incremental
+  (rsync delta on the raw DB would cut ~12 MB to ~290 KB — measured —
+  but needs a delta-friendly artifact and couples MailRepo to a
+  transport, violating the transport-agnostic `post_backup_command`
+  design); and backgrounding the post-backup command (sleep / lid-close
+  mid-transfer makes process lifecycle and failure-reporting
+  machine-dependent and fragile). rsync is a backup-of-a-backup, so
+  neither earns the complexity. Left as-is.
+- **Network binding (June 27):** verified MailRepo binds `127.0.0.1`
+  (hardcoded in `main.py`, both the dev and Waitress paths) — loopback
+  only, not network-exposed. EdgeCase similarly defaults to loopback;
+  `0.0.0.0` only behind an explicit `--lan` / `EDGECASE_LAN=1` opt-in
+  with a plaintext-HTTP warning. Both correct.

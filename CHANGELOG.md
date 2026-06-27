@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Bulk export was silently failing (Session 50).** Clicking Export in
+  the export modal threw a runtime `TypeError` and never reached the
+  server: `_exportPrefs` was declared `const` but `_startExport`
+  reassigns it wholesale. Changed the binding to `let`. A frontend
+  ESLint sweep (`no-const-assign` and related read-only-binding rules)
+  confirmed there were no other instances of this class of bug.
 - **Viewer action buttons are now gated on email load (Session 49).**
   The email viewer's always-on action buttons (copy-as-reply,
   view-source, download, print) had no visibility gating, so during the
