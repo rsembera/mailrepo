@@ -42,7 +42,7 @@ let _pickerSelectedDir = null; // directory selected within the picker (if any)
 // modal opens (user's last-used format / sort / include-subfolders /
 // include-cover / load-remote-content choices are remembered for the
 // next export in the same browser session). Not persisted to disk.
-const _exportPrefs = {
+let _exportPrefs = {
     format: 'pdf',
     sort_order: 'chronological',
     include_subfolders: true,
