@@ -3103,3 +3103,66 @@ doesn't exercise these paths.
 
 Unchanged: dogfooding → `git tag v1.0.0` + website go-live →
 `.deb`/`.dmg` packaging.
+
+
+---
+
+## Session 52 — July 1, 2026 (MacBook)
+
+### Doc verification + move-email partial-failure fix
+
+Session opened as a docs audit: verify Opus 4.8's Session 51
+documentation (commit `bf4c8eb`) against actual source. All checks
+passed — every Navigation_Map line count (six touched files plus JS/CSS
+section totals and the 38,721 table total) matched `wc -l` exactly, and
+every code claim (isSelectable semantics, chevron-expand on disabled
+rows, handleFolderSelect fully removed, both picker conversions) matched
+the shipped code. The disabled-row guard was also confirmed type-safe:
+`parseInt` on the data attribute vs. numeric API ids on both sides of
+the `disabledIds` Set.
+
+**Finding (pre-existing, not Session 51).** Reading the full
+move-email-modal.js during verification surfaced two silent-failure
+problems in `confirmMoveEmail()`, both violating the project's logging
+principle:
+
+1. A failed PATCH logged only the email ID — no HTTP status, no server
+   error text, no target folder — and the user was never alerted (the
+   catch-all only fired on thrown exceptions, which a non-ok response
+   never produced).
+2. View removal used the full `pendingMoveEmailIds` list, not the moves
+   that succeeded. Partial failure made every selected email vanish
+   from the current view; the failures silently reappeared in the old
+   folder on next reload. The UI lied until refresh.
+
+**Fix (commit `430f48b`).** Each move is tried individually inside its
+own try/catch; successes collect into a `movedIds` Set and only those
+are filtered from `state.emails`. Failures log action, email ID, target
+folder ID, HTTP status, and response text (or thrown error). If any
+moves failed, a "Move Incomplete" alert reports failed/total and points
+to the console. View re-render and selection clearing are skipped when
+nothing moved.
+
+**Deliberately left alone.** The loose `!=` / `==` id comparisons in
+move-email-modal.js and folder-tree.js are type-safe here (numeric ids
+on both sides) and match the component's existing style — tightening to
+strict equality would be churn without benefit.
+
+### Verification
+
+`node --check` clean; ESLint `no-const-assign` sweep clean (note:
+ESLint 10 replaced `--no-eslintrc` with `--no-config-lookup` for
+one-off npx runs). File grew 93 → 112 lines; Navigation_Map counts
+refreshed (JS 16,340 → 16,359; table total 38,721 → 38,740; overview
+stays ~38,700).
+
+### Commits
+
+- `430f48b` — Fix move-email partial-failure handling: only drop moved
+  emails from view
+- (this entry) — docs: Session 52 log; changelog; navigation map counts
+
+### On the horizon
+
+Unchanged: dogfooding → `git tag v1.0.0` + website go-live →
+`.deb`/`.dmg` packaging.

@@ -43,10 +43,10 @@ and `CHANGELOG.md` for the user-facing changelog under
 | Language | Files | Lines |
 |----------|-------|-------|
 | Python | 35 | 13,553 |
-| JavaScript | 29 | 16,340 |
+| JavaScript | 29 | 16,359 |
 | CSS | 23 | 7,497 |
 | HTML | 5 | 1,331 |
-| **Total** | **92** | **38,721** |
+| **Total** | **92** | **38,740** |
 
 Roughly doubled since the Feb 4, 2026 snapshot (was ~20,100 lines).
 Largest growth: encryption refactor (Sessions 36–37), retention vault
@@ -117,7 +117,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 ---
 
-## Frontend (JavaScript — 16,340 lines)
+## Frontend (JavaScript — 16,359 lines)
 
 ### Entry Point & Shared
 
@@ -160,7 +160,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `folder-tree.js` | 265 | Reusable folder tree renderer |
 | `custom-select.js` | 223 | Custom dropdown select component |
 | `thread-stage.js` | 197 | Stage-entire-thread modal from email viewer |
-| `move-email-modal.js` | 93 | Move archived emails between folders |
+| `move-email-modal.js` | 112 | Move archived emails between folders |
 
 ---
 

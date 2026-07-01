@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   folder-select handler.
 
 ### Fixed
+- **Moving emails no longer hides failures (Session 52).** If some moves
+  in a batch failed, every selected email still vanished from the
+  current view — the failures silently reappeared in their old folder
+  on the next reload, and the user was never told. Now only
+  successfully moved emails leave the view, failed moves are logged
+  with full detail (email ID, target folder, HTTP status, server error
+  text), and a "Move Incomplete" alert reports the failed/total count.
 - **Bulk export was silently failing (Session 50).** Clicking Export in
   the export modal threw a runtime `TypeError` and never reached the
   server: `_exportPrefs` was declared `const` but `_startExport`
