@@ -59,35 +59,54 @@ export async function renderMoveEmailFolderTree() {
 export async function confirmMoveEmail() {
     const emailIds = window.pendingMoveEmailIds;
     if (!emailIds || emailIds.length === 0 || !selectedFolderId) return;
-    
-    try {
-        // Move all emails
-        for (const emailId of emailIds) {
+
+    // Track which moves actually succeed so the view only drops those —
+    // an email whose move failed must stay visible in its current folder.
+    const movedIds = new Set();
+    let failedCount = 0;
+
+    for (const emailId of emailIds) {
+        try {
             const response = await fetch(`/api/messages/${emailId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ folder_id: selectedFolderId })
             });
-            
-            if (!response.ok) {
-                console.error(`Failed to move email ${emailId}`);
+
+            if (response.ok) {
+                movedIds.add(emailId);
+            } else {
+                failedCount++;
+                const errText = await response.text().catch(() => '');
+                console.error(
+                    `Move email ${emailId} -> folder ${selectedFolderId} failed: ` +
+                    `HTTP ${response.status} ${errText}`
+                );
             }
+        } catch (error) {
+            failedCount++;
+            console.error(
+                `Move email ${emailId} -> folder ${selectedFolderId} failed:`, error
+            );
         }
-        
-        // Remove from current view and re-render
-        const movedIds = new Set(emailIds);
+    }
+
+    // Remove only the successfully moved emails from the current view
+    if (movedIds.size > 0) {
         state.emails = state.emails.filter(e => !movedIds.has(e.id));
-        
-        // Clear archived selection if any were selected
         const { clearArchivedEmailSelection } = await import('./email-list.js');
         clearArchivedEmailSelection();
-        
         renderEmailList();
-        
-        closeModal('moveEmailModal');
-        window.pendingMoveEmailIds = null;
-    } catch (error) {
-        console.error('Error moving emails:', error);
-        showAlert('Error', 'Failed to move some emails');
+    }
+
+    closeModal('moveEmailModal');
+    window.pendingMoveEmailIds = null;
+
+    if (failedCount > 0) {
+        showAlert(
+            'Move Incomplete',
+            `${failedCount} of ${emailIds.length} email${emailIds.length === 1 ? '' : 's'} ` +
+            `could not be moved. See the browser console for details.`
+        );
     }
 }
