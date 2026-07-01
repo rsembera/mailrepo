@@ -259,25 +259,6 @@ async function createFolderInTree(parentId) {
 }
 
 /**
- * Legacy handler for folder selection (inline onclick compatibility).
- */
-export function handleFolderSelect(e) {
-    const item = e.target.closest('.folder-select-item');
-    if (!item) return;
-    
-    if (item.dataset.action === 'new') {
-        if (onOpenNewFolderModal) onOpenNewFolderModal(true);
-        return;
-    }
-    
-    document.querySelectorAll('.folder-select-item').forEach(i => i.classList.remove('selected'));
-    item.classList.add('selected');
-    
-    selectedDestinationFolder = item.dataset.id;
-    document.getElementById('confirmStageBtn').disabled = false;
-}
-
-/**
  * Get folder name from full path.
  * Handles both filesystem paths and IMAP folder names.
  * 

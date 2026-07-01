@@ -17,6 +17,7 @@ import { formatDate, daysUntil } from '../components/date-picker.js';
 import { renderEmailList } from '../components/email-list.js';
 import { openEmailViewer } from './mail.js';
 import { bindActions } from '../delegate.js';
+import { renderFolderTree } from '../components/folder-tree.js';
 
 // Module state
 let vaultFolders = [];
@@ -24,6 +25,7 @@ let vaultFilter = '';
 let vaultSort = 'date-asc'; // 'date-asc', 'date-desc', 'name-asc', 'name-desc'
 let restoreFolderId = null;
 let restoreDestinationId = null;
+let restoreTreeController = null;
 
 // State for viewing folder contents
 let viewingFolder = null;  // null = folder list, object = viewing folder's emails
@@ -621,82 +623,49 @@ function bindVaultActions() {
 }
 
 /**
- * Bind the destination-picker handler. The restore-folder modal lives
- * in the index.html template (outside emailList), so it needs its own
- * bindActions call on the picker container -- can't ride along with
- * bindVaultActions which targets emailList descendants only.
+ * Render the restore-destination picker: an "Archive Root" option (restore
+ * to top level) above the shared renderFolderTree component, matching the
+ * folder-move picker. Root vs. folder selection are kept in sync manually
+ * since the root row isn't part of the tree.
  */
-function bindRestorePickerActions() {
-    const container = document.getElementById('restoreDestinationList');
-    if (!container) return;
-    // Persistent element (the restore modal is reused). Bind exactly once;
-    // the delegated listener resolves clicks against the rows re-rendered on
-    // each open. Re-binding per open would stack duplicate listeners.
-    if (container.dataset.actionsBound) return;
-    bindActions(container, {
-        selectDest: (el) => {
-            const destId = el.dataset.destId;
-            selectRestoreDestination(destId === '' ? null : Number(destId));
-        },
-    });
-    container.dataset.actionsBound = '1';
-}
-
 function renderRestoreDestinations() {
     const container = document.getElementById('restoreDestinationList');
-    
-    // Filter out deleted folders and vault folders
-    const availableFolders = state.folders.filter(f => !f.deleted_at && !f.retention_date);
-    const topLevel = availableFolders.filter(f => !f.parent_id);
-    topLevel.sort((a, b) => a.name.localeCompare(b.name));
-    
-    let html = `
-        <div class="folder-select-item ${restoreDestinationId === null ? 'selected' : ''}" 
-             data-action="selectDest" data-dest-id="">
-            <i data-lucide="home" style="width: 16px; height: 16px;"></i>
+    if (!container) return;
+
+    const isRoot = restoreDestinationId === null;
+    container.innerHTML = `
+        <div class="folder-select-item root-option${isRoot ? ' selected' : ''}" data-dest-id="">
+            <i data-lucide="home"></i>
             <span>Archive Root</span>
         </div>
+        <div class="folder-tree-container" id="restoreDestTreeContainer"></div>
     `;
 
-    
-    function renderFolder(folder, depth = 0) {
-        const indent = depth * 20;
-        const children = availableFolders.filter(f => f.parent_id === folder.id);
-        children.sort((a, b) => a.name.localeCompare(b.name));
-        
-        const colorDot = folder.color ? 
-            `<span class="color-dot" style="background: ${folder.color}"></span>` : '';
-        
-        html += `
-            <div class="folder-select-item ${restoreDestinationId === folder.id ? 'selected' : ''}" 
-                 style="padding-left: ${16 + indent}px;"
-                 data-action="selectDest" data-dest-id="${folder.id}">
-                ${colorDot}
-                <i data-lucide="folder" style="width: 16px; height: 16px;"></i>
-                <span>${escapeHtml(folder.name)}</span>
-            </div>
-        `;
-        
-        for (const child of children) {
-            renderFolder(child, depth + 1);
-        }
-    }
-    
-    for (const folder of topLevel) {
-        renderFolder(folder, 0);
-    }
-    
-    container.innerHTML = html;
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-    bindRestorePickerActions();
-}
+    // Root option: restore to top level (no parent). Deselects the tree.
+    const rootOption = container.querySelector('.root-option');
+    rootOption.addEventListener('click', () => {
+        restoreTreeController?.setSelected(null);
+        container.querySelectorAll('.folder-select-item').forEach(i => i.classList.remove('selected'));
+        rootOption.classList.add('selected');
+        restoreDestinationId = null;
+    });
 
-/**
- * Select restore destination.
- */
-function selectRestoreDestination(folderId) {
-    restoreDestinationId = folderId;
-    renderRestoreDestinations();
+    // Folder tree. Vault folders (retention_date) are already excluded by the
+    // default filter, so the folder being restored can't appear as its own
+    // destination.
+    restoreTreeController = renderFolderTree(
+        document.getElementById('restoreDestTreeContainer'),
+        {
+            selectable: true,
+            selectedId: restoreDestinationId,
+            onSelect: (folderId) => {
+                rootOption.classList.remove('selected');
+                restoreDestinationId = folderId;
+            },
+        }
+    );
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 /**
