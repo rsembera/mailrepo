@@ -3040,3 +3040,66 @@ instance of this family in the frontend. ESLint was run one-off via npx
   only, not network-exposed. EdgeCase similarly defaults to loopback;
   `0.0.0.0` only behind an explicit `--lan` / `EDGECASE_LAN=1` opt-in
   with a plaintext-HTTP warning. Both correct.
+
+
+---
+
+## Session 51 — July 1, 2026 (MacBook)
+
+### Standardize destination-folder pickers on renderFolderTree
+
+Rick noticed the move-emails destination picker rendered a flat,
+fully-expanded folder list with no chevrons, unlike the commit/stage
+modal's collapsible tree. Goal: converge every archive-folder
+destination picker on the shared `renderFolderTree` component.
+
+**Audit.** Already on the standard: the sidebar, the commit/stage modal,
+the folder-management tree, and — on inspection — the folder-move picker
+(its lone `.folder-select-item` was just a "root level" row above an
+already-`renderFolderTree` tree; self/descendant exclusion was already
+handled via a `filter`). The real custom outliers were the move-emails
+picker and the vault restore picker, plus one genuinely dead handler.
+
+**Component (folder-tree.js).** Added a small reusable
+`isSelectable: (folder) => boolean` option. When it returns false the row
+is shown and its chevron still expands (children stay reachable), but the
+row itself can't be selected. Serves the move picker's "not the current
+folder" rule; the folder-move picker keeps using `filter` for its harder
+self/descendant exclusion.
+
+
+**move-email-modal.js** (commit `a7eb5f5`). Dropped its custom
+`renderFolder()`, the delegated selectFolder handler, and the now-unused
+escapeHtml/bindActions imports. Now calls renderFolderTree with
+`isSelectable: f => f.id != currentFolderId` and a `(current)` tag via
+renderActions. Matches the commit modal exactly.
+
+**vault.js restore picker** (commit `93d9ce8`). Replaced its flat
+renderer + delegated selectDest with an "Archive Root" option above a
+renderFolderTree tree, mirroring the folder-move picker. Vault folders
+(retention_date) are excluded by the default filter, so the folder being
+restored can't appear as its own destination.
+
+**Dead code (commit `93d9ce8`).** Removed `staging.handleFolderSelect`:
+it was bound to `#folderSelectList` clicks, but that container is filled
+by renderFolderTree (`.folder-tree-row` rows) while the handler only
+matched the old `.folder-select-item` rows — so it could never fire.
+Dropped the function, its app.js import, and its addEventListener.
+
+### Verification
+
+`node --check` clean on every touched file; ESLint read-only-binding
+sweep (`no-const-assign` etc.) clean. Frontend only — the Python suite
+doesn't exercise these paths.
+
+### Commits
+
+- `a7eb5f5` — Move-email picker: use the shared renderFolderTree
+- `93d9ce8` — Vault restore picker: use renderFolderTree; drop dead
+  handleFolderSelect
+- (this entry) — docs: Session 51 log; changelog; navigation map counts
+
+### On the horizon
+
+Unchanged: dogfooding → `git tag v1.0.0` + website go-live →
+`.deb`/`.dmg` packaging.

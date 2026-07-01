@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **All destination-folder pickers now use one shared tree component
+  (Session 51).** The move-emails and vault-restore pickers rendered
+  their own flat, fully-expanded folder lists; both now use the same
+  collapsible `renderFolderTree` (chevrons, collapse, color dots) as the
+  commit/stage modal. Added a reusable `isSelectable` option to the
+  component for per-picker target restrictions (e.g. can't move emails
+  into the folder they're already in). Also removed a dead legacy
+  folder-select handler.
+
 ### Fixed
 - **Bulk export was silently failing (Session 50).** Clicking Export in
   the export modal threw a runtime `TypeError` and never reached the

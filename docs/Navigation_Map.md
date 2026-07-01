@@ -38,15 +38,15 @@ and `CHANGELOG.md` for the user-facing changelog under
 
 ---
 
-## Codebase Overview (~38,800 lines)
+## Codebase Overview (~38,700 lines)
 
 | Language | Files | Lines |
 |----------|-------|-------|
 | Python | 35 | 13,553 |
-| JavaScript | 29 | 16,430 |
-| CSS | 23 | 7,480 |
+| JavaScript | 29 | 16,340 |
+| CSS | 23 | 7,497 |
 | HTML | 5 | 1,331 |
-| **Total** | **92** | **38,794** |
+| **Total** | **92** | **38,721** |
 
 Roughly doubled since the Feb 4, 2026 snapshot (was ~20,100 lines).
 Largest growth: encryption refactor (Sessions 36–37), retention vault
@@ -117,13 +117,13 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 ---
 
-## Frontend (JavaScript — 16,430 lines)
+## Frontend (JavaScript — 16,340 lines)
 
 ### Entry Point & Shared
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `app.js` | 732 | Init, event listeners, rail nav, nav guards, template-bindings wiring |
+| `app.js` | 730 | Init, event listeners, rail nav, nav guards, template-bindings wiring |
 | `template-bindings.js` | 143 | Single delegated handler for index.html data-tpl-action attrs (Session 38) |
 | `delegate.js` | 116 | `bindActions(container, handlers)` helper for per-view delegation |
 | `state.js` | 124 | Central state object, session persistence |
@@ -139,7 +139,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `review.js` | 1,034 | Review staged items, destination editing, commit |
 | `backups.js` | 952 | Backup/restore UI, restore points, settings |
 | `folder-selection.js` | 895 | Bulk folder staging from IMAP/imports |
-| `vault.js` | 889 | Retention vault: move to vault, restore, permanent delete |
+| `vault.js` | 858 | Retention vault: move to vault, restore, permanent delete |
 | `trash.js` | 774 | Trash view: deleted folders, emails, restore, purge |
 | `folder-mgmt.js` | 667 | Manage folders: rename, color, create, delete |
 | `starred.js` | 368 | Starred email view |
@@ -152,19 +152,19 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `email-list.js` | 778 | Email list rendering, selection, toolbar, filter input |
 | `sidebar.js` | 744 | Sidebar: archive folders, IMAP folders, imports, resize |
 | `imports.js` | 728 | Import mount/unmount, browse, folder/email display |
-| `staging.js` | 580 | Staging workflow, destination picker, stage/unstage |
+| `staging.js` | 561 | Staging workflow, destination picker, stage/unstage |
 | `file-picker.js` | 438 | Filesystem browser modal for import file selection |
 | `date-picker.js` | 383 | Date picker (ported from EdgeCase) for vault retention dates |
 | `progress.js` | 352 | SSE progress modal for commit/import operations |
 | `context-menu.js` | 288 | Right-click context menu for sidebar/folders |
-| `folder-tree.js` | 255 | Reusable folder tree renderer |
+| `folder-tree.js` | 265 | Reusable folder tree renderer |
 | `custom-select.js` | 223 | Custom dropdown select component |
 | `thread-stage.js` | 197 | Stage-entire-thread modal from email viewer |
-| `move-email-modal.js` | 141 | Move archived emails between folders |
+| `move-email-modal.js` | 93 | Move archived emails between folders |
 
 ---
 
-## CSS (7,480 lines)
+## CSS (7,497 lines)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
@@ -175,7 +175,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 Per-module stylesheets in `/css/modules/`: settings-view (606), backups-view (603),
 email-list (599), modals (569), export (513), sidebar (441), vault (413),
 review-view (325), email-viewer (332), folder-mgmt (320), content (293),
-folder-selection (255), date-picker (242), trash (230), folder-tree (198),
+folder-selection (255), date-picker (242), trash (230), folder-tree (215),
 layout (169), custom-select (121), progress (120), responsive (84),
 context-menu (69).
 
