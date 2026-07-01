@@ -50,6 +50,10 @@ export function renderFolderTree(container, options = {}) {
         onAddFolder: null,
         onClick: null,
         renderActions: null,
+        // (folder) => boolean. When it returns false the row is still shown and
+        // its chevron still expands (so children stay reachable), but the row
+        // itself can't be selected. Default: everything selectable.
+        isSelectable: null,
         ...options
     };
     
@@ -60,6 +64,8 @@ export function renderFolderTree(container, options = {}) {
     
     // Track expanded state
     const expandedIds = new Set();
+    // Folders shown but not selectable (recomputed each render).
+    let disabledIds = new Set();
     let selectedId = opts.selectedId;
     
     // Render the tree
@@ -70,6 +76,7 @@ export function renderFolderTree(container, options = {}) {
         }
         
         let html = '';
+        disabledIds = new Set();
         rootFolders.forEach(folder => {
             html += renderItem(folder, visibleFolders, 0);
         });
@@ -86,12 +93,14 @@ export function renderFolderTree(container, options = {}) {
         const hasChildren = children.length > 0;
         const isExpanded = expandedIds.has(folder.id);
         const isSelected = selectedId === folder.id;
+        const selectable = !opts.isSelectable || opts.isSelectable(folder);
+        if (!selectable) disabledIds.add(folder.id);
         const indent = depth * 20;
         
         let html = `<div class="folder-tree-item" data-${opts.itemDataAttr}="${folder.id}">`;
         
         // Row
-        const rowClasses = ['folder-tree-row', opts.rowClass, isSelected ? 'selected' : ''].filter(Boolean).join(' ');
+        const rowClasses = ['folder-tree-row', opts.rowClass, isSelected ? 'selected' : '', selectable ? '' : 'disabled'].filter(Boolean).join(' ');
         html += `<div class="${rowClasses}" style="padding-left: ${12 + indent}px">`;
         
         // Chevron
@@ -165,8 +174,9 @@ export function renderFolderTree(container, options = {}) {
                     return;
                 }
                 
-                // Selection
-                if (opts.selectable) {
+                // Selection (disabled rows still expand via the chevron
+                // handled above, but can't be chosen as a target)
+                if (opts.selectable && !disabledIds.has(folderId)) {
                     selectedId = folderId;
                     container.querySelectorAll('.folder-tree-row').forEach(r => r.classList.remove('selected'));
                     row.classList.add('selected');

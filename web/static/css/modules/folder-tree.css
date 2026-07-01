@@ -34,6 +34,23 @@
     background: var(--color-primary-lighter);
 }
 
+/* Non-selectable row (e.g. current folder in a move picker, or a folder
+   being moved into itself). Chevron still works to reach children. */
+.folder-tree-row.disabled {
+    color: var(--color-text-muted);
+    cursor: default;
+}
+
+.folder-tree-row.disabled:hover {
+    background: none;
+}
+
+.folder-tree-current-tag {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+}
+
 .folder-tree-children {
     display: block;
 }

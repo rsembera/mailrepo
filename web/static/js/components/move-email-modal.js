@@ -4,11 +4,10 @@
  * Handles moving archived emails to different folders.
  */
 
-import { escapeHtml } from '../utils.js';
 import { state, loadFolders } from '../state.js';
 import { closeModal, showAlert } from '../modals.js';
 import { renderEmailList } from './email-list.js';
-import { bindActions } from '../delegate.js';
+import { renderFolderTree } from './folder-tree.js';
 
 let selectedFolderId = null;
 
@@ -35,70 +34,23 @@ export async function renderMoveEmailFolderTree() {
         }
     }
     
-    // Get current folder (to exclude from selection but show in tree for children access)
+    // Can't move emails into the folder they're already in — but its
+    // subfolders are valid targets, so keep it visible/expandable.
     const currentFolderId = state.currentView?.id;
-    
-    // Build tree of non-deleted, non-vault folders
-    const folders = state.folders.filter(f => !f.deleted_at && !f.retention_date);
-    const topLevel = folders.filter(f => !f.parent_id);
-    
-    if (folders.length === 0) {
-        listEl.innerHTML = '<p class="empty-state">No other folders available</p>';
-        return;
-    }
-    
-    let html = '';
-    
-    function renderFolder(folder, depth = 0) {
-        const indent = depth * 20;
-        const children = folders.filter(f => f.parent_id == folder.id);
-        const isCurrent = folder.id == currentFolderId;
-        
-        html += `
-            <div class="folder-select-item ${isCurrent ? 'disabled' : ''}" data-id="${folder.id}" ${isCurrent ? '' : `data-action="selectFolder" data-folder-id="${folder.id}"`} style="padding-left: ${indent + 12}px">
-                <i data-lucide="folder" class="folder-icon"></i>
-                <span>${escapeHtml(folder.name)}${isCurrent ? ' (current)' : ''}</span>
-            </div>
-        `;
-        
-        children.sort((a, b) => a.name.localeCompare(b.name));
-        children.forEach(child => renderFolder(child, depth + 1));
-    }
-    
-    topLevel.sort((a, b) => a.name.localeCompare(b.name));
-    topLevel.forEach(folder => renderFolder(folder));
-    
-    listEl.innerHTML = html;
-    if (typeof lucide !== 'undefined') lucide.createIcons();
 
-    // Delegated click handler for the per-row folder selection. Replaces
-    // the previous inline onclick="selectMoveEmailFolder(N)" pattern and
-    // the window.selectMoveEmailFolder global it required.
-    //
-    // moveEmailFolderList is a persistent element (the modal is reused), so
-    // bind exactly once — the delegated listener resolves clicks against the
-    // freshly-rendered rows on every open. Re-binding per open would stack
-    // duplicate listeners.
-    if (!listEl.dataset.actionsBound) {
-        bindActions(listEl, {
-            selectFolder: (el) => selectMoveEmailFolder(Number(el.dataset.folderId)),
-        });
-        listEl.dataset.actionsBound = '1';
-    }
-}
-
-/**
- * Select a folder in the move email modal.
- */
-function selectMoveEmailFolder(folderId) {
-    selectedFolderId = folderId;
-    
-    // Update visual selection
-    document.querySelectorAll('#moveEmailFolderList .folder-select-item').forEach(el => {
-        el.classList.toggle('selected', el.dataset.id == folderId);
+    renderFolderTree(listEl, {
+        selectable: true,
+        selectedId: null,
+        isSelectable: (folder) => folder.id != currentFolderId,
+        renderActions: (folder) =>
+            folder.id == currentFolderId
+                ? '<span class="folder-tree-current-tag">(current)</span>'
+                : '',
+        onSelect: (folderId) => {
+            selectedFolderId = folderId;
+            document.getElementById('confirmMoveEmailBtn').disabled = false;
+        },
     });
-    
-    document.getElementById('confirmMoveEmailBtn').disabled = false;
 }
 
 /**
