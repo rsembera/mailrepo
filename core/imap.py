@@ -1354,3 +1354,179 @@ class IMAP:
                 e,
             )
             return True
+
+
+    @staticmethod
+    def _expand_uid_set(spec: str) -> list[str]:
+        """Expand an IMAP sequence-set of UIDs into an ordered list of strings.
+
+        Handles comma-separated items and ``N:M`` ranges, e.g. "4,7:9" ->
+        ["4", "7", "8", "9"]. Order is preserved because COPYUID's source and
+        destination sets are positionally parallel.
+        """
+        out: list[str] = []
+        for part in spec.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if ":" in part:
+                a, b = part.split(":", 1)
+                try:
+                    lo, hi = int(a), int(b)
+                except ValueError:
+                    continue
+                step = 1 if hi >= lo else -1
+                out.extend(str(n) for n in range(lo, hi + step, step))
+            else:
+                out.append(part)
+        return out
+
+    def _parse_copyuid_map(self, data) -> dict:
+        """Map source UID -> destination UID from a COPYUID response.
+
+        COPYUID has the form ``COPYUID <uidvalidity> <src-set> <dst-set>`` where
+        the source and destination sets are positionally parallel. Returns a
+        ``{src_uid: dst_uid}`` dict, or ``{}`` if the code is absent (no
+        UIDPLUS) or the two sets don't line up.
+        """
+        text = ""
+        # Prefer response() (pops the entry, avoiding a stale COPYUID from an
+        # earlier command being misread here — same reasoning as _parse_copyuid).
+        try:
+            _typ, resp = self.connection.response("COPYUID")
+            if resp and resp[0] is not None:
+                text = " ".join(
+                    i.decode("ascii", "ignore") if isinstance(i, bytes) else str(i)
+                    for i in resp
+                )
+        except Exception:
+            text = ""
+
+        if not text:
+            candidates: list[str] = []
+
+            def _collect(obj):
+                if isinstance(obj, bytes):
+                    candidates.append(obj.decode("ascii", "ignore"))
+                elif isinstance(obj, str):
+                    candidates.append(obj)
+                elif isinstance(obj, (list, tuple)):
+                    for sub in obj:
+                        _collect(sub)
+
+            _collect(data)
+            for c in candidates:
+                if "COPYUID" in c.upper():
+                    text = c
+                    break
+
+        if not text:
+            return {}
+
+        m = re.search(r"(?:COPYUID\s+)?\d+\s+(\S+)\s+(\S+)", text, re.IGNORECASE)
+        if not m:
+            return {}
+        src = self._expand_uid_set(m.group(1))
+        dst = self._expand_uid_set(m.group(2))
+        if not src or len(src) != len(dst):
+            return {}
+        return dict(zip(src, dst))
+
+    def delete_emails_via_trash(self, uids: list, source_folder: str) -> dict:
+        """Permanently delete several messages on Gmail-style label servers,
+        batched to minimise round-trips.
+
+        Same semantics as :meth:`delete_email_via_trash`, but for a set of UIDs
+        from one source folder: a single UID-set MOVE to Trash, one SELECT
+        Trash, one set STORE ``\\Deleted`` and one UID EXPUNGE, instead of that
+        whole sequence per message. On Gmail (high per-command latency) this is
+        the difference between ~7*N commands and a handful.
+
+        Returns a ``{uid: bool}`` map. True means the message was permanently
+        deleted, or reached Trash and will be auto-purged within ~30 days
+        (which satisfies the user's intent). A uid is False only if it could
+        not be moved to Trash at all.
+
+        The in-place case (source already Trash/Spam) and single-message calls
+        are delegated to the per-message path, which already handles them.
+
+        Caller contract: this leaves Trash SELECTed; callers doing more work in
+        the source folder must re-SELECT it.
+        """
+        if not self.connection:
+            raise IMAPError("Not connected")
+
+        uids = [str(u) for u in uids if u is not None]
+        if not uids:
+            return {}
+
+        trash = self.get_special_folder("trash")
+        if not trash:
+            raise IMAPError("Trash folder not found on server")
+        spam = self.get_special_folder("spam")
+
+        # In-place delete, or a single message: use the proven per-message path.
+        in_place = source_folder == trash or (spam and source_folder == spam)
+        if in_place or len(uids) == 1:
+            out = {}
+            for uid in uids:
+                try:
+                    self.select_folder(source_folder)
+                    out[uid] = self.delete_email_via_trash(uid, source_folder)
+                except IMAPError:
+                    out[uid] = False
+            return out
+
+        results = {u: False for u in uids}
+
+        # One MOVE of the whole set. Sort ascending so COPYUID's source and
+        # destination sets line up positionally when we zip them.
+        self.select_folder(source_folder)
+        ordered = sorted(uids, key=lambda u: int(u) if u.isdigit() else u)
+        uid_set = ",".join(ordered)
+        dest = f'"{trash}"'
+
+        if self._has_capability("MOVE"):
+            status, data = self.connection.uid("MOVE", uid_set, dest)
+            if status != "OK":
+                raise IMAPError(f"Failed to MOVE messages to {trash}")
+            uid_map = self._parse_copyuid_map(data)
+        else:
+            status, data = self.connection.uid("COPY", uid_set, dest)
+            if status != "OK":
+                raise IMAPError(f"Failed to copy messages to {trash}")
+            uid_map = self._parse_copyuid_map(data)
+            self.connection.uid("STORE", uid_set, "+FLAGS", "(\\Deleted)")
+            self._expunge_uid(uid_set)  # remove the source copies (scoped)
+
+        # Anything that made it into Trash counts as deleted from the user's
+        # point of view. With a COPYUID map we know exactly which moved; without
+        # one (rare on Gmail, which supports UIDPLUS), MOVE returning OK means
+        # they all moved, so trust that and rely on Trash auto-purge.
+        moved = set(uid_map.keys()) if uid_map else set(ordered)
+        for u in ordered:
+            if u in moved:
+                results[u] = True
+
+        if uid_map:
+            dst_set = ",".join(uid_map[u] for u in ordered if u in uid_map)
+            if dst_set:
+                try:
+                    self.select_folder(trash)
+                    self.connection.uid("STORE", dst_set, "+FLAGS", "(\\Deleted)")
+                    self._expunge_uid(dst_set)
+                except Exception as e:
+                    log.warning(
+                        "Gmail batch delete: %d message(s) reached Trash but "
+                        "expunge failed (%s); relying on ~30-day auto-purge",
+                        len(uid_map),
+                        e,
+                    )
+        else:
+            log.warning(
+                "Gmail batch delete: no COPYUID mapping for set %s; messages "
+                "reached Trash, relying on Gmail's ~30-day auto-purge",
+                uid_set,
+            )
+
+        return results

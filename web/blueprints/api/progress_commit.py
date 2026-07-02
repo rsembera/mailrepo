@@ -468,10 +468,58 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
 
             for source_folder, folder_items in by_folder.items():
                 actions_applied = False
+                handled_ids = set()
                 try:
                     client.select_folder(source_folder)
 
+                    # Batch Gmail permanent-deletes for this folder into a single
+                    # pass (one UID-set MOVE + one EXPUNGE instead of ~7 commands
+                    # per message). Gmail's per-command latency makes the
+                    # per-message path slow for multi-deletes. Single deletes fall
+                    # through to the per-item loop's proven path below.
+                    if is_gmail:
+                        delete_items = [
+                            it
+                            for it in folder_items
+                            if it["source_action"] == "delete"
+                            and it["item_data"]["email"].get("uid") is not None
+                        ]
+                        if len(delete_items) > 1:
+                            by_uid = {
+                                str(it["item_data"]["email"]["uid"]): it
+                                for it in delete_items
+                            }
+                            try:
+                                outcome = client.delete_emails_via_trash(
+                                    list(by_uid), source_folder
+                                )
+                            except IMAPError as e:
+                                outcome = {u: False for u in by_uid}
+                                logger.warning(
+                                    "Post-commit batch delete failed for %d items in %s: %s",
+                                    len(by_uid),
+                                    source_folder,
+                                    e,
+                                )
+                            for uid, ok in outcome.items():
+                                item = by_uid[uid]
+                                handled_ids.add(item["id"])
+                                if ok:
+                                    results["post_actions"]["success"] += 1
+                                    results["post_actions"]["by_action"]["delete"] = (
+                                        results["post_actions"]["by_action"].get("delete", 0)
+                                        + 1
+                                    )
+                                    mark_item_done(item["id"])
+                                    actions_applied = True
+                                else:
+                                    results["post_actions"]["failed"] += 1
+                            # The batch leaves Trash selected; restore the source.
+                            client.select_folder(source_folder)
+
                     for item in folder_items:
+                        if item["id"] in handled_ids:
+                            continue
                         item_data = item["item_data"]
                         action = item["source_action"]
                         uid = item_data["email"].get("uid")

@@ -253,3 +253,102 @@ class TestDeleteViaTrash:
         )
         assert client.delete_email_via_trash("100", "INBOX") is True
         find_mock.assert_called_once_with("[Gmail]/Trash", "<abc@example.com>")
+
+
+class TestBatchedGmailDelete:
+    """delete_emails_via_trash: one UID-set MOVE + one EXPUNGE for many
+    messages, with per-uid results and partial-failure honesty."""
+
+    def _gmail(self, monkeypatch, caps=("IMAP4REV1", "MOVE", "UIDPLUS")):
+        client, conn = make_client(caps)
+        monkeypatch.setattr(
+            client, "get_special_folder",
+            lambda t: "[Gmail]/Trash" if t == "trash" else None,
+        )
+        monkeypatch.setattr(client, "select_folder", lambda f=None: {})
+        return client, conn
+
+    def test_expand_uid_set(self):
+        assert IMAP._expand_uid_set("4,7:9") == ["4", "7", "8", "9"]
+        assert IMAP._expand_uid_set("100:102") == ["100", "101", "102"]
+        assert IMAP._expand_uid_set("5") == ["5"]
+
+    def test_parse_copyuid_map_comma_and_range(self, monkeypatch):
+        client, conn = self._gmail(monkeypatch)
+        store = {"COPYUID": [b"12 100,101 500,501"]}
+        conn.response.side_effect = lambda key: (key, store.pop(key, [None]))
+        assert client._parse_copyuid_map([b""]) == {"100": "500", "101": "501"}
+
+        store2 = {"COPYUID": [b"12 4:6 500:502"]}
+        conn.response.side_effect = lambda key: (key, store2.pop(key, [None]))
+        assert client._parse_copyuid_map([b""]) == {"4": "500", "5": "501", "6": "502"}
+
+    def test_parse_copyuid_map_absent_or_mismatched(self, monkeypatch):
+        client, conn = self._gmail(monkeypatch)
+        conn.response.side_effect = lambda key: (key, [None])
+        assert client._parse_copyuid_map([b"done"]) == {}
+        # mismatched set lengths -> {} (don't guess a partial mapping)
+        store = {"COPYUID": [b"12 100,101 500"]}
+        conn.response.side_effect = lambda key: (key, store.pop(key, [None]))
+        assert client._parse_copyuid_map([b""]) == {}
+
+    def test_one_move_and_one_expunge_for_many(self, monkeypatch):
+        client, conn = self._gmail(monkeypatch)
+        store = {"COPYUID": [b"12 100,101,102 500,501,502"]}
+        conn.response.side_effect = lambda key: (key, store.pop(key, [None]))
+        conn.uid.side_effect = _uid_dispatch(
+            {"MOVE": ("OK", [b"done"]), "STORE": ("OK", [b""]), "EXPUNGE": ("OK", [b""])}
+        )
+
+        result = client.delete_emails_via_trash(["100", "101", "102"], "INBOX")
+
+        assert result == {"100": True, "101": True, "102": True}
+        verbs = [c.args[0] for c in conn.uid.call_args_list]
+        assert verbs.count("MOVE") == 1          # one MOVE for all three
+        assert verbs.count("EXPUNGE") == 1       # one scoped EXPUNGE
+        # EXPUNGE targets the destination UID set from COPYUID
+        exp = [c for c in conn.uid.call_args_list if c.args[0] == "EXPUNGE"][0]
+        assert exp.args[1] == "500,501,502"
+
+    def test_without_copyuid_still_reports_success(self, monkeypatch):
+        # MOVE OK but no COPYUID -> messages are in Trash; report True and rely
+        # on Gmail's ~30-day auto-purge (matches per-message behaviour).
+        client, conn = self._gmail(monkeypatch, caps=("IMAP4REV1", "MOVE"))
+        conn.response.side_effect = lambda key: (key, [None])
+        conn.uid.side_effect = _uid_dispatch({"MOVE": ("OK", [b"done"])})
+
+        result = client.delete_emails_via_trash(["100", "101"], "INBOX")
+
+        assert result == {"100": True, "101": True}
+        verbs = [c.args[0] for c in conn.uid.call_args_list]
+        assert verbs.count("MOVE") == 1
+        assert "EXPUNGE" not in verbs            # no dst uids -> no scoped expunge
+
+    def test_move_failure_raises(self, monkeypatch):
+        client, conn = self._gmail(monkeypatch)
+        conn.response.side_effect = lambda key: (key, [None])
+        conn.uid.side_effect = _uid_dispatch({"MOVE": ("NO", [b"over quota"])})
+        with pytest.raises(IMAPError):
+            client.delete_emails_via_trash(["100", "101"], "INBOX")
+
+    def test_single_uid_delegates_to_per_message(self, monkeypatch):
+        client, _ = self._gmail(monkeypatch)
+        seen = []
+        monkeypatch.setattr(
+            client, "delete_email_via_trash",
+            lambda uid, src: (seen.append(uid) or True),
+        )
+        result = client.delete_emails_via_trash(["100"], "INBOX")
+        assert result == {"100": True}
+        assert seen == ["100"]                   # one message -> proven path
+
+    def test_in_place_delegates_to_per_message(self, monkeypatch):
+        client, _ = self._gmail(monkeypatch)
+        seen = []
+        monkeypatch.setattr(
+            client, "delete_email_via_trash",
+            lambda uid, src: (seen.append(uid) or True),
+        )
+        result = client.delete_emails_via_trash(["100", "101"], "[Gmail]/Trash")
+        assert result == {"100": True, "101": True}
+        assert seen == ["100", "101"]            # source is Trash -> in-place
