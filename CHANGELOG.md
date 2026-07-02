@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Bulk Gmail deletes are batched (Session 54).** Deleting several Gmail
+  messages from a folder now issues one UID-set MOVE to Trash plus a
+  single scoped EXPUNGE, instead of the full ~7-command per-message
+  sequence — collapsing ~7×N commands to ~5 and cutting the round-trip
+  latency that made multi-deletes slow (a two-email delete had been
+  taking 60–90s). Single deletes and non-Gmail servers keep their
+  existing path; partial failures are reported per-message.
 - **Faster folder resolution during Gmail deletes (Session 53).** The
   IMAP client now caches its folder list for the connection's lifetime,
   so resolving the Trash/Spam folders no longer issues a fresh full LIST

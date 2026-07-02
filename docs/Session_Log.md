@@ -3226,3 +3226,57 @@ full suite 345 passed (3:39).
 
 Unchanged: dogfooding → `git tag v1.0.0` + website go-live →
 `.deb`/`.dmg` packaging.
+
+
+---
+
+## Session 54 — July 2, 2026 (MacBook)
+
+### Batch Gmail permanent-deletes (commit `f51eac4`)
+
+Follow-up to Session 53's Gmail-delete diagnosis. The per-message delete
+path runs ~7 IMAP commands per message (re-SELECT source → resolve trash →
+UID MOVE → SELECT Trash → STORE `\Deleted` → UID EXPUNGE), and Gmail's
+per-command latency made multi-deletes slow — the 60–90s two-email delete
+that started this thread.
+
+**New: `delete_emails_via_trash(uids, source_folder)`.** One UID-set MOVE
+to Trash, one SELECT Trash, one set STORE `\Deleted`, one UID EXPUNGE — ~5
+commands regardless of N. Two helpers:
+- `_expand_uid_set`: expand an IMAP sequence-set (`4,7:9` → 4,7,8,9).
+- `_parse_copyuid_map`: parse COPYUID's positionally-parallel src/dst sets
+  into a `{src_uid: dst_uid}` map so the STORE/EXPUNGE in Trash hit the
+  right new UIDs.
+
+**Correctness.** Returns a `{uid: bool}` map — partial failures reported
+per-uid, not swallowed (same discipline as the move-emails fix). No COPYUID
+(rare on Gmail/UIDPLUS) → messages reached Trash, report True and rely on
+~30-day auto-purge, matching the per-message path. Single-message and
+in-place (source already Trash/Spam) delegate to the retained per-message
+`delete_email_via_trash`.
+
+**Integration.** `progress_commit` batches only Gmail delete items with 2+
+per folder; single deletes and every other action keep their existing
+per-item path (skip guard via `handled_ids`).
+
+### Verification
+
+8 new unit tests (set expansion, COPYUID mapping incl. ranges + mismatch,
+one-MOVE-for-many with dst-set expunge, no-COPYUID success, MOVE-failure
+raise, single/in-place delegation). Full suite 353 passed; ruff clean.
+
+**Live dogfood (Rick):** deleted a small batch of throwaway emails from a
+real Gmail folder — count correct, messages gone, Trash empty (so the real
+COPYUID mapping parsed as expected, not the auto-purge fallback). The one
+thing the mocked tests couldn't prove, now confirmed end-to-end.
+
+### Commits
+
+- `f51eac4` — imap: batch Gmail permanent-deletes into one MOVE + one
+  EXPUNGE
+- (this entry) — docs: Session 54 log; changelog; navigation map counts
+
+### On the horizon
+
+Unchanged: dogfooding → `git tag v1.0.0` + website go-live →
+`.deb`/`.dmg` packaging.
