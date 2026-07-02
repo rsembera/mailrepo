@@ -84,6 +84,13 @@ class IMAP:
         self.port = port
         self.use_ssl = use_ssl
         self.connection: Optional[imaplib.IMAP4_SSL | imaplib.IMAP4] = None
+        # Memoized list_folders() result for this connection's lifetime. The
+        # IMAP folder set doesn't change during a single short-lived operation,
+        # and this client never creates/renames/deletes server folders, so
+        # caching is safe. get_special_folder() calls list_folders() repeatedly
+        # (trash + spam per message during a Gmail delete), and a Gmail LIST is
+        # slow -- caching removes those redundant round-trips.
+        self._folder_cache: Optional[list[dict]] = None
 
     @classmethod
     def detect_server(cls, email_address: str) -> tuple[str, int] | None:
@@ -105,6 +112,7 @@ class IMAP:
 
     def connect(self) -> None:
         """Establish connection to IMAP server."""
+        self._folder_cache = None
         try:
             if self.use_ssl:
                 context = ssl.create_default_context()
@@ -146,7 +154,7 @@ class IMAP:
                 pass
             self.connection = None
 
-    def list_folders(self) -> list[dict]:
+    def list_folders(self, force_refresh: bool = False) -> list[dict]:
         """
         Get list of IMAP folders (mailboxes).
 
@@ -155,6 +163,9 @@ class IMAP:
         """
         if not self.connection:
             raise IMAPError("Not connected")
+
+        if self._folder_cache is not None and not force_refresh:
+            return self._folder_cache
 
         try:
             status, data = self.connection.list()
@@ -192,6 +203,7 @@ class IMAP:
                         }
                     )
 
+            self._folder_cache = folders
             return folders
         except Exception as e:
             raise IMAPError(f"Failed to list folders: {e}")
