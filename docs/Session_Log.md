@@ -3166,3 +3166,63 @@ stays ~38,700).
 
 Unchanged: dogfooding → `git tag v1.0.0` + website go-live →
 `.deb`/`.dmg` packaging.
+
+
+---
+
+## Session 53 — July 2, 2026 (MacBook)
+
+### Investigation: 60–90s Gmail delete
+
+Rick reported a commit-with-delete of two Gmail emails that sat at
+"Updating server…" for 60–90 seconds before completing successfully. Not
+the old timeout-and-skip failure mode (that path bails with a "server not
+responding" message and skips — this one succeeded), so the time was real
+work.
+
+Traced the Gmail delete path. Gmail's plain IMAP delete only removes a
+label, so `delete_email_via_trash` does the Gmail-safe dance per message:
+re-SELECT source → resolve trash → resolve spam → UID MOVE to
+`[Gmail]/Trash` → SELECT Trash → STORE `\Deleted` → UID EXPUNGE. About
+seven commands per message, ~14 for two, and Gmail's per-command IMAP
+latency (plus its slow EXPUNGE) dominates. The MOVE itself is atomic
+(RFC 6851), so that part is fine. Conclusion: most of the 60–90s is Gmail
+being Gmail on a real permanent delete, not a MailRepo bug.
+
+### Fix: cache list_folders() per connection (commit `c1f3178`)
+
+One genuine inefficiency: `get_special_folder()` resolved trash/spam by
+running a full IMAP LIST and scanning names, and `list_folders()` hit the
+server every call — so a two-email delete fired four uncached Gmail LISTs
+(trash + spam, twice), and a Gmail LIST is slow.
+
+Memoized `list_folders()` on the IMAP instance for the connection's
+lifetime (`self._folder_cache`). Safe: clients are short-lived per
+operation and never create/rename/delete server folders, so the set can't
+change under the cache; it resets on `connect()`, with a
+`force_refresh=True` escape hatch. Removes the redundant-LIST slice of the
+latency; the per-message SELECT/STORE/EXPUNGE and Gmail's inherent
+per-command latency are unchanged.
+
+### Deliberately not done
+
+Batching the delete (one UID-set MOVE + a single EXPUNGE instead of
+per-message) would cut round-trips further, but it's a real change for a
+cosmetic win on a chatty-by-nature Gmail operation — left as an optional
+follow-up.
+
+### Verification
+
+`ast.parse` clean; ruff clean; targeted `tests/test_imap.py` 21 passed;
+full suite 345 passed (3:39).
+
+### Commits
+
+- `c1f3178` — imap: cache list_folders() per connection to cut redundant
+  Gmail LISTs
+- (this entry) — docs: Session 53 log; changelog; navigation map counts
+
+### On the horizon
+
+Unchanged: dogfooding → `git tag v1.0.0` + website go-live →
+`.deb`/`.dmg` packaging.

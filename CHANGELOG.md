@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Faster folder resolution during Gmail deletes (Session 53).** The
+  IMAP client now caches its folder list for the connection's lifetime,
+  so resolving the Trash/Spam folders no longer issues a fresh full LIST
+  on every message. Removes redundant round-trips from Gmail's
+  (inherently chatty) permanent-delete path; no behavioural change.
 - **All destination-folder pickers now use one shared tree component
   (Session 51).** The move-emails and vault-restore pickers rendered
   their own flat, fully-expanded folder lists; both now use the same

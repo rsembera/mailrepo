@@ -42,11 +42,11 @@ and `CHANGELOG.md` for the user-facing changelog under
 
 | Language | Files | Lines |
 |----------|-------|-------|
-| Python | 35 | 13,553 |
+| Python | 35 | 13,565 |
 | JavaScript | 29 | 16,359 |
 | CSS | 23 | 7,497 |
 | HTML | 5 | 1,331 |
-| **Total** | **92** | **38,740** |
+| **Total** | **92** | **38,752** |
 
 Roughly doubled since the Feb 4, 2026 snapshot (was ~20,100 lines).
 Largest growth: encryption refactor (Sessions 36–37), retention vault
@@ -56,13 +56,13 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 ---
 
-## Backend (Python — 13,553 lines)
+## Backend (Python — 13,565 lines)
 
 ### Core (`/core/`)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `imap.py` | 1,344 | IMAP client: connect, auth, folders, fetch, MOVE/COPY + UID-scoped expunge, Gmail-aware delete, CONDSTORE |
+| `imap.py` | 1,356 | IMAP client: connect, auth, folders, fetch, MOVE/COPY + UID-scoped expunge, Gmail-aware delete, CONDSTORE |
 | `pdf_export.py` | 1,052 | PDF export: per-email PDFs, attachment merging, WeasyPrint |
 | `database.py` | 432 | SQLCipher connection, schema v5, FTS5, migrations, threading lock |
 | `encryption.py` | 385 | Argon2id KDF + HKDF + AES-256-GCM file/DB encryption (v2) |
