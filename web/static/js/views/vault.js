@@ -68,6 +68,7 @@ async function loadVaultFolders() {
  * Show the retention vault view.
  */
 export async function showVaultView() {
+    state.activeScreen = 'vault';
     vaultFilter = '';
     viewingFolder = null;  // Reset to folder list view
     vaultEmails = [];

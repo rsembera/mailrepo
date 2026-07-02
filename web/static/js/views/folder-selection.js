@@ -91,6 +91,7 @@ function filterFolderTree(nodes, query) {
  * Show folder selection view for bulk IMAP folder staging.
  */
 export async function showFolderSelectionView(accountId) {
+    state.activeScreen = 'folderSelection';
     currentFolderSelectionAccountId = accountId;
     selectedFoldersForStaging.clear();
     folderFilter = '';
@@ -139,6 +140,7 @@ export async function showFolderSelectionView(accountId) {
  */
 export function showImportFolderSelectionView(importId) {
     currentFolderSelectionImportId = importId;
+    state.activeScreen = 'folderSelection';
     currentFolderSelectionAccountId = null;
     selectedFoldersForStaging.clear();
     folderFilter = '';

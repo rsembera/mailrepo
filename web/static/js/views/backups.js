@@ -6,7 +6,7 @@
  */
 
 import { initCustomSelects } from '../components/custom-select.js';
-import { setBackupsUnsavedChecker, setBackupsUnsavedClearer } from '../state.js';
+import { state, setBackupsUnsavedChecker, setBackupsUnsavedClearer } from '../state.js';
 
 let contextTitle = null;
 let contextMeta = null;
@@ -36,6 +36,7 @@ export function initBackupsView(config) {
  * Show the backups view in the main content area.
  */
 export function showBackupsView() {
+    state.activeScreen = 'backups';
     const sidebar = document.getElementById('sidebar');
     const toolbar = document.querySelector('.content-toolbar');
     const headerActions = document.querySelector('.header-actions');

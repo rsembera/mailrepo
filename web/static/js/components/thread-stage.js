@@ -175,7 +175,17 @@ async function _findAndStageThread({ accountId, folder, uid, subject, destinatio
     }
 
     updateStagedBadge();
-    renderEmailList();
+    // Repaint whichever screen currently owns the shared content area so the
+    // newly staged thread appears immediately, rather than clobbering that
+    // screen with the inbox list (the bug that showed a hybrid Inbox/Staged
+    // view when navigating away mid-stage). If the user has moved to a screen
+    // staging doesn't affect, leave it — it renders correctly on return.
+    if (state.activeScreen === 'review') {
+        const { renderReviewView } = await import('../views/review.js');
+        renderReviewView();
+    } else if (state.activeScreen === 'mail') {
+        renderEmailList();
+    }
 
     // Light status feedback. Skip the modal for the common case (no
     // duplicates, no truncation, no timeout) — the badge update is

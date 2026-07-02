@@ -132,6 +132,7 @@ export function initReviewView(config) {
  * @returns {Promise<void>}
  */
 export async function showReviewView() {
+    state.activeScreen = 'review';
     const sidebar = document.getElementById('sidebar');
     const toolbar = document.querySelector('.content-toolbar');
     const headerActions = document.querySelector('.header-actions');
@@ -276,7 +277,7 @@ function buildGroupedData() {
 /**
  * Render the main review view with all staged items grouped by destination.
  */
-function renderReviewView() {
+export function renderReviewView() {
     const stagedEmails = getStagedEmails();
     const stagedFolders = getStagedFolders();
     const totalCount = stagedEmails.size + stagedFolders.length;

@@ -6,6 +6,7 @@
  */
 
 import { initCustomSelects, CustomSelect } from '../components/custom-select.js';
+import { state } from '../state.js';
 import { bindActions } from '../delegate.js';
 import { closeModal, registerModalCloseHandler } from '../modals.js';
 
@@ -35,6 +36,7 @@ export function initSettingsView(config) {
  * Show the settings view in the main content area.
  */
 export function showSettingsView() {
+    state.activeScreen = 'settings';
     // Reset guard flag
     settingsLoaded = false;
     

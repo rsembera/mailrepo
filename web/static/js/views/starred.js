@@ -41,6 +41,7 @@ export function initStarredView(config) {
  * button.
  */
 export async function showStarredView() {
+    state.activeScreen = 'starred';
     const sidebar = document.getElementById('sidebar');
     const toolbar = document.querySelector('.content-toolbar');
     const headerActions = document.querySelector('.header-actions');

@@ -109,6 +109,7 @@ export function initTrashView(config) {
 
 /** Show the trash view. */
 export async function showTrashView() {
+    state.activeScreen = 'trash';
     const sidebar = document.getElementById('sidebar');
     const toolbar = document.querySelector('.content-toolbar');
     const headerActions = document.querySelector('.header-actions');

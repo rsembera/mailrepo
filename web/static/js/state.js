@@ -52,6 +52,12 @@ export function updateStagedBadge() {
  */
 export const state = {
     currentView: null,      // { type: 'account'|'folder', id: number, label?: string }
+    // Which top-level screen currently owns the shared #emailList content area
+    // ('mail' | 'review' | 'settings' | 'vault' | 'trash' | 'starred' |
+    // 'backups' | 'folderSelection'). Each show*View sets this so async
+    // callbacks (e.g. thread staging) can repaint the active screen instead of
+    // clobbering it with another view's content.
+    activeScreen: 'mail',
     emails: [],
     staged: new Map(),      // Map<emailId, {email, destinationFolderId, sourceAccountId, sourceFolder}>
     stagedFolders: [],      // Array<{accountId, folder, destinationFolderId}> for bulk folder staging

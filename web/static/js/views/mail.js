@@ -119,6 +119,7 @@ let onButtonStatesUpdate = null;
  * Restore default header actions for email list view (Stage Selected only).
  */
 export function restoreDefaultHeaderActions() {
+    state.activeScreen = 'mail';
     const headerActions = document.querySelector('.header-actions');
     const toolbar = document.querySelector('.content-toolbar');
     const sidebar = document.getElementById('sidebar');
@@ -137,6 +138,7 @@ export function restoreDefaultHeaderActions() {
  * Clear header actions for archive view.
  */
 function clearHeaderActions() {
+    state.activeScreen = 'mail';
     const headerActions = document.querySelector('.header-actions');
     const toolbar = document.querySelector('.content-toolbar');
     const sidebar = document.getElementById('sidebar');
