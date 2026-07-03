@@ -43,10 +43,10 @@ and `CHANGELOG.md` for the user-facing changelog under
 | Language | Files | Lines |
 |----------|-------|-------|
 | Python | 35 | 13,789 |
-| JavaScript | 29 | 16,359 |
+| JavaScript | 29 | 16,386 |
 | CSS | 23 | 7,497 |
 | HTML | 5 | 1,331 |
-| **Total** | **92** | **38,976** |
+| **Total** | **92** | **39,003** |
 
 Roughly doubled since the Feb 4, 2026 snapshot (was ~20,100 lines).
 Largest growth: encryption refactor (Sessions 36–37), retention vault
@@ -117,7 +117,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 ---
 
-## Frontend (JavaScript — 16,359 lines)
+## Frontend (JavaScript — 16,386 lines)
 
 ### Entry Point & Shared
 
@@ -126,7 +126,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `app.js` | 730 | Init, event listeners, rail nav, nav guards, template-bindings wiring |
 | `template-bindings.js` | 143 | Single delegated handler for index.html data-tpl-action attrs (Session 38) |
 | `delegate.js` | 116 | `bindActions(container, handlers)` helper for per-view delegation |
-| `state.js` | 124 | Central state object, session persistence |
+| `state.js` | 130 | Central state object, session persistence |
 | `utils.js` | 90 | escapeHtml, formatDate, debounce, extractName |
 | `modals.js` | 144 | Alert/confirm/prompt + canonical closeModal + registerModalCloseHandler |
 
@@ -134,15 +134,15 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `mail.js` | 2,299 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
-| `settings.js` | 1,217 | Settings: appearance, accounts, security, backup, reset |
-| `review.js` | 1,034 | Review staged items, destination editing, commit |
-| `backups.js` | 952 | Backup/restore UI, restore points, settings |
-| `folder-selection.js` | 895 | Bulk folder staging from IMAP/imports |
-| `vault.js` | 858 | Retention vault: move to vault, restore, permanent delete |
-| `trash.js` | 774 | Trash view: deleted folders, emails, restore, purge |
+| `mail.js` | 2,301 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
+| `settings.js` | 1,219 | Settings: appearance, accounts, security, backup, reset |
+| `review.js` | 1,035 | Review staged items, destination editing, commit |
+| `backups.js` | 953 | Backup/restore UI, restore points, settings |
+| `folder-selection.js` | 897 | Bulk folder staging from IMAP/imports |
+| `vault.js` | 859 | Retention vault: move to vault, restore, permanent delete |
+| `trash.js` | 775 | Trash view: deleted folders, emails, restore, purge |
 | `folder-mgmt.js` | 667 | Manage folders: rename, color, create, delete |
-| `starred.js` | 368 | Starred email view |
+| `starred.js` | 369 | Starred email view |
 
 ### Components (`/js/components/`)
 
@@ -159,7 +159,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `context-menu.js` | 288 | Right-click context menu for sidebar/folders |
 | `folder-tree.js` | 265 | Reusable folder tree renderer |
 | `custom-select.js` | 223 | Custom dropdown select component |
-| `thread-stage.js` | 197 | Stage-entire-thread modal from email viewer |
+| `thread-stage.js` | 207 | Stage-entire-thread modal from email viewer |
 | `move-email-modal.js` | 112 | Move archived emails between folders |
 
 ---

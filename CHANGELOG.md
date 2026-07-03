@@ -32,6 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   folder-select handler.
 
 ### Fixed
+- **Staging a thread no longer shows a hybrid Inbox/Staged screen (Session 55).**
+  If you navigated to the Staged Items screen while a thread was still
+  staging, the completion step repainted the inbox list into the shared
+  content area, leaving the Staged Items chrome wrapped around inbox rows.
+  The app now tracks which screen is active and repaints that one on
+  completion, so the staged emails appear on the Staged Items screen
+  immediately.
 - **Moving emails no longer hides failures (Session 52).** If some moves
   in a batch failed, every selected email still vanished from the
   current view — the failures silently reappeared in their old folder

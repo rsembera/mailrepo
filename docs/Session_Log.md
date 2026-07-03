@@ -3280,3 +3280,54 @@ thing the mocked tests couldn't prove, now confirmed end-to-end.
 
 Unchanged: dogfooding → `git tag v1.0.0` + website go-live →
 `.deb`/`.dmg` packaging.
+
+
+---
+
+## Session 55 — July 2, 2026 (MacBook)
+
+### Fix: hybrid Inbox/Staged screen when navigating mid-stage (commit `9665477`)
+
+Rick opened an email, clicked Stage conversation, and navigated to the
+Staged Items screen while the stage spinner was still up — and saw a hybrid
+screen: the Staged Items chrome ("Staged Items" header, hidden sidebar) but
+with the *inbox* list painted into it, showing the email he'd just opened.
+Clicking away and back fixed it.
+
+**Cause.** Staging a thread is an async server round-trip; on completion,
+`_findAndStageThread` unconditionally called `renderEmailList()` to gray out
+the newly-staged rows. All top-level views share one `#emailList` content
+element, and `state.currentView` isn't updated when entering the Staged
+Items (review) screen — so that trailing repaint overwrote the review
+content with the inbox list while leaving the review chrome in place.
+
+**Fix.** Track which screen owns the shared content area
+(`state.activeScreen`), set by every `show*View` entry point. On stage
+completion, repaint the *active* screen:
+- review → `renderReviewView()` (now exported) so the thread's emails
+  appear immediately, no manual re-navigation
+- mail → `renderEmailList()` (previous behaviour)
+- any other screen → leave it; it renders correctly on return
+
+Touched all eight screen entries (mail, review, settings, vault, trash,
+starred, backups, folder-selection) because they all render into the one
+shared element — flagging only two would just move the clobber to a third
+screen. Added the `state` import to settings.js and backups.js, which
+lacked it.
+
+### Verification
+
+`node --check` clean on all 10 touched files; ESLint read-only-binding
+sweep clean. Frontend only — the Python suite doesn't exercise this;
+awaiting Rick's live re-run of the stage→navigate sequence.
+
+### Commits
+
+- `9665477` — Fix stage-thread hybrid view: repaint the active screen on
+  completion
+- (this entry) — docs: Session 55 log; changelog; navigation map counts
+
+### On the horizon
+
+Unchanged: dogfooding → `git tag v1.0.0` + website go-live →
+`.deb`/`.dmg` packaging.
