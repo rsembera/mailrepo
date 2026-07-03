@@ -24,6 +24,7 @@ and `CHANGELOG.md` for the user-facing changelog under
 |----------|---------|
 | `docs/Navigation_Map.md` | This file — codebase overview and context recovery |
 | `docs/Session_Log.md` | Chronological record of sessions and decisions |
+| `docs/Known_Issues.md` | Tracked open issues (e.g. intermittent slow Sentinel backup sync) + their instrumentation |
 | `docs/Post_1_0_Backlog.md` | Post-1.0 items: packaging, tag, website, deferred work |
 | `docs/Test_Coverage_Plan.md` | Tiered plan for the post-1.0 test-coverage expansion |
 | `CHANGELOG.md` | User-facing changelog (Keep a Changelog format) |

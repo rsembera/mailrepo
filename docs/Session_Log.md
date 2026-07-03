@@ -3331,3 +3331,48 @@ awaiting Rick's live re-run of the stage→navigate sequence.
 
 Unchanged: dogfooding → `git tag v1.0.0` + website go-live →
 `.deb`/`.dmg` packaging.
+
+
+---
+
+## Session 56 — July 3, 2026 (MacBook)
+
+### Slow Sentinel backup: diagnosed (partially) + instrumented
+
+Rick asked whether the slow backup was the office internet. It wasn't. Ran a
+battery of live tests to Sentinel — all fast (3–4.6 MB/s) — and ruled out:
+office/home internet, rsync directory scan (2s full-dir dry-run), the transport,
+process QoS (the server runs at normal priority; a forced `taskpolicy -b`
+transfer only fell to ~1.8 MB/s), and the iCloud-write/rsync race (faithful
+replication → 4.6 MB/s). iCloud's `bird` uploader was active during the slow
+18:11 window per the unified log, but only in seconds-long bursts — too short to
+explain a 60s crawl. Could not reproduce the ~204 KB/s the real backups hit
+(2026-06-26 and 2026-07-03, both ~204 KB/s); it's genuinely transient. Cause
+unpinned.
+
+Rather than chase a ghost, instrumented it. A wrapper script
+(`~/Applications/mailrepo-ops/backup-sync.sh`, outside the repo — machine-specific
+paths) runs the sync with identical terminal output and logs the outcome: a
+one-line `OK` normally, and a full diagnostic snapshot only when a real ≥1 MB
+transfer comes in under 1 MB/s — rsync summary, interface, iCloud `bird`
+activity, `nettop`, top CPU, and an independent 12 MB throughput probe to
+Sentinel (the datum that splits link-vs-flow). Log at
+`~/Applications/mailrepo-ops/backup-sync.log`. Two script bugs caught during a
+live test and fixed: a no-op re-sync's meaningless rate was falsely tripping the
+SLOW branch (now gated on ≥1 MB actually sent), and the probe needed `-av` to
+emit a rate line.
+
+Tracked in `docs/Known_Issues.md` (new) so a future chat can pick it up cold.
+
+**Manual step (Rick):** set MailRepo's post-backup command to
+`/Users/rick/Applications/mailrepo-ops/backup-sync.sh`, replacing the raw rsync.
+
+### Commits
+
+- (this entry) — docs: add Known_Issues.md (slow-backup tracking + instrumentation)
+  and register it in the Navigation Map. No repo code changed; the wrapper lives
+  outside the repo.
+
+### On the horizon
+
+Unchanged: dogfooding → `git tag v1.0.0` + website go-live → `.deb`/`.dmg`.
