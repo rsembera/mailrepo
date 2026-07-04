@@ -486,8 +486,7 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
                         ]
                         if len(delete_items) > 1:
                             by_uid = {
-                                str(it["item_data"]["email"]["uid"]): it
-                                for it in delete_items
+                                str(it["item_data"]["email"]["uid"]): it for it in delete_items
                             }
                             try:
                                 outcome = client.delete_emails_via_trash(
@@ -507,15 +506,35 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
                                 if ok:
                                     results["post_actions"]["success"] += 1
                                     results["post_actions"]["by_action"]["delete"] = (
-                                        results["post_actions"]["by_action"].get("delete", 0)
-                                        + 1
+                                        results["post_actions"]["by_action"].get("delete", 0) + 1
                                     )
                                     mark_item_done(item["id"])
                                     actions_applied = True
                                 else:
                                     results["post_actions"]["failed"] += 1
-                            # The batch leaves Trash selected; restore the source.
-                            client.select_folder(source_folder)
+                            # The batch leaves Trash selected; restore the source
+                            # for the per-item loop (apply_email_action only
+                            # re-selects on its Gmail-delete branch). Guarded so
+                            # a failure here can't fall through to the folder
+                            # handler and double-count the items the batch
+                            # already accounted for.
+                            try:
+                                client.select_folder(source_folder)
+                            except IMAPError as e:
+                                remaining = [
+                                    it for it in folder_items if it["id"] not in handled_ids
+                                ]
+                                results["post_actions"]["failed"] += len(remaining)
+                                logger.warning(
+                                    "Post-commit: re-select of %s failed after "
+                                    "batch delete; %d remaining item(s) skipped: %s",
+                                    source_folder,
+                                    len(remaining),
+                                    e,
+                                )
+                                if actions_applied:
+                                    clear_folder_cache(int(account_id), source_folder)
+                                continue
 
                     for item in folder_items:
                         if item["id"] in handled_ids:
