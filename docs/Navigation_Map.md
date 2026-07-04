@@ -43,11 +43,11 @@ and `CHANGELOG.md` for the user-facing changelog under
 
 | Language | Files | Lines |
 |----------|-------|-------|
-| Python | 35 | 13,789 |
+| Python | 35 | 13,823 |
 | JavaScript | 29 | 16,386 |
 | CSS | 23 | 7,497 |
 | HTML | 5 | 1,331 |
-| **Total** | **92** | **39,003** |
+| **Total** | **92** | **39,037** |
 
 Roughly doubled since the Feb 4, 2026 snapshot (was ~20,100 lines).
 Largest growth: encryption refactor (Sessions 36–37), retention vault
@@ -57,13 +57,13 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 ---
 
-## Backend (Python — 13,789 lines)
+## Backend (Python — 13,823 lines)
 
 ### Core (`/core/`)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `imap.py` | 1,532 | IMAP client: connect, auth, folders, fetch, MOVE/COPY + UID-scoped expunge, Gmail-aware delete, CONDSTORE |
+| `imap.py` | 1,535 | IMAP client: connect, auth, folders, fetch, MOVE/COPY + UID-scoped expunge, Gmail-aware delete (incl. batched set delete), CONDSTORE |
 | `pdf_export.py` | 1,052 | PDF export: per-email PDFs, attachment merging, WeasyPrint |
 | `database.py` | 432 | SQLCipher connection, schema v5, FTS5, migrations, threading lock |
 | `encryption.py` | 385 | Argon2id KDF + HKDF + AES-256-GCM file/DB encryption (v2) |
@@ -97,10 +97,10 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `emails.py` | 824 | Archived email operations: view, move, delete, batch, download |
 | `filesystem.py` | 807 | File browser for imports, path validation, PST conversion |
 | `imports.py` | 744 | Mount/unmount imports, browse imported emails/folders |
+| `progress_commit.py` | 701 | SSE streaming for commit operations; batched Gmail deletes; unified post-action failure accounting + logging (Sessions 47/54/57) |
 | `folders.py` | 670 | Archive folder CRUD, trash, restore, vault, retention |
-| `progress_commit.py` | 670 | SSE streaming for commit operations; post-action failures logged with error text (Session 47) |
-| `commit.py` | 488 | Email/folder commit workflow |
 | `accounts.py` | 495 | IMAP account CRUD, Gmail auto-detection, folder listing |
+| `commit.py` | 488 | Email/folder commit workflow |
 | `email_parser.py` | 336 | Email parsing: headers, body, attachments, body text extraction |
 | `progress_emails.py` | 286 | SSE streaming for email operations |
 | `settings.py` | 247 | App settings: timeout, retention, keepalive |

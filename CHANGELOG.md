@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Post-commit failure counts can no longer double-count (Session 57).**
+  If a connection died between a batched Gmail delete completing and
+  the re-select of the source folder — or any unexpected error escaped
+  mid-folder — the folder/account failure handlers added the full item
+  count over items already counted, producing summaries like
+  "3 succeeded, 3 failed" for 3 items. Accounting is now tracked with
+  an account-scoped set and the handlers count only unaccounted items.
+- **`list_folders()` returns copies of its cached result (Session 57)**,
+  so a caller mutating the returned list can't poison the
+  per-connection cache.
+
 ### Changed
 - **Bulk Gmail deletes are batched (Session 54).** Deleting several Gmail
   messages from a folder now issues one UID-set MOVE to Trash plus a

@@ -3376,3 +3376,94 @@ Tracked in `docs/Known_Issues.md` (new) so a future chat can pick it up cold.
 ### On the horizon
 
 Unchanged: dogfooding → `git tag v1.0.0` + website go-live → `.deb`/`.dmg`.
+
+
+---
+
+## Session 57 — July 4, 2026 (MacBook)
+
+### Review pass over the July 2–3 work (Sessions 50–56)
+
+Rick asked for a second-opinion review of the recent commits, made in
+sessions with another Claude instance. Scope: the three July 2–3 code
+commits (`c1f3178` LIST cache, `f51eac4` batched Gmail delete,
+`9665477` stage-thread hybrid-view fix) plus the earlier unreviewed
+frontend work (`430f48b` move-email partial failures, `a7eb5f5` /
+`93d9ce8` folder-picker standardization, `8b4ae15` export const→let).
+
+### Findings
+
+**Clean, verified by inspection:**
+- LIST cache: resets on connect, populated only on success, no caller
+  mutates the returned list.
+- Stage-thread fix: all `restoreDefaultHeaderActions` /
+  `clearHeaderActions` call sites are genuine mail-screen entries, so
+  the `activeScreen = 'mail'` claims are correct — the one place the
+  pattern could have gone wrong.
+- Folder-tree `isSelectable`: no string/number coercion bug
+  (`parseInt` on dataset vs numeric ids on both sides);
+  `setSelected(null)` exists and clears row highlights.
+- Vault restore picker root/tree selection sync: correct in both
+  directions.
+- Move-email fix: per-move try/catch, only successes filtered from
+  state; the unguarded repaint is fine because the modal blocks
+  navigation during the await sequence (unlike thread staging).
+- Repo-wide sweep: all 29 JS files pass `node --check` and eslint
+  `no-const-assign`.
+
+**Bug found and fixed — post-commit failure double-counting**
+(commits `72bc4dc`, `ffe52db`):
+
+The batched delete's post-batch re-select of the source folder
+(needed: `apply_email_action` only re-selects on its Gmail-delete
+branch, so remaining archive/trash items in the folder depend on the
+caller contract) sat inside the folder-level try *after* batch
+successes were counted and marked done. A connection death between
+the batch and the re-select would hit the folder handler's
+`failed += len(folder_items)`, recounting every already-handled item
+— summaries like "3 succeeded, 3 failed" for 3 items, with done-marks
+disagreeing with the numbers.
+
+First fix (`72bc4dc`): guard the re-select; on failure count only
+unhandled items, clear the folder cache for deletes that landed,
+continue to the next folder.
+
+Second fix (`ffe52db`): the account-level `except Exception` had the
+same recount bug one level up (a non-IMAPError escaping mid-folder,
+e.g. malformed item_data, added `len(account_items)` over items
+already counted). Replaced the folder-scoped `handled_ids` with an
+account-scoped `accounted_ids` set, updated at every point an item is
+definitively counted; both outer handlers now count only unaccounted
+items.
+
+Also from the review's minor findings (`ffe52db`): the UID sort
+comment in `delete_emails_via_trash` wrongly claimed the sort was
+needed for COPYUID parallelism (the map zips the server's own
+response sets) — rewritten, with a tuple sort key so a stray
+non-numeric UID can't TypeError; and `list_folders()` now returns
+shallow copies so callers can't poison the cache.
+
+### Notes
+
+- Coverage observation for Rick's consideration: nothing in the test
+  suite drives `_apply_post_actions_from_pending` directly (SSE
+  generator scaffolding cost) — the accounting layer is verified by
+  inspection only. This neighborhood has now produced two bugs
+  (Session 46's dead-dispatch, this recount). Might warrant a Tier
+  reconsideration in `Test_Coverage_Plan.md`.
+- Verification: full suite 353 passed (pre-change baseline); the 71
+  imap/commit tests re-run green after each change; ruff clean;
+  eslint + node --check clean across all 29 JS files.
+
+### Commits
+
+- `72bc4dc` — Fix double-count when post-batch folder re-select fails
+- `ffe52db` — Unify post-commit failure accounting; harden two review nits
+- (this entry) — docs: Session 57 log; changelog; navigation map counts
+
+### On the horizon
+
+Unchanged: general dogfooding, then tag + website go-live, then
+`.deb`/`.dmg` packaging. The July 2–3 work is now fully reviewed and
+signed off. Sentinel slow-backup instrumentation (Session 56) remains
+armed, awaiting a recurrence.
