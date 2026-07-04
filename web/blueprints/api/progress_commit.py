@@ -451,6 +451,12 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
             continue
 
         client = None
+        # Items already counted (success or failed) or resolved (leave/done).
+        # The folder- and account-level handlers below count only items NOT in
+        # this set, so a failure escaping mid-folder can't recount items that
+        # were already accounted for. IDs are unique across folders, so one
+        # account-scoped set serves both levels.
+        accounted_ids = set()
         try:
             client = IMAP.connect_with_credentials(account["credentials_encrypted"])
             # Gmail needs a provider-aware delete (its IMAP delete only
@@ -468,7 +474,6 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
 
             for source_folder, folder_items in by_folder.items():
                 actions_applied = False
-                handled_ids = set()
                 try:
                     client.select_folder(source_folder)
 
@@ -502,7 +507,7 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
                                 )
                             for uid, ok in outcome.items():
                                 item = by_uid[uid]
-                                handled_ids.add(item["id"])
+                                accounted_ids.add(item["id"])
                                 if ok:
                                     results["post_actions"]["success"] += 1
                                     results["post_actions"]["by_action"]["delete"] = (
@@ -522,9 +527,10 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
                                 client.select_folder(source_folder)
                             except IMAPError as e:
                                 remaining = [
-                                    it for it in folder_items if it["id"] not in handled_ids
+                                    it for it in folder_items if it["id"] not in accounted_ids
                                 ]
                                 results["post_actions"]["failed"] += len(remaining)
+                                accounted_ids.update(it["id"] for it in remaining)
                                 logger.warning(
                                     "Post-commit: re-select of %s failed after "
                                     "batch delete; %d remaining item(s) skipped: %s",
@@ -537,7 +543,7 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
                                 continue
 
                     for item in folder_items:
-                        if item["id"] in handled_ids:
+                        if item["id"] in accounted_ids:
                             continue
                         item_data = item["item_data"]
                         action = item["source_action"]
@@ -545,6 +551,7 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
 
                         if not action or action == "leave":
                             mark_item_done(item["id"])
+                            accounted_ids.add(item["id"])
                             continue
 
                         try:
@@ -555,9 +562,11 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
                                 results["post_actions"]["by_action"].get(action, 0) + 1
                             )
                             mark_item_done(item["id"])
+                            accounted_ids.add(item["id"])
                             actions_applied = True
                         except IMAPError as e:
                             results["post_actions"]["failed"] += 1
+                            accounted_ids.add(item["id"])
                             logger.warning(
                                 "Post-commit %s failed for UID %s in %s: %s",
                                 action,
@@ -570,20 +579,23 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
                     if actions_applied:
                         clear_folder_cache(int(account_id), source_folder)
                 except IMAPError as e:
-                    results["post_actions"]["failed"] += len(folder_items)
+                    unaccounted = [it for it in folder_items if it["id"] not in accounted_ids]
+                    results["post_actions"]["failed"] += len(unaccounted)
+                    accounted_ids.update(it["id"] for it in unaccounted)
                     logger.warning(
-                        "Post-commit actions failed for folder %s (%d items): %s",
+                        "Post-commit actions failed for folder %s (%d unprocessed items): %s",
                         source_folder,
-                        len(folder_items),
+                        len(unaccounted),
                         e,
                     )
 
         except Exception as e:
-            results["post_actions"]["failed"] += len(account_items)
+            unaccounted = [it for it in account_items if it["id"] not in accounted_ids]
+            results["post_actions"]["failed"] += len(unaccounted)
             logger.warning(
-                "Post-commit actions failed for account %s (%d items): %s",
+                "Post-commit actions failed for account %s (%d unprocessed items): %s",
                 account_id,
-                len(account_items),
+                len(unaccounted),
                 e,
             )
             # Report connection issues to the user via SSE. IMAPError wraps

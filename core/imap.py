@@ -165,7 +165,9 @@ class IMAP:
             raise IMAPError("Not connected")
 
         if self._folder_cache is not None and not force_refresh:
-            return self._folder_cache
+            # Shallow copy so a caller mutating the returned list (append,
+            # remove, sort) can't poison the cache for later callers.
+            return list(self._folder_cache)
 
         try:
             status, data = self.connection.list()
@@ -204,7 +206,7 @@ class IMAP:
                     )
 
             self._folder_cache = folders
-            return folders
+            return list(folders)
         except Exception as e:
             raise IMAPError(f"Failed to list folders: {e}")
 
@@ -1355,7 +1357,6 @@ class IMAP:
             )
             return True
 
-
     @staticmethod
     def _expand_uid_set(spec: str) -> list[str]:
         """Expand an IMAP sequence-set of UIDs into an ordered list of strings.
@@ -1396,8 +1397,7 @@ class IMAP:
             _typ, resp = self.connection.response("COPYUID")
             if resp and resp[0] is not None:
                 text = " ".join(
-                    i.decode("ascii", "ignore") if isinstance(i, bytes) else str(i)
-                    for i in resp
+                    i.decode("ascii", "ignore") if isinstance(i, bytes) else str(i) for i in resp
                 )
         except Exception:
             text = ""
@@ -1479,10 +1479,13 @@ class IMAP:
 
         results = {u: False for u in uids}
 
-        # One MOVE of the whole set. Sort ascending so COPYUID's source and
-        # destination sets line up positionally when we zip them.
+        # One MOVE of the whole set. Sorting is for a canonical, deterministic
+        # UID set (nicer logs, stable tests) — the COPYUID src->dst map is
+        # built from the server's own parallel response sets, so our request
+        # order isn't load-bearing. The tuple key keeps a stray non-numeric
+        # UID from raising TypeError in a mixed sort.
         self.select_folder(source_folder)
-        ordered = sorted(uids, key=lambda u: int(u) if u.isdigit() else u)
+        ordered = sorted(uids, key=lambda u: (0, int(u)) if u.isdigit() else (1, u))
         uid_set = ",".join(ordered)
         dest = f'"{trash}"'
 
