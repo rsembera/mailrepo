@@ -3513,3 +3513,31 @@ transient interfaces are recreated by macOS.)
 ### On the horizon
 
 Unchanged: dogfooding → `git tag v1.0.0` + website go-live → `.deb`/`.dmg`.
+
+
+### Session 58 addendum — office-skip implemented; diagnosis independently verified
+
+Second-opinion pass over the diagnosis (separate chat, same day): confirmed
+`sentinel` resolves to the Tailscale IP; live re-ran the asymmetry test from
+the office network (upload 237 KB/s vs download 2.75 MB/s, same tunnel,
+seconds apart — reproduces on demand); confirmed `utun8` MTU restored to
+1280. Verdict stands. Also fixed the duplicate session number (this entry
+was originally logged as Session 57; Session 57 was July 4). Open
+consistency question for Rick: the July 3 fast retests (3–4.6 MB/s, incl.
+the 19:42 wrapper run) require that he was already home that evening —
+believed but unconfirmed.
+
+Then implemented Known_Issues option 3, prompted by the weekly-full math:
+`create_backup()` auto-promotes to a full every 7 days (uncontrollable
+timing), and the last full shipped 222 MB — ~18 min of blocked logout at
+office rates. `backup-sync.sh` (ops dir, outside the repo) now skips the
+Sentinel sync when the Wi-Fi SSID matches
+`~/Applications/mailrepo-ops/office-networks.conf`, logging a `SKIP` line
+and exiting 0; rsync catches up on the next non-office backup. Live-tested
+at the office: 15 ms, clean skip, logged. The SSID never entered the repo
+or the chat (written shell-side into the conf).
+
+### Commits (addendum)
+
+- `6da3f8a` — docs: fix duplicate session number (July 11 is Session 58)
+- (this entry) — docs: Known_Issues option 3 implemented; Session 58 addendum

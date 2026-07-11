@@ -55,7 +55,14 @@ fix in MailRepo. Do not spend more time on this.**
 2. **Try Tailscale over TCP/443**, so the traffic looks like ordinary HTTPS that
    shapers ignore. Not guaranteed; would need its own session.
 3. **Skip the Sentinel sync on the office network** (condition the post-backup
-   command on the current SSID).
+   command on the current SSID). **← IMPLEMENTED 2026-07-11 (Session 58) on the
+   MacBook**: `backup-sync.sh` skips (logs `SKIP`, exits 0) when the Wi-Fi SSID
+   matches a line in `~/Applications/mailrepo-ops/office-networks.conf`; the
+   next backup on any other network catches up automatically (rsync is
+   stateless). Weekly *full* backups (~222 MB and growing) would otherwise
+   block logout ~18 min at office rates. Caveat: matches Wi-Fi SSID only — a
+   wired office connection isn't caught. Sentinel may be a few days stale
+   after consecutive office days; local iCloud backups are unaffected.
 4. Ask office IT to stop shaping outbound UDP — the correct fix, rarely available
    in a leased space.
 
