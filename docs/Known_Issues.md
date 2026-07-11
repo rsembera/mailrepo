@@ -5,53 +5,79 @@ future session can pick up where the last one left off.
 
 ---
 
-## Intermittent slow Sentinel backup sync (~204 KB/s) — OPEN, cause unpinned
+## Slow Sentinel backup sync (~200 KB/s) — RESOLVED 2026-07-11: office network, not a MailRepo bug
 
-**Symptom.** The post-backup `rsync` to Sentinel occasionally crawls at
-~204 KB/s (~60s for the ~12 MB incremental) instead of its normal ~3–4 MB/s.
-Observed 2026-06-26 (204,513 B/s) and 2026-07-03 (204,046 B/s) — both evenings,
-both landing on almost exactly the same rate, which points to something
-*systematic when it happens* rather than random congestion. It only surfaces at
-backup time, and it blocks the logout flow while it runs.
+**Verdict.** Rick's counselling office rate-limits outbound VPN/tunnel traffic.
+The backup `rsync` to Sentinel runs over Tailscale (`sentinel` resolves to the
+Tailscale IP `100.116.129.95`), so at the office it gets shaped to ~200 KB/s
+(~60s for the ~12 MB incremental). At home it runs at 20–29 MB/s. **Nothing to
+fix in MailRepo. Do not spend more time on this.**
 
-**Ruled out** (2026-07-03 — every isolated retest ran fast, 3–4.6 MB/s, minutes
-after the slow backup):
+**The evidence that settled it — an asymmetry test:**
 
-- **Office / home internet.** Direct rsync to Sentinel does 3–4.6 MB/s.
-- **rsync directory scan.** Dry-run of the full 147-file / 6.34 GB backup
-  directory: 2 seconds.
-- **The transport itself.** Single-file transfer from the real iCloud source: fast.
-- **Process QoS.** The MailRepo server runs at normal priority (nice 0, launched
-  from a shell), so a spawned rsync isn't throttled by inheritance; and a forced
-  background-QoS transfer (`taskpolicy -b`) only fell to ~1.8 MB/s — nowhere near
-  204 KB/s.
-- **iCloud write / rsync race.** Faithfully replicated (write 12 MB into the
-  iCloud backup folder, then immediately rsync it from there to Sentinel):
-  4.6 MB/s. iCloud's `bird` uploader *was* active during the slow 18:11 window
-  per the unified log, but its upload bursts were only seconds long — too short
-  to account for a 60-second crawl.
+- **Download from Sentinel: 16.8 MB/s. Upload to Sentinel: ~216 KB/s.** Same
+  tunnel, same route, same MTU, same moment — 80× slower in one direction only.
+  No packet-size, MTU, routing, or relay problem can do that; only a shaper
+  acting on outbound traffic can.
+- Raw `ssh … 'cat > /dev/null'` (no rsync, no iCloud, no MailRepo) is equally
+  slow → the app is not involved at any level.
+- Speedtest at the office: 351 / 52 Mbps, 7ms, 0% loss → the internet connection
+  is fine. Ordinary TCP/443 is untouched; it's the WireGuard-style UDP (port
+  41641) to an unrecognised peer that gets shaped.
+- The rate is *pinned*, not noisy: 204,513 / 204,046 / 211,561 / 216,134 B/s
+  across weeks. A flat ceiling is a rate limiter, not congestion.
+- Only ever at the office; never at home.
 
-**Status.** Could not reproduce on demand. Genuinely transient, tied to
-conditions at the specific moments the real backups ran. Not worth chasing
-further blind — instrumented instead (below).
+**Dead ends — already chased and disproven. Don't repeat these:**
 
-**Instrumentation (the black box).** A wrapper now runs the sync and logs the
-outcome, capturing a full snapshot only when a *real* transfer comes in slow:
+- **Office internet being "slow"** — no; Speedtest is 351/52 Mbps.
+- **rsync scanning the growing backup directory** — no; a full-dir dry-run of
+  147 files / 6.34 GB takes 2 seconds.
+- **The iCloud write → rsync race** — no; faithfully replicated at 4.6 MB/s.
+- **Process QoS / the app spawning a throttled child** — no; the server runs at
+  normal priority, and even a forced `taskpolicy -b` transfer only fell to
+  ~1.8 MB/s, nowhere near 200 KB/s.
+- **Tailscale falling back to a DERP relay** — no; `tailscale status` shows a
+  **direct** IPv6 path at ~50ms, and it's still slow.
+- **MTU / PMTU black hole** — no. Two wrong turns here, recorded so they aren't
+  repeated: (1) the Tailscale interface is **`utun8`**, not `utun0`; (2) it was
+  already at the correct 1280, and forcing it to 1200 changed throughput *not at
+  all*. The "drop line" in a ping-size probe simply tracks the interface MTU —
+  that's normal behaviour, not a black hole.
+  **If utun8 is still at 1200, set it back: `sudo ifconfig utun8 mtu 1280`.**
+  (Any stray change to `utun0` is harmless — those transient utun interfaces are
+  recreated by macOS and don't persist.)
 
-- **Script:** `~/Applications/mailrepo-ops/backup-sync.sh` — kept outside the repo
-  because it holds machine-specific paths (iCloud source, `rick@sentinel`). Wired
-  in as MailRepo's post-backup command, replacing the raw rsync. Terminal output
-  is identical to before.
+**Options at the office (all optional — none is a bug fix):**
+
+1. **Accept it.** The backup completes in ~60s and the Sentinel copy is a
+   backup-of-a-backup (primaries live in iCloud Drive). This is the sane default.
+2. **Try Tailscale over TCP/443**, so the traffic looks like ordinary HTTPS that
+   shapers ignore. Not guaranteed; would need its own session.
+3. **Skip the Sentinel sync on the office network** (condition the post-backup
+   command on the current SSID).
+4. Ask office IT to stop shaping outbound UDP — the correct fix, rarely available
+   in a leased space.
+
+**Not affected:** Google Meet and similar. The shaper targets unrecognised tunnel
+traffic, not standard services — Speedtest pushed 52 Mbps up through the same
+network, and Meet is well-known traffic on standard ports.
+
+---
+
+## Instrumentation: backup-sync black box (retained)
+
+The wrapper that caught this is still in place and still useful for any future
+backup-throughput question.
+
+- **Script:** `~/Applications/mailrepo-ops/backup-sync.sh` — outside the repo
+  (machine-specific paths). Wired in as MailRepo's post-backup command; terminal
+  output is identical to the raw rsync.
 - **Log:** `~/Applications/mailrepo-ops/backup-sync.log`.
-- Normal run → one line: `OK rate=… sent=… elapsed=…`, or `OK nothing substantial
-  to send` for a no-op re-sync.
-- Slow run (a real ≥1 MB send under 1 MB/s) → a timestamped snapshot: rsync
-  summary, network interface, iCloud (`bird`) upload activity, a per-process
-  network sample (`nettop`), top CPU processes, and — the key datum — **an
-  independent 12 MB throughput probe to Sentinel run right after the sync.**
-
-**Next step when it recurs.** Read the `SLOW` entry in the log. The probe result
-splits it immediately: if the probe is *also* slow, the bottleneck is the
-link/Sentinel; if the probe is *fast*, it's the backup flow specifically. The
-`bird` and `nettop` lines show what else was using the uplink at that instant.
-Diagnose from that evidence rather than re-running fast tests after the fact.
+- Normal run → one line: `OK rate=… sent=… elapsed=…`.
+- A real (≥1 MB) transfer under 1 MB/s → a timestamped diagnostic snapshot:
+  rsync summary, interface, iCloud (`bird`) activity, `nettop`, top CPU, and an
+  **independent 12 MB throughput probe to Sentinel** run right after the sync.
+- **Reading it:** if the probe is *also* slow, it's the link/Sentinel path — i.e.
+  this issue (you're at the office). If the probe is *fast*, it's the backup flow
+  specifically — that would be new and worth investigating.

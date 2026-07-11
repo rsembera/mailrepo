@@ -3467,3 +3467,49 @@ Unchanged: general dogfooding, then tag + website go-live, then
 `.deb`/`.dmg` packaging. The July 2–3 work is now fully reviewed and
 signed off. Sentinel slow-backup instrumentation (Session 56) remains
 armed, awaiting a recurrence.
+
+
+---
+
+## Session 57 — July 11, 2026 (MacBook)
+
+### Slow Sentinel backup: RESOLVED — office network shaping, not a MailRepo bug
+
+The black box from Session 56 caught the slow run live (211,561 B/s, 60s), and
+the snapshot's independent probe was *also* slow (241 KB/s) — which per the
+decision rule pointed at the link, not the backup flow. New detail from Rick:
+**it only ever happens at his counselling office, never at home.**
+
+Chased two wrong theories before landing it, both recorded in
+`docs/Known_Issues.md` so they aren't repeated: a supposed MTU misconfiguration
+(the Tailscale interface is `utun8`, not `utun0` — and it was already at the
+correct 1280), and a PMTU black hole (forcing the MTU to 1200 changed throughput
+not at all; the ping-probe "drop line" simply tracks the interface MTU, which is
+normal).
+
+**What settled it: an asymmetry test.** Download from Sentinel 16.8 MB/s; upload
+to Sentinel ~216 KB/s — same tunnel, same route, same moment, 80× slower one way
+only. No MTU/routing/relay fault can do that; only outbound traffic shaping can.
+Combined with Speedtest at the office reading 351/52 Mbps (ordinary TCP/443 is
+untouched), a *pinned* rate across weeks (204,513 / 204,046 / 211,561 / 216,134
+B/s — a flat ceiling, not congestion), and office-only occurrence: the office
+network rate-limits outbound WireGuard-style UDP (port 41641).
+
+Raw `ssh … 'cat > /dev/null'` — no rsync, no iCloud, no MailRepo — is equally
+slow, so the app is not involved at any level. Nothing to fix. Issue closed;
+`Known_Issues.md` rewritten as RESOLVED with the evidence, the dead ends, and the
+options (accept it / Tailscale over TCP 443 / skip the sync on the office SSID).
+The backup-sync black box is retained — it did its job and remains useful.
+
+**Follow-up for Rick:** if `utun8` is still at MTU 1200 from testing, restore it
+with `sudo ifconfig utun8 mtu 1280`. (The stray `utun0` change is harmless — those
+transient interfaces are recreated by macOS.)
+
+### Commits
+
+- (this entry) — docs: Known_Issues.md rewritten as RESOLVED; Session 57 log.
+  No code changed.
+
+### On the horizon
+
+Unchanged: dogfooding → `git tag v1.0.0` + website go-live → `.deb`/`.dmg`.
