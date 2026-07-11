@@ -56,13 +56,21 @@ fix in MailRepo. Do not spend more time on this.**
    shapers ignore. Not guaranteed; would need its own session.
 3. **Skip the Sentinel sync on the office network** (condition the post-backup
    command on the current SSID). **← IMPLEMENTED 2026-07-11 (Session 58) on the
-   MacBook**: `backup-sync.sh` skips (logs `SKIP`, exits 0) when the Wi-Fi SSID
-   matches a line in `~/Applications/mailrepo-ops/office-networks.conf`; the
-   next backup on any other network catches up automatically (rsync is
-   stateless). Weekly *full* backups (~222 MB and growing) would otherwise
-   block logout ~18 min at office rates. Caveat: matches Wi-Fi SSID only — a
-   wired office connection isn't caught. Sentinel may be a few days stale
-   after consecutive office days; local iCloud backups are unaffected.
+   MacBook, with automatic catch-up**: `backup-sync.sh` skips (logs `SKIP`,
+   exits 0, touches `.sentinel-pending`) when the Wi-Fi SSID matches a line in
+   `~/Applications/mailrepo-ops/office-networks.conf`. A launchd agent
+   (`~/Library/LaunchAgents/ca.mailrepo.sentinel-catchup.plist`, every 30 min)
+   re-runs the script with `--catchup`, which exits silently unless the pending
+   flag is set AND the machine is off the office network — so skipped backups
+   ship within ~30 min of leaving the office, without waiting for the next
+   backup to be created (MailRepo only invokes the post-backup command when a
+   backup was actually made, so a no-changes home logout would never have
+   triggered the catch-up). Any successful sync clears the flag. Rationale for
+   not just eating the slowness: weekly *fulls* (~222 MB and growing, timing
+   not user-controllable) would exceed MailRepo's 300s post-backup command
+   timeout at office rates — killed incomplete at 5 min, never finishing.
+   Caveats: matches Wi-Fi SSID only (wired office connection not caught);
+   local iCloud backups unaffected either way.
 4. Ask office IT to stop shaping outbound UDP — the correct fix, rarely available
    in a leased space.
 

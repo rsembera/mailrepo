@@ -3541,3 +3541,29 @@ or the chat (written shell-side into the conf).
 
 - `6da3f8a` — docs: fix duplicate session number (July 11 is Session 58)
 - (this entry) — docs: Known_Issues option 3 implemented; Session 58 addendum
+
+
+### Session 58 addendum 2 — pending-flag catch-up (Rick's design) + launchd trigger
+
+Rick spotted the gap in the plain SSID skip: MailRepo only invokes the
+post-backup command when a backup was actually *created*, so a no-changes
+home logout would never push office-skipped backups — Sentinel could stay
+stale indefinitely. (Verified in `web/blueprints/auth.py`: `post_cmd` runs
+inside `if result:`, and `create_backup()` returns None on no changes.)
+Also found while verifying: the post-backup command runs under a **300s
+subprocess timeout**, so an office weekly full (~18 min at shaped rates)
+would have been killed incomplete at 5 min — the earlier "blocks logout
+~18 min" claim was wrong in the worse direction. Corrected in
+Known_Issues.md.
+
+Fix per Rick's design, kept entirely ops-side (no MailRepo change): the
+office skip now touches `.sentinel-pending`; a launchd agent
+(`ca.mailrepo.sentinel-catchup`, StartInterval 1800) re-runs
+`backup-sync.sh --catchup`, which exits silently unless the flag is set
+and the machine is off the office network, then runs the normal sync
+(which clears the flag on success). launchd runs have no 300s cap, so
+even a large pending full catches up reliably, within ~30 min of leaving
+the office. Live-tested all three paths at the office: skip sets flag;
+--catchup at office is a silent no-op; --catchup off-office (simulated by
+moving the conf aside) logs CATCHUP, syncs (1s no-op), clears the flag.
+Agent bootstrapped and verified loaded.
