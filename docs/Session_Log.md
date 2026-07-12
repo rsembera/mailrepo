@@ -3567,3 +3567,52 @@ the office. Live-tested all three paths at the office: skip sets flag;
 --catchup at office is a silent no-op; --catchup off-office (simulated by
 moving the conf aside) logs CATCHUP, syncs (1s no-op), clears the flag.
 Agent bootstrapped and verified loaded.
+
+
+### Session 59 — July 12, 2026 (Apollo): website accuracy audit vs source
+
+Full pass over the draft website (`/home/rick/Websites/mailrepo-website`)
+comparing every checkable docs claim against the codebase, per the
+verify-against-source principle (CHANGELOG was not trusted — good thing,
+see below).
+
+**Docs.html held up almost perfectly.** Verified against source: themes
+(Pine/Graphite/Atlantic/Ember/Obsidian), fonts (Lexend/Libre
+Baskerville/Source Sans, S/M/L), folder cache TTL (2 min =
+`FOLDER_CACHE_TTL_SECONDS = 120`), backup frequency options + daily
+default, retention options + forever default, trash auto-purge (default
+never; 7/30/90/365), auto-logout (30 min default; 15/30/60/120/never),
+thread staging limit (500 default; 100–2,000), Gmail delete-via-Trash
+description incl. ~30-day fallback, keyboard shortcuts (j/k/s/Esc), FTS
+columns, 12-char passphrase minimum, "Load remote images" export option,
+Yahoo IMAP entry. Sessions 47–58 required no new documentation (internal
+work; user-visible pieces already covered).
+
+**One real docs gap, fixed:** the "Changing your passphrase" section
+never mentioned the non-overridable backup-≤24h precondition
+(`core/password_change.py`, `MAX_BACKUP_AGE_HOURS = 24.0`). Added a
+paragraph explaining the requirement, the rationale (rekey window not
+resumable), and the remedy (Backup Now, retry).
+
+**Website link fix:** footer GitHub links on all four site pages
+(index_final, why, docs, download) pointed at bare `github.com`; now
+`github.com/rsembera/mailrepo`.
+
+**CHANGELOG [1.0.0] section was stale in three places, corrected:**
+- Themes listed as "Pine, Lagoon, Graphite, Midnight, Atlantic" —
+  actual (per `themes.css`): Pine, Graphite, Atlantic, Ember, Obsidian.
+- "Configurable retention (default 6 months)" — actual default is
+  forever (`web/blueprints/backups.py`); options now listed.
+- "Session-based backup" — system is schedule-based (session / daily /
+  weekly / manual, default daily); 7-day full cycle confirmed in
+  `utils/backup.py` and retained.
+
+Launch gaps unchanged and known: live index.html is the Coming Soon
+placeholder; index_final.html screenshot placeholders still pending.
+
+### Commits
+
+- (this entry) — docs: CHANGELOG 1.0.0 corrections; Session 59 log.
+  No code changed.
+- Website repo: docs.html 24h-backup note + GitHub footer links (all
+  pages), pushed to Sentinel.

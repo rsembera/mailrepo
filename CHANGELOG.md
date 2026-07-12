@@ -311,18 +311,20 @@ is; the date and tag will land when dogfooding settles.
   dedicated Trash view with Folders + Emails tabs.
 
 #### Backup
-- **Session-based backup** with 7-day incremental + full cycle.
+- **Scheduled backups** (every session / daily / weekly / manual;
+  default daily) with 7-day incremental + full cycle.
   External `data/.backup_state.json` keeps the hash baseline outside
   the encrypted DB to avoid spurious change detection from WAL
   checkpoints.
-- **Configurable retention** (default 6 months).
+- **Configurable retention** (1 month / 6 months / 1 year / forever;
+  default forever).
 - **Post-backup rsync hook** for replication to a remote server.
 - **Persistent "Last Checked" indicator** in the Backup & Restore
   status card that updates on every Backup Now click, even on no-op.
 
 #### UI
 - **Three-pane layout:** rail / sidebar / main, with resizable sidebar.
-- **Five themes:** Pine (default), Lagoon, Graphite, Midnight, Atlantic.
+- **Five themes:** Pine (default), Graphite, Atlantic, Ember, Obsidian.
 - **Right-click context menu** for folder operations.
 - **Collapsible search tips** and subfolder breadcrumbs.
 - **Full-text search** via FTS5 with native column operators
