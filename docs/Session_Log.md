@@ -3632,3 +3632,43 @@ download.html (card and sysreq grid), 22.04 → 24.04. Revisit only if
 the .deb ends up shipping a bundled interpreter. No code changed;
 pyproject.toml left untouched (pytest-config only; adding a [project]
 section just for requires-python has tooling side effects).
+
+
+### Session 59 addendum 2 — July 13, 2026 (Apollo): packaging guides drafted from EdgeCase
+
+MailRepo had no packaging docs; EdgeCase has proven, shipped guides
+(`Linux_Packaging_Guide.md`, `Mac_Packaging_Guide.md`) plus a working
+py2app → sign → notarize → staple → DMG pipeline. Two findings that
+revise earlier estimates:
+
+- **Rick already holds a Developer ID certificate**
+  (`RICHARD L SEMBERA (2GKBD5N2AH)`) with a notarytool keychain
+  workflow — the "Apple enrollment is the calendar blocker" concern
+  is moot. One-time step: create a "MailRepo Notarization" profile.
+- **EdgeCase is a pywebview app** (desktop.py, PyGObject/GTK) — the
+  native-window pattern recommended post-1.0 for MailRepo already
+  ships in EdgeCase and is directly reusable when we get there.
+
+Drafted `docs/Linux_Packaging_Guide.md` (154 lines) and
+`docs/Mac_Packaging_Guide.md` (115 lines), adapted from EdgeCase with
+MailRepo deltas called out and [VERIFY] markers for the live session:
+
+- Data dir: launcher exports `MAILREPO_DATA_DIR` (hook already in
+  `core/config.py` — no code change needed; ~/.local/share/mailrepo
+  on Linux, ~/Library/Application Support/MailRepo on macOS).
+- WeasyPrint: Pango/HarfBuzz Depends on Linux; Homebrew dylib
+  bundling + rpaths on macOS is the expected long pole (no EdgeCase
+  precedent — it uses reportlab).
+- PST import: Depends: pst-utils on Linux; macOS [DECIDE] bundle
+  readpst vs. graceful degradation (guide recommends degradation
+  for 1.0).
+- sqlcipher3: follow EdgeCase's macOS source-build-against-local-
+  libsqlcipher recipe.
+- py2app gotchas carried over: explicit `includes` for every module,
+  `'argon2'`+`'_argon2_cffi_bindings'` in packages, pyproject.toml
+  rename dance, sign-all-binaries-individually-first.
+- TO CREATE: icon set (packaging/icons/), icon.icns,
+  dmg_background.png, setup_app.py, single-instance/port handling in
+  the launcher, possible requirements-runtime.txt split.
+
+No code changed.
