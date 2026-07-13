@@ -3616,3 +3616,19 @@ placeholder; index_final.html screenshot placeholders still pending.
   No code changed.
 - Website repo: docs.html 24h-backup note + GitHub footer links (all
   pages), pushed to Sentinel.
+
+
+### Session 59 addendum — July 13, 2026 (Apollo): Ubuntu floor verified, 22.04 → 24.04
+
+Pre-packaging verification of the website's "Ubuntu 22.04 LTS or later"
+claim. Findings: README states Python 3.11+ as the floor; Session 44's
+formatter pass deliberately preserved 3.11 (not 3.10) compatibility;
+dev/test runs on 3.13. Ubuntu 22.04 ships Python 3.10 — below the floor
+and never tested. Unless the eventual .deb bundles its own interpreter
+(undecided, heavier build), the honest claim is 24.04 LTS (Python 3.12).
+
+Website updated accordingly: docs.html requirements section +
+download.html (card and sysreq grid), 22.04 → 24.04. Revisit only if
+the .deb ends up shipping a bundled interpreter. No code changed;
+pyproject.toml left untouched (pytest-config only; adding a [project]
+section just for requires-python has tooling side effects).
