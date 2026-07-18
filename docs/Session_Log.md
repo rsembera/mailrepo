@@ -3709,3 +3709,22 @@ Possible future refinement: throughput-probe-based skip instead of SSID.
 ### Commits
 
 - (this entry) — docs: Known_Issues revision + OPEN item; Session 60 log
+
+### Session 60 addendum — SSID collision ruled out; trigger hardened
+
+Rick confirms home and office SSIDs are entirely different. That rules out
+the shared-name misfire and implies the script never ran during the home
+window (the un-instrumented code would still have logged CATCHUP/WARN given
+flag-set + non-matching SSID; the log has neither). Suspect: the launchd
+StartInterval trigger itself during that session. Hardened: interval
+1800→600s, plus WatchPaths on /Library/Preferences/SystemConfiguration so
+joining a network fires the check on arrival. Agent reloaded, verified
+firing and logging (runs=1, correct verdict at office). Next home session's
+debug log is the decider.
+
+Bonus finding from the debug log: the old timer fired at 11:35:27 — inside
+the brief window when the conf was moved aside for the manual push — and
+started a second, concurrent, harmless sync. Sloppy on my part (the conf
+move created a race); no damage, and it proves the interval timer was
+firing at the office today, further isolating the failure to the morning
+home window.

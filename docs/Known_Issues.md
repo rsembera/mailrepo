@@ -19,6 +19,19 @@ unanswered as of this entry). Also unexplained: the Jul 17 14:14 catch-up
 attempt died 15s in with ssh I/O errors (likely lid-close or network
 transition mid-transfer; the flag correctly survived).
 
+**Narrowed 2026-07-18 (same day):** Rick confirms home and office SSIDs are
+entirely different — shared-name misfire ruled out. That implies the script
+did not run at all during the home window: with the flag set and a
+non-matching SSID, even the un-instrumented code would have logged a
+CATCHUP (or WARN) line, and there is none. Suspect is therefore the
+launchd trigger itself (the 09:18/09:54 "service inactive" events were
+likely dark-wake evaluations, not spawns; StartInterval fires may not have
+occurred during the awake home session). Hardening applied: StartInterval
+600s (was 1800) and a WatchPaths trigger on
+`/Library/Preferences/SystemConfiguration` so joining a network fires the
+check within moments of arriving home. Reloaded agent verified firing and
+logging. The debug log from the next home session confirms or refutes.
+
 **Instrumentation armed (2026-07-18):** every `--catchup` invocation now
 writes one line to `~/Applications/mailrepo-ops/catchup-debug.log` —
 `pending=SET|absent ssid=matches-conf|no-match|none` — regardless of what
