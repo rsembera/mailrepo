@@ -3672,3 +3672,40 @@ MailRepo deltas called out and [VERIFY] markers for the live session:
   the launcher, possible requirements-runtime.txt split.
 
 No code changed.
+---
+
+## Session 60 — July 18, 2026 (MacBook)
+
+### Backlog cleared; office-shaper theory revised; catch-up mystery opened
+
+Rick asked whether Thursday's office backup had reached Sentinel. It had
+not — and unpacking why turned over two separate stones.
+
+**The backlog.** Last successful sync was Jul 11. Pending: Jul 13 incr,
+the Jul 15 weekly full (222.9 MB), Jul 16 ×2, Jul 17, Jul 18 incrs —
+~285 MB. The Jul 17 14:14 catch-up had fired ("off office network") but
+died 15s in with ssh I/O errors (likely lid-close/network transition);
+the flag correctly survived. Every check since ran on office Wi-Fi.
+
+**The mystery.** Rick worked at home the morning of Jul 18 with the flag
+set — the backlog should have shipped and didn't. launchd events at 09:18
+and 09:54 (interval-consistent) suggest the agent ran and silently
+declined, but the catch-up's decline paths logged nothing — the same
+diagnosability sin fixed in MailRepo in Session 47, reproduced in my own
+ops script. Fixed: every --catchup invocation now logs one line to
+catchup-debug.log (pending state + SSID verdict) regardless of outcome.
+Open question for Rick: do home and office Wi-Fi share a name? Tracked as
+OPEN in Known_Issues.md; next home session settles it.
+
+**The theory revision.** Cleared the backlog manually from the office —
+and all 285 MB shipped in 55s at 5.2 MB/s over a confirmed direct IPv6
+path. The same office network that pinned a probe at 237 KB/s seven days
+earlier. The static "office shapes outbound tunnel traffic" verdict is
+falsified; the throttling is conditional (leading guess: load-adaptive
+QoS; condition unknown). Retires the July 3 anomaly. Known_Issues.md
+revised accordingly — the skip+catch-up design is unaffected either way.
+Possible future refinement: throughput-probe-based skip instead of SSID.
+
+### Commits
+
+- (this entry) — docs: Known_Issues revision + OPEN item; Session 60 log

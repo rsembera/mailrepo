@@ -5,7 +5,49 @@ future session can pick up where the last one left off.
 
 ---
 
+## OPEN: catch-up did not fire (or silently declined) at home — 2026-07-18 morning
+
+Rick worked on the MacBook at home the morning of Jul 18 with the pending
+flag set (since Jul 17 19:29); the backlog should have shipped. It didn't.
+launchd events at 09:18 and 09:54 (interval-consistent spacing) suggest the
+agent *ran* and silently declined — but the catch-up's decline paths logged
+nothing, so "never ran" vs "ran and declined" is indistinguishable for that
+morning. The only silent-decline reasons are: pending flag absent (it
+wasn't) or current SSID matching `office-networks.conf` — which at home
+would mean **home and office Wi-Fi share a name** (question posed to Rick,
+unanswered as of this entry). Also unexplained: the Jul 17 14:14 catch-up
+attempt died 15s in with ssh I/O errors (likely lid-close or network
+transition mid-transfer; the flag correctly survived).
+
+**Instrumentation armed (2026-07-18):** every `--catchup` invocation now
+writes one line to `~/Applications/mailrepo-ops/catchup-debug.log` —
+`pending=SET|absent ssid=matches-conf|no-match|none` — regardless of what
+it decides. The next home session settles it: `no-match` = trigger works
+(morning anomaly was something else); `matches-conf` at home = shared SSID
+name, switch the discriminator to gateway MAC (or a throughput probe);
+no line at all = launchd isn't spawning the job. Backlog itself was cleared
+manually from the office at 11:35 (see revision below), flag cleared.
+
+---
+
 ## Slow Sentinel backup sync (~200 KB/s) — RESOLVED 2026-07-11: office network, not a MailRepo bug
+## REVISED 2026-07-18 (Session 60): the throttling is CONDITIONAL, not constant
+
+**Update 2026-07-18.** The static version of the verdict below is falsified:
+a manual 285 MB catch-up ran from the office at **5.2 MB/s** (direct IPv6
+path confirmed via `tailscale status`) — the same network that pinned
+transfers at ~200–240 KB/s on multiple prior occasions, including a
+237 KB/s probe seven days earlier. Still supported: the slowness has only
+ever occurred on the office network; when present it is outbound-only and
+pinned flat at ~200–240 KB/s. Now known: it is **sometimes absent**.
+Leading hypothesis: load-adaptive QoS that squeezes unrecognized bulk
+traffic only when the shared link is busy; the true condition is unknown.
+This also retires the July 3 anomaly — the fast 19:42 wrapper run that
+evening no longer requires having been off the office network. The
+skip+catch-up design is unaffected (defers when throttled, costs ~nothing
+when not). Possible refinement if SSID-based skipping proves troublesome:
+condition on measured throughput (short probe) instead of network identity.
+Read the verdict below with this revision in mind.
 
 **Verdict.** Rick's counselling office rate-limits outbound VPN/tunnel traffic.
 The backup `rsync` to Sentinel runs over Tailscale (`sentinel` resolves to the
