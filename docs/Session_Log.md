@@ -3728,3 +3728,46 @@ started a second, concurrent, harmless sync. Sloppy on my part (the conf
 move created a race); no damage, and it proves the interval timer was
 firing at the office today, further isolating the failure to the morning
 home window.
+
+
+---
+
+## Session 61 — July 20, 2026 (MacBook)
+
+### Root cause found: the office-SSID conf contained the literal string `<redacted>`
+
+Rick checked in on whether the weekend synced. Short answer: nothing was
+pending (no MailRepo backups since the Sat 11:20 office run, which the
+Sat manual push covered) — but the debug log showed 490 of 496 catch-up
+invocations reporting `ssid=matches-conf` across BOTH locations. Rick's
+SSIDs: office `waverley361`, home `NCF_1639098` — entirely different,
+both 11 chars. The conf: 11 bytes = 10 chars + newline. Neither name is
+10 characters. The conf contained the macOS location-permission
+placeholder: modern macOS redacts SSIDs from CLI tools (`ipconfig
+getsummary`, `system_profiler` both verified), so the Jul 11 shell-side
+capture wrote `<redacted>` — which then "matched" every subsequent
+redacted read, on every network on earth. Skip-everywhere since Jul 11.
+(The Jul 11 privacy measure of keeping the SSID out of the chat was
+unwittingly perfect: there was never an SSID in the pipeline at all.)
+
+One cause explains every anomaly: the Sat-morning home declines were
+real declines (trigger fine; launchd suspicion retracted — the 600s +
+WatchPaths hardening was aimed at nothing but is harmless and kept);
+the lone spontaneous catch-up (Jul 17 14:14) fired only because Wi-Fi
+was unassociated in transit, hence the guaranteed I/O-error death.
+
+### Fix — gateway-MAC discriminator, fail-open (per Rick: skip ONLY at 361 Waverley)
+
+`backup-sync.sh` rewritten: skip only when the current default gateway's
+MAC matches `office-gateways.conf`; sync on no-conf / unreadable /
+no-match. No permissions, no redaction, also covers wired office
+connections. New `--mark-office` mode appends the current gateway MAC to
+the conf. Poisoned `office-networks.conf` deleted. Verified at home:
+gateway MAC reads cleanly (92:aa:c3:34:dc:71), catch-up logs
+`gw=no-conf` and exits silently. **Pending: Rick runs
+`backup-sync.sh --mark-office` once at the office**; until then the
+wrapper syncs everywhere (safe direction).
+
+### Commits
+
+- (this entry) — docs: root cause + gateway-MAC fix; Session 61 log

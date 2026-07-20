@@ -5,7 +5,45 @@ future session can pick up where the last one left off.
 
 ---
 
-## OPEN: catch-up did not fire (or silently declined) at home — 2026-07-18 morning
+## ROOT-CAUSED & FIXED 2026-07-20: catch-up never fired away from the office — the SSID conf contained the literal string `<redacted>`
+
+**Root cause (Session 61).** Modern macOS redacts Wi-Fi SSIDs from CLI tools
+lacking location permission: `ipconfig getsummary` (and `system_profiler`)
+return the 10-character placeholder `<redacted>` instead of the network
+name. The Jul 11 shell-side "capture the office SSID" therefore wrote the
+placeholder into `office-networks.conf` (11 bytes — 10 chars + newline),
+and every subsequent runtime read returned the same placeholder on every
+network. Result: `matches-conf` everywhere, i.e. **skip-everywhere since
+Jul 11** — the worst inversion, silently deferring all Sentinel syncs.
+Confirmed empirically: 490 of 496 debug-log invocations said
+`matches-conf` across office AND home (SSIDs `waverley361` vs
+`NCF_1639098` — entirely different); the only exceptions were
+`ssid=none` moments (Wi-Fi unassociated) and one conf-moved artifact.
+
+This retires the Jul 18 "trigger mystery" entirely: the launchd trigger
+was never broken. The Sat-morning home declines were *real* declines
+against the placeholder; the sole spontaneous catch-up attempt
+(Jul 17 14:14) fired precisely because Wi-Fi was unassociated in transit
+— guaranteed to fail with I/O errors. Every anomaly, one cause. The
+StartInterval-600s + WatchPaths hardening from Jul 18 was aimed at a
+non-existent launchd fault but is harmless and kept.
+
+**Fix (per Rick: skip ONLY at 361 Waverley, sync everywhere else):**
+discriminate by **default-gateway MAC address** instead of SSID — no
+permissions, no redaction, identifies the actual router. `backup-sync.sh`
+now skips only when the current gateway MAC matches a line in
+`office-gateways.conf`, and **fails open** (syncs) on no-conf, unreadable
+gateway, or no match. Debug log now records `gw=` states. New
+`--mark-office` mode captures the current gateway into the conf.
+**Pending one action: run `backup-sync.sh --mark-office` once at the
+office.** Until then the wrapper syncs everywhere (worst case: an
+occasionally-throttled office sync — safe direction). Gateway-MAC also
+covers a wired office connection to the same router, retiring the old
+Wi-Fi-only caveat.
+
+---
+
+## Historical: the Jul 18 investigation notes (superseded by the root cause above)
 
 Rick worked on the MacBook at home the morning of Jul 18 with the pending
 flag set (since Jul 17 19:29); the backlog should have shipped. It didn't.
