@@ -18,7 +18,7 @@
 import { state, updateStagedBadge } from '../state.js';
 import { showAlert } from '../modals.js';
 import { openChangeDestinationModal } from './staging.js';
-import { renderEmailList } from './email-list.js';
+import { renderEmailList, clearEmail } from './email-list.js';
 
 /**
  * Toggle the busy state on the Staged Items rail button.
@@ -141,6 +141,20 @@ async function _findAndStageThread({ accountId, folder, uid, subject, destinatio
         // renderer checks via state.staged.has(emailId) to gray out
         // staged rows.
         const key = m.uid;
+        // If the user individually selected any of these messages before
+        // staging the whole conversation, deselect them now — selected and
+        // staged are mutually exclusive (selectEmail refuses staged
+        // emails), and a stale selection here made confirmNavigation()
+        // show a spurious "selected but not staged" warning after the
+        // thread was in fact staged. clearEmail() also fires the
+        // selection-count refresh. Selection keys come from dataset
+        // attributes (strings), so probe both forms.
+        const selKey = state.selectedEmails.has(key)
+            ? key
+            : state.selectedEmails.has(String(key))
+                ? String(key)
+                : null;
+        if (selKey !== null) clearEmail(selKey);
         if (state.staged.has(key)) {
             skipped += 1;
             continue;
