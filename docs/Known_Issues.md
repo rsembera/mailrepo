@@ -5,6 +5,24 @@ future session can pick up where the last one left off.
 
 ---
 
+## UPDATE 2026-07-24 (Session 62): carrier tether shaping confirmed; constrained-link skip added; office Wi-Fi still unjudged
+
+The pinned ~220 KB/s outbound ceiling was measured live on an iPhone
+tether over a **confirmed direct IPv6 Tailscale path** (DERP hypothesis
+tested and killed) — carrier hotspot traffic management, not the data
+plan. The wrapper now skips (and sets the pending flag) on any
+`constrained` default-route interface (macOS's own hotspot/expensive-link
+marker); MAC matching is impossible on tethers anyway (CLAT gateway
+192.0.0.1, NOARP). Failed syncs now also set the pending flag. Because of
+the `<redacted>` bug, no July slow event has a verified network identity;
+Rick believes he was not tethered for them, so the office remains a
+suspect — **probe `waverley361`'s throughput before adding it to
+`office-gateways.conf`** (it may be innocent; Saturday's 5.2 MB/s may
+have been its normal behavior). `--mark-office` for waverley361 remains
+pending that probe.
+
+---
+
 ## ROOT-CAUSED & FIXED 2026-07-20: catch-up never fired away from the office — the SSID conf contained the literal string `<redacted>`
 
 **Root cause (Session 61).** Modern macOS redacts Wi-Fi SSIDs from CLI tools

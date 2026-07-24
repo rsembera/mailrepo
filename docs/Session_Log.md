@@ -3771,3 +3771,46 @@ wrapper syncs everywhere (safe direction).
 ### Commits
 
 - (this entry) — docs: root cause + gateway-MAC fix; Session 61 log
+
+
+---
+
+## Session 62 — July 24, 2026 (MacBook)
+
+### Weekly full over iPhone tether: carrier shaping confirmed; constrained-link skip added
+
+Weekly full (223.4 MB, 10:19) ran while Rick was at the office tethered
+to his iPhone. Live measurement: 221 KB/s on a **confirmed direct IPv6
+Tailscale path** (DERP-relay hypothesis tested and killed) — the pinned
+throttle signature, now observed on a carrier tether. MailRepo's 300s
+timeout killed the sync as predicted (~110 MB cellular burned across two
+attempts). Backup itself safe in iCloud. EdgeCase note: it "syncs fine"
+tethered because 750 KB at 221 KB/s is ~3.5s — same shaping, invisible
+payload, same lesson as the office chapter.
+
+Rick confirms he was (probably) NOT tethered during the July office slow
+events, so the office attribution stands for those — but because of the
+`<redacted>` bug we never truly knew the network for any of them.
+Plan: throughput-probe `waverley361` before deciding whether it enters
+the skip list at all (Saturday's 5.2 MB/s may have been its normal self).
+
+### Fixes (ops wrapper)
+
+- **Failed syncs now set the pending flag** (previously only office
+  skips did — a killed/failed sync left nothing for the catch-up to
+  retry). Note: MailRepo's timeout SIGKILLs the whole wrapper, so a
+  timeout-killed run still can't set it; the flag was set manually today.
+- **Constrained-link skip:** cellular tethers are IPv6-native (CLAT
+  IPv4 gateway 192.0.0.1, NOARP — no gateway MAC exists to match), so
+  MAC-based marking can't work there. macOS flags hotspot/expensive
+  links as `constrained` on the interface; the wrapper now skips (and
+  flags) on any constrained default route — covers any phone, any
+  hotspot, no per-device marking. Distinct SKIP log lines for
+  tether vs office-gateway; catch-up debug gains `gw=constrained-tether`.
+- Both paths live-tested on the tether: SKIP + flag set + catch-up
+  declines. Tonight at home: unconstrained, no conf match -> the 223 MB
+  full ships automatically (~10s).
+
+### Commits
+
+- (this entry) — docs: Session 62; tether shaping + constrained-link skip
