@@ -3821,3 +3821,19 @@ Added `backup-sync.sh --status`: one command prints pending state, the
 current network verdict (regular / constrained tether / office gateway),
 and the last sync and skip log lines. Rick can check the sync system's
 health at a glance without reading logs.
+
+---
+
+## Session 63 — July 24, 2026 (MacBook)
+
+### Fix: spurious "Unsaved Selections" after Stage conversation
+
+Rick selected an email, then staged its whole conversation, then got
+"You have 1 email selected but not staged" on navigating away.
+Root cause: thread-stage.js staged into state.staged but never pruned
+state.selectedEmails, violating the selected/staged mutual-exclusion
+invariant (selectEmail refuses staged emails; the reverse order had no
+guard). Fixed by calling clearEmail() for any thread message currently
+selected (probing both raw and String() key forms — selection keys are
+dataset strings), which also refreshes the Stage (N) counter.
+node --check + eslint clean. Commit 2fd9bbf.
