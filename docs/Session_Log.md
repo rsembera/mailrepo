@@ -3837,3 +3837,11 @@ guard). Fixed by calling clearEmail() for any thread message currently
 selected (probing both raw and String() key forms — selection keys are
 dataset strings), which also refreshes the Stage (N) counter.
 node --check + eslint clean. Commit 2fd9bbf.
+
+### Session 63 addendum — waverley361 acquitted; case closed
+
+The 12:16 catch-up shipped the morning full (223 MB) minutes after Rick
+left the tether — over office Wi-Fi at ~5 MB/s. Evening incrementals
+likewise ~5 MB/s. Every verified waverley361 measurement is fast; conf
+stays empty; constrained-tether is the only deferral. Known_Issues
+updated: probe question CLOSED.

@@ -17,9 +17,17 @@ marker); MAC matching is impossible on tethers anyway (CLAT gateway
 the `<redacted>` bug, no July slow event has a verified network identity;
 Rick believes he was not tethered for them, so the office remains a
 suspect — **probe `waverley361`'s throughput before adding it to
-`office-gateways.conf`** (it may be innocent; Saturday's 5.2 MB/s may
-have been its normal behavior). `--mark-office` for waverley361 remains
-pending that probe.
+`office-gateways.conf`**.
+
+**CLOSED 2026-07-24 evening: waverley361 ACQUITTED.** Every verified
+measurement on it is fast: 285 MB @ 5.2 MB/s (Jul 18), 223 MB full via
+catch-up (Jul 24 ~12:16, minutes after leaving the tether), and two
+incrementals @ ~5 MB/s (Jul 24 17:44/17:50). `office-gateways.conf`
+stays intentionally EMPTY; the constrained-tether check is the only
+deferral rule. The July slow events' network identity is permanently
+unknowable (the `<redacted>` bug), but the tether is the only network
+ever verified slow. If a slow sync recurs, the logs now capture rate and
+network verdict — reopen then.
 
 ---
 
