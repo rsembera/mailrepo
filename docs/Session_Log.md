@@ -3845,3 +3845,16 @@ left the tether — over office Wi-Fi at ~5 MB/s. Evening incrementals
 likewise ~5 MB/s. Every verified waverley361 measurement is fast; conf
 stays empty; constrained-tether is the only deferral. Known_Issues
 updated: probe question CLOSED.
+
+### Session 63 correction — the morning full SHIPPED over the tether
+
+Sentinel ctime: the 223.4 MB full landed complete at 10:25:38 over the
+tether. MailRepo timeout=300 killed only the shell; orphaned rsync
+finished 62s later; the UI reported failure for a success (backlog:
+kill process group / async post-backup). True average 617 KB/s with ~5x
+acceleration -- the flat-221-KB/s claim was bad arithmetic; tether
+shaping UNCONFIRMED. The manual 10:26 pending flag chased a delivered
+full all afternoon (the WARN storm; zombies re-arming via the new
+touch-on-failure path). Constrained-skip kept on corrected grounds
+(metered data + timeout misreporting). waverley361 acquittal stands.
+Three wrong narratives corrected in one evening -- ctime over stories.

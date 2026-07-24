@@ -5,6 +5,29 @@ future session can pick up where the last one left off.
 
 ---
 
+## CORRECTION 2026-07-24 evening (Session 63): the morning tether sync SUCCEEDED; tether shaping is NOT confirmed
+
+Sentinel-side ctime proves `full_2026-07-24_101936.zip` (223.4 MB) landed
+complete at **10:25:38** — over the tether. MailRepo's `timeout=300`
+killed only the spawned *shell* at 10:24:36; the orphaned rsync/ssh kept
+transferring and finished 62s later. So: (1) MailRepo's UI reported a
+failed sync for a transfer that succeeded — real finding, see backlog
+note below; (2) the "killed as predicted" claim below is FALSE; (3) the
+"221 KB/s pinned" measurement divided bytes by wall time that included a
+slow first phase — true average was 617 KB/s with ~5x acceleration after
+minute ~3.5 (TCP/ssh ramp over high-RTT cellular is a candidate; shaping
+is neither confirmed nor excluded); (4) the pending flag set manually at
+10:26 was for an already-delivered full, causing the afternoon's futile
+retry WARNs on flapping in-transit networks (some re-armed by
+overlapping zombie runs hitting the new touch-on-failure path).
+The constrained-tether skip REMAINS, on corrected grounds: metered
+cellular data, and the 300s-timeout/orphan mismatch means big tether
+syncs report failure in MailRepo's UI even when they succeed.
+waverley361's acquittal stands (directly measured fast, repeatedly).
+MailRepo backlog item: post-backup command should kill the process
+group on timeout (honest reporting), and/or run async / with a
+configurable timeout so multi-minute syncs aren't misreported.
+
 ## UPDATE 2026-07-24 (Session 62): carrier tether shaping confirmed; constrained-link skip added; office Wi-Fi still unjudged
 
 The pinned ~220 KB/s outbound ceiling was measured live on an iPhone
