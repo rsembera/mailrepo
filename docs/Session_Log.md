@@ -3814,3 +3814,10 @@ the skip list at all (Saturday's 5.2 MB/s may have been its normal self).
 ### Commits
 
 - (this entry) — docs: Session 62; tether shaping + constrained-link skip
+
+### Session 62 addendum — `--status` mode
+
+Added `backup-sync.sh --status`: one command prints pending state, the
+current network verdict (regular / constrained tether / office gateway),
+and the last sync and skip log lines. Rick can check the sync system's
+health at a glance without reading logs.
