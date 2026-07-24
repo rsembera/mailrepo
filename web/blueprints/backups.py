@@ -124,7 +124,10 @@ def backup_now():
         if post_cmd:
             from utils import run_shell_command
 
-            success, msg = run_shell_command(post_cmd, timeout=300)
+            success, msg, cmd_stdout = run_shell_command(post_cmd, timeout=300)
+            for line in (cmd_stdout or "").strip().split("\n"):
+                if line:
+                    log.info(f"  {line}")
             if not success:
                 # Log but don't fail the backup
                 log.warning(f"Post-backup command error: {msg}")

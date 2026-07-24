@@ -289,33 +289,23 @@ def _run_auto_backup_check():
             if result:
                 log.info(f"Backup created: {result['filename']}")
 
-                # Run post-backup command if configured
+                # Run post-backup command if configured. run_shell_command
+                # owns the process group and kills it wholesale on timeout,
+                # so the outcome we log is the outcome that happened (no
+                # orphaned rsync finishing after a reported "timeout").
                 post_cmd = get_setting("post_backup_command", "")
                 if post_cmd:
                     log.info(f"Running post-backup command: {post_cmd}")
-                    import subprocess
+                    from utils import run_shell_command
 
-                    try:
-                        proc_result = subprocess.run(
-                            post_cmd, shell=True, timeout=300, capture_output=True, text=True
-                        )
-                        if proc_result.stdout:
-                            for line in proc_result.stdout.strip().split("\n"):
-                                if line:
-                                    log.info(f"  {line}")
-                        if proc_result.returncode == 0:
-                            log.info("Post-backup command completed")
-                        else:
-                            error_msg = (
-                                proc_result.stderr.strip()
-                                if proc_result.stderr
-                                else f"Exit code {proc_result.returncode}"
-                            )
-                            log.warning(f"Post-backup command failed: {error_msg}")
-                    except subprocess.TimeoutExpired:
-                        log.warning("Post-backup command timed out")
-                    except Exception as e:
-                        log.warning(f"Post-backup command error: {e}")
+                    success, msg, cmd_stdout = run_shell_command(post_cmd, timeout=300)
+                    for line in (cmd_stdout or "").strip().split("\n"):
+                        if line:
+                            log.info(f"  {line}")
+                    if success:
+                        log.info("Post-backup command completed")
+                    else:
+                        log.warning(f"Post-backup command: {msg}")
             else:
                 log.info("No changes since last backup")
 
