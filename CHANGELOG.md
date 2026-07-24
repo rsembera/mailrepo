@@ -47,9 +47,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   folder-select handler.
 
 ### Fixed
-- **Staging a conversation now deselects its individually-selected
-  messages (Session 63)**, ending the spurious "selected but not staged"
-  warning on navigation after Stage conversation.
 - **Staging a thread no longer shows a hybrid Inbox/Staged screen (Session 55).**
   If you navigated to the Staged Items screen while a thread was still
   staging, the completion step repainted the inbox list into the shared
@@ -104,9 +101,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   log file, since error strings can contain folder names.
 
 ### Fixed
-- **Staging a conversation now deselects its individually-selected
-  messages (Session 63)**, ending the spurious "selected but not staged"
-  warning on navigation after Stage conversation.
 - **"Server not responding" notice can now actually fire on connect
   failures (Session 47).** The SSE notice checked
   `isinstance(e, (socket.timeout, OSError))`, but `connect()` wraps
@@ -252,9 +246,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   since the color is interpolated into a `style` attribute on render.
 
 ### Fixed
-- **Staging a conversation now deselects its individually-selected
-  messages (Session 63)**, ending the spurious "selected but not staged"
-  warning on navigation after Stage conversation.
 - **Atomic backup-state and manifest writes.** `data/.backup_state.json`
   and `backups/manifest.json` are now written via the same crash-safe
   `temp + fsync + os.replace + fsync(dir)` pattern as the salt file, so
