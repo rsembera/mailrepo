@@ -24,9 +24,11 @@ The constrained-tether skip REMAINS, on corrected grounds: metered
 cellular data, and the 300s-timeout/orphan mismatch means big tether
 syncs report failure in MailRepo's UI even when they succeed.
 waverley361's acquittal stands (directly measured fast, repeatedly).
-MailRepo backlog item: post-backup command should kill the process
-group on timeout (honest reporting), and/or run async / with a
-configurable timeout so multi-minute syncs aren't misreported.
+MailRepo backlog item — DONE 2026-07-24 evening (cec22a6):
+run_shell_command owns the process group and kills it wholesale on
+timeout, reporting truthfully. Ops wrapper stripped to one rule (defer
+on constrained links), with PID lock and pre-armed pending flag; all
+office/gateway machinery removed.
 
 ## UPDATE 2026-07-24 (Session 62): carrier tether shaping confirmed; constrained-link skip added; office Wi-Fi still unjudged
 

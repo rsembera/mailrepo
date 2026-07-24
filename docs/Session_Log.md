@@ -3858,3 +3858,27 @@ full all afternoon (the WARN storm; zombies re-arming via the new
 touch-on-failure path). Constrained-skip kept on corrected grounds
 (metered data + timeout misreporting). waverley361 acquittal stands.
 Three wrong narratives corrected in one evening -- ctime over stories.
+
+### Session 63 (cont.) — strip-down + honest timeout: spinner bounded, completion guaranteed
+
+Per Rick, simplified to ONE RULE: defer Sentinel syncs on constrained
+(metered/tether) links, sync everywhere else. Removed from the ops
+wrapper: --mark-office, office-gateways.conf, gateway-MAC functions (all
+born of the falsified office-throttle theory). Added: PID lockfile with
+stale-lock stealing (the Jul 24 flag-flapping was overlapping zombie
+runs) and PRE-ARMED pending flag (touched before every real sync,
+cleared only on success — crash-safe by construction, replaces
+touch-on-failure which could not survive a process-group kill).
+
+MailRepo (cec22a6): run_shell_command now owns the process group
+(start_new_session) and on timeout kills it wholesale, returning a
+truthful message + stdout; auth.py logout path routes through it (was a
+third inline subprocess.run). This is the fix for the morning finding:
+orphaned rsync completing after a reported timeout.
+
+Net guarantee Rick asked for: spinner time is hard-capped at 300s worst
+case (instant on tethers, seconds on regular networks); sync completion
+is decoupled and guaranteed by flag + catch-up, which has no timeout.
+20-minute spinners are structurally impossible. All wrapper paths
+live-tested (status, catchup silent/decline, lock contention, pre-arm +
+clear on a real sync). Full suite 353 green.

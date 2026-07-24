@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Post-backup commands are stopped honestly on timeout (Session 63).**
+  The 300s timeout previously killed only the spawned shell; children
+  (e.g. an rsync) survived as orphans and kept running after the UI
+  reported failure. The command now runs in its own process group and
+  the whole group is killed on timeout, with stdout captured and logged
+  from both the logout and Backup Now paths.
 - **Staging a conversation now deselects its individually-selected
   messages (Session 63)**, ending the spurious "selected but not staged"
   warning on navigation after Stage conversation.
