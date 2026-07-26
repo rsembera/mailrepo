@@ -165,6 +165,17 @@ def main():
     waitress_log = logging.getLogger("waitress")
     waitress_log.setLevel(logging.ERROR)
 
+    # Fail fast if SQLCipher is missing. Checked before anything touches the
+    # database so a broken install/packaged build reports cleanly at launch
+    # instead of raising partway through an operation.
+    from core.database import SQLCipherUnavailableError, require_sqlcipher
+
+    try:
+        require_sqlcipher()
+    except SQLCipherUnavailableError as e:
+        print(f"\nMailRepo cannot start.\n\n{e}\n", file=sys.stderr)
+        sys.exit(1)
+
     # Check for pending restore before opening database
     try:
         from utils import backup

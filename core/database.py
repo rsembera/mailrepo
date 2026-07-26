@@ -8,7 +8,11 @@ try:
     from sqlcipher3 import dbapi2 as sqlite3
 
     SQLCIPHER_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover - depends on install environment
+    # Fall back ONLY so this module stays importable: type annotations,
+    # tooling, and the error message below all need `sqlite3` to be bound.
+    # It is never used to open the archive -- require_sqlcipher() refuses,
+    # because a plain-sqlite3 archive would be stored UNENCRYPTED.
     import sqlite3
 
     SQLCIPHER_AVAILABLE = False
@@ -21,6 +25,30 @@ from .config import Config
 
 # Current schema version (increment when schema changes)
 SCHEMA_VERSION = 5
+
+
+class SQLCipherUnavailableError(RuntimeError):
+    """Raised instead of silently falling back to an unencrypted database."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "SQLCipher is unavailable: the 'sqlcipher3' module could not be "
+            "imported. MailRepo will not create or open an archive without it, "
+            "because the archive would be stored UNENCRYPTED. Install it with "
+            "'pip install sqlcipher3'. In a packaged build, this means the "
+            "native extension was not bundled correctly."
+        )
+
+
+def require_sqlcipher() -> None:
+    """Refuse to touch the archive unless a real SQLCipher build is loaded.
+
+    Called before the database file is created or opened. Without this guard a
+    missing sqlcipher3 silently produces a plaintext archive -- same UI, same
+    passphrase prompt, no error, user data readable on disk.
+    """
+    if not SQLCIPHER_AVAILABLE:
+        raise SQLCipherUnavailableError()
 
 
 class Database:
@@ -109,6 +137,10 @@ class Database:
                 if cls._db_key is None:
                     raise RuntimeError("Database key not set. Call set_key() first.")
 
+                # Refuse BEFORE the file is created. Plain sqlite3.connect()
+                # would happily create an unencrypted archive here.
+                require_sqlcipher()
+
                 db_path = Config.get_database_path()
                 db_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -118,9 +150,10 @@ class Database:
                 )
                 cls._connection.row_factory = sqlite3.Row
 
-                # Set encryption key (SQLCipher)
-                if SQLCIPHER_AVAILABLE:
-                    cls._connection.execute(f"PRAGMA key = \"x'{cls._db_key}'\"")
+                # Set encryption key. Unconditional: require_sqlcipher() above
+                # guarantees a real SQLCipher build, so a skipped key would be
+                # a silent plaintext archive rather than a recoverable error.
+                cls._connection.execute(f"PRAGMA key = \"x'{cls._db_key}'\"")
 
                 # Enable foreign keys
                 cls._connection.execute("PRAGMA foreign_keys = ON")

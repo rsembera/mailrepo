@@ -194,3 +194,56 @@ class TestFTSIndex:
             subjects = [r["subject"] for r in results]
             assert "Budget Report" in subjects
             assert "Lunch Plans" in subjects
+
+
+class TestSQLCipherRequired:
+    """The archive must never be created or opened unencrypted.
+
+    Regression guard: core/database.py falls back to plain sqlite3 so the
+    module stays importable, but that fallback must never reach the archive.
+    Before this guard existed, a missing sqlcipher3 produced a silent
+    plaintext database with an unchanged UI and no error.
+    """
+
+    def test_require_sqlcipher_passes_when_available(self):
+        """With a real SQLCipher build loaded, the guard is a no-op."""
+        from core.database import SQLCIPHER_AVAILABLE, require_sqlcipher
+
+        assert SQLCIPHER_AVAILABLE, "test environment lacks sqlcipher3"
+        require_sqlcipher()
+
+    def test_require_sqlcipher_raises_when_missing(self, monkeypatch):
+        """With SQLCipher absent, the guard refuses."""
+        import core.database as db
+
+        monkeypatch.setattr(db, "SQLCIPHER_AVAILABLE", False)
+
+        with pytest.raises(db.SQLCipherUnavailableError, match="UNENCRYPTED"):
+            db.require_sqlcipher()
+
+    def test_no_database_file_created_without_sqlcipher(self, monkeypatch, temp_data_dir):
+        """The guard must fire BEFORE any file is written to disk."""
+        import core.database as db
+        from core.config import Config
+
+        monkeypatch.setattr(db, "SQLCIPHER_AVAILABLE", False)
+        db.Database._db_key = "41" * 32
+
+        with pytest.raises(db.SQLCipherUnavailableError):
+            db.Database.get_connection()
+
+        assert not Config.get_database_path().exists(), (
+            "an unencrypted database file was created on disk"
+        )
+
+    def test_archive_is_actually_encrypted_on_disk(self, initialized_app):
+        """End-to-end: the real archive is ciphertext, not readable SQLite."""
+        from core.config import Config
+
+        db_path = Config.get_database_path()
+        assert db_path.exists()
+
+        raw = db_path.read_bytes()
+        assert not raw.startswith(b"SQLite format 3"), (
+            "archive has a plaintext SQLite header -- it is not encrypted"
+        )
