@@ -3985,5 +3985,18 @@ a local hostname and then fail against Tailscale MagicDNS —
 `gh auth login --hostname github.com --git-protocol https --web` skips
 every prompt that can go wrong.
 
-Open: whether to land the three os.open guards now or at 1.1, and
-whether to delete branch spike/windows (it has served its purpose).
+Decided (Claude's call, at Rick's delegation):
+
+Guards deferred to 1.1, not landed now. They are trivial in size but
+they sit in the three most consequential write paths in the product —
+the salt file, the password change, and the backup state. Changing
+durability behaviour in those files immediately before a release tag,
+for zero benefit to either platform actually shipping at 1.0, is a bad
+trade. They land as part of the Windows workstream, where they can be
+verified on Windows rather than reasoned about from a Mac.
+
+Branch spike/windows kept. On a private repo a stale branch costs
+nothing, and the workflow is the verification harness for the 1.1
+guards — deleting it means writing it twice. It cannot interfere with
+the tag: it triggers only on pushes to that branch or manual dispatch,
+never on main.
