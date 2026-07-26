@@ -3882,3 +3882,108 @@ is decoupled and guaranteed by flag + catch-up, which has no timeout.
 20-minute spinners are structurally impossible. All wrapper paths
 live-tested (status, catchup silent/decline, lock contention, pre-arm +
 clear on a real sync). Full suite 353 green.
+
+## Session 64 — July 26, 2026 (MacBook)
+
+Started as a release-readiness estimate and a "should we do Windows?"
+question. Both answers moved, and a security bug surfaced on the way.
+
+### Security fix: no more silent plaintext archive
+
+core/database.py fell back to plain sqlite3 when sqlcipher3 failed to
+import, and SQLCIPHER_AVAILABLE gated exactly one thing — the PRAGMA
+key line. Three references in the whole codebase, all in that file.
+Consequence: a missing sqlcipher3 produced an unencrypted archive with
+an identical passphrase prompt, identical UI, identical success path,
+no error and nothing logged. For an encrypted mail archive sold to
+lawyers and therapists this is the one failure that must never be
+quiet, and it is precisely what a packaged build without the native
+extension bundled would produce.
+
+The fallback dated to the original SQLCipher migration (9f136c6) —
+migration-era scaffolding nothing had depended on since.
+
+Added SQLCipherUnavailableError + require_sqlcipher(), called in
+get_connection() BEFORE Config.get_database_path() and
+sqlite3.connect(), since plain sqlite3 would otherwise create the file
+before anything could object. PRAGMA key is now unconditional. The
+plain-sqlite3 import stays so the module remains importable (the
+sqlite3.Connection annotations and the error text itself need the name
+bound) but can no longer reach the archive. main.py fails fast at
+launch on stderr with exit 1, before the pending-restore path.
+
+Four tests, incl. one asserting no file appears on disk when the guard
+fires and one reading the live archive's bytes for a plaintext SQLite
+header. Full suite 357 green (353 + 4). ruff clean. Commit 38127a6.
+
+core/sync_cache.py deliberately uses plain sqlite3 for transient IMAP
+folder state outside the encrypted DB — intentionally untouched.
+
+### Windows spike (branch spike/windows, run 30208317114)
+
+Rick has no Windows machine, so GitHub runners stood in. Six probes,
+windows-latest, py3.11 and py3.14. Result: both rows identical.
+
+Corrections to my own pre-spike estimate, which was wrong twice:
+
+1. sqlcipher3 0.6.2 ships prebuilt Windows wheels — win_amd64, win32
+   AND win_arm64, cp39 through cp314. I had claimed no Windows wheels
+   exist; that was true of pysqlcipher3 and old sqlcipher3, stated as
+   current fact without checking. requirements.txt already pins
+   >=0.5.0, so a bare pip install on Windows pulls a wheel today.
+   Verified live: cipher_version 4.12.0 community — same build as the
+   Mac — real ciphertext header, canary absent from the file. Windows
+   encryption is fully functional.
+
+2. The WeasyPrint seam needed no work. core/pdf_export.py is the only
+   file referencing it, its imports are lazy (in-function, nothing at
+   module level), and its sole consumer web/blueprints/api/exports.py
+   also imports lazily, inside two functions that sit under the
+   except Exception at exports.py:464. So a box without WeasyPrint
+   starts fine and fails PDF export as a job error. My "forks your
+   export architecture" claim was unfounded.
+
+Test suite on Windows: 87 passed, 39 failed, 189 errors. Every one of
+those 228 traces to a single POSIX idiom in three places:
+
+    dir_fd = os.open(str(path.parent), os.O_RDONLY)
+    os.fsync(dir_fd)
+
+  - core/encryption.py:358  (_atomic_write_salt_file)
+  - core/password_change.py:340
+  - utils/backup.py:42      (_atomic_write_text)
+
+Windows refuses os.open() on a directory outright — PermissionError
+errno 13 — and has no directory-fsync equivalent. Note os.replace IS
+atomic on Windows (MoveFileEx), so the atomic-write pattern itself
+survives; only the durability-of-the-rename step needs skipping. That
+does mean a genuinely weaker guarantee on Windows: NTFS journals
+metadata, but it is not the POSIX guarantee. Document it, don't paper
+over it. Three ~4-line platform guards, not 228 problems.
+
+WeasyPrint failed as predicted: cannot load library
+'libgobject-2.0-0' — GTK stack absent.
+
+Revised estimate: the Windows *port* is small (1–2 sessions), and the
+real remaining cost is packaging and code signing, not architecture.
+Signing economics unchanged — hardware token or cloud HSM, ~$200–400/yr
+OV, SmartScreen until reputation accrues. Not a 1.0 item; a credible
+1.1 one.
+
+### Release readiness
+
+Source tag is effectively ready — engineering checklist closed, what
+remains is dogfooding plus the website going live paired with the tag.
+The decision that actually gates the date is what download.html
+promises: source-install now and packages later, or installers on day
+one. Recommended decoupling the two so the tag does not wait on py2app.
+
+Tooling: gh installed and authenticated (HTTPS, matching the existing
+origin remote; workflow scope requested explicitly, which the spike
+push needed). Note gh auth login's Enterprise prompt will happily take
+a local hostname and then fail against Tailscale MagicDNS —
+`gh auth login --hostname github.com --git-protocol https --web` skips
+every prompt that can go wrong.
+
+Open: whether to land the three os.open guards now or at 1.1, and
+whether to delete branch spike/windows (it has served its purpose).

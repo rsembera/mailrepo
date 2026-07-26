@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **MailRepo now refuses to open or create the archive if SQLCipher is
+  missing, instead of silently writing it unencrypted (Session 64).**
+  `core/database.py` fell back to plain `sqlite3` when `sqlcipher3`
+  failed to import, and the only consequence was that the `PRAGMA key`
+  line was skipped. Everything else — passphrase prompt, UI, success
+  path — behaved identically, so the archive was written in plaintext
+  with no error and nothing in the logs. A new `require_sqlcipher()`
+  guard runs before the database file is created, so no unencrypted
+  file can come into existence, and `main.py` now reports the problem
+  and exits at launch. This was most likely to bite in a packaged
+  build shipped without the native extension correctly bundled.
+
 ### Fixed
 - **Post-backup commands are stopped honestly on timeout (Session 63).**
   The 300s timeout previously killed only the spawned shell; children

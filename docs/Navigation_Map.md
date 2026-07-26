@@ -57,7 +57,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 ---
 
-## Backend (Python — 13,823 lines)
+## Backend (Python — 13,856 lines)
 
 ### Core (`/core/`)
 
@@ -65,7 +65,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 |------|-------|--------------|
 | `imap.py` | 1,535 | IMAP client: connect, auth, folders, fetch, MOVE/COPY + UID-scoped expunge, Gmail-aware delete (incl. batched set delete), CONDSTORE |
 | `pdf_export.py` | 1,052 | PDF export: per-email PDFs, attachment merging, WeasyPrint |
-| `database.py` | 432 | SQLCipher connection, schema v5, FTS5, migrations, threading lock |
+| `database.py` | 465 | SQLCipher connection, schema v5, FTS5, migrations, threading lock, hard refusal to open unencrypted |
 | `encryption.py` | 385 | Argon2id KDF + HKDF + AES-256-GCM file/DB encryption (v2) |
 | `password_change.py` | 344 | v2-native password change with full file/DB re-encryption |
 | `importer.py` | 280 | mbox, Apple mbox, EML, PST import handling |
