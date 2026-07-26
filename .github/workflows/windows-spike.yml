@@ -1,0 +1,79 @@
+name: windows-spike
+
+# Throwaway probe (Session 64): does MailRepo's dependency stack stand up on
+# Windows? NOT part of the release pipeline -- delete once it has answered.
+#
+# Two Python rows bracket the supported range: 3.11 is the declared floor in
+# pyproject/requirements, 3.14 is what the MacBook venv actually runs. Linux
+# is deliberately absent -- Apollo covers that locally for free.
+#
+# Runs only on the spike/windows branch, or on manual dispatch.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [spike/windows]
+
+jobs:
+  probe:
+    name: windows / py${{ matrix.python }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: 1. sqlcipher3 wheel installs
+        run: |
+          python -m pip install --upgrade pip
+          pip install "sqlcipher3>=0.6.2"
+          pip show sqlcipher3
+
+      - name: 2. Is it real SQLCipher, and does it actually encrypt?
+        shell: python
+        run: |
+          import os, tempfile
+          import sqlcipher3.dbapi2 as sq
+          c = sq.connect(":memory:")
+          print("cipher_version:", c.execute("PRAGMA cipher_version").fetchone())
+          print("sqlite_version:", c.execute("select sqlite_version()").fetchone())
+          path = os.path.join(tempfile.mkdtemp(), "probe.db")
+          d = sq.connect(path)
+          d.execute('PRAGMA key = "x\'' + "41" * 32 + '\'"')
+          d.execute("create table t(x)")
+          d.execute("insert into t values ('CANARY-STRING')")
+          d.commit()
+          d.close()
+          raw = open(path, "rb").read()
+          print("first 16 bytes:", raw[:16])
+          assert not raw.startswith(b"SQLite format 3"), "FAIL: database is NOT encrypted"
+          assert b"CANARY-STRING" not in raw, "FAIL: plaintext leaked into file"
+          print("PASS: encrypted at rest, canary absent from ciphertext")
+
+      - name: 3. Rest of the stack, from requirements.txt minus weasyprint
+        shell: bash
+        run: |
+          grep -v -i weasyprint requirements.txt > win-requirements.txt
+          pip install -r win-requirements.txt
+          python -c "import flask, cryptography, argon2, PIL, pypdf, pyzipper; print('core deps OK')"
+
+      - name: 4. Does MailRepo import, and is SQLCipher live?
+        run: |
+          python -c "from core import Config, Database, Encryption; from core.database import SQLCIPHER_AVAILABLE; print('SQLCIPHER_AVAILABLE =', SQLCIPHER_AVAILABLE); assert SQLCIPHER_AVAILABLE, 'fell back to plaintext sqlite3'"
+
+      - name: 5. Test suite, PDF/export tests excluded
+        run: pytest -q -k "not pdf and not export"
+        continue-on-error: true
+
+      - name: 6. weasyprint (expected to fail on Windows)
+        run: |
+          pip install weasyprint
+          python -c "import weasyprint; print('weasyprint OK:', weasyprint.__version__)"
+        continue-on-error: true
