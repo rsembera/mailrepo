@@ -53,6 +53,84 @@ until measurements justify it.
 
 ---
 
+## UI / UX (surveyed Session 64)
+
+Source-level survey only. Claude read the frontend but cannot use the
+app, so nothing here covers flow, clarity, or whether the staging model
+reads correctly first time — those need Rick at the keyboard.
+
+### Non-blocking feedback channel
+**Priority:** Highest of the UX items. Real friction, small build.
+
+`showAlert` is the only way the app tells the user anything — 80 call
+sites, and no toast/inline/status system anywhere in the JS (one stray
+CSS match, no implementation). Every success message and completion
+notice is a modal requiring a click to dismiss. In repetitive
+workflows (stage, commit, stage, commit) that is a click tax on every
+cycle, and it trains the user to dismiss dialogs unread — which in
+turn erodes the destructive-action confirms that genuinely matter.
+
+Build a status line or toast, then demote the informational subset of
+those 80 alerts to it. Keep modals for anything needing a decision.
+
+### Accessibility of the dynamically-rendered UI
+**Priority:** Real, not urgent. Best done incrementally while touching
+files rather than as one retrofit pass.
+
+Static templates are fine: 17 labels for 18 inputs, alt text on all 4
+images. The gap is everything rendered at runtime — 7 `aria-*`
+references and 2 role assignments across 16,386 lines of JS that build
+essentially the whole interface.
+
+Three concrete consequences:
+
+- **No focus trap in any modal.** Zero `activeElement`/focus-trap
+  logic against 18 bare `.focus()` calls, in a modal-heavy app
+  (export, staging, file picker, date picker, thread stage, move
+  email, plus alert/confirm/prompt). Tab walks out of the dialog into
+  the page behind; closing drops focus to document top rather than the
+  originating control. `closeModal` has 46 callers across 10 files and
+  is a true chokepoint, so focus *restoration* can be centralised in
+  `modals.js`. There is no matching `openModal` export, so trap
+  *activation* needs a hook that does not currently exist — that half
+  touches many files.
+- **SSE progress modal is silent to screen readers.** No `aria-live`,
+  no `role="progressbar"`. Commit is the highest-stakes operation in
+  the product and it reports nothing non-visually.
+- **No `prefers-reduced-motion`** against 76 transition/animation
+  declarations. Roughly five lines of CSS; land whenever.
+
+The procurement/institutional-buyer argument does NOT apply — this is
+a free AGPL tool for solo practitioners, not enterprise software. The
+honest case is simply that some practitioners are blind or
+keyboard-only. Weigh accordingly.
+
+### Focus-ring consistency
+**Priority:** Cosmetic.
+
+All 11 `outline: none` rules are correctly paired with a visible
+replacement. Five use border-color alone without a box-shadow, which
+is a weaker indicator and may miss the 3:1 contrast bar for focus
+rings. Make consistent when convenient.
+
+### Checked and found correct — do not re-raise
+
+- **Destructive-operation safety.** Initially flagged as "irreversible
+  ops are one click away"; that was wrong. Both `Permanent Delete` and
+  `Delete All Folders` live in `trash.js` and operate only on items
+  already in the trash, so deletion is genuinely two-stage. Confirms
+  name the specific folder and count affected subfolders, use specific
+  verbs (`Delete Forever`, `Delete All`) rather than OK/Cancel, and
+  carry danger styling. Correct as built; type-to-confirm would be
+  redundant on top of the existing gating.
+- **Empty states.** 27 in place — first-run and no-results are not
+  dead ends.
+- **Error hygiene.** Only 6 sites leak a raw `error.message` at the
+  user across the entire frontend; errors route through one consistent
+  modal API rather than scattered `alert()`.
+
+---
+
 ## Future major work (separately documented)
 
 ### Future crypto migration (hypothetical v2 → v3)

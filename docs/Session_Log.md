@@ -4000,3 +4000,40 @@ nothing, and the workflow is the verification harness for the 1.1
 guards — deleting it means writing it twice. It cannot interfere with
 the tag: it triggers only on pushes to that branch or manual dispatch,
 never on main.
+
+### Session 64 addendum — UI/UX survey
+
+Source-level only; Claude can read the frontend but not use the app, so
+flow/clarity questions are untouched and remain Rick's to judge.
+
+Recorded in Post_1_0_Backlog.md under a new "UI / UX" section. Two
+items worth doing, one cosmetic, three explicitly closed.
+
+Worth doing: (1) there is no non-blocking feedback channel at all —
+showAlert is the only output path, 80 call sites, no toast/status
+system in the JS. Every completion notice is a click-to-dismiss modal,
+which taxes repetitive stage/commit cycles and trains users to dismiss
+dialogs unread, undermining the confirms that matter. (2) The
+dynamically-rendered UI has almost no ARIA — 7 aria refs and 2 roles
+across 16,386 lines of JS. No focus trap in any modal; SSE progress
+has no aria-live or role=progressbar; no prefers-reduced-motion against
+76 transition/animation declarations.
+
+Two corrections to my own first pass, both caught by Rick:
+
+- I justified accessibility work with an institutional-procurement
+  argument. That does not apply to a free AGPL tool for solo
+  practitioners. The honest case is just that some practitioners are
+  blind or keyboard-only. Argument withdrawn, finding kept.
+- I led with "irreversible operations are one click away." Wrong.
+  Verified: both Permanent Delete and Delete All Folders live in
+  trash.js and act only on already-trashed items, so deletion is
+  two-stage by design. Confirms name the specific folder, count
+  affected subfolders, use specific verbs and danger styling. Recorded
+  in the backlog under "checked and found correct — do not re-raise"
+  so a future session does not burn time re-discovering it.
+
+Also verified fine: 27 empty states; only 6 raw error.message leaks
+frontend-wide; all 11 outline:none rules paired with a visible focus
+replacement (5 use border-color alone, weaker than the box-shadow ones
+— logged as cosmetic).
