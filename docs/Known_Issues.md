@@ -5,6 +5,21 @@ future session can pick up where the last one left off.
 
 ---
 
+## RESOLVED 2026-08-08 (Session 65): launchd catch-up had NEVER worked — TCC blocked iCloud Drive
+
+iCloud Drive is TCC-protected; launchd-spawned bash had no grant, so the
+catch-up's rsync saw an empty source and "succeeded" shipping nothing
+(sent=29 bytes) — 199 times out of 201 since 2026-07-11. Fixed: /bin/bash
+granted Full Disk Access (manual, System Settings); wrapper now refuses
+loudly (ERROR, flag kept, exit 1) whenever the source reads empty, so the
+failure class is permanently un-silent. Verified: agent shipped the
+deferred 224.5 MB Aug 7 full at 5.8 MB/s in 40s — its first real
+delivery. If this Mac is ever rebuilt, re-grant FDA to /bin/bash or the
+guard will start firing. Parked: occasional WatchPaths bursts (~10s
+apart) from SystemConfiguration churn; harmless under the lock.
+
+---
+
 ## CORRECTION 2026-07-24 evening (Session 63): the morning tether sync SUCCEEDED; tether shaping is NOT confirmed
 
 Sentinel-side ctime proves `full_2026-07-24_101936.zip` (223.4 MB) landed

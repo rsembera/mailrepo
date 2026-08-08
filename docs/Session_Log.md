@@ -4037,3 +4037,43 @@ Also verified fine: 27 empty states; only 6 raw error.message leaks
 frontend-wide; all 11 outline:none rules paired with a visible focus
 replacement (5 use border-color alone, weaker than the box-shadow ones
 — logged as cosmetic).
+
+---
+
+## Session 65 — August 8, 2026 (MacBook)
+
+### Root cause: the launchd catch-up NEVER worked — macOS TCC blocked iCloud Drive
+
+Rick spotted a backup on disk but not on Sentinel (the Aug 7 weekly
+full, 224 MB, created on a tether and correctly deferred). Investigation
+showed catch-up runs "succeeding" with sent=29 bytes — an EMPTY file
+list. Cause: ~/Library/Mobile Documents (iCloud Drive) is TCC-protected;
+bash spawned by launchd has no Files-and-Folders grant, so readdir
+returns empty and rsync ships nothing, exit 0. Log audit: 199 of 201
+historical CATCHUP OK lines sent exactly 29 bytes — the launchd
+catch-up never shipped a byte since 2026-07-11. The two real CATCHUP
+transfers were manual invocations from a TCC-blessed shell. Every
+genuine Sentinel delivery to date came from MailRepo-invoked post-backup
+runs (user-session permissions). The system appeared healthy only
+because MailRepo backs up frequently in a blessed context.
+
+### Fixes
+
+- Wrapper guard: an empty-readable source now refuses loudly
+  ("ERROR source empty/unreadable (TCC?)"), keeps the pending flag, and
+  exits 1 — this failure class can never again masquerade as OK. The
+  guard caught its first real case 60s after installation (kickstart
+  raced the permission grant).
+- Permission: Rick granted /bin/bash Full Disk Access (System
+  Settings > Privacy & Security). Trade-off noted: any launchd bash
+  script on this Mac gains file access; acceptable on a single-user
+  machine with a controlled LaunchAgents dir.
+- Verified end-to-end: kickstarted agent shipped the 224.5 MB full
+  at 5.8 MB/s in 40s — the catch-up's first-ever real delivery. Flag
+  cleared; --status clean; Sentinel confirmed current.
+
+### Also observed, parked
+
+- WatchPaths storm: catch-up fired every ~10s in bursts (12:22-12:25) —
+  SystemConfiguration churn, cause unknown. Harmless under the lock +
+  no-op cost; consider a debounce if it persists.
