@@ -356,7 +356,194 @@ function renderSecuritySection() {
                 <button class="btn btn-secondary" id="cancelChangePasswordBtn">Cancel</button>
             </div>
         </div>
+
+        <hr class="settings-divider">
+
+        <div class="form-group" id="recoveryKeySection">
+            <label>Recovery Key</label>
+            <p class="setting-hint" id="recoveryKeyStatus" style="margin-bottom: var(--space-md);">
+                Checking...
+            </p>
+            <button class="btn btn-secondary" id="rotateRecoveryKeyBtn" hidden>
+                <i data-lucide="rotate-ccw"></i>
+                Generate New Recovery Key
+            </button>
+            <a class="btn btn-primary" href="/auth/upgrade" id="upgradeRecoveryKeyBtn" hidden>
+                <i data-lucide="shield-plus"></i>
+                Add a Recovery Key
+            </a>
+        </div>
+
+        <div id="rotateRecoveryKeyForm" class="password-change-form">
+            <p class="setting-hint">
+                This immediately revokes your current recovery key. Anything
+                printed or saved with the old key stops working.
+            </p>
+            <div class="form-group">
+                <label for="rotateKeyPassword">Current Password</label>
+                <div class="password-input-wrapper">
+                    <input type="password" id="rotateKeyPassword" class="form-input" autocomplete="current-password">
+                    <button type="button" class="password-toggle" data-target="rotateKeyPassword" title="Show password">
+                        <i data-lucide="eye"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="rotateRecoveryKeyError" class="password-error"></div>
+            <div class="password-actions">
+                <button class="btn btn-primary" id="confirmRotateRecoveryKeyBtn">Generate New Key</button>
+                <button class="btn btn-secondary" id="cancelRotateRecoveryKeyBtn">Cancel</button>
+            </div>
+        </div>
+
+        <div id="newRecoveryKeyDisplay" class="password-change-form">
+            <p class="setting-hint">
+                <strong>Save this now.</strong> It is shown once and is not
+                stored anywhere. Your previous recovery key no longer works.
+            </p>
+            <div class="recovery-key-display">
+                <code id="newRecoveryKeyValue"></code>
+            </div>
+            <div class="password-actions">
+                <button class="btn btn-secondary" id="copyNewRecoveryKeyBtn">Copy</button>
+                <button class="btn btn-primary" id="doneNewRecoveryKeyBtn">I've saved it</button>
+            </div>
+        </div>
     `;
+}
+
+/**
+ * Read the CSRF token the server put in base.html.
+ *
+ * app.py enforces X-CSRF-Token on every state-changing request whose path
+ * contains /api/, which includes /auth/api/*. The token has been rendered
+ * into a meta tag all along; nothing in the frontend was reading it.
+ */
+function getCsrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') || '' : '';
+}
+
+/**
+ * Recovery key: status, rotation, and the one-time display of a new key.
+ *
+ * Rotation is deliberately gated on the current password rather than just
+ * an unlocked session — a recovery key is a durable second credential and
+ * minting one should require the same proof as changing the password.
+ */
+function initRecoveryKeyHandlers() {
+    const statusEl = document.getElementById('recoveryKeyStatus');
+    const rotateBtn = document.getElementById('rotateRecoveryKeyBtn');
+    const upgradeBtn = document.getElementById('upgradeRecoveryKeyBtn');
+    const rotateForm = document.getElementById('rotateRecoveryKeyForm');
+    const confirmBtn = document.getElementById('confirmRotateRecoveryKeyBtn');
+    const cancelBtn = document.getElementById('cancelRotateRecoveryKeyBtn');
+    const errorEl = document.getElementById('rotateRecoveryKeyError');
+    const displayEl = document.getElementById('newRecoveryKeyDisplay');
+    const valueEl = document.getElementById('newRecoveryKeyValue');
+    const copyBtn = document.getElementById('copyNewRecoveryKeyBtn');
+    const doneBtn = document.getElementById('doneNewRecoveryKeyBtn');
+    const passwordEl = document.getElementById('rotateKeyPassword');
+
+    if (!statusEl) return;
+
+    fetch('/auth/api/recovery-key-status')
+        .then((r) => r.json())
+        .then((data) => {
+            if (data.has_recovery_key) {
+                statusEl.textContent =
+                    'This archive has a recovery key. Generate a new one if the ' +
+                    'old one may have been seen by someone else — this revokes it ' +
+                    'immediately.';
+                if (rotateBtn) rotateBtn.hidden = false;
+            } else {
+                statusEl.textContent =
+                    'This archive has no recovery key. Without one, a forgotten ' +
+                    'password means the archive cannot be opened.';
+                if (upgradeBtn) upgradeBtn.hidden = false;
+            }
+        })
+        .catch(() => {
+            statusEl.textContent = 'Could not check recovery key status.';
+        });
+
+    if (rotateBtn && rotateForm) {
+        rotateBtn.addEventListener('click', () => {
+            rotateBtn.hidden = true;
+            rotateForm.style.display = 'block';
+            if (passwordEl) passwordEl.focus();
+        });
+    }
+
+    if (cancelBtn && rotateForm) {
+        cancelBtn.addEventListener('click', () => {
+            rotateForm.style.display = 'none';
+            if (rotateBtn) rotateBtn.hidden = false;
+            if (passwordEl) passwordEl.value = '';
+            if (errorEl) errorEl.style.display = 'none';
+        });
+    }
+
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', async () => {
+            const password = passwordEl ? passwordEl.value : '';
+            if (!password) {
+                errorEl.textContent = 'Enter your current password.';
+                errorEl.style.display = 'block';
+                return;
+            }
+
+            confirmBtn.disabled = true;
+            errorEl.style.display = 'none';
+
+            try {
+                const response = await fetch('/auth/api/rotate-recovery-key', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': getCsrfToken(),
+                    },
+                    body: JSON.stringify({ password }),
+                });
+                const data = await response.json();
+                if (!response.ok || data.error) {
+                    throw new Error(data.error || 'Could not rotate the recovery key.');
+                }
+
+                if (passwordEl) passwordEl.value = '';
+                rotateForm.style.display = 'none';
+                valueEl.textContent = data.recovery_key;
+                displayEl.style.display = 'block';
+            } catch (err) {
+                errorEl.textContent = err.message;
+                errorEl.style.display = 'block';
+            } finally {
+                confirmBtn.disabled = false;
+            }
+        });
+    }
+
+    if (copyBtn) {
+        copyBtn.addEventListener('click', () => {
+            const key = valueEl.textContent.trim();
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(key).then(() => {
+                    copyBtn.textContent = 'Copied';
+                    setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
+                });
+            }
+        });
+    }
+
+    if (doneBtn) {
+        doneBtn.addEventListener('click', () => {
+            // Clear the key from the DOM once acknowledged. It is already
+            // unrecoverable from the server; leaving it rendered just keeps
+            // it on screen for whoever walks past next.
+            valueEl.textContent = '';
+            displayEl.style.display = 'none';
+            if (rotateBtn) rotateBtn.hidden = false;
+        });
+    }
 }
 
 /**
@@ -396,6 +583,8 @@ function initSecurityHandlers() {
             document.getElementById('currentPassword').focus();
         });
     }
+
+    initRecoveryKeyHandlers();
     
     if (cancelBtn && form) {
         cancelBtn.addEventListener('click', () => {
@@ -480,7 +669,10 @@ async function handleChangePassword() {
         // Start password change on server
         const response = await fetch('/auth/api/change-password', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': getCsrfToken(),
+            },
             body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
         });
         

@@ -23,11 +23,16 @@ from flask import (
 
 from core import Database, Encryption, EncryptionError, InvalidPasswordError
 from core.config import Config
+from core.crypto_migration_v3 import migrate_to_v3, needs_v3_migration
 from core.database import get_setting
 from core.password_change import (
+    MAX_BACKUP_AGE_HOURS,
     PasswordChangeError,
+    _restore_point_age_hours,
+    rotate_recovery_key,
     set_password_after_recovery,
 )
+from utils.backup import create_backup, get_verified_latest_restore_point
 from utils.log import get_logger
 
 log = get_logger(__name__)
@@ -276,6 +281,15 @@ def login():
             session["csrf_token"] = secrets.token_hex(32)
             session.permanent = True
 
+            # Offer the recovery-key upgrade on the way in. A one-time
+            # nudge per login rather than a permanent nag: the archive
+            # works fine without it, and pestering someone on every page
+            # trains them to dismiss notices that matter.
+            if needs_v3_migration():
+                return make_response(
+                    redirect(url_for("auth.upgrade_to_recovery_keys"))
+                )
+
             # Use make_response for explicit cookie handling (Safari/Firefox)
             response = make_response(redirect(url_for("main.index")))
             return response
@@ -384,6 +398,73 @@ def set_password_post_recovery():
     return render_template("auth/post_recovery_password.html")
 
 
+@auth_bp.route("/upgrade", methods=["GET", "POST"])
+def upgrade_to_recovery_keys():
+    """Offer, and perform, the v2 -> v3 upgrade for an existing archive.
+
+    Runs synchronously. Measured throughput is ~850 files/s (the walk is
+    plain AES-GCM; the expensive Argon2id derivation happens once), so
+    even a very large archive is a couple of minutes, and this is
+    localhost with no proxy in front of it. A progress stream would be
+    more machinery than the operation warrants.
+    """
+    if not session.get("authenticated") or not Encryption.is_unlocked():
+        return redirect(url_for("auth.login"))
+
+    if not needs_v3_migration():
+        flash("This archive already has a recovery key.", "info")
+        return redirect(url_for("main.index"))
+
+    # The migration ends in a non-resumable window, so it demands a
+    # verified recent backup. Report that up front rather than letting the
+    # user submit the form and bounce off the gate.
+    point, problems = get_verified_latest_restore_point()
+    age = _restore_point_age_hours(point) if point else None
+    backup_ok = not problems and age is not None and age <= MAX_BACKUP_AGE_HOURS
+
+    if request.method == "POST":
+        password = request.form.get("password", "")
+
+        try:
+            if not backup_ok:
+                # Take one now rather than refusing. The user asked to
+                # upgrade; making them find the backup screen themselves
+                # is friction for no safety gain.
+                create_backup()
+
+            recovery_key = migrate_to_v3(password)
+        except InvalidPasswordError:
+            return render_template(
+                "auth/upgrade.html",
+                errors=["That is not your current master password."],
+                backup_ok=backup_ok,
+                backup_age=age,
+                backup_problems=problems,
+            )
+        except Exception as e:
+            log.error(f"v3 upgrade failed: {e}")
+            return render_template(
+                "auth/upgrade.html",
+                errors=[str(e)],
+                backup_ok=backup_ok,
+                backup_age=age,
+                backup_problems=problems,
+            )
+
+        return render_template(
+            "auth/recovery_key.html",
+            recovery_key=recovery_key,
+            context="migration",
+        )
+
+    return render_template(
+        "auth/upgrade.html",
+        backup_ok=backup_ok,
+        backup_age=age,
+        backup_problems=problems,
+    )
+
+
 @auth_bp.route("/logout", methods=["GET", "POST"])
 def logout():
     """Log out, run backup check, and lock encryption."""
@@ -443,6 +524,44 @@ def _run_auto_backup_check():
             log.debug("Backup not needed (frequency check)")
     except Exception as e:
         log.error(f"Auto-backup failed: {e}")
+
+
+@auth_bp.route("/api/recovery-key-status", methods=["GET"])
+def recovery_key_status():
+    """Whether this archive has a recovery key, for the settings screen."""
+    if not session.get("authenticated"):
+        return {"error": "Not authenticated"}, 401
+
+    return {
+        "has_recovery_key": Encryption.has_recovery_key(),
+        "needs_upgrade": needs_v3_migration(),
+    }
+
+
+@auth_bp.route("/api/rotate-recovery-key", methods=["POST"])
+def api_rotate_recovery_key():
+    """Issue a new recovery key, revoking the old one.
+
+    Returns the new key in the response body. It is not stored, so this
+    response is the only place it exists — the frontend must show it and
+    must not discard it silently.
+    """
+    if not session.get("authenticated"):
+        return {"error": "Not authenticated"}, 401
+
+    data = request.get_json() or {}
+    password = data.get("password", "")
+
+    try:
+        new_key = rotate_recovery_key(password)
+        return {"recovery_key": new_key}
+    except InvalidPasswordError:
+        return {"error": "Current password is incorrect"}, 403
+    except PasswordChangeError as e:
+        return {"error": str(e)}, 400
+    except Exception as e:
+        log.error(f"Recovery key rotation failed: {e}")
+        return {"error": "Could not rotate the recovery key."}, 500
 
 
 @auth_bp.route("/api/verify-password", methods=["POST"])
