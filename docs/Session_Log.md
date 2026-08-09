@@ -4240,3 +4240,132 @@ inside the rekey window; corrupt-marker handling.
   v2-breaks-restore bug in June. Recommended before the recovery key.
 - Recovery key / envelope encryption: unstarted. Decision on pre- vs
   post-tag still Rick's, still not recorded.
+
+---
+
+## Session 68 — August 9, 2026 (MacBook)
+
+### Automated restore coverage (commit `feea063`)
+
+Restore had zero automated coverage. It had been exercised by hand
+exactly twice — Session 34 (Feb 2026, v1 crypto) and the Session 67
+drill (v2) — with the crypto stack replaced wholesale between them.
+
+`tests/test_restore.py`, 21 tests: the Session 67 drill automated. Round
+trip (staged files decrypt to original plaintext; backup carries its own
+key material; restored DB is not plaintext SQLite), incremental chains
+(later additions included, deletions propagate, older points exclude
+newer files), safety (prepare leaves production untouched, takes a
+pre_restore backup, writes a pending marker; cancel is byte-clean),
+completion, and `verify_restore_point_files` tested directly rather than
+only through the password gate.
+
+Verified by mutation, not by going green: disabling deleted-file
+application and disabling the testzip report each failed exactly one
+test, and only its own.
+
+### Recovery key / envelope encryption
+
+Rick approved implementation. Four increments, each committed separately.
+
+**The design fork that shaped everything (recorded before writing code).**
+The cheap migration would set the v3 master to the value the current
+password already derives: rewrite one file, re-encrypt nothing, atomic
+and reversible. It is wrong. If master == Argon2id(password, salt), that
+password remains a permanent path to the master regardless of rewrapping,
+so password change would stop actually revoking the old password — a
+silent downgrade for exactly the users who change passwords because one
+was compromised. Migration therefore generates a random master and
+re-encrypts once, at the cost of one password change. Rick's call, taken
+explicitly.
+
+**`79d6270` — v3 envelope primitives.** Master becomes 32 random bytes
+wrapped twice: Argon2id(password) and HKDF(recovery key). Everything
+below the master is unchanged; archive ciphertext stays v2 format, only
+the key file changes. MRC3 is fixed 190 bytes: magic(4) salt_pw(32)
+wrapped_pw(61) salt_rk(32) wrapped_rk(61). No separate verification
+token — a wrong password fails the GCM tag on the wrapper, which is the
+check v2 spent 61 bytes on.
+
+Recovery key: 20 random bytes → 32 base32 chars → eight hyphenated
+groups. Base32 has no 0/1/8 so those can only be typos, mapped to O/I/B
+on parse. Generated, never user-chosen, so HKDF suffices — Argon2id buys
+nothing against a uniformly random 160-bit secret, and recovery unlock is
+instant. Full HKDF with per-archive salt rather than expand-only, because
+printed keys get reused.
+
+**`8e5f34d` — unlock wiring.** `unlock()` handles both formats, both
+funnelling through `_adopt_master()` so they cannot drift. Added
+`unlock_with_recovery_key()` (refuses on v2 with a specific reason),
+`initialize_v3()`, `salt_file_version()` / `is_v3()` /
+`has_recovery_key()`. Load-bearing test: unlocking by password and by
+recovery key yield byte-identical file and DB keys — divergence would be
+a silent split-brain.
+
+**`917f08b` — the migration.** Reuses password_change's rekey helpers
+rather than growing a parallel implementation; the interruption marker
+gained a `phase` argument so both operations share one mechanism.
+
+A TEST CAUGHT A REAL FLAW. The first version claimed to be re-runnable
+and was not. An interrupted run leaves files under a random master that
+existed only in memory; a second attempt minted a FRESH master, so those
+files decrypted under neither key and `_rekey_file` correctly halted as
+corruption. The user-facing message would have walked someone straight
+into that halt. Fix: the candidate master is persisted before the walk,
+wrapped under the old file key, in `data/.v3_migration_state`. No new
+exposure — encrypted under the key already protecting the archive —
+deleted on success. Unreadable state halts and says restore from backup
+rather than minting a new master, because starting fresh would strand
+every already-converted file.
+
+Ordering: key file written LAST, after the DB rekey. Until that write
+lands the archive is still described by the v2 key file, so a crash
+leaves a re-runnable migration rather than an unopenable archive.
+
+**`ec06131` — password change as rewrap, plus rotation.**
+`change_master_password` branches on version. v3 replaces the password
+wrapper and stops. The non-resumable window disappears for password
+changes, and the backup gate is deliberately NOT applied there: the
+operation is one atomic file replacement, so after `os.replace` either
+the old key file is intact or the new one is, with no in-between state
+for a backup to rescue. Recorded in the docstring so it does not get
+"fixed" back.
+
+`rotate_recovery_key()` requires the current password, not merely an
+unlocked session — otherwise anyone with a live session could mint a
+durable second credential surviving the user's next password change.
+
+### Tests
+
+466 pass, up from 357 at session start. New files:
+`test_restore.py` (21), `test_recovery_key.py` (40),
+`test_crypto_migration_v3.py` (40).
+
+### Process note
+
+First attempt at `test_restore.py` used the `create_file` tool, which
+writes to the sandbox container, not Rick's Mac. Caught when ruff
+reported the file missing. Only Desktop Commander reaches the real
+filesystem.
+
+### Commits
+- `feea063` — Automated restore coverage
+- `79d6270` — v3 envelope encryption primitives
+- `8e5f34d` — Wire v3 into unlock; add initialize_v3
+- `917f08b` — v2 → v3 crypto migration
+- `ec06131` — v3 password change as rewrap; recovery key rotation
+- docs commit (this entry, CHANGELOG, Navigation_Map)
+
+### Still open
+
+- **Nothing is wired to the UI.** New installs still get v2;
+  `initialize_v3` and `migrate_to_v3` are not called from anywhere. The
+  archive on this machine is untouched and still v2.
+- Needed next: setup flow showing the recovery key, migration prompt +
+  progress, unlock-by-recovery-key on the login screen, rotation in
+  settings.
+- Docs: threat-model note that a printed recovery key is a second
+  full-access credential.
+- **Before migrating Rick's real archive:** scratch-copy drill, same
+  pattern as Session 67 — copy the archive, migrate the copy, confirm it
+  opens under both password and recovery key.

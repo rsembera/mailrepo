@@ -65,9 +65,10 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 |------|-------|--------------|
 | `imap.py` | 1,535 | IMAP client: connect, auth, folders, fetch, MOVE/COPY + UID-scoped expunge, Gmail-aware delete (incl. batched set delete), CONDSTORE |
 | `pdf_export.py` | 1,052 | PDF export: per-email PDFs, attachment merging, WeasyPrint |
+| `encryption.py` | 733 | Argon2id KDF + HKDF + AES-256-GCM (v2) plus the v3 envelope: random master wrapped under password and recovery key |
+| `password_change.py` | 574 | Password change — v2 full re-encryption, v3 rewrap; on-disk backup gate, interruption marker, recovery-key rotation |
 | `database.py` | 465 | SQLCipher connection, schema v5, FTS5, migrations, threading lock, hard refusal to open unencrypted |
-| `password_change.py` | 452 | v2-native password change with full file/DB re-encryption; on-disk backup verification gate + interruption marker |
-| `encryption.py` | 385 | Argon2id KDF + HKDF + AES-256-GCM file/DB encryption (v2) |
+| `crypto_migration_v3.py` | 298 | v2 → v3 migration: re-encrypt under a random master, resumable via wrapped-master state file |
 | `importer.py` | 280 | mbox, Apple mbox, EML, PST import handling |
 | `pending_commit.py` | 222 | Commit resume: save/restore interrupted commits |
 | `config.py` | 114 | Paths, constants, Flask config |
@@ -282,10 +283,13 @@ python main.py
 
 ---
 
-## Test Suite (365 tests)
+## Test Suite (466 tests)
 
 | File | Coverage |
 |------|----------|
+| `tests/test_crypto_migration_v3.py` | v2 → v3 envelope migration: content survives, readable under both credentials, interrupted migration re-runs to completion, resume state halts rather than minting a new master; v3 password change as rewrap; recovery-key rotation (40 tests, Session 68) |
+| `tests/test_recovery_key.py` | v3 envelope: recovery-key format and parse tolerance, wrapping structure, unlock by either credential yielding identical keys, tamper detection, independent rewrap of each wrapper (40 tests, Session 68) |
+| `tests/test_restore.py` | Restore path: staged files decrypt to original plaintext, backup carries its own key material, incremental chains and deletion propagation, staging-is-not-production, complete/cancel, chain verification (21 tests, Session 68) |
 | `tests/test_auth.py` | Auth boundary: setup, login + rate-limit lockout, logout, CSRF enforcement, password-change job-id handoff end-to-end (22 tests, Session 40) |
 | `tests/test_encryption.py` | v2 `Encryption` lifecycle: init / unlock / lock / wrong-password (no v1 code remains) |
 | `tests/test_encryption_v2.py` | v2 encryption: Argon2id, HKDF, AES-256-GCM, file/DB round-trip |

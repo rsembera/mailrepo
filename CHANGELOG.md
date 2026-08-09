@@ -9,6 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Recovery keys (envelope encryption) — crypto layer complete, not yet
+  reachable from the UI (Session 68).** MailRepo can now protect an
+  archive with a printable recovery key alongside the master password,
+  so a forgotten password no longer means a lost archive. The master key
+  becomes 32 random bytes wrapped twice — once under the password, once
+  under the recovery key — and either one opens the archive. The
+  recovery key is 32 characters in eight groups, drawn from an alphabet
+  with no 0, 1 or 8 so the common transcription mistakes cannot happen;
+  typing it back in tolerates lowercase, missing hyphens and spaces.
+  It is shown once and never stored.
+
+  Because the master key no longer depends on the password, **changing
+  your password on an upgraded archive is instant** — MailRepo rewrites
+  61 bytes instead of re-encrypting every message, and the interruption
+  risk that made password changes require a fresh backup disappears
+  entirely. Recovery keys can also be rotated, revoking the old one
+  without touching the password or the archive.
+
+  Existing archives are upgraded by a one-time migration that
+  re-encrypts under a new random master. This costs about what one
+  password change costs today, and is required rather than optional: if
+  the master were left derived from the password, that password would
+  remain a permanent way in and future password changes would not truly
+  revoke it. The migration is resumable — if interrupted, log in and run
+  it again.
+
+  Nothing about this is wired into the interface yet, so no existing
+  archive changes. New installs still use the previous format until the
+  setup screens can display a recovery key.
+
 ### Security
 - **The password-change backup gate now verifies the backup on disk
   instead of trusting the manifest (Session 67).** The non-overridable
