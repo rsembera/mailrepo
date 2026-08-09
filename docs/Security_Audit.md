@@ -9,6 +9,38 @@
 
 > **Addendum (June 9, 2026):** This audit is a point-in-time record and predates the v2 crypto migration of May 29, 2026. References to PBKDF2 and Fernet below describe the retired v1 scheme. The current scheme is Argon2id (m=256 MiB, t=6) → HKDF-Expand with domain-separated info strings → AES-256-GCM, with SQLCipher unlocked via raw-key PRAGMA. See the module docstring in `core/encryption.py` for the authoritative description, and `docs/Code_Review_Findings.md` (Session 38) for the current pre-tag code review. The class-level key management pattern noted below remains in place and is documented as a deliberate design decision, with rationale, in the encryption module docstring.
 
+> **Addendum (August 9, 2026 — Session 68):** The key file moved to the v3 envelope. The master key is now 32 random bytes, wrapped twice: once under Argon2id(password) and once under HKDF(recovery key). `file_key` and `db_key` still derive from the master by HKDF-Expand exactly as before, and archive ciphertext is unchanged — only the key file format moved (MRC2 → MRC3). Two consequences for this document:
+>
+> - **Password change no longer re-encrypts anything on v3 archives.** It replaces the 61-byte password wrapper. The old password is genuinely revoked because the master is random and independent of it — this is why the migration mints a fresh master and re-encrypts once rather than reusing the password-derived value.
+> - **The recovery key is a second full-access credential.** See the new threat-model section below.
+>
+> The CSRF row under Authentication was accurate about the server and misleading about the system: the check is enforced, but no frontend code read the token that `base.html` renders. Corrected below.
+
+---
+
+## Threat model: the recovery key (added Session 68)
+
+The recovery key is a printable 160-bit secret that opens the archive **without the master password**. That is the point of it, and it is also its whole risk surface. For MailRepo's audience — solo lawyers, therapists, journalists holding confidential material — this deserves stating plainly rather than burying in a tooltip.
+
+**What it changes.** Before v3, the security of an archive was exactly the security of one password held in one person's head. After v3, it is the weaker of that password and wherever the recovery key physically ends up. A key photographed and left in cloud photo storage, or filed in the same drawer as an unlocked laptop, is a full compromise of the archive regardless of how strong the password is.
+
+**What MailRepo does about it.**
+
+| Measure | Detail |
+|---|---|
+| Shown once | Generated at setup or upgrade, rendered into a single HTTP response, never stored server-side |
+| Never in the session | Flask sessions are signed, not encrypted; a key placed there would be readable in the browser cookie jar. Guarded by `test_recovery_key_never_enters_the_session` |
+| Rotatable | `rotate_recovery_key()` revokes the old key immediately, without a password change or re-encryption |
+| Rotation gated on password | An unlocked session alone cannot mint a durable second credential |
+| Rate limited | Recovery-key login shares the password login's limiter — it is an equivalent credential and must not be the cheaper thing to attack |
+| Cleared from the DOM | The Settings rotation view blanks the key once acknowledged |
+
+**What it does not do.** MailRepo cannot tell whether the key was written down, where it went, or whether it has been copied. There is no usage log, no "last used" indicator, and no way to detect that someone else has a copy. A user who suspects exposure has exactly one remedy: rotate.
+
+**Guidance given in-product.** The setup and rotation screens tell the user to store it like a spare key to their office — somewhere physical, somewhere private, and not alongside the password. The downloadable text file repeats this, because that file is the copy most likely to be read months later.
+
+**Not offered deliberately.** There is no "email me my recovery key", no cloud escrow, and no account-recovery path through Anthropic or anyone else. Every one of those would move the archive's security off the user's own premises, which is the property the product exists to provide.
+
 ---
 
 ## Summary
@@ -36,7 +68,7 @@ Comprehensive review of all security-critical code paths: encryption, authentica
 |-------|--------|--------|
 | Rate limiting | ✅ | 5 attempts per 60 seconds per IP |
 | Session timeout | ✅ | Configurable (15/30/60/120 min or never) |
-| CSRF protection | ✅ | Token validated on all POST/PUT/DELETE/PATCH |
+| CSRF protection | ⚠️ | Server-side check is correct (all POST/PUT/DELETE/PATCH on `/api/` paths). **Frontend was not sending the token** — `base.html` renders it into a meta tag and no JS read it. Fixed for the password-change and recovery-key calls in Session 68; 47 other POST fetches still send none and need checking against the running app |
 | Session tracking | ✅ | Activity-based with automatic logout |
 | Password policy | ✅ | Minimum 12 characters |
 | Trash cleanup | ✅ | Expired items cleaned on login |

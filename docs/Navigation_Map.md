@@ -66,7 +66,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `imap.py` | 1,535 | IMAP client: connect, auth, folders, fetch, MOVE/COPY + UID-scoped expunge, Gmail-aware delete (incl. batched set delete), CONDSTORE |
 | `pdf_export.py` | 1,052 | PDF export: per-email PDFs, attachment merging, WeasyPrint |
 | `encryption.py` | 733 | Argon2id KDF + HKDF + AES-256-GCM (v2) plus the v3 envelope: random master wrapped under password and recovery key |
-| `password_change.py` | 574 | Password change — v2 full re-encryption, v3 rewrap; on-disk backup gate, interruption marker, recovery-key rotation |
+| `password_change.py` | 603 | Password change — v2 full re-encryption, v3 rewrap; post-recovery reset, recovery-key rotation, on-disk backup gate, interruption marker |
 | `database.py` | 465 | SQLCipher connection, schema v5, FTS5, migrations, threading lock, hard refusal to open unencrypted |
 | `crypto_migration_v3.py` | 298 | v2 → v3 migration: re-encrypt under a random master, resumable via wrapped-master state file |
 | `importer.py` | 280 | mbox, Apple mbox, EML, PST import handling |
@@ -86,7 +86,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `auth.py` | 465 | Setup, login, logout, rate limiting, session management |
+| `auth.py` | 702 | Setup, login, logout, rate limiting, session management; recovery-key login, post-recovery password reset, v3 upgrade flow, rotation API |
 | `backups.py` | 273 | Backup/restore endpoints, folder picker |
 | `main.py` | 81 | Page routes: index, create_archive, settings |
 
@@ -131,13 +131,14 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `state.js` | 130 | Central state object, session persistence |
 | `utils.js` | 90 | escapeHtml, formatDate, debounce, extractName |
 | `modals.js` | 144 | Alert/confirm/prompt + canonical closeModal + registerModalCloseHandler |
+| `recovery-key.js` | 123 | One-time recovery-key screen: copy / print / download, beforeunload guard |
 
 ### Views (`/js/views/`)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
 | `mail.js` | 2,301 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
-| `settings.js` | 1,219 | Settings: appearance, accounts, security, backup, reset |
+| `settings.js` | 1,411 | Settings: appearance, accounts, security, recovery-key status + rotation, backup, reset |
 | `review.js` | 1,035 | Review staged items, destination editing, commit |
 | `backups.js` | 953 | Backup/restore UI, restore points, settings |
 | `folder-selection.js` | 897 | Bulk folder staging from IMAP/imports |
@@ -283,10 +284,11 @@ python main.py
 
 ---
 
-## Test Suite (466 tests)
+## Test Suite (490 tests)
 
 | File | Coverage |
 |------|----------|
+| `tests/test_recovery_key_web.py` | Recovery-key web flow end to end: setup shows the key (and never puts it in the session), recovery login, post-recovery password reset, v3 upgrade flow, rotation API + CSRF (24 tests, Session 68) |
 | `tests/test_crypto_migration_v3.py` | v2 → v3 envelope migration: content survives, readable under both credentials, interrupted migration re-runs to completion, resume state halts rather than minting a new master; v3 password change as rewrap; recovery-key rotation (40 tests, Session 68) |
 | `tests/test_recovery_key.py` | v3 envelope: recovery-key format and parse tolerance, wrapping structure, unlock by either credential yielding identical keys, tamper detection, independent rewrap of each wrapper (40 tests, Session 68) |
 | `tests/test_restore.py` | Restore path: staged files decrypt to original plaintext, backup carries its own key material, incremental chains and deletion propagation, staging-is-not-production, complete/cancel, chain verification (21 tests, Session 68) |

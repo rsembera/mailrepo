@@ -4369,3 +4369,90 @@ filesystem.
 - **Before migrating Rick's real archive:** scratch-copy drill, same
   pattern as Session 67 — copy the archive, migrate the copy, confirm it
   opens under both password and recovery key.
+
+### Session 68 addendum — UI, upgrade flow, and a CSRF finding
+
+**Migration drill against a real copy (before any UI work).** Copied
+`data/` + `archive/` to a scratch dir, gave it its own self-contained
+backup, migrated, verified. 1,754 files in **2.1 seconds — 845 files/s**.
+My earlier estimate of "about what one password change costs" was too
+pessimistic: the walk is plain AES-GCM and Argon2id runs once, not per
+file. Content byte-identical under both password and recovery key; DB
+opened under the recovery-key-derived key. Scratch deleted, so the key
+printed to the terminal now opens nothing. Live archive untouched.
+
+Also learned: the live archive's newest backup was 25.6h old, past the
+24h gate. The gate refused, correctly. That shaped the upgrade UI —
+it takes a fresh backup itself rather than refusing.
+
+**`8617eaa` — recovery key UI.** Setup now uses v3 and shows the key.
+The key is rendered directly into the setup POST response, never put in
+the session: Flask sessions are SIGNED, not encrypted, so anything there
+is readable in the browser cookie jar. Screens: one-time key display
+(copy / print / download, confirmation checkbox, beforeunload guard,
+print styles that strip everything but the key), recovery login, and
+post-recovery password reset. `set_password_after_recovery()` exists
+because `change_master_password` needs the old password to unwrap the
+master, which this user by definition does not have.
+
+A test caught a wiring bug: the new routes were not in the
+`before_request` public-endpoint allowlist, so `/auth/login/recovery`
+redirected to login — unreachable for exactly the person locked out.
+
+**`9fb9a0d` — upgrade flow, rotation, CSRF fix.** `/auth/upgrade`,
+reached automatically when a v2 archive logs in. Rotation lives in
+Settings, gated on the current password so an unlocked session alone
+cannot mint a durable second credential.
+
+**CSRF: a pre-existing bug, not introduced here.** `app.py` enforces
+`X-CSRF-Token` on every state-changing request whose path contains
+`/api/`, which includes `/auth/api/*`. `base.html` has rendered the token
+into a meta tag all along and **nothing in the frontend has ever read
+it** — zero case-insensitive matches for "csrf" across
+`web/static/js`. The Session 40 tests pass because they set the header
+explicitly, so the real UI path was never exercised. The settings Change
+Password button could not have worked.
+
+Fixed for the two calls touched here. **47 other POST fetches still send
+no token.** Either they are all failing or something about that path
+differs from what the code reads like; not investigated, because that
+needs the running app rather than more code reading. Flagged rather than
+guessed at. Quickest check for Rick: click Change Password in Settings.
+
+**Security_Audit.md** was documenting PBKDF2 and Fernet — retired in
+June. Added a Session 68 addendum, corrected the CSRF row to ⚠️, and
+added a threat-model section on the recovery key as a second full-access
+credential, including what MailRepo deliberately does not offer (no
+email-me-my-key, no escrow, no vendor recovery path).
+
+### Tests
+
+490 pass, up from 357 at the start of Session 67. Mutation-verified in
+three places this session: restore deleted-file handling, the testzip
+report, the post-login upgrade redirect, and the automatic backup on
+upgrade each failed exactly one test, and only its own.
+
+### Commits (Session 68 — six code, two docs)
+- `feea063` — Automated restore coverage
+- `79d6270` — v3 envelope encryption primitives
+- `8e5f34d` — Wire v3 into unlock; add initialize_v3
+- `917f08b` — v2 → v3 crypto migration
+- `ec06131` — v3 password change as rewrap; recovery key rotation
+- `8617eaa` — Recovery key UI: setup, recovery login, post-recovery reset
+- `9fb9a0d` — Upgrade flow, rotation in Settings, CSRF fix
+- `2318644` + this entry — docs
+
+More than the usual two commits per session, noted deliberately: the
+work split into genuinely independent increments, each shippable and
+separately revertable.
+
+### Still open
+
+- **The CSRF question above.** Highest priority; it is either nothing or
+  it is most of the frontend.
+- Rick's archive is still v2. Upgrading it: log in, follow the redirect.
+  The recovery key shown will be the only copy that ever exists.
+- Nothing here has been used through a browser. Claude can read the
+  frontend but not operate it, so every screen added this session is
+  unverified in the way that matters — flow, wording, whether the
+  one-time key display reads as urgent enough.

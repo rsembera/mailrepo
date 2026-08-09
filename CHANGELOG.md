@@ -10,35 +10,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Recovery keys (envelope encryption) — crypto layer complete, not yet
-  reachable from the UI (Session 68).** MailRepo can now protect an
-  archive with a printable recovery key alongside the master password,
-  so a forgotten password no longer means a lost archive. The master key
-  becomes 32 random bytes wrapped twice — once under the password, once
-  under the recovery key — and either one opens the archive. The
-  recovery key is 32 characters in eight groups, drawn from an alphabet
-  with no 0, 1 or 8 so the common transcription mistakes cannot happen;
-  typing it back in tolerates lowercase, missing hyphens and spaces.
-  It is shown once and never stored.
+- **Recovery keys (envelope encryption) — Session 68.** MailRepo can now
+  protect an archive with a printable recovery key alongside the master
+  password, so a forgotten password no longer means a lost archive. The
+  master key becomes 32 random bytes wrapped twice — once under the
+  password, once under the recovery key — and either one opens the
+  archive. The recovery key is 32 characters in eight groups, drawn from
+  an alphabet with no 0, 1 or 8 so the common transcription mistakes
+  cannot happen; typing it back in tolerates lowercase, missing hyphens
+  and spaces. It is shown once and never stored.
+
+  New archives get a recovery key during setup. Existing archives are
+  offered a one-time upgrade on the way in, which re-encrypts under a new
+  random master — measured at roughly 850 messages per second, so seconds
+  for a typical archive. A fresh backup is taken automatically first. The
+  upgrade is resumable: if it is interrupted, log in and run it again.
 
   Because the master key no longer depends on the password, **changing
   your password on an upgraded archive is instant** — MailRepo rewrites
   61 bytes instead of re-encrypting every message, and the interruption
-  risk that made password changes require a fresh backup disappears
-  entirely. Recovery keys can also be rotated, revoking the old one
-  without touching the password or the archive.
+  risk that made password changes require a fresh backup disappears.
 
-  Existing archives are upgraded by a one-time migration that
-  re-encrypts under a new random master. This costs about what one
-  password change costs today, and is required rather than optional: if
-  the master were left derived from the password, that password would
-  remain a permanent way in and future password changes would not truly
-  revoke it. The migration is resumable — if interrupted, log in and run
-  it again.
+  If you forget your password, "Use your recovery key" on the login
+  screen opens the archive and offers to set a new password immediately.
+  Recovery keys can be regenerated from Settings, which revokes the old
+  one at once — worth doing if a printed copy may have been seen.
 
-  Nothing about this is wired into the interface yet, so no existing
-  archive changes. New installs still use the previous format until the
-  setup screens can display a recovery key.
+  A recovery key opens your archive without the password, so treat it
+  like a spare key to your office: somewhere physical, somewhere private,
+  not filed next to the password. `docs/Security_Audit.md` covers what
+  this does and does not protect against.
 
 ### Security
 - **The password-change backup gate now verifies the backup on disk
@@ -79,6 +80,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   build shipped without the native extension correctly bundled.
 
 ### Fixed
+- **The frontend was not sending its CSRF token (Session 68).** MailRepo
+  validates a CSRF token on state-changing API requests, and the token
+  has always been rendered into the page — but no frontend code read it.
+  The Change Password button in Settings could not have worked as a
+  result. Fixed for the password-change and recovery-key requests; other
+  requests are still being checked.
 - **Malformed backup manifest entries no longer crash the restore
   screen (Session 67).** An entry missing `chain_id` raised a
   `KeyError` out of `get_restore_points()`, turning a backup-health
