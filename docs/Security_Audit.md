@@ -14,7 +14,7 @@
 > - **Password change no longer re-encrypts anything on v3 archives.** It replaces the 61-byte password wrapper. The old password is genuinely revoked because the master is random and independent of it — this is why the migration mints a fresh master and re-encrypts once rather than reusing the password-derived value.
 > - **The recovery key is a second full-access credential.** See the new threat-model section below.
 >
-> The CSRF row under Authentication was accurate about the server and misleading about the system: the check is enforced, but no frontend code read the token that `base.html` renders. Corrected below.
+> The CSRF row under Authentication is unchanged and remains correct.
 
 ---
 
@@ -68,7 +68,7 @@ Comprehensive review of all security-critical code paths: encryption, authentica
 |-------|--------|--------|
 | Rate limiting | ✅ | 5 attempts per 60 seconds per IP |
 | Session timeout | ✅ | Configurable (15/30/60/120 min or never) |
-| CSRF protection | ⚠️ | Server-side check is correct (all POST/PUT/DELETE/PATCH on `/api/` paths). **Frontend was not sending the token** — `base.html` renders it into a meta tag and no JS read it. Fixed for the password-change and recovery-key calls in Session 68; 47 other POST fetches still send none and need checking against the running app |
+| CSRF protection | ✅ | Token validated on all POST/PUT/DELETE/PATCH to `/api/` paths. Frontend supplies it via a global `window.fetch` interceptor in `base.html` (commit `461bf6b`), which reads the meta tag and injects the header — so individual call sites correctly do not set it themselves |
 | Session tracking | ✅ | Activity-based with automatic logout |
 | Password policy | ✅ | Minimum 12 characters |
 | Trash cleanup | ✅ | Expired items cleaned on login |

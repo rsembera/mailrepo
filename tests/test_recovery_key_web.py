@@ -360,9 +360,9 @@ class TestRotationApi:
     def test_rotation_requires_csrf(self, v3_client):
         """This endpoint sits under /api/, so app.py enforces the token.
 
-        The frontend now reads it from the meta tag in base.html; before
-        Session 68 nothing in the JS did, which is why the settings
-        password-change call could not have worked.
+        In the browser the global fetch interceptor in base.html supplies
+        it automatically, which is why no call site sets it by hand. The
+        test client does not run that script, so it must be explicit here.
         """
         response = v3_client["client"].post(
             "/auth/api/rotate-recovery-key",

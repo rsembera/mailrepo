@@ -80,12 +80,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   build shipped without the native extension correctly bundled.
 
 ### Fixed
-- **The frontend was not sending its CSRF token (Session 68).** MailRepo
-  validates a CSRF token on state-changing API requests, and the token
-  has always been rendered into the page — but no frontend code read it.
-  The Change Password button in Settings could not have worked as a
-  result. Fixed for the password-change and recovery-key requests; other
-  requests are still being checked.
 - **Malformed backup manifest entries no longer crash the restore
   screen (Session 67).** An entry missing `chain_id` raised a
   `KeyError` out of `get_restore_points()`, turning a backup-health

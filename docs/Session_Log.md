@@ -4404,26 +4404,52 @@ reached automatically when a v2 archive logs in. Rotation lives in
 Settings, gated on the current password so an unlocked session alone
 cannot mint a durable second credential.
 
-**CSRF: a pre-existing bug, not introduced here.** `app.py` enforces
-`X-CSRF-Token` on every state-changing request whose path contains
-`/api/`, which includes `/auth/api/*`. `base.html` has rendered the token
-into a meta tag all along and **nothing in the frontend has ever read
-it** — zero case-insensitive matches for "csrf" across
-`web/static/js`. The Session 40 tests pass because they set the header
-explicitly, so the real UI path was never exercised. The settings Change
-Password button could not have worked.
+**CSRF: I reported a bug that does not exist. Corrected same session.**
 
-Fixed for the two calls touched here. **47 other POST fetches still send
-no token.** Either they are all failing or something about that path
-differs from what the code reads like; not investigated, because that
-needs the running app rather than more code reading. Flagged rather than
-guessed at. Quickest check for Rick: click Change Password in Settings.
+The claim was that no frontend code sends `X-CSRF-Token`, so every POST
+must be 403ing. It was wrong, and it reached CHANGELOG, Security_Audit
+and this log before being caught. All three have been corrected and the
+redundant `getCsrfToken()` calls removed.
+
+The truth: a global `window.fetch` interceptor in `base.html` (line 126)
+injects the header on every state-changing request, reading it from the
+meta tag. It has been there since `461bf6b` (Feb 3), whose commit message
+says so outright — "Global fetch interceptor auto-injects X-CSRF-Token
+header — zero changes to existing fetch calls (47 call sites)." Call
+sites correctly do not set it themselves. That is the design.
+
+How the error was made, because the shape is worth remembering:
+
+1. Grepped `web/static/js/` for "csrf", got zero hits, and treated
+   absence in that directory as absence everywhere. The interceptor is
+   an inline script in `base.html`, outside the search path. I had
+   already read line 6 of that same file — the meta tag — and did not
+   look further down it.
+2. "Confirmed" it with a probe that returned 403 without a token. But
+   Flask's test client does not execute inline JS, so it can never
+   exercise the interceptor. The result was guaranteed by the method
+   and said nothing about production.
+3. Dismissed the disconfirming evidence. I noted twice that Rick uses
+   `/api/backup/now` and folder creation daily and wrote "that can't
+   be" — then continued instead of treating the contradiction as the
+   signal. A daily-driven app cannot have all its POSTs failing.
+
+The first probe attempt also returned a misleading 200, because
+`authenticated_client` in conftest wraps `post()` and injects the CSRF
+header automatically.
+
+**One real finding does survive.** That `authenticated_client` wrapper
+means the suite structurally cannot catch a genuine CSRF regression:
+every test that posts through it gets a valid token whether the code
+under test would have supplied one or not. Logged in the backlog; not
+changed today.
 
 **Security_Audit.md** was documenting PBKDF2 and Fernet — retired in
-June. Added a Session 68 addendum, corrected the CSRF row to ⚠️, and
-added a threat-model section on the recovery key as a second full-access
-credential, including what MailRepo deliberately does not offer (no
-email-me-my-key, no escrow, no vendor recovery path).
+June. Added a Session 68 addendum and a threat-model section on the
+recovery key as a second full-access credential, including what MailRepo
+deliberately does not offer (no email-me-my-key, no escrow, no vendor
+recovery path). The CSRF row was briefly and wrongly downgraded to ⚠️;
+restored to ✅ with the interceptor documented.
 
 ### Tests
 
@@ -4439,7 +4465,8 @@ upgrade each failed exactly one test, and only its own.
 - `917f08b` — v2 → v3 crypto migration
 - `ec06131` — v3 password change as rewrap; recovery key rotation
 - `8617eaa` — Recovery key UI: setup, recovery login, post-recovery reset
-- `9fb9a0d` — Upgrade flow, rotation in Settings, CSRF fix
+- `9fb9a0d` — Upgrade flow, rotation in Settings (commit message claims a
+  CSRF fix; that claim is wrong — see the correction above)
 - `2318644` + this entry — docs
 
 More than the usual two commits per session, noted deliberately: the
@@ -4448,11 +4475,11 @@ separately revertable.
 
 ### Still open
 
-- **The CSRF question above.** Highest priority; it is either nothing or
-  it is most of the frontend.
 - Rick's archive is still v2. Upgrading it: log in, follow the redirect.
   The recovery key shown will be the only copy that ever exists.
 - Nothing here has been used through a browser. Claude can read the
   frontend but not operate it, so every screen added this session is
   unverified in the way that matters — flow, wording, whether the
   one-time key display reads as urgent enough.
+- `authenticated_client` injects CSRF headers, so the suite cannot catch
+  a real CSRF regression (backlog).

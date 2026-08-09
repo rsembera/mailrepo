@@ -38,8 +38,31 @@ own task; will be done outside of these working sessions.
 
 ---
 
-## Performance items (only act on if symptoms appear)
+## Test suite
 
+### `authenticated_client` hides CSRF regressions
+**Found:** Session 68.
+
+`authenticated_client` in `tests/conftest.py` wraps `post()` and injects
+`X-CSRF-Token` on every request. Convenient, but it means no test using
+that fixture can ever observe a missing token: the fixture supplies one
+whether or not the code under test would have. If the `base.html` fetch
+interceptor were removed or broken, the suite would stay green while the
+entire frontend 403'd.
+
+`tests/test_auth.py` does cover the boundary directly with a raw client
+(`test_api_post_without_token_rejected` / `_with_token_accepted`), so the
+server-side check is not untested — the gap is that everything *above*
+it is tested through a fixture that cannot fail this way.
+
+Options: add a raw-client smoke test asserting a representative API POST
+403s without a token, or make the injection opt-in per test. Low
+priority; the server check is verified and the interceptor has been
+stable since February.
+
+---
+
+## Performance items (only act on if symptoms appear)
 ### Per-thread DB connection pool
 Currently every DB operation serializes through the class-level RLock.
 For a single-user local app this is invisible. If contention becomes

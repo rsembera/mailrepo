@@ -412,18 +412,6 @@ function renderSecuritySection() {
 }
 
 /**
- * Read the CSRF token the server put in base.html.
- *
- * app.py enforces X-CSRF-Token on every state-changing request whose path
- * contains /api/, which includes /auth/api/*. The token has been rendered
- * into a meta tag all along; nothing in the frontend was reading it.
- */
-function getCsrfToken() {
-    const meta = document.querySelector('meta[name="csrf-token"]');
-    return meta ? meta.getAttribute('content') || '' : '';
-}
-
-/**
  * Recovery key: status, rotation, and the one-time display of a new key.
  *
  * Rotation is deliberately gated on the current password rather than just
@@ -498,10 +486,7 @@ function initRecoveryKeyHandlers() {
             try {
                 const response = await fetch('/auth/api/rotate-recovery-key', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-Token': getCsrfToken(),
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ password }),
                 });
                 const data = await response.json();
@@ -669,10 +654,7 @@ async function handleChangePassword() {
         // Start password change on server
         const response = await fetch('/auth/api/change-password', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-Token': getCsrfToken(),
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
         });
         
