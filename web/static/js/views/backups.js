@@ -10,6 +10,7 @@ import { state, setBackupsUnsavedChecker, setBackupsUnsavedClearer } from '../st
 
 let contextTitle = null;
 let contextMeta = null;
+let _restorePoints = [];
 let emailList = null;
 
 // State
@@ -199,6 +200,7 @@ function renderBackupsView() {
                     <i data-lucide="alert-triangle" class="warning-icon"></i>
                     <span>Your current data will be replaced with the backup data. A safety backup will be created first.</span>
                 </div>
+                <div class="warning-text credential-warning" id="modal-credential-warning" hidden></div>
                 <div class="modal-actions">
                     <button class="btn btn-secondary" id="cancel-restore-modal-btn">Cancel</button>
                     <button class="btn btn-primary" id="confirm-restore-btn">Restore</button>
@@ -447,7 +449,11 @@ async function loadRestorePoints() {
     try {
         const response = await fetch('/api/backup/restore-points');
         const data = await response.json();
-        
+
+        // Cached so the restore modal can look up the credential note for
+        // whichever point is selected, without a second round trip.
+        _restorePoints = data.restore_points || [];
+
         const listEl = document.getElementById('backup-list');
         const restoreSelectEl = document.getElementById('restore-point-select');
         
@@ -561,10 +567,41 @@ function renderFullBackup(point) {
                 <div class="backup-item-info">
                     <span class="backup-type-badge badge-full">Full</span>
                     <span class="backup-item-name">${escapeHtml(point.display_name)}</span>
+                    ${renderCredentialBadge(point)}
                     ${dependentText}
                 </div>
             </div>
     `;
+}
+
+/**
+ * Badge showing which credentials a restore point needs.
+ *
+ * Restoring replaces the key file, so a backup taken before a password
+ * change or the recovery-key upgrade needs the credentials in force at
+ * the time. Without this the failure is silent and arrives at the worst
+ * possible moment.
+ */
+function renderCredentialBadge(point) {
+    const status = point.credential_status;
+    if (!status || status === 'current' || status === 'unknown') {
+        return '';
+    }
+
+    const labels = {
+        obsolete_crypto: 'Cannot be opened',
+        predates_recovery_key: 'No recovery key',
+        password_changed: 'Older password',
+        recovery_key_rotated: 'Older recovery key',
+        both_changed: 'Older credentials',
+    };
+
+    const label = labels[status] || '';
+    if (!label) return '';
+
+    const note = point.credential_note || '';
+    return `<span class="credential-badge credential-${escapeHtml(status)}"
+                  title="${escapeHtml(note)}">${escapeHtml(label)}</span>`;
 }
 
 /**
@@ -579,6 +616,7 @@ function renderIncrementalBackup(point, isLast) {
             <div class="backup-item-info">
                 <span class="backup-type-badge badge-incr">Incr</span>
                 <span class="backup-item-name">${escapeHtml(point.display_name)}</span>
+                ${renderCredentialBadge(point)}
             </div>
         </div>
     `;
@@ -735,6 +773,19 @@ function showRestoreModal() {
     const selectedText = selectedItem ? selectedItem.textContent : 'Unknown backup';
     
     document.getElementById('modal-restore-point').textContent = selectedText;
+
+    // Surface the credential warning here, not just as a badge in the
+    // list. This is the last screen before an irreversible action, and
+    // "you will not be able to open this with your current password" is
+    // exactly the thing someone needs before clicking, not after.
+    const warnEl = document.getElementById('modal-credential-warning');
+    if (warnEl) {
+        const point = (_restorePoints || []).find(p => p.id === selectedValue);
+        const note = point && point.credential_note ? point.credential_note : '';
+        warnEl.textContent = note;
+        warnEl.hidden = !note;
+    }
+
     const modal = document.getElementById('restore-modal');
     modal.classList.remove('hidden');
     modal.classList.add('active');

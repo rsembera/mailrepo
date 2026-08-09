@@ -27,11 +27,16 @@ from utils.backup import (
     complete_restore,
     create_full_backup,
     create_incremental_backup,
+    describe_restore_point_credentials,
     get_restore_points,
     get_verified_latest_restore_point,
+    key_file_fingerprint,
     prepare_restore,
+    read_key_file_from_chain,
     verify_restore_point_files,
 )
+
+PASSWORD = "TestPassword123!"
 
 # ============================================================
 # FIXTURES
@@ -313,3 +318,132 @@ class TestVerifyRestorePointFiles:
         found, problems = get_verified_latest_restore_point()
         assert found is None
         assert problems
+
+
+# ============================================================
+# CREDENTIAL FINGERPRINTING OF RESTORE POINTS
+# ============================================================
+
+
+class TestRestorePointCredentials:
+    """Restoring replaces the key file, so a backup opens with whatever
+    credentials were in force when it was taken. Detecting that needs no
+    password: each rewrap changes one half of the key file and leaves the
+    other byte-identical."""
+
+    def test_fresh_backup_is_current(self, archive_with_backup):
+        point = get_restore_points()[0]
+        assert point["credential_status"] == "current"
+        assert point["credential_note"] == ""
+
+    def test_v2_backup_flagged_once_the_archive_has_a_recovery_key(
+        self, archive_with_backup
+    ):
+        """The pre-migration case: restoring it drops the recovery key."""
+        from core.crypto_migration_v3 import migrate_to_v3
+
+        migrate_to_v3(PASSWORD)
+
+        points = get_restore_points()
+        v2_point = next(
+            p
+            for p in points
+            if p["credential_status"] == "predates_recovery_key"
+        )
+        assert "recovery key" in v2_point["credential_note"]
+
+    def test_password_change_flags_older_backups(self, archive_with_backup):
+        from core.crypto_migration_v3 import migrate_to_v3
+        from core.password_change import change_master_password
+
+        migrate_to_v3(PASSWORD)
+        create_full_backup()  # taken under the current password
+        change_master_password(PASSWORD, "ADifferentPassword456!")
+
+        statuses = {p["credential_status"] for p in get_restore_points()}
+        assert "password_changed" in statuses
+
+        flagged = next(
+            p
+            for p in get_restore_points()
+            if p["credential_status"] == "password_changed"
+        )
+        assert "password you used then" in flagged["credential_note"]
+        # The recovery key is untouched by a password change, and the note
+        # must say so — otherwise the user assumes they have nothing.
+        assert "recovery key still works" in flagged["credential_note"]
+
+    def test_recovery_key_rotation_flags_older_backups(self, archive_with_backup):
+        from core.crypto_migration_v3 import migrate_to_v3
+        from core.password_change import rotate_recovery_key
+
+        migrate_to_v3(PASSWORD)
+        create_full_backup()
+        rotate_recovery_key(PASSWORD)
+
+        statuses = {p["credential_status"] for p in get_restore_points()}
+        assert "recovery_key_rotated" in statuses
+
+    def test_rotating_recovery_key_does_not_flag_the_password(
+        self, archive_with_backup
+    ):
+        """Each half is independent; a rotation must not imply the password
+        moved, or the warning becomes noise."""
+        from core.crypto_migration_v3 import migrate_to_v3
+        from core.password_change import rotate_recovery_key
+
+        migrate_to_v3(PASSWORD)
+        create_full_backup()
+        rotate_recovery_key(PASSWORD)
+
+        statuses = {p["credential_status"] for p in get_restore_points()}
+        assert "password_changed" not in statuses
+        assert "both_changed" not in statuses
+
+    def test_both_changed_when_both_rotate(self, archive_with_backup):
+        from core.crypto_migration_v3 import migrate_to_v3
+        from core.password_change import change_master_password, rotate_recovery_key
+
+        migrate_to_v3(PASSWORD)
+        create_full_backup()
+        rotate_recovery_key(PASSWORD)
+        change_master_password(PASSWORD, "ADifferentPassword456!")
+
+        statuses = {p["credential_status"] for p in get_restore_points()}
+        assert "both_changed" in statuses
+
+    def test_pre_v2_key_file_is_reported_as_unopenable(self, archive_with_backup):
+        """Key files with no magic predate v2, whose code was deleted.
+
+        Rick's real archive has 102 of these. They are not 'needs an older
+        password' — no current build can open them at all.
+        """
+        blob = b"\xf0;x\x9b" + b"\x00" * 148  # 152 bytes, no magic: v1 shape
+        assert key_file_fingerprint(blob)["version"] == 1
+
+        result = describe_restore_point_credentials([], current_blob=None)
+        assert result["status"] in ("unknown", "obsolete_crypto")
+
+    def test_effective_key_file_is_the_last_one_in_the_chain(
+        self, archive_with_backup
+    ):
+        """Incrementals only carry changed files.
+
+        Most do not contain the key file at all, so the one that lands on
+        disk comes from the last backup in the chain that has it. Reading
+        the full's copy would misreport every chain that spans a change.
+        """
+        from core.crypto_migration_v3 import migrate_to_v3
+
+        # Full is v2; the migration then rewrites every file, so the next
+        # incremental carries the v3 key file.
+        migrate_to_v3(PASSWORD)
+        create_incremental_backup()
+
+        newest = get_restore_points()[0]
+        assert len(newest["files_needed"]) >= 2
+        blob = read_key_file_from_chain(newest["files_needed"])
+        assert blob[:4] == b"MRC3", (
+            "chain reported the older key file instead of the effective one"
+        )
+        assert newest["credential_status"] == "current"

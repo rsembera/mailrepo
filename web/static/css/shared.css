@@ -714,6 +714,36 @@ a.btn:hover {
     letter-spacing: normal;
 }
 
+/* Restore points: which credentials a backup needs.
+   Restoring replaces the key file, so a backup from before a password
+   change or the recovery-key upgrade opens only with what was in force
+   then. Silent until now. */
+.credential-badge {
+    display: inline-block;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    padding: 0.1rem 0.45rem;
+    border-radius: var(--radius-sm, 4px);
+    margin-left: var(--space-sm);
+    white-space: nowrap;
+    cursor: help;
+    background: #FEF3C7;
+    color: #92400E;
+    border: 1px solid #FDE68A;
+}
+
+/* Not merely "needs an older credential" — this build cannot open it
+   at all, so it reads as an error rather than a caution. */
+.credential-badge.credential-obsolete_crypto {
+    background: #FEE2E2;
+    color: #B91C1C;
+    border-color: #FECACA;
+}
+
+.credential-warning {
+    margin-top: var(--space-sm);
+}
+
 /* The `hidden` attribute must actually hide things.
    The browser's built-in [hidden] { display: none } is a UA rule and
    loses to any class that sets display — .btn sets inline-flex, so

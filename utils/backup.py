@@ -785,6 +785,22 @@ def get_restore_points():
 
     # Sort by date, newest first
     restore_points.sort(key=lambda x: x["created_at"], reverse=True)
+
+    # Annotate which credentials each point would need. Done once here
+    # with the live key file read a single time, rather than per point.
+    try:
+        salt_path = Config.get_salt_path()
+        current_blob = salt_path.read_bytes() if salt_path.exists() else None
+    except Exception:
+        current_blob = None
+
+    for point in restore_points:
+        creds = describe_restore_point_credentials(
+            point.get("files_needed", []), current_blob
+        )
+        point["credential_status"] = creds["status"]
+        point["credential_note"] = creds["note"]
+
     return restore_points
 
 
@@ -1110,6 +1126,162 @@ def verify_restore_point_files(restore_point) -> list:
             problems.append(f"{name}: corrupt entry ({bad_file})")
 
     return problems
+
+
+def key_file_fingerprint(blob):
+    """Identify which credentials a key file belongs to, without using them.
+
+    Returns the SHA-256 prefix of each wrapper half plus the format
+    version. Comparing these against the live key file says which
+    credentials a backup needs, without trying a single password:
+
+      - MRC2 vs MRC3 tells you whether it predates recovery keys
+      - the password half changes only when the password changes, because
+        rewrap_password mints a fresh salt every time
+      - the recovery half changes only when the recovery key is rotated
+
+    That separation is a property of the envelope: each rewrap touches
+    one half and leaves the other byte-identical.
+    """
+    if not blob or len(blob) < 4:
+        return None
+
+    magic = blob[:4]
+
+    if magic == b"MRC2":
+        return {"version": 2, "password_id": None, "recovery_id": None}
+
+    if magic != b"MRC3":
+        # No recognised magic. The magic was introduced with v2, so a key
+        # file without it predates v2 — the Fernet/PBKDF2 scheme, whose
+        # code was removed entirely in the v1 cleanup. Backups this old
+        # cannot be opened by any current build.
+        return {"version": 1, "password_id": None, "recovery_id": None}
+
+    # Offsets mirror core.encryption's MRC3 layout. Imported lazily to
+    # keep utils.backup free of a core.encryption dependency at module
+    # scope (backup runs in contexts where encryption may be locked).
+    from core.encryption import (
+        V3_OFF_SALT_PW,
+        V3_OFF_SALT_RK,
+        V3_SALT_FILE_LENGTH,
+    )
+
+    if len(blob) != V3_SALT_FILE_LENGTH:
+        return None
+
+    pw_half = blob[V3_OFF_SALT_PW:V3_OFF_SALT_RK]
+    rk_half = blob[V3_OFF_SALT_RK:]
+
+    return {
+        "version": 3,
+        "password_id": hashlib.sha256(pw_half).hexdigest()[:16],
+        "recovery_id": hashlib.sha256(rk_half).hexdigest()[:16],
+    }
+
+
+def read_key_file_from_chain(files_needed):
+    """Extract the key file that a restore point would actually land on.
+
+    Incrementals only carry files that changed, so most do not contain
+    data/.salt. The effective key file is the one from the LAST backup in
+    the chain that has it — that is what extraction leaves on disk.
+    """
+    blob = None
+    for path_str in files_needed:
+        try:
+            with zipfile.ZipFile(path_str, "r") as zf:
+                names = zf.namelist()
+                for candidate in ("data/.salt", ".salt"):
+                    if candidate in names:
+                        blob = zf.read(candidate)
+                        break
+        except Exception:
+            continue
+    return blob
+
+
+def describe_restore_point_credentials(files_needed, current_blob=None):
+    """What credentials would open this restore point, versus today's.
+
+    Returns a dict with a machine-readable `status` and a `note` written
+    for someone about to click Restore. Never raises: a restore screen
+    that cannot render because a fingerprint failed is worse than one
+    that says nothing.
+    """
+    unknown = {"status": "unknown", "note": ""}
+
+    try:
+        if current_blob is None:
+            salt_path = Config.get_salt_path()
+            current_blob = salt_path.read_bytes() if salt_path.exists() else None
+
+        current = key_file_fingerprint(current_blob)
+        backup = key_file_fingerprint(read_key_file_from_chain(files_needed))
+
+        if not backup:
+            return unknown
+
+        if backup["version"] == 1:
+            return {
+                "status": "obsolete_crypto",
+                "note": (
+                    "Created before the May 2026 encryption upgrade. This "
+                    "build cannot open it — the old scheme was removed. It "
+                    "is not a usable restore point and can be deleted."
+                ),
+            }
+
+        if backup["version"] == 2:
+            if current and current["version"] == 3:
+                return {
+                    "status": "predates_recovery_key",
+                    "note": (
+                        "Predates recovery keys. Restoring this returns the "
+                        "archive to password-only — your recovery key will "
+                        "not open it, and you would need to add a new one."
+                    ),
+                }
+            return {"status": "current", "note": ""}
+
+        if not current or current["version"] != 3:
+            return unknown
+
+        password_changed = backup["password_id"] != current["password_id"]
+        recovery_rotated = backup["recovery_id"] != current["recovery_id"]
+
+        if password_changed and recovery_rotated:
+            return {
+                "status": "both_changed",
+                "note": (
+                    "Both your password and recovery key have changed since "
+                    "this backup. It opens only with the ones in use at the "
+                    "time."
+                ),
+            }
+        if password_changed:
+            return {
+                "status": "password_changed",
+                "note": (
+                    "Your master password has changed since this backup. It "
+                    "opens with the password you used then, not your current "
+                    "one. Your recovery key still works."
+                ),
+            }
+        if recovery_rotated:
+            return {
+                "status": "recovery_key_rotated",
+                "note": (
+                    "Your recovery key has been replaced since this backup. "
+                    "It opens with the earlier key, or with your current "
+                    "password."
+                ),
+            }
+
+        return {"status": "current", "note": ""}
+    except Exception as e:
+        log.warning(f"Could not fingerprint restore point credentials: {e}")
+        return unknown
 
 
 def get_verified_latest_restore_point():
