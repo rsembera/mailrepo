@@ -285,6 +285,55 @@ class TestUpgradeFlow:
         assert Encryption.salt_file_version() == 3
         assert list(backups_dir.glob("*.zip")), "no backup was taken"
 
+    def test_upgrade_succeeds_with_a_stale_backup_and_no_file_changes(
+        self, v2_client
+    ):
+        """The case that actually bit Rick.
+
+        A real backup exists but is older than the 24h gate, and nothing
+        in the archive has changed since. create_backup() would decide
+        'incremental', find no changes, and return None without writing
+        anything — so the gate would still see the stale backup and refuse,
+        after the page had promised a fresh one. Forcing a full backup is
+        what makes this pass.
+        """
+        from datetime import datetime, timedelta
+
+        from core.config import Config
+        from utils.backup import create_full_backup
+
+        backups_dir = Config.get_data_path().parent / "backups"
+
+        # A genuine backup of the current archive, aged past the gate.
+        create_full_backup()
+        import json
+
+        manifest_path = backups_dir / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        stale = (datetime.now() - timedelta(hours=30)).isoformat()
+        for entry in manifest["backups"]:
+            entry["created_at"] = stale
+        manifest_path.write_text(json.dumps(manifest))
+
+        response = v2_client.post("/auth/upgrade", data={"password": PASSWORD})
+
+        assert "Save your recovery key" in response.get_data(as_text=True), (
+            "upgrade refused despite promising to take a fresh backup"
+        )
+        assert Encryption.salt_file_version() == 3
+
+        # Filenames are timestamped to the second, so counting files is
+        # unreliable here. What matters is that a non-stale restore point
+        # now exists: that is what the gate reads.
+        manifest = json.loads(manifest_path.read_text())
+        newest = max(b["created_at"] for b in manifest["backups"])
+        age_hours = (
+            datetime.now() - datetime.fromisoformat(newest)
+        ).total_seconds() / 3600
+        assert age_hours < 1, (
+            f"newest backup is still {age_hours:.1f}h old — none was taken"
+        )
+
     def test_already_upgraded_archive_redirects(self, v2_client):
         v2_client.post("/auth/upgrade", data={"password": PASSWORD})
         response = v2_client.get("/auth/upgrade")

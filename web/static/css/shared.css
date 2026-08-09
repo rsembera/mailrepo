@@ -714,6 +714,16 @@ a.btn:hover {
     letter-spacing: normal;
 }
 
+/* The `hidden` attribute must actually hide things.
+   The browser's built-in [hidden] { display: none } is a UA rule and
+   loses to any class that sets display — .btn sets inline-flex, so
+   `<button class="btn" hidden>` rendered anyway. This bit the recovery
+   key section, which showed both "Add" and "Generate New" at once.
+   Applies to every .btn in the app, not just that section. */
+[hidden] {
+    display: none !important;
+}
+
 /* Printing this page should produce something worth putting in a drawer:
    the key, what it does, and nothing else. */
 @media print {

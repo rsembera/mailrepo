@@ -32,7 +32,7 @@ from core.password_change import (
     rotate_recovery_key,
     set_password_after_recovery,
 )
-from utils.backup import create_backup, get_verified_latest_restore_point
+from utils.backup import create_full_backup, get_verified_latest_restore_point
 from utils.log import get_logger
 
 log = get_logger(__name__)
@@ -427,10 +427,14 @@ def upgrade_to_recovery_keys():
 
         try:
             if not backup_ok:
-                # Take one now rather than refusing. The user asked to
-                # upgrade; making them find the backup screen themselves
-                # is friction for no safety gain.
-                create_backup()
+                # MUST be a full backup, not create_backup(). The latter
+                # auto-decides and picks incremental when a recent full
+                # exists — and an incremental returns None when nothing
+                # has changed, which is exactly the case here for an
+                # archive that has been sitting idle. The gate would then
+                # still see the stale backup and refuse, after this page
+                # promised a fresh one would be taken.
+                create_full_backup()
 
             recovery_key = migrate_to_v3(password)
         except InvalidPasswordError:
@@ -443,10 +447,21 @@ def upgrade_to_recovery_keys():
             )
         except Exception as e:
             log.error(f"v3 upgrade failed: {e}")
+            # Re-read backup state: a backup may well have been taken
+            # just now, and reporting the pre-attempt state would be
+            # stale and confusing.
+            point, problems = get_verified_latest_restore_point()
+            age = _restore_point_age_hours(point) if point else None
             return render_template(
                 "auth/upgrade.html",
-                errors=[str(e)],
-                backup_ok=backup_ok,
+                errors=[
+                    "The upgrade could not be completed. Your archive has "
+                    "not been changed and your password is unaffected.",
+                    str(e),
+                ],
+                backup_ok=not problems
+                and age is not None
+                and age <= MAX_BACKUP_AGE_HOURS,
                 backup_age=age,
                 backup_problems=problems,
             )
