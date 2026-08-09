@@ -44,7 +44,7 @@ from argon2.low_level import Type as Argon2Type
 from argon2.low_level import hash_secret_raw
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from cryptography.hazmat.primitives.kdf.hkdf import HKDFExpand
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF, HKDFExpand
 
 from .config import Config
 
@@ -90,6 +90,56 @@ SALT_MAGIC_V2 = b"MRC2"
 VERSION_BYTE_V2 = 0x02
 GCM_NONCE_LENGTH = 12
 GCM_TAG_LENGTH = 16
+
+# ------------------------------------------------------------
+# v3 envelope encryption
+# ------------------------------------------------------------
+#
+# v2 derives the master key directly from the password. That makes the
+# password the only way in: forget it and the archive is gone, and
+# changing it means re-encrypting every file because every key below it
+# moves.
+#
+# v3 makes the master key a random 32 bytes and wraps it twice -- once
+# under a password-derived KEK, once under a recovery-key-derived KEK.
+# Either wrapper yields the same master, so file_key and db_key are
+# unchanged and NOTHING below the master needs to know v3 exists. The
+# ciphertext format of archive files is still v2; only the key file
+# changes.
+#
+# Second-order benefit: a password change becomes a rewrap of 61 bytes
+# instead of a walk over the whole archive, which removes the
+# non-resumable rekey window entirely for password changes.
+#
+# The recovery key is generated, never user-chosen: 160 bits of entropy
+# means no password-strength guessing to defend against, so HKDF is
+# sufficient and unlock-by-recovery-key is instant. Argon2id would buy
+# nothing against a uniformly random 160-bit secret.
+
+SALT_MAGIC_V3 = b"MRC3"
+HKDF_INFO_RECOVERY_V3 = b"mailrepo.recovery.v3"
+
+MASTER_KEY_LENGTH = 32
+RECOVERY_KEY_BYTES = 20  # 160 bits -> exactly 32 base32 chars, no padding
+RECOVERY_KEY_GROUP = 4
+
+# [version 1][nonce 12][ciphertext 32][tag 16]
+WRAPPED_KEY_LENGTH = 1 + GCM_NONCE_LENGTH + MASTER_KEY_LENGTH + GCM_TAG_LENGTH
+
+# MRC3 layout, fixed length:
+#   0   4    magic "MRC3"
+#   4   32   salt_pw    (Argon2id salt)
+#   36  61   wrapped_pw (master under the password KEK)
+#   97  32   salt_rk    (HKDF salt)
+#   129 61   wrapped_rk (master under the recovery-key KEK)
+V3_OFF_SALT_PW = len(SALT_MAGIC_V3)
+V3_OFF_WRAPPED_PW = V3_OFF_SALT_PW + SALT_LENGTH
+V3_OFF_SALT_RK = V3_OFF_WRAPPED_PW + WRAPPED_KEY_LENGTH
+V3_OFF_WRAPPED_RK = V3_OFF_SALT_RK + SALT_LENGTH
+V3_SALT_FILE_LENGTH = V3_OFF_WRAPPED_RK + WRAPPED_KEY_LENGTH
+
+# Base32 excludes 0/1/8, so these can only be typos for lookalikes.
+_RECOVERY_KEY_FIXUPS = str.maketrans({"0": "O", "1": "I", "8": "B"})
 
 
 # ============================================================
@@ -330,6 +380,188 @@ class Encryption:
             raise EncryptionError("Keys not available; cannot write salt file.")
         encrypted_verification = cls._encrypt_v2_with_key(VERIFICATION_TOKEN, cls._file_key_v2)
         cls._atomic_write_salt_file(SALT_MAGIC_V2 + cls._salt + encrypted_verification)
+
+    # ----------------------------------------------------------
+    # v3 envelope: recovery key
+    # ----------------------------------------------------------
+
+    @classmethod
+    def generate_recovery_key(cls) -> str:
+        """Generate a fresh recovery key in display format.
+
+        20 random bytes -> 32 base32 characters -> eight hyphenated groups
+        of four. Base32 (RFC 4648) has no 0, 1 or 8, which removes the
+        worst transcription ambiguities before they happen.
+        """
+        raw = secrets.token_bytes(RECOVERY_KEY_BYTES)
+        return cls.format_recovery_key(raw)
+
+    @staticmethod
+    def format_recovery_key(raw: bytes) -> str:
+        """Render recovery-key bytes as hyphenated base32 groups."""
+        encoded = base64.b32encode(raw).decode("ascii").rstrip("=")
+        return "-".join(
+            encoded[i : i + RECOVERY_KEY_GROUP] for i in range(0, len(encoded), RECOVERY_KEY_GROUP)
+        )
+
+    @staticmethod
+    def parse_recovery_key(text: str) -> bytes:
+        """Parse a user-typed recovery key back to bytes.
+
+        Tolerant of the things people actually do: lowercase, spaces
+        instead of hyphens, missing hyphens, and 0/1/8 typed for O/I/B.
+        Raises EncryptionError on anything that cannot be a recovery key,
+        so a malformed key is distinguishable from a wrong one.
+        """
+        if not text:
+            raise EncryptionError("No recovery key provided.")
+
+        cleaned = (
+            text.strip()
+            .upper()
+            .replace("-", "")
+            .replace(" ", "")
+            .replace("\t", "")
+            .translate(_RECOVERY_KEY_FIXUPS)
+        )
+
+        expected_chars = len(base64.b32encode(b"\x00" * RECOVERY_KEY_BYTES).rstrip(b"="))
+        if len(cleaned) != expected_chars:
+            raise EncryptionError(
+                f"Recovery key should be {expected_chars} characters "
+                f"(excluding hyphens); got {len(cleaned)}."
+            )
+
+        padding = "=" * (-len(cleaned) % 8)
+        try:
+            raw = base64.b32decode(cleaned + padding, casefold=False)
+        except Exception:
+            raise EncryptionError(
+                "Recovery key contains characters that are not part of the key "
+                "alphabet (A-Z and 2-7)."
+            )
+        if len(raw) != RECOVERY_KEY_BYTES:
+            raise EncryptionError("Recovery key is the wrong length.")
+        return raw
+
+    @classmethod
+    def _derive_kek_from_recovery_key(cls, raw: bytes, salt_rk: bytes) -> bytes:
+        """HKDF a key-encryption key from recovery-key bytes.
+
+        Full HKDF (extract + expand) rather than expand-only: the salt
+        makes two archives with the same recovery key derive different
+        KEKs, which matters because recovery keys get printed, copied and
+        occasionally reused by people who should not reuse them.
+        """
+        hkdf = HKDF(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt_rk,
+            info=HKDF_INFO_RECOVERY_V3,
+        )
+        return hkdf.derive(raw)
+
+    # ----------------------------------------------------------
+    # v3 envelope: salt file
+    # ----------------------------------------------------------
+
+    @classmethod
+    def build_v3_salt_blob(cls, master: bytes, password: str, recovery_key: str) -> bytes:
+        """Wrap the master key under both a password and a recovery key."""
+        if len(master) != MASTER_KEY_LENGTH:
+            raise EncryptionError(
+                f"Master key must be {MASTER_KEY_LENGTH} bytes, got {len(master)}."
+            )
+
+        salt_pw = secrets.token_bytes(SALT_LENGTH)
+        salt_rk = secrets.token_bytes(SALT_LENGTH)
+
+        kek_pw = cls._derive_master_v2(password, salt_pw)
+        kek_rk = cls._derive_kek_from_recovery_key(cls.parse_recovery_key(recovery_key), salt_rk)
+
+        wrapped_pw = cls._encrypt_v2_with_key(master, kek_pw)
+        wrapped_rk = cls._encrypt_v2_with_key(master, kek_rk)
+
+        blob = SALT_MAGIC_V3 + salt_pw + wrapped_pw + salt_rk + wrapped_rk
+        if len(blob) != V3_SALT_FILE_LENGTH:
+            raise EncryptionError(
+                f"Built a v3 salt blob of {len(blob)} bytes, expected {V3_SALT_FILE_LENGTH}."
+            )
+        return blob
+
+    @staticmethod
+    def parse_v3_salt_blob(blob: bytes) -> dict:
+        """Split an MRC3 blob into its fields. Raises if malformed."""
+        if blob[:4] != SALT_MAGIC_V3:
+            raise EncryptionError("Not a v3 (MRC3) key file.")
+        if len(blob) != V3_SALT_FILE_LENGTH:
+            raise EncryptionError(
+                f"v3 key file is {len(blob)} bytes, expected "
+                f"{V3_SALT_FILE_LENGTH}. The file may be truncated."
+            )
+        return {
+            "salt_pw": blob[V3_OFF_SALT_PW:V3_OFF_WRAPPED_PW],
+            "wrapped_pw": blob[V3_OFF_WRAPPED_PW:V3_OFF_SALT_RK],
+            "salt_rk": blob[V3_OFF_SALT_RK:V3_OFF_WRAPPED_RK],
+            "wrapped_rk": blob[V3_OFF_WRAPPED_RK:],
+        }
+
+    @classmethod
+    def unwrap_master_with_password(cls, blob: bytes, password: str) -> bytes:
+        """Recover the master key from a v3 blob using the password.
+
+        A wrong password fails the GCM auth tag, so the wrapper doubles as
+        the verification token v2 needed a separate field for.
+        """
+        fields = cls.parse_v3_salt_blob(blob)
+        kek = cls._derive_master_v2(password, fields["salt_pw"])
+        try:
+            return cls._decrypt_v2_with_key(fields["wrapped_pw"], kek)
+        except Exception:
+            raise InvalidPasswordError("Invalid master password.")
+
+    @classmethod
+    def unwrap_master_with_recovery_key(cls, blob: bytes, recovery_key: str) -> bytes:
+        """Recover the master key from a v3 blob using the recovery key."""
+        fields = cls.parse_v3_salt_blob(blob)
+        raw = cls.parse_recovery_key(recovery_key)
+        kek = cls._derive_kek_from_recovery_key(raw, fields["salt_rk"])
+        try:
+            return cls._decrypt_v2_with_key(fields["wrapped_rk"], kek)
+        except Exception:
+            raise InvalidPasswordError("That recovery key does not open this archive.")
+
+    @classmethod
+    def rewrap_password(cls, blob: bytes, master: bytes, new_password: str) -> bytes:
+        """Replace the password wrapper, leaving the recovery wrapper alone.
+
+        This is the whole point of the envelope: changing a password
+        rewrites 61 bytes and revokes the old password, with no file walk
+        and no database rekey. It works only because the master is random
+        -- if the master were derived from the old password, that password
+        would remain a permanent path to it no matter how often we rewrap.
+        """
+        fields = cls.parse_v3_salt_blob(blob)
+        salt_pw = secrets.token_bytes(SALT_LENGTH)
+        kek_pw = cls._derive_master_v2(new_password, salt_pw)
+        wrapped_pw = cls._encrypt_v2_with_key(master, kek_pw)
+        return SALT_MAGIC_V3 + salt_pw + wrapped_pw + fields["salt_rk"] + fields["wrapped_rk"]
+
+    @classmethod
+    def rewrap_recovery_key(cls, blob: bytes, master: bytes, new_recovery_key: str) -> bytes:
+        """Replace the recovery wrapper, leaving the password wrapper alone.
+
+        A printed recovery key is a second full-access credential. If it
+        is lost, or was stored somewhere it should not have been, it has
+        to be revocable without forcing a password change.
+        """
+        fields = cls.parse_v3_salt_blob(blob)
+        salt_rk = secrets.token_bytes(SALT_LENGTH)
+        kek_rk = cls._derive_kek_from_recovery_key(
+            cls.parse_recovery_key(new_recovery_key), salt_rk
+        )
+        wrapped_rk = cls._encrypt_v2_with_key(master, kek_rk)
+        return SALT_MAGIC_V3 + fields["salt_pw"] + fields["wrapped_pw"] + salt_rk + wrapped_rk
 
     # ----------------------------------------------------------
     # Atomic file replacement
