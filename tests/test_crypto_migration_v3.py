@@ -22,9 +22,12 @@ from core.crypto_migration_v3 import (
 )
 from core.encryption import Encryption, InvalidPasswordError
 from core.password_change import (
+    PasswordChangeError,
+    change_master_password,
     check_password_change_interrupted,
     describe_interrupted_password_change,
     get_interruption_marker_path,
+    rotate_recovery_key,
 )
 
 PASSWORD = "TestPassword123!"
@@ -363,3 +366,129 @@ class TestMigrationResumeState:
         get_migration_state_path().write_bytes(short)
         with pytest.raises(MigrationError, match="malformed"):
             migrate_to_v3(PASSWORD)
+
+
+# ============================================================
+# v3 PASSWORD CHANGE + RECOVERY KEY ROTATION
+# ============================================================
+
+
+@pytest.fixture
+def v3_archive(v2_archive):
+    """A migrated archive, plus its recovery key and original content."""
+    recovery_key = migrate_to_v3(PASSWORD)
+    return {**v2_archive, "recovery_key": recovery_key}
+
+
+def _all_content_readable(plaintexts):
+    for rel, expected in plaintexts.items():
+        data = (Config.get_archive_path() / rel).read_bytes()
+        if Encryption.decrypt(data) != expected:
+            return False
+    return True
+
+
+class TestV3PasswordChange:
+    """On v3 a password change is a rewrap: no file walk, no DB rekey."""
+
+    NEW = "BrandNewPassword789!"
+
+    def test_new_password_unlocks(self, v3_archive):
+        change_master_password(PASSWORD, self.NEW)
+        Encryption.lock()
+        assert Encryption.unlock(self.NEW)
+
+    def test_old_password_stops_working(self, v3_archive):
+        change_master_password(PASSWORD, self.NEW)
+        Encryption.lock()
+        with pytest.raises(InvalidPasswordError):
+            Encryption.unlock(PASSWORD)
+
+    def test_no_files_were_re_encrypted(self, v3_archive):
+        """The entire point: the archive is not touched."""
+        before = {
+            rel: (Config.get_archive_path() / rel).read_bytes()
+            for rel in v3_archive["plaintexts"]
+        }
+        result = change_master_password(PASSWORD, self.NEW)
+
+        assert result["files"] == 0
+        assert result["rewrapped"] is True
+        for rel, raw in before.items():
+            assert (Config.get_archive_path() / rel).read_bytes() == raw
+
+    def test_content_still_readable(self, v3_archive):
+        change_master_password(PASSWORD, self.NEW)
+        Encryption.lock()
+        Encryption.unlock(self.NEW)
+        assert _all_content_readable(v3_archive["plaintexts"])
+
+    def test_recovery_key_survives(self, v3_archive):
+        change_master_password(PASSWORD, self.NEW)
+        Encryption.lock()
+        Encryption.unlock_with_recovery_key(v3_archive["recovery_key"])
+        assert _all_content_readable(v3_archive["plaintexts"])
+
+    def test_no_backup_required(self, v3_archive):
+        """Deliberate removal: the operation is one atomic file write.
+
+        The v2 gate protects a non-resumable window that does not exist
+        here, so requiring a fresh backup would be ceremony.
+        """
+        (v3_archive["backups_dir"] / "full_test.zip").unlink()
+        (v3_archive["backups_dir"] / "manifest.json").unlink()
+
+        change_master_password(PASSWORD, self.NEW)
+        Encryption.lock()
+        assert Encryption.unlock(self.NEW)
+
+    def test_wrong_current_password_refused(self, v3_archive):
+        with pytest.raises(InvalidPasswordError):
+            change_master_password("NotThePassword!", self.NEW)
+
+    def test_same_password_refused(self, v3_archive):
+        with pytest.raises(PasswordChangeError, match="same as the current"):
+            change_master_password(PASSWORD, PASSWORD)
+
+    def test_failed_change_leaves_old_password_working(self, v3_archive):
+        with pytest.raises(InvalidPasswordError):
+            change_master_password("NotThePassword!", self.NEW)
+        Encryption.lock()
+        assert Encryption.unlock(PASSWORD)
+
+
+class TestRecoveryKeyRotation:
+    def test_new_key_works(self, v3_archive):
+        new_rk = rotate_recovery_key(PASSWORD)
+        Encryption.lock()
+        Encryption.unlock_with_recovery_key(new_rk)
+        assert _all_content_readable(v3_archive["plaintexts"])
+
+    def test_old_key_is_revoked(self, v3_archive):
+        rotate_recovery_key(PASSWORD)
+        Encryption.lock()
+        with pytest.raises(InvalidPasswordError):
+            Encryption.unlock_with_recovery_key(v3_archive["recovery_key"])
+
+    def test_password_still_works(self, v3_archive):
+        rotate_recovery_key(PASSWORD)
+        Encryption.lock()
+        assert Encryption.unlock(PASSWORD)
+
+    def test_requires_the_current_password(self, v3_archive):
+        """An unlocked session alone must not mint a durable second key."""
+        with pytest.raises(InvalidPasswordError):
+            rotate_recovery_key("NotThePassword!")
+
+    def test_refused_on_v2_archive(self, v2_archive):
+        with pytest.raises(PasswordChangeError, match="predates recovery keys"):
+            rotate_recovery_key(PASSWORD)
+
+    def test_rotation_does_not_touch_archive_files(self, v3_archive):
+        before = {
+            rel: (Config.get_archive_path() / rel).read_bytes()
+            for rel in v3_archive["plaintexts"]
+        }
+        rotate_recovery_key(PASSWORD)
+        for rel, raw in before.items():
+            assert (Config.get_archive_path() / rel).read_bytes() == raw

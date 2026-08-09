@@ -105,6 +105,12 @@ def change_master_password(
       PasswordChangeError: backup too old, wrong password, or db rekey fail.
       PasswordChangeCorruptionError: a file decrypted with neither key.
     """
+    # v3 archives take a completely different route: the master key is
+    # random and wrapped, so changing the password means replacing one
+    # wrapper. No file walk, no database rekey, no irreversible window.
+    if Encryption.is_initialized() and Encryption.salt_file_version() == 3:
+        return _change_password_v3(old_password, new_password, progress_cb)
+
     # 1. Non-overridable backup check: recent AND verified usable on disk.
     #
     #    The manifest is a claim, not evidence. Before opening the rekey
@@ -241,6 +247,101 @@ def change_master_password(
         )
 
     return {"files": total, "credentials": cred_count}
+
+
+# ============================================================
+# v3 PASSWORD CHANGE (rewrap)
+# ============================================================
+
+
+def _change_password_v3(
+    old_password: str,
+    new_password: str,
+    progress_cb: Optional[Callable[[dict], None]] = None,
+) -> dict:
+    """Change the master password on a v3 archive by rewrapping the master.
+
+    The master key is random and independent of any password, so a
+    password change replaces 61 bytes in the key file and touches nothing
+    else. No file walk, no SQLCipher rekey, no in-memory key changes --
+    file_key and db_key derive from the master, which does not move.
+
+    NO BACKUP GATE. The v2 gate exists because the rekey window is not
+    resumable and the backup is the only recovery path. Here the entire
+    operation is one atomic file replacement: after os.replace either the
+    old key file is intact (old password works) or the new one is (new
+    password works). There is no state in between, so requiring a fresh
+    backup would be ceremony rather than protection. Note this is a
+    deliberate removal, not an oversight.
+
+    The recovery key is untouched and keeps working.
+    """
+    if not Encryption.is_unlocked():
+        raise PasswordChangeError("Encryption is locked. Log in and retry.")
+
+    if old_password == new_password:
+        raise PasswordChangeError(
+            "New password is the same as the current one. Choose a different password."
+        )
+
+    if progress_cb:
+        progress_cb({"status": "counting", "message": "Verifying current password..."})
+
+    blob = Encryption.read_salt_blob()
+
+    # Unwrap with the old password. This both verifies the password and
+    # yields the master we are about to rewrap. A wrong password fails the
+    # GCM tag and raises InvalidPasswordError from here.
+    master = Encryption.unwrap_master_with_password(blob, old_password)
+
+    if progress_cb:
+        progress_cb({"status": "finalizing", "message": "Updating key file..."})
+
+    new_blob = Encryption.rewrap_password(blob, master, new_password)
+    Encryption.write_v3_salt_file(new_blob)
+
+    if progress_cb:
+        progress_cb(
+            {
+                "status": "complete",
+                "message": "Password changed successfully.",
+            }
+        )
+
+    log.info("v3 password change complete (rewrap; no re-encryption needed)")
+    return {"files": 0, "credentials": 0, "rewrapped": True}
+
+
+def rotate_recovery_key(password: str) -> str:
+    """Issue a new recovery key, revoking the old one. Returns the new key.
+
+    A printed recovery key is a second full-access credential. If it is
+    lost, or ended up somewhere it should not have, it must be revocable
+    without forcing a password change and without re-encrypting anything.
+
+    Requires the current password: otherwise anyone with a live unlocked
+    session could silently mint themselves a durable second key.
+    """
+    if not Encryption.is_initialized():
+        raise PasswordChangeError("Encryption is not initialized.")
+
+    if Encryption.salt_file_version() != 3:
+        raise PasswordChangeError(
+            "This archive predates recovery keys. Upgrade it before rotating one."
+        )
+
+    blob = Encryption.read_salt_blob()
+
+    # Verifying via the password wrapper also yields the master, and fails
+    # with InvalidPasswordError if the password is wrong.
+    master = Encryption.unwrap_master_with_password(blob, password)
+
+    new_recovery_key = Encryption.generate_recovery_key()
+    new_blob = Encryption.rewrap_recovery_key(blob, master, new_recovery_key)
+    Encryption.write_v3_salt_file(new_blob)
+
+    log.info("Recovery key rotated; previous key revoked")
+    return new_recovery_key
 
 
 # ============================================================
