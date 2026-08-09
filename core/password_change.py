@@ -34,12 +34,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Iterator, Optional
 
+from utils.backup import get_verified_latest_restore_point
+from utils.log import get_logger
+
 from .config import Config
 from .database import Database
 from .encryption import (
     Encryption,
     InvalidPasswordError,
 )
+
+log = get_logger(__name__)
 
 # ============================================================
 # EXCEPTIONS
@@ -100,12 +105,26 @@ def change_master_password(
       PasswordChangeError: backup too old, wrong password, or db rekey fail.
       PasswordChangeCorruptionError: a file decrypted with neither key.
     """
-    # 1. Non-overridable backup-age check.
-    age = _latest_backup_age_hours()
-    if age is None or age > MAX_BACKUP_AGE_HOURS:
-        age_repr = f"{age:.1f}h" if age is not None else "no backups found"
+    # 1. Non-overridable backup check: recent AND verified usable on disk.
+    #
+    #    The manifest is a claim, not evidence. Before opening the rekey
+    #    window we open every file in the newest restore chain — that is
+    #    what catches a deleted backup, a truncated write, or an
+    #    iCloud-evicted placeholder that still looks present to exists().
+    point, problems = get_verified_latest_restore_point()
+    if problems:
+        detail = "; ".join(problems)
         raise PasswordChangeError(
-            f"Password change refused: most recent backup is {age_repr}. "
+            f"Password change refused: the most recent backup did not "
+            f"verify. {detail}. The DB rekey window is not resumable; the "
+            f"backup is the recovery path. Take a fresh backup and retry."
+        )
+
+    age = _restore_point_age_hours(point)
+    if age is None or age > MAX_BACKUP_AGE_HOURS:
+        age_repr = f"{age:.1f}h" if age is not None else "unknown age"
+        raise PasswordChangeError(
+            f"Password change refused: most recent verified backup is {age_repr}. "
             f"The DB rekey window is not resumable; the backup is the "
             f"recovery path. Take a fresh backup and retry."
         )
@@ -180,6 +199,15 @@ def change_master_password(
     # 7. Database rekey + salt file rewrite. These two operations together
     #    form an irreversible commit point; if anything fails between them,
     #    recovery is restore-from-backup.
+    #
+    #    Write the interruption marker BEFORE entering the window. If we
+    #    crash inside it, the next startup finds the marker and can say
+    #    what actually happened. Without it, a half-rekeyed archive
+    #    presents as "invalid master password" — the single most
+    #    misleading message we could show someone whose password is
+    #    correct and whose data is still recoverable.
+    _write_interruption_marker(point)
+
     if progress_cb:
         progress_cb({"status": "database", "message": "Rekeying database..."})
 
@@ -200,6 +228,9 @@ def change_master_password(
         Encryption.write_v2_salt_file()
     finally:
         Database.release_after_migration()
+
+    # Window closed successfully — the marker's job is done.
+    clear_interruption_marker()
 
     if progress_cb:
         progress_cb(
@@ -303,20 +334,97 @@ def _iter_archive_files() -> Iterator[Path]:
             yield path
 
 
-def _latest_backup_age_hours() -> Optional[float]:
-    """Age of the most recent backup in hours, or None if no manifest."""
+# ============================================================
+# INTERRUPTION MARKER
+# ============================================================
+#
+# The DB rekey + salt file rewrite is a non-resumable window. If the
+# process dies inside it, the archive may be half-rekeyed: the DB on the
+# new key, the salt file still on the old one (or vice versa). Unlock
+# then fails, and the honest-looking symptom is "invalid master
+# password" — which sends the user hunting for a password problem that
+# does not exist, and risks them concluding their data is lost.
+#
+# The marker turns that into a specific, actionable message naming the
+# backup that was verified immediately beforehand.
+
+
+def get_interruption_marker_path() -> Path:
+    return Config.get_data_path() / ".password_change_in_progress"
+
+
+def _write_interruption_marker(point) -> None:
+    """Record that the irreversible window is open. Best-effort by design.
+
+    Marker-write failure must not abort a password change the user has
+    already authorised and which has already re-encrypted the archive —
+    that would leave a worse mess than the one the marker guards against.
+    """
     try:
-        manifest_path = Config.get_data_path().parent / "backups" / "manifest.json"
+        payload = {
+            "started_at": datetime.now().isoformat(),
+            "phase": "db_rekey_and_salt_write",
+            "verified_backup": (point or {}).get("filename"),
+            "verified_backup_created_at": (point or {}).get("created_at"),
+        }
+        _atomic_write_file(
+            get_interruption_marker_path(),
+            json.dumps(payload, indent=2).encode("utf-8"),
+        )
+    except Exception as e:
+        log.warning(f"Could not write password-change interruption marker: {e}")
+
+
+def clear_interruption_marker() -> None:
+    """Remove the marker after the window closes cleanly."""
+    try:
+        get_interruption_marker_path().unlink(missing_ok=True)
+    except Exception as e:
+        log.warning(f"Could not clear password-change interruption marker: {e}")
+
+
+def check_password_change_interrupted() -> Optional[dict]:
+    """Return marker contents if a previous password change was interrupted.
+
+    Called at startup. Returns None in the normal case.
+    """
+    path = get_interruption_marker_path()
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text())
     except Exception:
-        return None
-    if not manifest_path.exists():
+        # A corrupt marker still means a change was interrupted; that fact
+        # matters more than the details we failed to parse.
+        return {"started_at": None, "phase": "unknown", "verified_backup": None}
+
+
+def describe_interrupted_password_change(marker: dict) -> str:
+    """Human-readable guidance for an interrupted password change."""
+    started = marker.get("started_at") or "an earlier session"
+    backup = marker.get("verified_backup")
+    lines = [
+        "A previous master password change was interrupted before it finished.",
+        f"It began at {started} and stopped inside the database rekey step.",
+        "",
+        "What this means: the archive may be partly re-encrypted under the new",
+        "password. If the app reports an invalid password, that is a symptom of",
+        "the interruption, not necessarily a wrong password — try BOTH your old",
+        "and your new password before assuming anything is lost.",
+        "",
+        "If neither password opens the archive, restore from backup.",
+    ]
+    if backup:
+        lines.append(f"A backup was verified immediately beforehand: {backup}")
+    return "\n".join(lines)
+
+
+def _restore_point_age_hours(point) -> Optional[float]:
+    """Age in hours of an already-verified restore point, or None if unparseable."""
+    if not point:
         return None
     try:
-        manifest = json.loads(manifest_path.read_text())
-        if not manifest.get("backups"):
-            return None
-        latest = max(manifest["backups"], key=lambda b: b["created_at"])
-        created_str = latest["created_at"].rstrip("Z")
+        created_str = point["created_at"].rstrip("Z")
         created = datetime.fromisoformat(created_str)
         return (datetime.now() - created).total_seconds() / 3600.0
     except Exception:

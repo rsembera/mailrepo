@@ -186,6 +186,22 @@ def main():
     except Exception as e:
         log.error(f"Restore failed: {e}")
 
+    # Surface an interrupted password change before the user hits a login
+    # screen that would otherwise just say "invalid password".
+    try:
+        from core.password_change import (
+            check_password_change_interrupted,
+            describe_interrupted_password_change,
+        )
+
+        marker = check_password_change_interrupted()
+        if marker:
+            message = describe_interrupted_password_change(marker)
+            log.warning(f"Interrupted password change detected:\n{message}")
+            print(f"\n{'=' * 70}\n{message}\n{'=' * 70}\n", file=sys.stderr)
+    except Exception as e:
+        log.error(f"Password-change interruption check failed: {e}")
+
     app = create_app()
 
     # Register cleanup handlers

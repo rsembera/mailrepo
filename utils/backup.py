@@ -677,7 +677,17 @@ def get_restore_points():
     # Group by chain
     chains = {}
     for backup in backups:
-        chain_id = backup["chain_id"]
+        # A manifest entry missing chain_id is malformed (hand-edited, or
+        # written by a pre-chain version). Skip it rather than raising —
+        # a KeyError here would take down the whole restore screen, and
+        # callers that gate on backup health need a clean "nothing usable"
+        # answer instead of a crash.
+        chain_id = backup.get("chain_id")
+        if not chain_id:
+            log.warning(
+                f"Skipping manifest entry without chain_id: {backup.get('filename', '?')}"
+            )
+            continue
         if chain_id not in chains:
             chains[chain_id] = {"full": None, "incrementals": [], "pre_restore": None}
 
@@ -1047,6 +1057,82 @@ def cleanup_old_backups(retention, custom_location=None):
     if safety_deleted:
         save_manifest(manifest)
         log.info(f"Retention cleanup: Deleted {safety_deleted} old safety backup(s)")
+
+
+def verify_restore_point_files(restore_point) -> list:
+    """
+    Verify every file a restore point depends on is actually usable.
+
+    A manifest entry is a claim, not evidence. This opens each file in the
+    chain, which is what proves the claim:
+
+      - exists() catches a deleted or moved backup
+      - a zero/short size catches a truncated write
+      - opening the zip forces cloud-storage materialization, so an
+        iCloud-evicted placeholder fails here instead of at restore time
+      - testzip() catches silent corruption
+
+    Returns a list of human-readable problems. Empty list means the whole
+    chain is verified good.
+    """
+    problems = []
+
+    for path_str in restore_point.get("files_needed", []):
+        path = Path(path_str)
+        name = path.name
+
+        if not path.exists():
+            problems.append(f"{name}: missing from disk")
+            continue
+
+        try:
+            size = path.stat().st_size
+        except OSError as e:
+            problems.append(f"{name}: cannot stat ({e})")
+            continue
+
+        if size == 0:
+            problems.append(f"{name}: zero bytes")
+            continue
+
+        try:
+            with zipfile.ZipFile(path, "r") as zf:
+                bad_file = zf.testzip()
+        except zipfile.BadZipFile:
+            problems.append(f"{name}: not a readable zip (corrupt or truncated)")
+            continue
+        except OSError as e:
+            # Cloud-evicted files and permission failures land here.
+            problems.append(f"{name}: unreadable ({e}) — cloud-evicted or blocked?")
+            continue
+
+        if bad_file:
+            problems.append(f"{name}: corrupt entry ({bad_file})")
+
+    return problems
+
+
+def get_verified_latest_restore_point():
+    """
+    Newest restore point whose entire chain verifies on disk.
+
+    Returns (restore_point, problems). If a usable point is found,
+    problems is empty. If the newest point fails verification, we do NOT
+    silently fall back to an older one — the caller is told what broke,
+    because a user who believes they have a backup from an hour ago must
+    not be handed one from last week without being told.
+
+    Returns (None, problems) when nothing usable exists.
+    """
+    points = get_restore_points()
+    if not points:
+        return None, ["No restore points found in the manifest."]
+
+    newest = points[0]
+    problems = verify_restore_point_files(newest)
+    if problems:
+        return None, problems
+    return newest, []
 
 
 def get_backup_status():

@@ -13,6 +13,7 @@ where possible. Whole module runs in ~30-60s.
 
 import json
 import os
+import zipfile
 from datetime import datetime, timedelta
 
 import pytest
@@ -29,7 +30,46 @@ from core.password_change import (
     _atomic_write_file,
     _rekey_file,
     change_master_password,
+    check_password_change_interrupted,
+    describe_interrupted_password_change,
+    get_interruption_marker_path,
 )
+
+# ============================================================
+# HELPERS
+# ============================================================
+
+
+def write_backup_manifest(backups_dir, created, filename="full_test.zip"):
+    """Write a real backup zip plus a matching manifest entry.
+
+    The password-change gate opens every file in the newest restore chain,
+    so tests must put an actual readable zip on disk. Writing only a
+    manifest entry describes a backup that does not exist — which is
+    precisely the condition the gate exists to catch.
+    """
+    zip_path = backups_dir / filename
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("data/placeholder.txt", "test backup content")
+
+    (backups_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "current_chain_id": "testchain",
+                "backups": [
+                    {
+                        "filename": filename,
+                        "created_at": created.isoformat(),
+                        "type": "full",
+                        "chain_id": "testchain",
+                        "backup_dir": str(backups_dir),
+                    }
+                ],
+            }
+        )
+    )
+    return zip_path
+
 
 # ============================================================
 # FIXTURES
@@ -65,25 +105,12 @@ def v2_archive(initialized_app, tmp_path):
         path.write_bytes(ciphertext)
         file_paths.append(path)
 
-    # Write a fresh backup manifest entry so the backup-<=24h check passes.
-    # change_master_password reads data/../backups/manifest.json — i.e., the
-    # backups directory is a sibling of the data directory.
+    # Write a fresh backup so the backup gate passes. The gate verifies the
+    # file on disk (opens the zip), not just the manifest entry, so a real
+    # zip has to exist — a manifest entry alone is not a backup.
     backups_dir = tmp_path / "backups"
     backups_dir.mkdir(parents=True, exist_ok=True)
-    now_iso = datetime.now().isoformat()
-    (backups_dir / "manifest.json").write_text(
-        json.dumps(
-            {
-                "backups": [
-                    {
-                        "filename": "full_test.zip",
-                        "created_at": now_iso,
-                        "type": "full",
-                    }
-                ],
-            }
-        )
-    )
+    write_backup_manifest(backups_dir, datetime.now())
 
     with app.app_context():
         yield {
@@ -165,21 +192,13 @@ class TestChangeMasterPasswordBackupCheck:
             change_master_password(v2_archive["password"], "NewPassword456!")
 
     def test_refuses_with_stale_backup(self, v2_archive):
-        # Rewrite the manifest with a backup from 48h ago
-        manifest_path = v2_archive["tmp_path"] / "backups" / "manifest.json"
-        old_time = (datetime.now() - timedelta(hours=48)).isoformat()
-        manifest_path.write_text(
-            json.dumps(
-                {
-                    "backups": [
-                        {
-                            "filename": "full_old.zip",
-                            "created_at": old_time,
-                            "type": "full",
-                        }
-                    ],
-                }
-            )
+        # Replace with a real but 48h-old backup: verifiable, just too old.
+        backups_dir = v2_archive["tmp_path"] / "backups"
+        (backups_dir / "full_test.zip").unlink()
+        write_backup_manifest(
+            backups_dir,
+            datetime.now() - timedelta(hours=48),
+            filename="full_old.zip",
         )
         with pytest.raises(PasswordChangeError, match="backup"):
             change_master_password(v2_archive["password"], "NewPassword456!")
@@ -191,6 +210,77 @@ class TestChangeMasterPasswordBackupCheck:
             "NewPassword456!",
         )
         assert "files" in result
+
+    def test_refuses_when_backup_file_is_missing(self, v2_archive):
+        """A manifest entry is a claim; the file is the evidence.
+
+        Before the gate verified files on disk, this passed — the rekey
+        window opened against a backup that did not exist.
+        """
+        (v2_archive["tmp_path"] / "backups" / "full_test.zip").unlink()
+        with pytest.raises(PasswordChangeError, match="did not verify"):
+            change_master_password(v2_archive["password"], "NewPassword456!")
+
+    def test_refuses_when_backup_file_is_truncated(self, v2_archive):
+        """A half-written zip is not a recovery path."""
+        zip_path = v2_archive["tmp_path"] / "backups" / "full_test.zip"
+        zip_path.write_bytes(zip_path.read_bytes()[:20])
+        with pytest.raises(PasswordChangeError, match="did not verify"):
+            change_master_password(v2_archive["password"], "NewPassword456!")
+
+    def test_refuses_when_backup_file_is_zero_bytes(self, v2_archive):
+        """Matches the iCloud-eviction shape: present, but no content."""
+        (v2_archive["tmp_path"] / "backups" / "full_test.zip").write_bytes(b"")
+        with pytest.raises(PasswordChangeError, match="did not verify"):
+            change_master_password(v2_archive["password"], "NewPassword456!")
+
+
+class TestInterruptionMarker:
+    """The marker converts a half-rekeyed archive from 'invalid password'
+    into a specific, actionable message."""
+
+    def test_no_marker_when_idle(self, v2_archive):
+        assert check_password_change_interrupted() is None
+
+    def test_marker_cleared_after_successful_change(self, v2_archive):
+        change_master_password(v2_archive["password"], "NewPassword456!")
+        assert not get_interruption_marker_path().exists()
+        assert check_password_change_interrupted() is None
+
+    def test_marker_survives_a_crash_in_the_rekey_window(self, v2_archive, monkeypatch):
+        """Kill the process inside the irreversible window; marker must remain."""
+        import core.password_change as pc
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("simulated crash mid-rekey")
+
+        monkeypatch.setattr(pc.Database, "acquire_for_migration", boom)
+
+        with pytest.raises(RuntimeError, match="simulated crash"):
+            change_master_password(v2_archive["password"], "NewPassword456!")
+
+        marker = check_password_change_interrupted()
+        assert marker is not None
+        assert marker["phase"] == "db_rekey_and_salt_write"
+        # The verified backup is named so the user knows their recovery point.
+        assert marker["verified_backup"] == "full_test.zip"
+
+    def test_description_mentions_trying_both_passwords(self):
+        text = describe_interrupted_password_change(
+            {
+                "started_at": "2026-08-09T12:00:00",
+                "phase": "db_rekey_and_salt_write",
+                "verified_backup": "full_test.zip",
+            }
+        )
+        assert "old" in text and "new" in text
+        assert "full_test.zip" in text
+
+    def test_corrupt_marker_still_reports_interruption(self, v2_archive):
+        get_interruption_marker_path().write_text("{not json")
+        marker = check_password_change_interrupted()
+        assert marker is not None
+        assert marker["phase"] == "unknown"
 
 
 class TestChangeMasterPasswordWrongOldPassword:
