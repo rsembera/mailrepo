@@ -353,17 +353,22 @@ def get_interruption_marker_path() -> Path:
     return Config.get_data_path() / ".password_change_in_progress"
 
 
-def _write_interruption_marker(point) -> None:
+def _write_interruption_marker(point, phase: str = "db_rekey_and_salt_write") -> None:
     """Record that the irreversible window is open. Best-effort by design.
 
     Marker-write failure must not abort a password change the user has
     already authorised and which has already re-encrypted the archive —
     that would leave a worse mess than the one the marker guards against.
+
+    The phase argument lets the v3 migration reuse this mechanism rather
+    than growing a second, subtly-different one: both operations open the
+    same non-resumable window and both need the next launch to explain
+    itself.
     """
     try:
         payload = {
             "started_at": datetime.now().isoformat(),
-            "phase": "db_rekey_and_salt_write",
+            "phase": phase,
             "verified_backup": (point or {}).get("filename"),
             "verified_backup_created_at": (point or {}).get("created_at"),
         }
@@ -403,17 +408,33 @@ def describe_interrupted_password_change(marker: dict) -> str:
     """Human-readable guidance for an interrupted password change."""
     started = marker.get("started_at") or "an earlier session"
     backup = marker.get("verified_backup")
-    lines = [
-        "A previous master password change was interrupted before it finished.",
-        f"It began at {started} and stopped inside the database rekey step.",
-        "",
-        "What this means: the archive may be partly re-encrypted under the new",
-        "password. If the app reports an invalid password, that is a symptom of",
-        "the interruption, not necessarily a wrong password — try BOTH your old",
-        "and your new password before assuming anything is lost.",
-        "",
-        "If neither password opens the archive, restore from backup.",
-    ]
+
+    if marker.get("phase") == "v3_migration":
+        lines = [
+            "A recovery-key upgrade was interrupted before it finished.",
+            f"It began at {started} and stopped partway through re-encrypting",
+            "the archive.",
+            "",
+            "What this means: some files may be encrypted under the new key and",
+            "some under the old. MailRepo handles that automatically when you",
+            "log in and re-run the upgrade — it detects already-converted files",
+            "and skips them. Use your existing master password.",
+            "",
+            "If the archive will not open at all, restore from backup.",
+        ]
+    else:
+        lines = [
+            "A previous master password change was interrupted before it finished.",
+            f"It began at {started} and stopped inside the database rekey step.",
+            "",
+            "What this means: the archive may be partly re-encrypted under the new",
+            "password. If the app reports an invalid password, that is a symptom of",
+            "the interruption, not necessarily a wrong password — try BOTH your old",
+            "and your new password before assuming anything is lost.",
+            "",
+            "If neither password opens the archive, restore from backup.",
+        ]
+
     if backup:
         lines.append(f"A backup was verified immediately beforehand: {backup}")
     return "\n".join(lines)
