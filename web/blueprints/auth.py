@@ -530,6 +530,15 @@ def _run_auto_backup_check():
             if result:
                 log.info(f"Backup created: {result['filename']}")
 
+                # Retention cleanup. This lives here as well as in the
+                # manual Backup Now endpoint because almost every backup
+                # is automatic — pruning only on the days the user
+                # happens to click the button means a retention setting
+                # that quietly does nothing.
+                retention = get_setting("backup_retention", "forever")
+                if retention != "forever":
+                    backup.cleanup_old_backups(retention, location)
+
                 # Run post-backup command if configured. run_shell_command
                 # owns the process group and kills it wholesale on timeout,
                 # so the outcome we log is the outcome that happened (no

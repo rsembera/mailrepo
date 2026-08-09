@@ -41,6 +41,20 @@ The recovery key is a printable 160-bit secret that opens the archive **without 
 
 **Not offered deliberately.** There is no "email me my recovery key", no cloud escrow, and no account-recovery path through Anthropic or anyone else. Every one of those would move the archive's security off the user's own premises, which is the property the product exists to provide.
 
+**Rotation does not reach existing backups.** This is the most important limitation on this page, and it is a property of encrypted backups generally rather than a MailRepo shortcoming.
+
+A backup is an immutable snapshot that includes the key file as it stood when the backup was taken. Changing the master password or rotating the recovery key rewrites the *live* key file only. Every existing backup still contains the old one, so the old credential still opens those copies — and copies are precisely what tends to live somewhere less controlled: a cloud folder, a sync target, an external drive, a version history the user cannot enumerate.
+
+MailRepo deliberately does **not** re-encrypt old backups on credential change:
+
+- They are the artifacts you need when something has already gone wrong. Rewriting the whole corpus puts that at risk for a benefit that is partial at best; an interruption partway leaves a mixed and possibly damaged set.
+- It cannot reach every copy. Partial revocation is worse than none, because it produces confidence that is not warranted.
+- It does not work at all for pre-v2 backups, where there is no wrapper to swap and the content itself would need re-encrypting under a scheme whose code has been removed.
+
+**So the remedy for a genuinely compromised credential is to rotate *and* to destroy the backups that predate the rotation.** That is a policy action, not something software can do on the user's behalf across storage it does not control.
+
+To make this visible rather than implicit, every restore point is annotated with which credentials it needs (Session 69). The check compares SHA-256 prefixes of the two wrapper halves against the live key file — no passwords required, because each rewrap touches one half and leaves the other byte-identical. Restore points are labelled as current, predating recovery keys, needing an older password, needing an older recovery key, or — for key files predating the v2 magic — unopenable by any current build.
+
 ---
 
 ## Summary

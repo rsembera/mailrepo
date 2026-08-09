@@ -4559,3 +4559,97 @@ to open it.
   trying is now essentially nil.
 - `authenticated_client` injects CSRF headers, so the suite cannot catch
   a real CSRF regression (backlog).
+
+---
+
+## Session 69 — August 9, 2026 (MacBook)
+
+Short session, one feature and two findings, both from Rick asking
+questions rather than from anything Claude went looking for.
+
+### The question: should credential changes re-encrypt old backups?
+
+No, and this is standard rather than a MailRepo judgement call. Encrypted
+backups are immutable snapshots; rotating a credential protects the live
+system, not copies already written. FileVault, BitLocker, Time Machine
+and password managers all behave this way.
+
+Three reasons recorded in `Security_Audit.md`: backups are the artifacts
+you need when something has already gone wrong, so rewriting the whole
+corpus risks them for a partial benefit; it cannot reach copies on
+Sentinel, in iCloud version history, or on external media, and partial
+revocation produces unwarranted confidence; and it does not work at all
+for pre-v2 backups, where there is no wrapper to swap.
+
+The remedy for a genuinely compromised credential is to rotate AND
+destroy backups predating the rotation. That is policy, not software.
+
+### The real gap: restoring silently changes which credentials work
+
+Restoring replaces the key file, so a backup opens with whatever was in
+force when it was taken. Restore something from before a password change
+and your current password will not open it — with nothing on screen to
+say so. Restore a pre-migration backup and your recovery key stops
+working, because the wrapper it lives in did not exist yet.
+
+**`232a0ed`** — every restore point is now annotated. No passwords and no
+crypto operations needed: each rewrap touches exactly one half of the
+MRC3 key file and leaves the other byte-identical, so comparing SHA-256
+prefixes of the two halves against the live key file says precisely which
+credential moved. MRC2 vs MRC3 covers the recovery-key case.
+
+Subtlety worth remembering: incrementals only carry changed files, so
+most do not contain the key file at all. The one that lands on disk comes
+from the LAST backup in the chain that has it. Reading the full's copy
+would misreport every chain spanning a change.
+
+UI: a badge per restore point plus the note repeated in the restore
+confirmation modal — the last screen before an irreversible action is
+where this actually helps.
+
+Estimated one to one and a half sessions; took well under one, because
+the fingerprint approach removed the need to try credentials at all.
+
+### Finding: 102 of Rick's 181 restore points are unopenable
+
+Of 181: 1 current, 78 predating recovery keys, and 102 whose key files
+carry no magic at all. Those 102 span 19 Feb – 29 May and are v1
+Fernet/PBKDF2, whose code was deleted in `9337954`. No current build can
+open them. They had been sitting in the restore list looking like valid
+options for two and a half months; reaching for one in an emergency would
+have restored files nothing could decrypt.
+
+They now say "Cannot be opened" in red rather than appearing usable.
+Left in place for now — not deleting backups while a crypto change is
+still settling.
+
+### Finding: retention cleanup never ran on automatic backups
+
+Rick asked whether auto-delete was working. It was not, though not for
+the reason it looked like.
+
+The retention default is `"forever"`, so nothing being deleted is
+correct behaviour if the setting was never changed. But
+`cleanup_old_backups()` was called from exactly one place: the manual
+Backup Now endpoint. `_run_auto_backup_check()` — which runs on logout
+and produces nearly every backup — took the backup and ran the
+post-backup command but never pruned. A user who set retention to six
+months would have had it silently apply only on days they happened to
+click the button. Fixed.
+
+### Commits
+- `232a0ed` — Show which credentials each restore point needs
+- (this entry) — retention on the automatic path, Security_Audit
+  revocation section, docs
+
+### Still open
+
+- The 102 obsolete backups can be deleted once dogfooding settles
+  (~1.2 GB across iCloud and Sentinel).
+- Recovery login and post-recovery password reset still unclicked.
+- Adversarial review before tagging; `git tag v1.0.0` after a week of
+  ordinary use.
+- EdgeCase recovery key port — fresh session in that project. The
+  envelope layer should transfer nearly unchanged; the migration should
+  use EdgeCase's existing rebuild-and-swap machinery rather than
+  MailRepo's in-place approach.

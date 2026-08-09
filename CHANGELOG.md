@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Restore points now say which credentials they need (Session 69).**
+  Restoring replaces your key file, so a backup taken before a password
+  change opens with the password you used then, not your current one —
+  and one taken before recovery keys existed leaves the archive without
+  one. Both were silent. Each restore point is now labelled, and the
+  warning is repeated on the confirmation dialog before you commit.
+  Backups from before the May 2026 encryption upgrade are marked as
+  unopenable, because this version cannot read them at all.
 - **Recovery keys (envelope encryption) — Session 68.** MailRepo can now
   protect an archive with a printable recovery key alongside the master
   password, so a forgotten password no longer means a lost archive. The
@@ -80,6 +88,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   build shipped without the native extension correctly bundled.
 
 ### Fixed
+- **Backup retention was never applied to automatic backups
+  (Session 69).** Old backups were only cleaned up when you pressed
+  "Backup Now" by hand. Scheduled backups — which is nearly all of them
+  — skipped the cleanup entirely, so a retention setting other than
+  "Keep forever" quietly did almost nothing.
 - **The recovery-key upgrade refused to run after promising to take a
   backup (Session 68).** The upgrade page says a fresh backup will be
   taken first, but asked for an automatic backup — which does nothing

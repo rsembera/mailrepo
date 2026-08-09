@@ -86,7 +86,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `auth.py` | 726 | Setup, login, logout, rate limiting, session management; recovery-key login, post-recovery password reset, v3 upgrade flow, rotation API |
+| `auth.py` | 743 | Setup, login, logout, rate limiting, session management; recovery-key login, post-recovery password reset, v3 upgrade flow, rotation API |
 | `backups.py` | 273 | Backup/restore endpoints, folder picker |
 | `main.py` | 81 | Page routes: index, create_archive, settings |
 
@@ -113,7 +113,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `backup.py` | 1,297 | Full/incremental backup, restore, retention, external state file (Libram-style), on-disk restore-chain verification |
+| `backup.py` | 1,469 | Full/incremental backup, restore, retention, external state file (Libram-style), on-disk restore-chain verification |
 | `log.py` | 51 | Logging setup, polling filter |
 | `__init__.py` | 34 | Shell command runner, path utilities |
 
@@ -140,7 +140,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `mail.js` | 2,301 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
 | `settings.js` | 1,411 | Settings: appearance, accounts, security, recovery-key status + rotation, backup, reset |
 | `review.js` | 1,035 | Review staged items, destination editing, commit |
-| `backups.js` | 953 | Backup/restore UI, restore points, settings |
+| `backups.js` | 1,004 | Backup/restore UI, restore points, settings |
 | `folder-selection.js` | 897 | Bulk folder staging from IMAP/imports |
 | `vault.js` | 859 | Retention vault: move to vault, restore, permanent delete |
 | `trash.js` | 775 | Trash view: deleted folders, emails, restore, purge |
@@ -284,7 +284,7 @@ python main.py
 
 ---
 
-## Test Suite (493 tests)
+## Test Suite (502 tests)
 
 | File | Coverage |
 |------|----------|
