@@ -339,6 +339,40 @@ class TestUpgradeFlow:
         response = v2_client.get("/auth/upgrade")
         assert response.status_code == 302
 
+    def test_continue_after_migration_goes_to_the_archive(self, v2_client):
+        """Not to "Create New Archive".
+
+        After an upgrade the user already has an archive. Landing them on
+        the create-archive screen reads like the upgrade wiped everything
+        — which is exactly how it looked when Rick hit it.
+        """
+        v2_client.post("/auth/upgrade", data={"password": PASSWORD})
+
+        with v2_client.session_transaction() as sess:
+            token = sess["csrf_token"]
+
+        response = v2_client.post(
+            "/auth/setup/recovery-key-saved",
+            data={"csrf_token": token, "context": "migration"},
+        )
+        assert response.status_code == 302
+        assert "create" not in response.headers["Location"]
+
+    def test_continue_after_first_run_setup_goes_to_create_archive(self, app):
+        """The other half: a brand-new install has nothing yet."""
+        client = app.test_client()
+        client.post("/auth/setup", data={"password": PASSWORD, "confirm": PASSWORD})
+
+        with client.session_transaction() as sess:
+            token = sess["csrf_token"]
+
+        response = client.post(
+            "/auth/setup/recovery-key-saved",
+            data={"csrf_token": token, "context": "setup"},
+        )
+        assert response.status_code == 302
+        assert "create" in response.headers["Location"]
+
     def test_upgrade_requires_a_session(self, app):
         with app.app_context():
             Encryption.initialize(PASSWORD)

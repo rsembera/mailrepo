@@ -226,6 +226,11 @@ def recovery_key_confirmed():
     clicking past the one screen where the key exists, not a record of
     anything — MailRepo cannot verify the user actually saved it, and
     pretending otherwise in the data model would be theatre.
+
+    Where the user lands afterwards depends on how they got here. After
+    first-run setup, creating an archive is genuinely the next step.
+    After a migration they already have one, and sending them to
+    "Create New Archive" reads like the upgrade wiped everything.
     """
     if not session.get("authenticated"):
         return redirect(url_for("auth.login"))
@@ -234,6 +239,10 @@ def recovery_key_confirmed():
     expected = session.get("csrf_token", "")
     if not expected or not secrets.compare_digest(token, expected):
         return redirect(url_for("auth.login"))
+
+    if request.form.get("context") == "migration":
+        flash("Recovery key created. Your archive is unchanged.", "success")
+        return redirect(url_for("main.index"))
 
     return redirect(url_for("main.create_archive"))
 

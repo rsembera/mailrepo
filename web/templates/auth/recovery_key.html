@@ -11,7 +11,8 @@
             <h1>Save your recovery key</h1>
             <p class="auth-subtitle">
                 {% if context == "migration" %}
-                Your archive now has a recovery key.
+                Your archive now has a recovery key. Nothing else has
+                changed — all your mail and folders are exactly as they were.
                 {% else %}
                 Your archive is protected. This key is your way back in.
                 {% endif %}
@@ -51,6 +52,7 @@
 
         <form method="POST" action="{{ url_for('auth.recovery_key_confirmed') }}" class="auth-form">
             <input type="hidden" name="csrf_token" value="{{ session.get('csrf_token', '') }}">
+            <input type="hidden" name="context" value="{{ context }}">
             <div class="form-group form-group-checkbox">
                 <label>
                     <input type="checkbox" id="confirm-saved" name="confirm_saved" required>
