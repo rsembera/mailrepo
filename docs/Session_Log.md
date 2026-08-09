@@ -4077,3 +4077,43 @@ because MailRepo backs up frequently in a blessed context.
 - WatchPaths storm: catch-up fired every ~10s in bursts (12:22-12:25) —
   SystemConfiguration churn, cause unknown. Harmless under the lock +
   no-op cost; consider a debounce if it persists.
+
+---
+
+## Session 66 — August 9, 2026 (MacBook)
+
+### Discussion session: password-change comparison verified; roadmap decisions queued
+
+Verified a Daybook-project claim comparing sibling password-change
+implementations — accurate on all points. EdgeCase (migrate_crypto.py):
+own backup, rekey_v2 marker, auto-rollback on exception AND
+startup-marker recovery after hard crash, .keyinfo committed last, via
+rebuild-and-swap of the DB. MailRepo (password_change.py): in-place
+PRAGMA rekey, non-overridable <=24h backup gate ("backup IS the recovery
+path" — recorded rationale in Crypto_Refactor_Plan.md: SQLCipher's rekey
+window is inherently non-resumable), resumable file walk, halt-loud on
+neither-key corruption. The two designs are different answers to the
+same SQLCipher constraint.
+
+Also surfaced: the printable-recovery-key feature (envelope encryption)
+was logged in Session 49 as "highest-leverage pre-launch item," then
+silently vanished from later horizon notes — no drop decision recorded.
+Status: idea, owned by nobody since June.
+
+### Recommendations made to Rick (decisions pending, for a FRESH session)
+
+1. Backup hardening (1 session): zipfile.testzip() the newest backup at
+   the password-change gate AND after each weekly full is created;
+   interruption marker + startup detection for password change (crash
+   currently presents as "wrong password" with no guidance).
+2. Restore drill (procedure, once, pre-tag): restore latest full to a
+   scratch location, open, spot-check. Never yet exercised end-to-end.
+3. Recovery key / envelope encryption: recommended PRE-tag (audience
+   argument: lawyers/therapists forgetting passwords; sequencing
+   argument: post-1.0 format change means shipping a second migration).
+   3-5 careful sessions; requires reading encryption.py first; delays
+   tag/website/packaging. Rick may instead decide to ship without it as
+   a documented stance — EXPLICIT decision either way, recorded here.
+
+Implementation deliberately deferred to a new chat: this session carries
+a month of backup-saga context; crypto work deserves a clean one.
