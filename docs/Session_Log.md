@@ -4117,3 +4117,126 @@ Status: idea, owned by nobody since June.
 
 Implementation deliberately deferred to a new chat: this session carries
 a month of backup-saga context; crypto work deserves a clean one.
+
+---
+
+## Session 67 — August 9, 2026 (MacBook)
+
+### Restore drill: first end-to-end verification of a v2 backup
+
+Rick asked whether a restore had ever been exercised before he started
+archiving real mail. It had — Session 34, February 8, 2026, on Mercury —
+and it was real, not theoretical: that session fixed `complete_restore()`
+never being called on startup, plus three restore-modal bugs. You only
+find "the startup hook was never wired" by running a restore and
+watching nothing happen.
+
+But that verification was stale in a way that mattered. The v2 crypto
+landed June 4 (`e59ca2b`, Argon2id + AES-256-GCM), and `9337954` then
+stripped Fernet/PBKDF2 out entirely. February restored a **v1** archive.
+Nothing had ever restored a v2 one. Also landed since: external backup
+state file, atomic state/manifest writes, per-backup stored locations.
+
+And restore had zero automated coverage — `tests/test_backup.py` tested
+creation, change detection and baseline safety, but never
+`prepare_restore` / `complete_restore` / `get_restore_points`.
+
+Rick had no test database. He doesn't need one: `prepare_restore()`
+extracts to staging and explicitly does not replace production files.
+Ran the scratch-copy variant instead — zero contact with the live tree.
+
+**Method.** Copied the Aug 7 full (224 MB) + Aug 8 incremental to
+`~/Applications/mailrepo-ops/restore-drill-2026-08-09/` (outside the
+repo). Both were materialised in iCloud, not evicted stubs. `testzip()`
+clean on both. Replayed the chain exactly as `prepare_restore()` does
+(full first, incremental over it, deleted-file handling included):
+1,757 files, 224,338,277 bytes.
+
+The backup carries its own key material — `data/.salt` (85 bytes, `MRC2`
+magic, v2), `data/.secret_key`, `data/mailrepo.db`. It restores on a
+machine that has nothing else. DB header is not `SQLite format 3`.
+
+Wrote `verify_restore.py` (kept in the ops dir, reusable). It points the
+real application code at the staging copy via `MAILREPO_DATA_DIR`, with
+a hard guard that aborts if `Config` resolves anywhere else. Password
+comes from `getpass` — never in the chat, never on disk. Rick ran it.
+
+**Result: PASSED.** Argon2id derivation against the restored salt
+produced keys that opened the restored DB. `PRAGMA integrity_check =
+ok`, 27 schema objects, 3 accounts / 69 folders / 1,754 messages. 25
+emails sampled across the full set decrypted and parsed as RFC822.
+
+Cross-checked against live: 1,754 archive files on both sides, zero diff
+in the file list, and the DB message count matches the file count
+exactly — no orphan rows, no orphan files. The chain is complete, not
+merely readable.
+
+Scratch cleaned up (443 MB → 16 KB); the script was kept.
+
+### Backup hardening
+
+**The gate trusted the manifest.** `_latest_backup_age_hours()` read
+`manifest.json`, took the newest `created_at`, and returned an age. It
+never checked that the file existed, was fully written, or — given
+backups live in iCloud Drive — had not been evicted to a placeholder.
+The non-resumable rekey window could open with no recovery path behind
+it.
+
+The existing test fixture *demonstrated* the hole: it wrote a manifest
+entry for `full_test.zip` and never created the file, and
+`test_accepts_with_recent_backup` passed. The suite was green while
+authorising a rekey against a phantom backup.
+
+Replaced with `get_verified_latest_restore_point()` in `utils/backup.py`,
+which reuses `get_restore_points()` (so the unit verified is the *chain*,
+not one file) and opens every file in it: exists, non-zero, valid zip,
+`testzip()`. Opening forces cloud materialisation, so eviction fails
+here rather than at restore time. On failure: refuse and name what
+broke. Deliberately **no** silent fallback to an older backup — a user
+who believes they have an hour-old backup must not be handed one from
+last week without being told.
+
+**Interruption marker.** The DB rekey + salt rewrite is non-resumable; a
+crash inside it leaves a half-rekeyed archive whose symptom is "invalid
+master password". That is the most misleading message available to us:
+the password is correct and the data is recoverable. Marker is written
+before the window, cleared after, detected at startup next to the
+existing pending-restore check. Message tells the user to try both
+passwords before concluding anything, and names the backup verified
+moments earlier. Marker writes are best-effort — a marker failure must
+not abort a change that has already re-encrypted the archive.
+
+**Robustness.** `get_restore_points()` raised `KeyError` on manifest
+entries lacking `chain_id`, which would take down the restore screen and
+turn a health check into a crash. Now skipped with a warning.
+
+### Corrections to Session 66's queued recommendations
+
+Item 1a was wrong. `verify_backup()` already existed at
+`utils/backup.py:611` and already ran `testzip()` after every full
+(484), every incremental (587), and the pre-restore backup (854).
+"Add testzip after each weekly full" was already done. Should not have
+been queued without reading the file.
+
+Checked and found correct — do not re-raise: `_backup_metadata.json` is
+absent from most backup zips. That is by design; line 577 only writes it
+when an incremental actually has deletions.
+
+### Tests
+
+365 pass, up from 357. New: gate refusal on missing / truncated /
+zero-byte backup files; marker lifecycle including a simulated crash
+inside the rekey window; corrupt-marker handling.
+
+### Commits
+- `347c44e` — Password-change gate: verify the backup on disk, not just the manifest
+- docs commit (this entry, CHANGELOG, Navigation_Map)
+
+### Still open
+
+- Restore still has no automated coverage. The drill is automatable
+  against a synthetic fixture (build small archive → back up → restore →
+  assert it decrypts); that is the regression that would have caught a
+  v2-breaks-restore bug in June. Recommended before the recovery key.
+- Recovery key / envelope encryption: unstarted. Decision on pre- vs
+  post-tag still Rick's, still not recorded.

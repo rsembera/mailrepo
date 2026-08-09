@@ -10,6 +10,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Security
+- **The password-change backup gate now verifies the backup on disk
+  instead of trusting the manifest (Session 67).** The non-overridable
+  "backup must be <=24h old" check read `manifest.json` and believed
+  it. A manifest entry says nothing about whether the file still
+  exists, was fully written, or — for backups kept in iCloud Drive —
+  has been evicted to a cloud placeholder that still looks present.
+  The gate could therefore open the non-resumable database rekey
+  window with no real recovery path behind it. The gate now walks the
+  entire newest restore chain and opens every file in it: existence,
+  non-zero size, valid zip, `testzip()`. Opening forces cloud
+  materialisation, so an evicted backup fails the check rather than
+  failing at restore time. If verification fails, the password change
+  is refused and names what broke; MailRepo does not silently
+  substitute an older backup.
+- **Interrupted password changes are now detected and explained
+  (Session 67).** The database rekey and salt-file rewrite form a
+  window that cannot be resumed. If MailRepo was killed inside it, the
+  archive could be left half-re-encrypted, and the symptom was an
+  "invalid master password" error — misleading, because the password
+  was correct and the data was recoverable. A marker is now written
+  before the window and cleared after it. On the next launch MailRepo
+  reports what happened, tells you to try both your old and new
+  password before assuming anything is lost, and names the backup that
+  was verified immediately beforehand.
+
 - **MailRepo now refuses to open or create the archive if SQLCipher is
   missing, instead of silently writing it unencrypted (Session 64).**
   `core/database.py` fell back to plain `sqlite3` when `sqlcipher3`
@@ -23,6 +48,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   build shipped without the native extension correctly bundled.
 
 ### Fixed
+- **Malformed backup manifest entries no longer crash the restore
+  screen (Session 67).** An entry missing `chain_id` raised a
+  `KeyError` out of `get_restore_points()`, turning a backup-health
+  check into a crash. Such entries are now skipped with a warning.
 - **Post-backup commands are stopped honestly on timeout (Session 63).**
   The 300s timeout previously killed only the spawned shell; children
   (e.g. an rsync) survived as orphans and kept running after the UI

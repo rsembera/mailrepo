@@ -1,6 +1,6 @@
 # MailRepo — Navigation Map
 
-**Last Updated:** May 31, 2026
+**Last Updated:** August 9, 2026
 
 ---
 
@@ -66,8 +66,8 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `imap.py` | 1,535 | IMAP client: connect, auth, folders, fetch, MOVE/COPY + UID-scoped expunge, Gmail-aware delete (incl. batched set delete), CONDSTORE |
 | `pdf_export.py` | 1,052 | PDF export: per-email PDFs, attachment merging, WeasyPrint |
 | `database.py` | 465 | SQLCipher connection, schema v5, FTS5, migrations, threading lock, hard refusal to open unencrypted |
+| `password_change.py` | 452 | v2-native password change with full file/DB re-encryption; on-disk backup verification gate + interruption marker |
 | `encryption.py` | 385 | Argon2id KDF + HKDF + AES-256-GCM file/DB encryption (v2) |
-| `password_change.py` | 344 | v2-native password change with full file/DB re-encryption |
 | `importer.py` | 280 | mbox, Apple mbox, EML, PST import handling |
 | `pending_commit.py` | 222 | Commit resume: save/restore interrupted commits |
 | `config.py` | 114 | Paths, constants, Flask config |
@@ -112,7 +112,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `backup.py` | 1,211 | Full/incremental backup, restore, retention, external state file (Libram-style) |
+| `backup.py` | 1,297 | Full/incremental backup, restore, retention, external state file (Libram-style), on-disk restore-chain verification |
 | `log.py` | 51 | Logging setup, polling filter |
 | `__init__.py` | 34 | Shell command runner, path utilities |
 
@@ -282,14 +282,14 @@ python main.py
 
 ---
 
-## Test Suite (353 tests)
+## Test Suite (365 tests)
 
 | File | Coverage |
 |------|----------|
 | `tests/test_auth.py` | Auth boundary: setup, login + rate-limit lockout, logout, CSRF enforcement, password-change job-id handoff end-to-end (22 tests, Session 40) |
 | `tests/test_encryption.py` | v2 `Encryption` lifecycle: init / unlock / lock / wrong-password (no v1 code remains) |
 | `tests/test_encryption_v2.py` | v2 encryption: Argon2id, HKDF, AES-256-GCM, file/DB round-trip |
-| `tests/test_password_change.py` | v2-native password change (15 tests added Session 37) |
+| `tests/test_password_change.py` | v2-native password change; on-disk backup gate (missing/truncated/zero-byte) + interruption marker lifecycle (23 tests, Session 67) |
 | `tests/test_backup.py` | Backup: state-file round-trip + corruption degrade, change detection, WAL-checkpoint no-op, interrupted-backup baseline safety (17 tests, Session 39) |
 | `tests/test_pending_commit.py` | Commit-resume state machine: session creation, status transitions, resume detection, post-action filtering, clear/discard (19 tests, Session 39) |
 | `tests/test_database.py` | Schema, migrations, FTS5 |
