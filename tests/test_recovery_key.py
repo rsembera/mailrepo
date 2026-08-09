@@ -14,6 +14,7 @@ import secrets
 
 import pytest
 
+from core.config import Config
 from core.encryption import (
     RECOVERY_KEY_BYTES,
     SALT_MAGIC_V3,
@@ -255,3 +256,102 @@ class TestRewrapRecoveryKey:
         assert (
             Encryption.unwrap_master_with_password(blob, PASSWORD) == envelope["master"]
         )
+
+
+# ============================================================
+# UNLOCK WIRING (v2 and v3 side by side)
+# ============================================================
+
+
+class TestUnlockWiring:
+    """A v3 archive must be indistinguishable to everything below the master."""
+
+    def test_v2_archive_reports_version_2(self, app):
+        with app.app_context():
+            Encryption.initialize(PASSWORD)
+            assert Encryption.salt_file_version() == 2
+            assert not Encryption.is_v3()
+            assert not Encryption.has_recovery_key()
+
+    def test_v3_archive_reports_version_3(self, app):
+        with app.app_context():
+            Encryption.initialize_v3(PASSWORD)
+            assert Encryption.salt_file_version() == 3
+            assert Encryption.is_v3()
+            assert Encryption.has_recovery_key()
+
+    def test_initialize_v3_returns_a_usable_recovery_key(self, app):
+        with app.app_context():
+            rk = Encryption.initialize_v3(PASSWORD)
+            assert len(rk.split("-")) == 8
+            Encryption.lock()
+            assert Encryption.unlock_with_recovery_key(rk)
+
+    def test_v3_unlock_by_password(self, app):
+        with app.app_context():
+            Encryption.initialize_v3(PASSWORD)
+            master = Encryption._master
+            Encryption.lock()
+
+            assert Encryption.unlock(PASSWORD)
+            assert Encryption._master == master
+            assert Encryption._salt_version == 3
+
+    def test_v3_unlock_by_recovery_key_yields_identical_keys(self, app):
+        """Both doors must produce the same file_key and db_key.
+
+        If they did not, data written after a recovery-key unlock would be
+        unreadable after a password unlock -- a silent split-brain.
+        """
+        with app.app_context():
+            rk = Encryption.initialize_v3(PASSWORD)
+
+            Encryption.lock()
+            Encryption.unlock(PASSWORD)
+            by_password = (Encryption._file_key_v2, Encryption._db_key_v2)
+
+            Encryption.lock()
+            Encryption.unlock_with_recovery_key(rk)
+            by_recovery = (Encryption._file_key_v2, Encryption._db_key_v2)
+
+            assert by_password == by_recovery
+
+    def test_v3_round_trips_ciphertext_across_unlock_methods(self, app):
+        """Encrypt after a password unlock, decrypt after a recovery unlock."""
+        with app.app_context():
+            rk = Encryption.initialize_v3(PASSWORD)
+            secret = b"From: alice@example.com\r\nSubject: Hi\r\n\r\nBody."
+            ciphertext = Encryption.encrypt(secret)
+
+            Encryption.lock()
+            Encryption.unlock_with_recovery_key(rk)
+            assert Encryption.decrypt(ciphertext) == secret
+
+    def test_v3_wrong_password_still_raises_invalid_password(self, app):
+        with app.app_context():
+            Encryption.initialize_v3(PASSWORD)
+            Encryption.lock()
+            with pytest.raises(InvalidPasswordError):
+                Encryption.unlock("WrongPassword!")
+
+    def test_v2_archive_refuses_recovery_key_unlock_with_a_clear_reason(self, app):
+        with app.app_context():
+            Encryption.initialize(PASSWORD)
+            Encryption.lock()
+            with pytest.raises(EncryptionError, match="predates recovery keys"):
+                Encryption.unlock_with_recovery_key(Encryption.generate_recovery_key())
+
+    def test_lock_clears_the_master(self, app):
+        with app.app_context():
+            Encryption.initialize_v3(PASSWORD)
+            Encryption.lock()
+            assert Encryption._master is None
+            assert Encryption._salt_version is None
+            assert not Encryption.is_unlocked()
+
+    def test_unrecognised_magic_is_reported(self, app):
+        with app.app_context():
+            Encryption.initialize_v3(PASSWORD)
+            Config.get_salt_path().write_bytes(b"XXXX" + b"\x00" * 100)
+            with pytest.raises(EncryptionError, match="recognised magic"):
+                Encryption.salt_file_version()

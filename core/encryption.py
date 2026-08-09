@@ -160,6 +160,13 @@ class Encryption:
     _file_key_v2: Optional[bytes] = None
     _db_key_v2: Optional[str] = None
 
+    # v3 envelope state. _master is the random master key recovered by
+    # unwrapping; _salt_version records which key-file format is on disk
+    # so callers (password change, migration) can branch without
+    # re-reading and re-sniffing the file.
+    _master: Optional[bytes] = None
+    _salt_version: Optional[int] = None
+
     # ----------------------------------------------------------
     # Initialization / unlock state
     # ----------------------------------------------------------
@@ -180,6 +187,58 @@ class Encryption:
         cls._salt = None
         cls._file_key_v2 = None
         cls._db_key_v2 = None
+        cls._master = None
+        cls._salt_version = None
+
+    @classmethod
+    def read_salt_blob(cls) -> bytes:
+        """Raw bytes of the key file on disk."""
+        if not cls.is_initialized():
+            raise EncryptionError("Encryption not initialized. Call initialize() first.")
+        with open(Config.get_salt_path(), "rb") as f:
+            return f.read()
+
+    @classmethod
+    def salt_file_version(cls) -> int:
+        """Which key-file format is on disk: 2 (MRC2) or 3 (MRC3)."""
+        magic = cls.read_salt_blob()[:4]
+        if magic == SALT_MAGIC_V3:
+            return 3
+        if magic == SALT_MAGIC_V2:
+            return 2
+        raise EncryptionError(
+            "Key file has no recognised magic. It may have been created by an "
+            "incompatible version of MailRepo, or may be corrupt."
+        )
+
+    @classmethod
+    def is_v3(cls) -> bool:
+        """True if the archive on disk uses the v3 envelope."""
+        return cls.salt_file_version() == 3
+
+    @classmethod
+    def has_recovery_key(cls) -> bool:
+        """True if this archive can be opened with a recovery key.
+
+        v2 archives cannot -- there is no second wrapper to unwrap.
+        """
+        try:
+            return cls.is_v3()
+        except EncryptionError:
+            return False
+
+    @classmethod
+    def _adopt_master(cls, master: bytes, version: int, salt: Optional[bytes] = None) -> None:
+        """Load a recovered master key and its subkeys into class state.
+
+        Single place where unlock state is populated, so the v2 and v3
+        paths cannot drift apart in what they set.
+        """
+        cls._master = master
+        cls._salt_version = version
+        cls._salt = salt
+        cls._file_key_v2 = cls._derive_subkey_v2(master, HKDF_INFO_FILE_V2)
+        cls._db_key_v2 = cls._derive_subkey_v2(master, HKDF_INFO_DB_V2).hex()
 
     # ----------------------------------------------------------
     # Initialize / unlock
@@ -202,38 +261,45 @@ class Encryption:
         salt = secrets.token_bytes(SALT_LENGTH)
         master = cls._derive_master_v2(password, salt)
         file_key = cls._derive_subkey_v2(master, HKDF_INFO_FILE_V2)
-        db_key = cls._derive_subkey_v2(master, HKDF_INFO_DB_V2)
 
         verification = cls._encrypt_v2_with_key(VERIFICATION_TOKEN, file_key)
 
         Config.get_data_path().mkdir(parents=True, exist_ok=True)
         cls._atomic_write_salt_file(SALT_MAGIC_V2 + salt + verification)
 
-        cls._salt = salt
-        cls._file_key_v2 = file_key
-        cls._db_key_v2 = db_key.hex()
+        cls._adopt_master(master, version=2, salt=salt)
 
     @classmethod
     def unlock(cls, password: str) -> bool:
-        """Unlock with the master password. Raises InvalidPasswordError on mismatch."""
+        """Unlock with the master password. Raises InvalidPasswordError on mismatch.
+
+        Handles both key-file formats. v3 unwraps the random master from
+        the password wrapper; v2 derives the master from the password and
+        checks the verification token. Either way the same subkeys land in
+        class state, so nothing downstream needs to know which ran.
+        """
         if not cls.is_initialized():
             raise EncryptionError("Encryption not initialized. Call initialize() first.")
 
-        with open(Config.get_salt_path(), "rb") as f:
-            data = f.read()
-        if data[:4] != SALT_MAGIC_V2:
+        blob = cls.read_salt_blob()
+
+        if blob[:4] == SALT_MAGIC_V3:
+            master = cls.unwrap_master_with_password(blob, password)
+            cls._adopt_master(master, version=3)
+            return True
+
+        if blob[:4] != SALT_MAGIC_V2:
             raise EncryptionError(
                 "Salt file is missing the MRC2 magic. This archive may have been "
                 "created by an incompatible version of MailRepo, or the salt file "
                 "may be corrupt."
             )
 
-        salt = data[4 : 4 + SALT_LENGTH]
-        encrypted_verification = data[4 + SALT_LENGTH :]
+        salt = blob[4 : 4 + SALT_LENGTH]
+        encrypted_verification = blob[4 + SALT_LENGTH :]
 
         master = cls._derive_master_v2(password, salt)
         file_key = cls._derive_subkey_v2(master, HKDF_INFO_FILE_V2)
-        db_key = cls._derive_subkey_v2(master, HKDF_INFO_DB_V2)
 
         try:
             decrypted = cls._decrypt_v2_with_key(encrypted_verification, file_key)
@@ -242,10 +308,60 @@ class Encryption:
         if decrypted != VERIFICATION_TOKEN:
             raise InvalidPasswordError("Invalid master password.")
 
-        cls._salt = salt
-        cls._file_key_v2 = file_key
-        cls._db_key_v2 = db_key.hex()
+        cls._adopt_master(master, version=2, salt=salt)
         return True
+
+    @classmethod
+    def unlock_with_recovery_key(cls, recovery_key: str) -> bool:
+        """Unlock using the printed recovery key instead of the password.
+
+        Only possible on v3 archives. A v2 archive has one door, and
+        saying so plainly is better than a generic failure -- someone
+        reaching for a recovery key has usually forgotten their password
+        and needs to know immediately whether this route exists at all.
+        """
+        if not cls.is_initialized():
+            raise EncryptionError("Encryption not initialized. Call initialize() first.")
+
+        blob = cls.read_salt_blob()
+        if blob[:4] != SALT_MAGIC_V3:
+            raise EncryptionError(
+                "This archive predates recovery keys and cannot be opened with one. "
+                "It can only be opened with its master password."
+            )
+
+        master = cls.unwrap_master_with_recovery_key(blob, recovery_key)
+        cls._adopt_master(master, version=3)
+        return True
+
+    @classmethod
+    def initialize_v3(cls, password: str) -> str:
+        """Initialize a brand-new archive with the v3 envelope.
+
+        Returns the recovery key in display format. This is the ONLY time
+        it exists in plaintext -- it is never stored, so if the user does
+        not write it down here, it is gone. Callers must surface it.
+        """
+        if cls.is_initialized():
+            raise EncryptionError(
+                "Encryption already initialized. Use the password-change flow instead."
+            )
+
+        master = secrets.token_bytes(MASTER_KEY_LENGTH)
+        recovery_key = cls.generate_recovery_key()
+        blob = cls.build_v3_salt_blob(master, password, recovery_key)
+
+        Config.get_data_path().mkdir(parents=True, exist_ok=True)
+        cls._atomic_write_salt_file(blob)
+
+        cls._adopt_master(master, version=3)
+        return recovery_key
+
+    @classmethod
+    def write_v3_salt_file(cls, blob: bytes) -> None:
+        """Atomically replace the key file with a v3 blob (validated first)."""
+        cls.parse_v3_salt_blob(blob)
+        cls._atomic_write_salt_file(blob)
 
     # ----------------------------------------------------------
     # DB key access
