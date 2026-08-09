@@ -14,6 +14,7 @@ the guard.
 
 import json
 import zipfile
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -332,6 +333,38 @@ class TestUpgradeFlow:
         ).total_seconds() / 3600
         assert age_hours < 1, (
             f"newest backup is still {age_hours:.1f}h old — none was taken"
+        )
+
+    def test_upgrade_backup_goes_to_the_configured_location(self, v2_client):
+        """Not the default repo backups/ dir.
+
+        create_full_backup() with no argument writes to
+        Config.get_backup_path(). Anyone using a cloud folder has their
+        backups elsewhere, so the safety backup would land somewhere
+        their off-machine sync never sees — leaving a full that exists
+        only locally while the incrementals depending on it are the only
+        things replicated. That happened to Rick's real archive.
+        """
+        from core.config import Config
+        from core.database import set_setting
+
+        custom = Config.get_base_path() / "custom_backups"
+        custom.mkdir(parents=True, exist_ok=True)
+        set_setting("backup_location", str(custom))
+
+        # Make the existing backup stale so the upgrade takes a new one.
+        backups_dir = Config.get_data_path().parent / "backups"
+        manifest_path = backups_dir / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        stale = (datetime.now() - timedelta(hours=30)).isoformat()
+        for entry in manifest["backups"]:
+            entry["created_at"] = stale
+        manifest_path.write_text(json.dumps(manifest))
+
+        v2_client.post("/auth/upgrade", data={"password": PASSWORD})
+
+        assert list(custom.glob("*.zip")), (
+            "upgrade backup did not go to the configured location"
         )
 
     def test_already_upgraded_archive_redirects(self, v2_client):

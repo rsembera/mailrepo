@@ -443,7 +443,15 @@ def upgrade_to_recovery_keys():
                 # archive that has been sitting idle. The gate would then
                 # still see the stale backup and refuse, after this page
                 # promised a fresh one would be taken.
-                create_full_backup()
+                #
+                # And it MUST go to the configured backup location. With
+                # no argument it defaults to the repo's backups/ dir,
+                # which for anyone using a cloud folder means the backup
+                # lands somewhere their off-machine sync never sees — a
+                # full that exists locally while the incrementals that
+                # depend on it are the only things replicated.
+                location = get_setting("backup_location", "")
+                create_full_backup(location if location else None)
 
             recovery_key = migrate_to_v3(password)
         except InvalidPasswordError:
