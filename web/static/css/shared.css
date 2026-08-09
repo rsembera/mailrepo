@@ -635,3 +635,117 @@ a.btn:hover {
         height: 56px;
     }
 }
+
+
+/* ============================================
+   RECOVERY KEY SCREEN
+   ============================================ */
+.auth-container-wide {
+    max-width: 560px;
+}
+
+.auth-card-wide {
+    padding: 2.5rem 3rem;
+}
+
+.recovery-key-display {
+    background: var(--color-surface-alt, #F8FAFC);
+    border: 2px dashed var(--color-border, #CBD5E1);
+    border-radius: var(--radius-lg);
+    padding: var(--space-xl) var(--space-lg);
+    margin-bottom: var(--space-lg);
+    text-align: center;
+}
+
+.recovery-key-display code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: 1.125rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    line-height: 1.9;
+    /* The key is the one thing on this page a user must be able to
+       transcribe by hand, so it stays selectable and wraps on the
+       hyphens rather than mid-group. */
+    word-spacing: 0.15em;
+    user-select: all;
+}
+
+.recovery-key-actions {
+    display: flex;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-xl);
+    flex-wrap: wrap;
+}
+
+.recovery-key-actions .btn {
+    flex: 1;
+    min-width: 9rem;
+}
+
+.recovery-key-warning p {
+    margin: 0 0 var(--space-sm) 0;
+}
+
+.recovery-key-warning p:last-child {
+    margin-bottom: 0;
+}
+
+.form-group-checkbox label {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    font-weight: 400;
+    cursor: pointer;
+}
+
+.form-group-checkbox input[type="checkbox"] {
+    margin-top: 0.2em;
+    flex-shrink: 0;
+}
+
+.recovery-key-input {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.recovery-key-input::placeholder {
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+/* Printing this page should produce something worth putting in a drawer:
+   the key, what it does, and nothing else. */
+@media print {
+    body {
+        background: white;
+    }
+
+    .recovery-key-actions,
+    .auth-form,
+    .flash-container,
+    .auth-logo {
+        display: none !important;
+    }
+
+    .auth-card,
+    .auth-card-wide {
+        box-shadow: none;
+        border: 1px solid #000;
+        padding: 1.5rem;
+    }
+
+    .recovery-key-display {
+        border: 2px solid #000;
+    }
+
+    .recovery-key-display code {
+        font-size: 1.25rem;
+    }
+
+    .error-box.recovery-key-warning {
+        background: white;
+        border: 1px solid #000;
+        color: #000;
+    }
+}

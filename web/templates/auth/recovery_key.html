@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Recovery Key - {{ app_name }}{% endblock %}
+
+{% block body_class %}auth-page{% endblock %}
+
+{% block content %}
+<div class="auth-container auth-container-wide">
+    <div class="auth-card auth-card-wide">
+        <div class="auth-header">
+            <h1>Save your recovery key</h1>
+            <p class="auth-subtitle">
+                {% if context == "migration" %}
+                Your archive now has a recovery key.
+                {% else %}
+                Your archive is protected. This key is your way back in.
+                {% endif %}
+            </p>
+        </div>
+
+        <div class="recovery-key-display">
+            <code id="recovery-key-value">{{ recovery_key }}</code>
+        </div>
+
+        <div class="recovery-key-actions">
+            <button type="button" class="btn btn-secondary" id="copy-recovery-key">
+                Copy to clipboard
+            </button>
+            <button type="button" class="btn btn-secondary" id="print-recovery-key">
+                Print
+            </button>
+            <button type="button" class="btn btn-secondary" id="download-recovery-key">
+                Download as text file
+            </button>
+        </div>
+
+        <div class="error-box recovery-key-warning">
+            <p>
+                <strong>This key is shown once and is not stored anywhere.</strong>
+                If you leave this page without saving it, it cannot be shown
+                again — you would need to generate a new one from Settings,
+                which requires your master password.
+            </p>
+            <p>
+                Anyone who has this key can open your archive without the
+                password. Store it the way you would store a spare key to
+                your office: somewhere physical, somewhere private, not in
+                the same place as your password.
+            </p>
+        </div>
+
+        <form method="POST" action="{{ url_for('auth.recovery_key_confirmed') }}" class="auth-form">
+            <input type="hidden" name="csrf_token" value="{{ session.get('csrf_token', '') }}">
+            <div class="form-group form-group-checkbox">
+                <label>
+                    <input type="checkbox" id="confirm-saved" name="confirm_saved" required>
+                    I have saved my recovery key somewhere safe
+                </label>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary btn-full" id="continue-button" disabled>
+                    Continue
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/recovery-key.js') }}"></script>
+{% endblock %}

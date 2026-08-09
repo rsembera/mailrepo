@@ -24,6 +24,10 @@ from flask import (
 from core import Database, Encryption, EncryptionError, InvalidPasswordError
 from core.config import Config
 from core.database import get_setting
+from core.password_change import (
+    PasswordChangeError,
+    set_password_after_recovery,
+)
 from utils.log import get_logger
 
 log = get_logger(__name__)
@@ -182,7 +186,7 @@ def setup():
 
         # Initialize encryption
         try:
-            Encryption.initialize(password)
+            recovery_key = Encryption.initialize_v3(password)
             init_database()
 
             # Clear any stale session data before setting new values
@@ -192,13 +196,41 @@ def setup():
             session["csrf_token"] = secrets.token_hex(32)
             session.permanent = True
 
-            flash("Master password created successfully.", "success")
-            response = make_response(redirect(url_for("main.create_archive")))
-            return response
+            # Render the recovery key directly in this response rather than
+            # redirecting with it in the session. Flask sessions are SIGNED,
+            # not encrypted, so anything put there is readable in the
+            # browser's cookie jar — which is the last place a recovery key
+            # should live. This is the only time the key exists in plaintext
+            # anywhere; it is not stored, and closing this page loses it.
+            return render_template(
+                "auth/recovery_key.html",
+                recovery_key=recovery_key,
+                context="setup",
+            )
         except EncryptionError as e:
             return render_template("auth/setup.html", errors=[str(e)])
 
     return render_template("auth/setup.html")
+
+
+@auth_bp.route("/setup/recovery-key-saved", methods=["POST"])
+def recovery_key_confirmed():
+    """Acknowledge that the recovery key has been written down.
+
+    Deliberately stores nothing. The checkbox is a speed bump against
+    clicking past the one screen where the key exists, not a record of
+    anything — MailRepo cannot verify the user actually saved it, and
+    pretending otherwise in the data model would be theatre.
+    """
+    if not session.get("authenticated"):
+        return redirect(url_for("auth.login"))
+
+    token = request.form.get("csrf_token", "")
+    expected = session.get("csrf_token", "")
+    if not expected or not secrets.compare_digest(token, expected):
+        return redirect(url_for("auth.login"))
+
+    return redirect(url_for("main.create_archive"))
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
@@ -254,6 +286,102 @@ def login():
             return render_template("auth/login.html", error=str(e))
 
     return render_template("auth/login.html")
+
+
+@auth_bp.route("/login/recovery", methods=["GET", "POST"])
+def login_with_recovery_key():
+    """Unlock using the printed recovery key instead of the master password.
+
+    Rate limited on the same counter as password login: this is a second
+    full-access credential, and leaving it un-throttled would make it the
+    cheaper thing to attack.
+    """
+    if not Encryption.is_initialized():
+        return redirect(url_for("auth.setup"))
+
+    if not Encryption.has_recovery_key():
+        return render_template(
+            "auth/login.html",
+            error="This archive predates recovery keys and can only be opened "
+            "with its master password.",
+        )
+
+    client_ip = request.remote_addr or "unknown"
+    allowed, seconds_remaining = _check_rate_limit(client_ip)
+    if not allowed:
+        return render_template(
+            "auth/recovery_login.html",
+            error=f"Too many failed attempts. Please wait {seconds_remaining} seconds.",
+            lockout_seconds=seconds_remaining,
+        )
+
+    if request.method == "POST":
+        recovery_key = request.form.get("recovery_key", "")
+
+        try:
+            Encryption.unlock_with_recovery_key(recovery_key)
+            _clear_attempts(client_ip)
+            init_database()
+            cleanup_expired_trash()
+
+            session.clear()
+            session["authenticated"] = True
+            session["last_activity"] = time.time()
+            session["csrf_token"] = secrets.token_hex(32)
+            session["via_recovery_key"] = True
+            session.permanent = True
+
+            return make_response(redirect(url_for("auth.set_password_post_recovery")))
+        except InvalidPasswordError:
+            _record_failed_attempt(client_ip)
+            return render_template(
+                "auth/recovery_login.html",
+                error="That recovery key does not open this archive.",
+            )
+        except EncryptionError as e:
+            # Malformed input (wrong length, bad characters) lands here
+            # rather than in InvalidPasswordError, so the user is told they
+            # mistyped it rather than that it is the wrong key.
+            return render_template("auth/recovery_login.html", error=str(e))
+
+    return render_template("auth/recovery_login.html")
+
+
+@auth_bp.route("/login/recovery/new-password", methods=["GET", "POST"])
+def set_password_post_recovery():
+    """Set a new master password after unlocking with a recovery key.
+
+    Someone who used their recovery key has almost always forgotten their
+    password. Letting them straight into the app would leave them locked
+    out again at the next login, so this is offered immediately — but not
+    forced, because a user may have had another reason to use the key.
+    """
+    if not session.get("authenticated") or not Encryption.is_unlocked():
+        return redirect(url_for("auth.login"))
+
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        confirm = request.form.get("confirm", "")
+
+        errors = []
+        if len(password) < 12:
+            errors.append("Password must be at least 12 characters.")
+        if password != confirm:
+            errors.append("Passwords do not match.")
+
+        if errors:
+            return render_template("auth/post_recovery_password.html", errors=errors)
+
+        try:
+            set_password_after_recovery(password)
+            session.pop("via_recovery_key", None)
+            session["csrf_token"] = secrets.token_hex(32)
+            flash("Master password updated.", "success")
+            return redirect(url_for("main.index"))
+        except PasswordChangeError as e:
+            return render_template("auth/post_recovery_password.html", errors=[str(e)])
+
+    return render_template("auth/post_recovery_password.html")
 
 
 @auth_bp.route("/logout", methods=["GET", "POST"])

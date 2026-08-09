@@ -312,6 +312,35 @@ def _change_password_v3(
     return {"files": 0, "credentials": 0, "rewrapped": True}
 
 
+def set_password_after_recovery(new_password: str) -> dict:
+    """Set a new master password using the already-unlocked master key.
+
+    For the recovery-key path only. change_master_password() needs the old
+    password to unwrap the master; someone who just used a recovery key by
+    definition does not have it. Here the master is already in memory from
+    the recovery unwrap, so the new password wrapper can be built directly.
+
+    Requires an unlocked v3 archive. Does not touch the recovery key —
+    rotating that is a separate, deliberate action.
+    """
+    if not Encryption.is_unlocked():
+        raise PasswordChangeError("Encryption is locked. Log in and retry.")
+
+    if Encryption.salt_file_version() != 3:
+        raise PasswordChangeError("This archive predates recovery keys.")
+
+    master = Encryption._master
+    if master is None:
+        raise PasswordChangeError("No master key in memory.")
+
+    blob = Encryption.read_salt_blob()
+    new_blob = Encryption.rewrap_password(blob, master, new_password)
+    Encryption.write_v3_salt_file(new_blob)
+
+    log.info("Master password set via recovery-key path")
+    return {"files": 0, "credentials": 0, "rewrapped": True}
+
+
 def rotate_recovery_key(password: str) -> str:
     """Issue a new recovery key, revoking the old one. Returns the new key.
 

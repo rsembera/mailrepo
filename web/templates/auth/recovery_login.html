@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Recovery Key Login - {{ app_name }}{% endblock %}
+
+{% block body_class %}auth-page{% endblock %}
+
+{% block content %}
+<div class="auth-container auth-container-wide">
+    <div class="auth-card auth-card-wide">
+        <div class="auth-header">
+            <div class="auth-logo">
+                <img src="{{ url_for('static', filename='assets/icon.png') }}" alt="MailRepo">
+            </div>
+            <h1>Use your recovery key</h1>
+            <p class="auth-subtitle">
+                Enter the key you saved when you set up this archive
+            </p>
+        </div>
+
+        {% if error %}
+        <div class="error-box">
+            <ul><li>{{ error }}</li></ul>
+        </div>
+        {% endif %}
+
+        <form method="POST" class="auth-form">
+            <div class="form-group">
+                <label for="recovery_key">Recovery Key</label>
+                <input
+                    type="text"
+                    id="recovery_key"
+                    name="recovery_key"
+                    class="recovery-key-input"
+                    placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
+                    autocomplete="off"
+                    autocapitalize="characters"
+                    spellcheck="false"
+                    required
+                    autofocus
+                    {% if lockout_seconds %}disabled{% endif %}
+                >
+                <span class="helper-text">
+                    Hyphens, spaces and capitalisation don't matter.
+                </span>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary btn-full"
+                        {% if lockout_seconds %}disabled{% endif %}>
+                    Unlock Archive
+                </button>
+            </div>
+        </form>
+
+        <div class="auth-footer">
+            <p><a href="{{ url_for('auth.login') }}">Back to password login</a></p>
+        </div>
+    </div>
+</div>
+{% endblock %}

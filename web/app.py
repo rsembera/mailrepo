@@ -69,7 +69,16 @@ def create_app(test_config: dict = None) -> Flask:
     def check_auth():
         """Ensure user is authenticated and session hasn't timed out."""
         # Public routes that don't require authentication
-        public_endpoints = {"auth.login", "auth.setup", "static"}
+        # auth.login_with_recovery_key is public for the same reason
+        # auth.login is: it is a way IN. Requiring an authenticated
+        # session to reach it would make it unreachable by exactly the
+        # person it exists for — someone locked out of their archive.
+        public_endpoints = {
+            "auth.login",
+            "auth.login_with_recovery_key",
+            "auth.setup",
+            "static",
+        }
 
         if request.endpoint in public_endpoints:
             return
@@ -152,6 +161,13 @@ def create_app(test_config: dict = None) -> Flask:
             "app_name": Config.APP_NAME,
             "app_version": Config.VERSION,
             "csrf_token": csrf_token,
+            # Whether this archive can be opened with a recovery key.
+            # Injected globally so the login screen does not have to
+            # thread it through every render path (there are several,
+            # including the rate-limit branches, and missing one would
+            # silently hide the recovery link exactly when a locked-out
+            # user needs it most).
+            "has_recovery_key": Encryption.has_recovery_key(),
         }
 
     # JSON safety net: any uncaught exception on an API path returns JSON

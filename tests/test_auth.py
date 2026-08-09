@@ -57,12 +57,18 @@ class TestSetup:
         assert b"do not match" in resp.data
         assert not Encryption.is_initialized()
 
-    def test_post_valid_initializes_and_redirects(self, client):
+    def test_post_valid_initializes_and_shows_recovery_key(self, client):
+        """Setup now ends on the recovery-key screen, not a redirect.
+
+        The key is rendered into this one response and stored nowhere, so
+        setup cannot redirect past it (Session 68).
+        """
         resp = client.post(
             "/auth/setup",
             data={"password": "averylongpassword", "confirm": "averylongpassword"},
         )
-        assert resp.status_code == 302
+        assert resp.status_code == 200
+        assert b"Save your recovery key" in resp.data
         assert Encryption.is_initialized()
         with client.session_transaction() as sess:
             assert sess.get("authenticated") is True
