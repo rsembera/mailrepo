@@ -4475,11 +4475,87 @@ separately revertable.
 
 ### Still open
 
-- Rick's archive is still v2. Upgrading it: log in, follow the redirect.
-  The recovery key shown will be the only copy that ever exists.
 - Nothing here has been used through a browser. Claude can read the
   frontend but not operate it, so every screen added this session is
   unverified in the way that matters — flow, wording, whether the
   one-time key display reads as urgent enough.
+- `authenticated_client` injects CSRF headers, so the suite cannot catch
+  a real CSRF regression (backlog).
+
+---
+
+## Session 68 addendum 2 — Rick opens the app
+
+Three bugs, all found within minutes of actually clicking through, none
+visible to a green suite. Recorded together because the pattern matters
+more than any one of them.
+
+**1. The upgrade refused its own backup (`664c73e`).** The page promises
+"a fresh backup will be taken", then called `create_backup()`, which
+auto-decides full vs incremental. With a recent full on disk it picked
+incremental, and `create_incremental_backup()` returns None when nothing
+has changed — exactly the case for an idle archive. Nothing was written,
+so the gate still saw the 26.6h-old backup and refused. Fixed by calling
+`create_full_backup()`, which always produces a restore point.
+
+Compounding it: the refusal rendered in the red box directly under the
+password field, so it read as "it keeps rejecting my master password."
+The password was never wrong. The generic failure path now leads with
+"your archive has not been changed and your password is unaffected."
+
+**2. Both recovery-key buttons showed at once (`664c73e`).** "Add a
+Recovery Key" and "Generate New Recovery Key" are mutually exclusive and
+the JS sets `hidden` on whichever does not apply — but the browser's
+`[hidden] { display: none }` is a UA rule and loses to `.btn`'s
+`display: inline-flex`. Added `[hidden] { display: none !important }`.
+Never specific to this screen: any `.btn` in the app using the attribute
+was affected.
+
+**3. Post-migration Continue landed on "Create New Archive"
+(`a85adf8`).** The most alarming-looking and the most trivial.
+`recovery_key_confirmed()` always redirected to `main.create_archive` —
+right after first-run setup, wrong after a migration. Looked exactly
+like the upgrade had wiped everything. It had not: 1,754 files, MRC3 at
+190 bytes, no leftover markers. Context is now submitted as a hidden
+field and the redirect branches on it.
+
+### Rick's live archive is now v3, and verified
+
+Migrated successfully. `mailrepo-ops/verify_live_v3.py` (read-only,
+getpass for both credentials) confirmed against the real archive:
+
+- key file MRC3, recovery key available
+- unlocks with the master password; database opens, 1,754 messages
+- 25/25 sampled real messages decrypt under the password
+- **unlocks with the recovery key**; 25/25 decrypt; database opens under
+  the recovery-key-derived key
+
+That last block is the one that matters. A recovery key that has never
+been exercised is a promise, not a feature.
+
+### The lesson worth keeping
+
+Every failure this session was in the seams, not the crypto. The
+envelope, the migration and the restore path were each drilled against
+real data and held. What broke was a backup helper's no-op-on-no-changes
+behaviour, a CSS specificity rule, and a hardcoded redirect — none of
+which any amount of reading would have surfaced, and all of which a
+person clicking through found immediately.
+
+Standing implication: for UI work, "tests pass" is not evidence the
+feature works. It is evidence the logic is not obviously wrong. Rick has
+to open it.
+
+### Commits
+- `92c1282` — Correct the record: the CSRF bug I reported does not exist
+- `664c73e` — Fix upgrade refusing its own backup; fix `[hidden]` on buttons
+- `a85adf8` — Fix post-migration Continue landing on Create New Archive
+
+### Still open
+
+- The remaining screens are still unclicked: the recovery login and the
+  post-recovery password reset have never been used through a browser.
+  Worth exercising once — the recovery key is known good, so the risk of
+  trying is now essentially nil.
 - `authenticated_client` injects CSRF headers, so the suite cannot catch
   a real CSRF regression (backlog).

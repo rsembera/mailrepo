@@ -80,6 +80,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   build shipped without the native extension correctly bundled.
 
 ### Fixed
+- **The recovery-key upgrade refused to run after promising to take a
+  backup (Session 68).** The upgrade page says a fresh backup will be
+  taken first, but asked for an automatic backup — which does nothing
+  when no mail has changed since the last one. The upgrade then refused
+  because the existing backup was too old, and the error appeared under
+  the password field, so it looked like the password was being rejected.
+  It now takes a full backup, which always produces one.
+- **Buttons using the `hidden` attribute were displayed anyway
+  (Session 68).** A styling rule overrode the browser's built-in
+  hiding, so the Settings screen showed both "Add a Recovery Key" and
+  "Generate New Recovery Key" at once even though only one applies.
+- **Finishing the recovery-key upgrade landed on "Create New Archive"
+  (Session 68)**, which looked alarmingly like the upgrade had erased
+  the archive. It had not. That screen is only correct after first-run
+  setup; after an upgrade you now return to your archive.
 - **Malformed backup manifest entries no longer crash the restore
   screen (Session 67).** An entry missing `chain_id` raised a
   `KeyError` out of `get_restore_points()`, turning a backup-health
