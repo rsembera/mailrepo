@@ -583,6 +583,19 @@ a.btn:hover {
     text-align: center;
 }
 
+/* Recovery-key link on the login screen. Sized as a footer link rather
+   than body text, and the link phrase itself never breaks mid-phrase:
+   if the line must wrap, it wraps at the sentence boundary, not on
+   "recovery / key". */
+.recovery-link {
+    font-size: 0.9375rem;
+    margin-bottom: 0.75rem;
+}
+
+.recovery-link a {
+    white-space: nowrap;
+}
+
 .security-note {
     font-size: 0.8125rem;
     color: var(--color-text-muted);

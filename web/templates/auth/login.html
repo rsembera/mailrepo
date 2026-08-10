@@ -51,7 +51,7 @@
         
         <div class="auth-footer">
             {% if has_recovery_key %}
-            <p><a href="{{ url_for('auth.login_with_recovery_key') }}">Forgot your password? Use your recovery key</a></p>
+            <p class="recovery-link">Forgot your password? <a href="{{ url_for('auth.login_with_recovery_key') }}">Use your recovery key</a></p>
             {% endif %}
             <p class="security-note">Your data is encrypted with AES-256</p>
         </div>

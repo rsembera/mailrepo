@@ -4721,3 +4721,9 @@ counts).
 The "adversarial review" item under Still open in Session 69's list is
 now partly served: Sessions 68–69 have had a hostile read. Earlier
 sessions' surfaces have not.
+
+**Addendum:** the login screen's recovery link wrapped awkwardly
+("...recovery / key"). Restructured as plain-text question + link
+("Forgot your password? [Use your recovery key]"), sized as a footer
+link, with the link phrase nowrap so any wrap lands at the sentence
+boundary. Third commit this session.
