@@ -4653,3 +4653,71 @@ click the button. Fixed.
   envelope layer should transfer nearly unchanged; the migration should
   use EdgeCase's existing rebuild-and-swap machinery rather than
   MailRepo's in-place approach.
+
+---
+
+## Session 70 — August 9, 2026 (MacBook)
+
+**Code review of Sessions 68–69, and the fix for what it found.**
+
+Rick asked for a review of the day's work (recovery keys, v3 migration,
+restore-point credentials, retention fix). Read `core/encryption.py`,
+`core/crypto_migration_v3.py`, and `core/password_change.py` in full,
+plus `web/blueprints/auth.py`, the app-level auth/CSRF middleware, and
+the `utils/backup.py` credential-fingerprint work. Ran the full suite
+first: 502/502 in 16:44.
+
+**Verdict on the crypto and migration: sound.** Random master wrapped
+twice, subkey derivation untouched so v2 ciphertexts stay valid, key
+file written last so a crash leaves a re-runnable migration, resume
+state wrapped under the old key so a second attempt cannot strand
+converted files. The no-backup-gate argument for the v3 rewrap holds:
+one atomic replace, no partial state. The restore-point fingerprint
+trick (fresh salt per rewrap → each half identifies its credential)
+is correct.
+
+**One real finding — fixed this session.**
+`/auth/login/recovery/new-password` checked `authenticated` + unlocked
+but never `session["via_recovery_key"]`, and its form POST carried no
+CSRF token (the app-level CSRF check covers `/api/` paths only, via the
+`X-CSRF-Token` header). Since `set_password_after_recovery()` requires
+no old password by design, this was the only state-changing route
+reachable with zero credential knowledge: any unlocked session could
+replace the master password. That is exactly the capability the
+rotation endpoint withholds by demanding the password — its own
+docstring makes the argument. Fix: the route now requires a session
+established by the recovery login (redirects to the archive otherwise)
+and verifies a CSRF token; `post_recovery_password.html` carries the
+hidden input.
+
+**Consistency fixes alongside it:**
+
+- `/auth/upgrade` POST now verifies a CSRF token too
+  (`upgrade.html` carries it). The password requirement already stopped
+  a blind cross-site POST from succeeding, so this one is about keeping
+  every state-changing `/auth/` form on the same rule.
+- Stale comment in the password-change SSE endpoint ("All archives are
+  on v2") replaced with a description of the actual v2/v3 branching.
+
+**Tests.** Ten existing POSTs updated to carry the token (via a small
+`_csrf(client)` helper); three new tests:
+`test_password_reset_requires_a_recovery_login` (password-login session
+is bounced from GET and POST, password provably unchanged),
+`test_password_reset_requires_csrf`, and
+`test_upgrade_post_requires_csrf`. Suite: 505 tests.
+`test_recovery_key_web.py` + `test_auth.py` re-run after the change:
+53/53.
+
+**Noted, not fixed (footnote-grade):** the credential fingerprint will
+report "password changed" if someone re-sets the *same* password via the
+recovery path — rewrap mints a fresh salt, so the halves differ even
+though the password still works. The warning errs conservative;
+harmless.
+
+**Docs:** CHANGELOG (Security section), Security_Audit (new row in the
+recovery-key measures table), Navigation_Map (auth.py 769 lines, test
+counts).
+
+The "adversarial review" item under Still open in Session 69's list is
+now partly served: Sessions 68–69 have had a hostile read. Earlier
+sessions' surfaces have not.

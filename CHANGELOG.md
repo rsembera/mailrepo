@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **The post-recovery password reset is now gated to the recovery login
+  (Session 70).** The screen that sets a new password after a recovery-key
+  login deliberately asks for no old password — the recovery key entered
+  at login is the proof. But the route never checked *how* the session was
+  established, so any logged-in session could reach it and replace the
+  master password without proving any credential, and the form carried no
+  CSRF token. The route now requires a session created by the recovery
+  login itself and verifies a CSRF token; the upgrade form's POST now
+  verifies one as well. Found in a code review of Sessions 68–69; no
+  release ever shipped without the fix.
+
 ### Added
 - **Restore points now say which credentials they need (Session 69).**
   Restoring replaces your key file, so a backup taken before a password

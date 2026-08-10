@@ -32,6 +32,7 @@ The recovery key is a printable 160-bit secret that opens the archive **without 
 | Never in the session | Flask sessions are signed, not encrypted; a key placed there would be readable in the browser cookie jar. Guarded by `test_recovery_key_never_enters_the_session` |
 | Rotatable | `rotate_recovery_key()` revokes the old key immediately, without a password change or re-encryption |
 | Rotation gated on password | An unlocked session alone cannot mint a durable second credential |
+| Post-recovery reset gated on the recovery login itself | The no-old-password reset at `/auth/login/recovery/new-password` is reachable only by a session that was established with the recovery key (`session["via_recovery_key"]`), and its form carries a CSRF token. Found and closed in Session 70: before the gate, any unlocked session could replace the master password without proving any credential — the same capability the rotation gate exists to withhold. Guarded by `test_password_reset_requires_a_recovery_login` |
 | Rate limited | Recovery-key login shares the password login's limiter — it is an equivalent credential and must not be the cheaper thing to attack |
 | Cleared from the DOM | The Settings rotation view blanks the key once acknowledged |
 

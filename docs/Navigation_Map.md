@@ -86,7 +86,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `auth.py` | 743 | Setup, login, logout, rate limiting, session management; recovery-key login, post-recovery password reset, v3 upgrade flow, rotation API |
+| `auth.py` | 769 | Setup, login, logout, rate limiting, session management; recovery-key login, post-recovery password reset (gated to recovery-login sessions + CSRF), v3 upgrade flow, rotation API |
 | `backups.py` | 273 | Backup/restore endpoints, folder picker |
 | `main.py` | 81 | Page routes: index, create_archive, settings |
 
@@ -284,11 +284,11 @@ python main.py
 
 ---
 
-## Test Suite (502 tests)
+## Test Suite (505 tests)
 
 | File | Coverage |
 |------|----------|
-| `tests/test_recovery_key_web.py` | Recovery-key web flow end to end: setup shows the key (and never puts it in the session), recovery login, post-recovery password reset, v3 upgrade flow (incl. stale-backup-with-no-changes), post-upgrade redirect destination, rotation API + CSRF (27 tests, Session 68) |
+| `tests/test_recovery_key_web.py` | Recovery-key web flow end to end: setup shows the key (and never puts it in the session), recovery login, post-recovery password reset (incl. gating to recovery-login sessions and CSRF), v3 upgrade flow (incl. stale-backup-with-no-changes and CSRF), post-upgrade redirect destination, rotation API + CSRF (31 tests, Sessions 68–70) |
 | `tests/test_crypto_migration_v3.py` | v2 → v3 envelope migration: content survives, readable under both credentials, interrupted migration re-runs to completion, resume state halts rather than minting a new master; v3 password change as rewrap; recovery-key rotation (40 tests, Session 68) |
 | `tests/test_recovery_key.py` | v3 envelope: recovery-key format and parse tolerance, wrapping structure, unlock by either credential yielding identical keys, tamper detection, independent rewrap of each wrapper (40 tests, Session 68) |
 | `tests/test_restore.py` | Restore path: staged files decrypt to original plaintext, backup carries its own key material, incremental chains and deletion propagation, staging-is-not-production, complete/cancel, chain verification (21 tests, Session 68) |
