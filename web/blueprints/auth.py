@@ -378,11 +378,27 @@ def set_password_post_recovery():
     password. Letting them straight into the app would leave them locked
     out again at the next login, so this is offered immediately — but not
     forced, because a user may have had another reason to use the key.
+
+    Gated to sessions established BY a recovery-key login. This is the
+    only route in the app that changes the master password without proof
+    of any credential — the recovery key shown at login IS the proof, and
+    session["via_recovery_key"] records that it was shown. Without the
+    gate, any unlocked session could replace the password, which is the
+    exact capability rotate_recovery_key deliberately withholds from
+    unlocked sessions by demanding the password.
     """
     if not session.get("authenticated") or not Encryption.is_unlocked():
         return redirect(url_for("auth.login"))
 
+    if not session.get("via_recovery_key"):
+        return redirect(url_for("main.index"))
+
     if request.method == "POST":
+        token = request.form.get("csrf_token", "")
+        expected = session.get("csrf_token", "")
+        if not expected or not secrets.compare_digest(token, expected):
+            return redirect(url_for("auth.login"))
+
         password = request.form.get("password", "")
         confirm = request.form.get("confirm", "")
 
@@ -432,6 +448,15 @@ def upgrade_to_recovery_keys():
     backup_ok = not problems and age is not None and age <= MAX_BACKUP_AGE_HOURS
 
     if request.method == "POST":
+        # CSRF token check. The password requirement already stops a blind
+        # cross-site POST from doing anything, but the app-level CSRF
+        # middleware only covers /api/ paths, so state-changing /auth/
+        # forms carry and verify the token themselves for consistency.
+        token = request.form.get("csrf_token", "")
+        expected = session.get("csrf_token", "")
+        if not expected or not secrets.compare_digest(token, expected):
+            return redirect(url_for("auth.login"))
+
         password = request.form.get("password", "")
 
         try:
@@ -681,10 +706,11 @@ def change_password_progress(job_id):
             yield f"data: {json.dumps({'error': 'Missing or expired password-change request'})}\n\n"
             return
 
-        # All archives are on v2 (AES-256-GCM + Argon2id). The actual work
-        # lives in core/password_change.change_master_password as a pure
-        # function with a progress_cb; here we just bridge that callback
-        # into the SSE stream via a worker thread + queue. The event
+        # The actual work lives in core/password_change.change_master_password,
+        # which branches on the key-file version itself: v2 archives get the
+        # full re-encrypt walk, v3 archives get the 61-byte rewrap. Here we
+        # just bridge its progress_cb into the SSE stream via a worker
+        # thread + queue. The event
         # vocabulary matches settings.js (counting / counted / encrypting
         # with current+total / credentials / database / finalizing /
         # complete + error) so the frontend works without changes.

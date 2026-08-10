@@ -57,6 +57,12 @@ def extract_recovery_key(html):
     return html[start:end].strip()
 
 
+def _csrf(client):
+    """The session's CSRF token, as the /auth/ form POSTs now require."""
+    with client.session_transaction() as sess:
+        return sess.get("csrf_token", "")
+
+
 @pytest.fixture
 def fresh_client(app):
     """A client against an app with no archive set up yet."""
@@ -168,7 +174,7 @@ class TestRecoveryLogin:
 
         response = client.post(
             "/auth/login/recovery/new-password",
-            data={"password": NEW_PASSWORD, "confirm": NEW_PASSWORD},
+            data={"csrf_token": _csrf(client), "password": NEW_PASSWORD, "confirm": NEW_PASSWORD},
         )
         assert response.status_code == 302
 
@@ -180,7 +186,7 @@ class TestRecoveryLogin:
         client.post("/auth/login/recovery", data={"recovery_key": archive["key"]})
         client.post(
             "/auth/login/recovery/new-password",
-            data={"password": NEW_PASSWORD, "confirm": NEW_PASSWORD},
+            data={"csrf_token": _csrf(client), "password": NEW_PASSWORD, "confirm": NEW_PASSWORD},
         )
 
         Encryption.lock()
@@ -191,6 +197,50 @@ class TestRecoveryLogin:
         response = archive["client"].get("/auth/login/recovery/new-password")
         assert response.status_code == 302
         assert "login" in response.headers["Location"]
+
+    def test_password_reset_requires_a_recovery_login(self, archive):
+        """A password login must NOT reach the no-old-password reset.
+
+        set_password_after_recovery() deliberately asks for no credential
+        -- the recovery key shown at login is the credential. A session
+        established with the password never showed one, so letting it in
+        would mean any unlocked session can replace the master password:
+        the exact capability rotate_recovery_key withholds by demanding
+        the password.
+        """
+        client = archive["client"]
+        client.post("/auth/login", data={"password": PASSWORD})
+
+        response = client.get("/auth/login/recovery/new-password")
+        assert response.status_code == 302
+        assert "new-password" not in response.headers["Location"]
+
+        response = client.post(
+            "/auth/login/recovery/new-password",
+            data={"csrf_token": _csrf(client), "password": NEW_PASSWORD, "confirm": NEW_PASSWORD},
+        )
+        assert response.status_code == 302
+
+        Encryption.lock()
+        with pytest.raises(InvalidPasswordError):
+            Encryption.unlock(NEW_PASSWORD)
+        assert Encryption.unlock(PASSWORD)
+
+    def test_password_reset_requires_csrf(self, archive):
+        """Missing or wrong token: redirected out, password unchanged."""
+        client = archive["client"]
+        client.post("/auth/login/recovery", data={"recovery_key": archive["key"]})
+
+        response = client.post(
+            "/auth/login/recovery/new-password",
+            data={"password": NEW_PASSWORD, "confirm": NEW_PASSWORD},
+        )
+        assert response.status_code == 302
+        assert "login" in response.headers["Location"]
+
+        Encryption.lock()
+        with pytest.raises(InvalidPasswordError):
+            Encryption.unlock(NEW_PASSWORD)
 
 
 # ============================================================
@@ -245,7 +295,10 @@ class TestUpgradeFlow:
         assert b"Add a recovery key" in page.data
 
     def test_upgrade_produces_a_working_recovery_key(self, v2_client):
-        response = v2_client.post("/auth/upgrade", data={"password": PASSWORD})
+        response = v2_client.post(
+            "/auth/upgrade",
+            data={"csrf_token": _csrf(v2_client), "password": PASSWORD},
+        )
         assert response.status_code == 200
         html = response.get_data(as_text=True)
         assert "Save your recovery key" in html
@@ -262,12 +315,18 @@ class TestUpgradeFlow:
         path = Config.get_archive_path() / "1" / "000.eml.enc"
         expected = Encryption.decrypt(path.read_bytes())
 
-        v2_client.post("/auth/upgrade", data={"password": PASSWORD})
+        v2_client.post(
+            "/auth/upgrade",
+            data={"csrf_token": _csrf(v2_client), "password": PASSWORD},
+        )
 
         assert Encryption.decrypt(path.read_bytes()) == expected
 
     def test_wrong_password_refused(self, v2_client):
-        response = v2_client.post("/auth/upgrade", data={"password": "WrongOne!"})
+        response = v2_client.post(
+            "/auth/upgrade",
+            data={"csrf_token": _csrf(v2_client), "password": "WrongOne!"},
+        )
         assert b"not your current master password" in response.data
         assert Encryption.salt_file_version() == 2
 
@@ -280,7 +339,10 @@ class TestUpgradeFlow:
             leftover.unlink()
         (backups_dir / "manifest.json").unlink()
 
-        response = v2_client.post("/auth/upgrade", data={"password": PASSWORD})
+        response = v2_client.post(
+            "/auth/upgrade",
+            data={"csrf_token": _csrf(v2_client), "password": PASSWORD},
+        )
 
         assert "Save your recovery key" in response.get_data(as_text=True)
         assert Encryption.salt_file_version() == 3
@@ -316,7 +378,10 @@ class TestUpgradeFlow:
             entry["created_at"] = stale
         manifest_path.write_text(json.dumps(manifest))
 
-        response = v2_client.post("/auth/upgrade", data={"password": PASSWORD})
+        response = v2_client.post(
+            "/auth/upgrade",
+            data={"csrf_token": _csrf(v2_client), "password": PASSWORD},
+        )
 
         assert "Save your recovery key" in response.get_data(as_text=True), (
             "upgrade refused despite promising to take a fresh backup"
@@ -361,14 +426,20 @@ class TestUpgradeFlow:
             entry["created_at"] = stale
         manifest_path.write_text(json.dumps(manifest))
 
-        v2_client.post("/auth/upgrade", data={"password": PASSWORD})
+        v2_client.post(
+            "/auth/upgrade",
+            data={"csrf_token": _csrf(v2_client), "password": PASSWORD},
+        )
 
         assert list(custom.glob("*.zip")), (
             "upgrade backup did not go to the configured location"
         )
 
     def test_already_upgraded_archive_redirects(self, v2_client):
-        v2_client.post("/auth/upgrade", data={"password": PASSWORD})
+        v2_client.post(
+            "/auth/upgrade",
+            data={"csrf_token": _csrf(v2_client), "password": PASSWORD},
+        )
         response = v2_client.get("/auth/upgrade")
         assert response.status_code == 302
 
@@ -379,7 +450,10 @@ class TestUpgradeFlow:
         the create-archive screen reads like the upgrade wiped everything
         — which is exactly how it looked when Rick hit it.
         """
-        v2_client.post("/auth/upgrade", data={"password": PASSWORD})
+        v2_client.post(
+            "/auth/upgrade",
+            data={"csrf_token": _csrf(v2_client), "password": PASSWORD},
+        )
 
         with v2_client.session_transaction() as sess:
             token = sess["csrf_token"]
@@ -412,6 +486,16 @@ class TestUpgradeFlow:
         response = app.test_client().get("/auth/upgrade")
         assert response.status_code == 302
         assert "login" in response.headers["Location"]
+
+    def test_upgrade_post_requires_csrf(self, v2_client):
+        """The password already blocks a blind cross-site POST from
+        succeeding, but the token check keeps every state-changing /auth/
+        form on the same rule rather than each arguing its own exception.
+        """
+        response = v2_client.post("/auth/upgrade", data={"password": PASSWORD})
+        assert response.status_code == 302
+        assert "login" in response.headers["Location"]
+        assert Encryption.salt_file_version() == 2
 
 
 # ============================================================

@@ -72,6 +72,7 @@
         {% endif %}
 
         <form method="POST" class="auth-form" id="upgrade-form">
+            <input type="hidden" name="csrf_token" value="{{ session.get('csrf_token', '') }}">
             <div class="form-group">
                 <label for="password">Confirm your master password</label>
                 <input type="password" id="password" name="password" required
