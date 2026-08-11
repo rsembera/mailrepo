@@ -42,6 +42,8 @@ The recovery key is a printable 160-bit secret that opens the archive **without 
 
 **Not offered deliberately.** There is no "email me my recovery key", no cloud escrow, and no account-recovery path through Anthropic or anyone else. Every one of those would move the archive's security off the user's own premises, which is the property the product exists to provide.
 
+**Known divergence from EdgeCase (raised Session 71, not yet actioned).** MailRepo's recovery key currently grants a full authenticated session, with the password reset offered rather than required. EdgeCase treats the same credential strictly as a password-reset mechanism that cannot log you in at all. EdgeCase's model is the correct one for a credential that lives on paper, and MailRepo should adopt it before 1.0 — see `Post_1_0_Backlog.md`. Until then, the recovery key is closer to a permanent parallel password than to a break-glass credential, which is a stronger claim on the user's storage discipline than this page otherwise implies.
+
 **Rotation does not reach existing backups.** This is the most important limitation on this page, and it is a property of encrypted backups generally rather than a MailRepo shortcoming.
 
 A backup is an immutable snapshot that includes the key file as it stood when the backup was taken. Changing the master password or rotating the recovery key rewrites the *live* key file only. Every existing backup still contains the old one, so the old credential still opens those copies — and copies are precisely what tends to live somewhere less controlled: a cloud folder, a sync target, an external drive, a version history the user cannot enumerate.

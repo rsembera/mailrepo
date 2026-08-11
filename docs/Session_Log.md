@@ -4727,3 +4727,63 @@ sessions' surfaces have not.
 ("Forgot your password? [Use your recovery key]"), sized as a footer
 link, with the link phrase nowrap so any wrap lands at the sentence
 boundary. Third commit this session.
+
+---
+
+## Session 71 — August 10, 2026 (MacBook, late)
+
+Design question only; no code changed.
+
+Rick asked whether MailRepo's recovery key acting as "a second password"
+was a good idea, given EdgeCase links recovery-key use to a password
+change. Claude answered from Rick's description first and got the shape
+of EdgeCase wrong; Rick pushed back and said to read the codebase.
+Reading it changed the answer materially.
+
+**EdgeCase does not merely couple the key to a password change — the
+recovery key cannot log you in at all.** `/recover` verifies the key and
+hands a short-lived server-side token to `/recover/reset`, which exists
+solely to set a new master password. No authenticated state exists
+anywhere on that path. The key never enters a cookie; the master never
+enters the session. After a successful reset it deliberately does NOT log
+the user in, so they type the new password once while the recovery key is
+still in their hand — the cheapest confirmation the password is what they
+think it is.
+
+**MailRepo's divergence is bigger than the missing force.**
+`unlock_with_recovery_key()` grants a full authenticated session; the
+"Skip for now" link is a symptom of that, not the problem itself. Left
+alone, a user who skips will reach for the printed key at every
+subsequent login, and a 32-character string used routinely ends up
+photographed or pasted into Notes — the break-glass credential migrating
+into everyday storage, gradually enough that nobody notices deciding it.
+
+Filed under a new **Security** section in `Post_1_0_Backlog.md`, flagged
+as worth doing before `git tag v1.0.0` because it changes the security
+model rather than the implementation. Note the direction of travel: for
+this feature EdgeCase is the reference and MailRepo is the port, the
+reverse of the usual relationship.
+
+**Method note.** Claude reasoned about EdgeCase's design from Rick's
+one-line description rather than reading it, and produced a confident but
+wrong account. Same failure shape as the CSRF episode earlier in the day
+and the retention-setting claim: treating an inference about a system as
+knowledge of it. EdgeCase was readable at
+`/Users/rick/Applications/edgecase` the whole time.
+
+### Machine notes for the next session
+
+Work is machine-agnostic — Flask routes, templates, tests — so Apollo is
+fine. Verified: Apollo reachable at Tailscale IP `100.86.191.115` (the
+bare hostname `apollo` does not resolve from the MacBook; no `~/.ssh/config`
+entry exists, unlike `sentinel`). Both repos present:
+`~/Applications/mailrepo` and `~/Applications/edgecase`.
+
+Apollo's MailRepo was at `e11e721`, one pull behind. `git pull` first,
+and keep session numbering from colliding with entries written on the
+MacBook.
+
+Expect the full suite to be slower on Apollo — Argon2id dominates
+runtime, ~7.5 min on the M4. Targeted runs against `test_auth.py`,
+`test_recovery_key_web.py` and `test_crypto_migration_v3.py` cover this
+change; background the full suite once at the end.
