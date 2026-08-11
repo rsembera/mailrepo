@@ -14,6 +14,7 @@ original password. The drill's one manual step (typing the master
 password) is unnecessary here because the fixture knows it.
 """
 
+import time
 import zipfile
 from pathlib import Path
 
@@ -447,3 +448,187 @@ class TestRestorePointCredentials:
             "chain reported the older key file instead of the effective one"
         )
         assert newest["credential_status"] == "current"
+
+
+# ============================================================
+# REVIEW FINDINGS — regression tests
+# ============================================================
+#
+# These encode bugs found in the Session 74 pre-tag review and
+# reproduced in a sandbox before any fix was written. Each one failed
+# against the code as it stood.
+
+
+class TestChainReplayCorrectness:
+    """The restore path reconstructed states that never existed."""
+
+    def test_delete_then_recreate_survives_restore(self, archive_with_backup):
+        """Finding 1 (critical).
+
+        Deletions used to be accumulated across every zip in the chain
+        and applied after all extractions, so a file deleted in
+        incremental N and recreated in N+1 was extracted correctly and
+        then removed by N's stale tombstone. The restore reported
+        success.
+
+        The trigger is ordinary use for this app: permanently delete an
+        archived email, later re-commit the same message to the same
+        folder — `{folder_id}/{account}_{uid}.eml.enc` repeats exactly.
+        """
+        path = Config.get_archive_path() / "1/000.eml.enc"
+        recreated = b"From: alice@example.com\r\nSubject: One\r\n\r\nRECREATED"
+
+        path.unlink()
+        assert create_incremental_backup() is not None
+
+        time.sleep(1.05)  # distinct filenames; see finding 6
+        path.write_bytes(Encryption.encrypt(recreated))
+        assert create_incremental_backup() is not None
+
+        staging = Path(prepare_restore(get_restore_points()[0]["id"]))
+        staged = staging / "archive" / "1/000.eml.enc"
+
+        assert staged.exists(), (
+            "file deleted then recreated was lost on restore"
+        )
+        assert Encryption.decrypt(staged.read_bytes()) == recreated
+
+    def test_deletion_still_applies_when_not_recreated(self, archive_with_backup):
+        """The counterpart: per-zip ordering must not break real deletions."""
+        path = Config.get_archive_path() / "1/002.eml.enc"
+        path.unlink()
+        assert create_incremental_backup() is not None
+
+        staging = Path(prepare_restore(get_restore_points()[0]["id"]))
+        assert not (staging / "archive" / "1/002.eml.enc").exists()
+
+
+class TestMissingChainMemberIsReported:
+    """A chain with a hole must not verify clean."""
+
+    def test_missing_incremental_stays_in_files_needed(self, archive_with_backup):
+        """Finding 2 (critical).
+
+        get_restore_points() skipped incrementals absent from disk and
+        kept building the chain, so a restore point could be full +
+        incr1 + incr3 with incr2 silently gone. Verification reported no
+        problems, because it checks that listed files open — not that the
+        list is complete.
+        """
+        (Config.get_archive_path() / "1/003.eml.enc").write_bytes(
+            Encryption.encrypt(b"second")
+        )
+        assert create_incremental_backup() is not None
+        middle = get_restore_points()[0]
+
+        time.sleep(1.05)
+        (Config.get_archive_path() / "1/004.eml.enc").write_bytes(
+            Encryption.encrypt(b"third")
+        )
+        assert create_incremental_backup() is not None
+
+        # Lose the middle incremental, as cloud eviction or partial sync would.
+        Path(middle["files_needed"][-1]).unlink()
+
+        newest = get_restore_points()[0]
+        assert len(newest["files_needed"]) == 3, (
+            "missing incremental was silently dropped from the chain"
+        )
+
+        problems = verify_restore_point_files(newest)
+        assert problems, "chain with a hole verified clean"
+        assert "missing" in problems[0]
+
+    def test_gate_refuses_a_chain_with_a_hole(self, archive_with_backup):
+        """The consequence: the non-resumable windows must not open."""
+        (Config.get_archive_path() / "1/003.eml.enc").write_bytes(
+            Encryption.encrypt(b"second")
+        )
+        create_incremental_backup()
+        middle = get_restore_points()[0]
+
+        time.sleep(1.05)
+        (Config.get_archive_path() / "1/004.eml.enc").write_bytes(
+            Encryption.encrypt(b"third")
+        )
+        create_incremental_backup()
+
+        Path(middle["files_needed"][-1]).unlink()
+
+        found, problems = get_verified_latest_restore_point()
+        assert found is None
+        assert problems
+
+
+class TestBackupFilenameCollisions:
+    """Finding 6. Two backups in one second used to overwrite each other."""
+
+    def test_same_second_backups_get_distinct_filenames(self, archive_with_backup):
+        from utils.backup import generate_backup_filename
+
+        backups_dir = Config.get_data_path().parent / "backups"
+        backups_dir.mkdir(parents=True, exist_ok=True)
+
+        first = generate_backup_filename("full", backups_dir)
+        (backups_dir / first).write_bytes(b"placeholder")
+        second = generate_backup_filename("full", backups_dir)
+
+        assert first != second, (
+            "second backup in the same second would overwrite the first"
+        )
+
+    def test_back_to_back_backups_do_not_clobber(self, archive_with_backup):
+        """End to end: no sleep, so both land in the same second."""
+        (Config.get_archive_path() / "1/003.eml.enc").write_bytes(
+            Encryption.encrypt(b"a")
+        )
+        first = create_incremental_backup()
+        (Config.get_archive_path() / "1/004.eml.enc").write_bytes(
+            Encryption.encrypt(b"b")
+        )
+        second = create_incremental_backup()
+
+        assert first["filename"] != second["filename"]
+        for info in (first, second):
+            assert (
+                Path(info.get("backup_dir", "")) / info["filename"]
+            ).exists() or (
+                Config.get_data_path().parent / "backups" / info["filename"]
+            ).exists()
+
+
+class TestSafetyBackupsAreAllReachable:
+    """Finding 7. Only the newest used to be offered."""
+
+    def test_every_safety_backup_becomes_a_restore_point(self, archive_with_backup):
+        from utils.backup import create_pre_restore_backup
+
+        create_pre_restore_backup()
+        time.sleep(1.05)
+        create_pre_restore_backup()
+
+        safety = [p for p in get_restore_points() if p["type"] == "pre_restore"]
+        assert len(safety) >= 2, (
+            "older safety backups are unreachable — which is exactly when "
+            "you want one, after a second bad restore"
+        )
+        assert len({p["id"] for p in safety}) == len(safety)
+
+
+class TestSafetyBackupLocation:
+    """Finding 10. The rollback copy never left the machine."""
+
+    def test_safety_backup_honours_configured_location(self, archive_with_backup):
+        from core.database import set_setting
+        from utils.backup import create_pre_restore_backup
+
+        custom = Config.get_base_path() / "custom_backups"
+        custom.mkdir(parents=True, exist_ok=True)
+        set_setting("backup_location", str(custom))
+
+        create_pre_restore_backup()
+
+        assert list(custom.glob("pre_restore_*.zip")), (
+            "safety backup went to the repo-local dir, which never syncs "
+            "off-machine"
+        )
