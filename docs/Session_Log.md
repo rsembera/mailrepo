@@ -4889,3 +4889,111 @@ still quick.
   worth adding before the tag.
 - Rick's live archive is v3 and verified; this change does not touch
   stored data, only the route flow.
+
+---
+
+## Session 73 — August 11, 2026 (Apollo)
+
+Continues directly from 72. Two things: the verify endpoint that 72's
+change made necessary, and the first ever lint of the frontend.
+
+### Check a recovery key without using it
+
+Ports EdgeCase's `/recovery-key/verify`, fitted to MailRepo's shape as an
+API endpoint plus a Settings control rather than a page, matching how
+rotation already works.
+
+Session 72 made the recovery reset mandatory, which was right but left a
+gap: the only way to find out whether the key in the drawer opens this
+archive was to use it and lose your password doing so. Rick needed a
+whole test database to exercise the flow. The Session 68 verification
+drill needed a CLI script written for the occasion. A key that has never
+been tested is one you are only assuming works.
+
+`POST /auth/api/verify-recovery-key` verifies against the live key file
+and changes nothing — no password, no rotation, no unlock. The underlying
+`Encryption.verify_recovery_key()` discards the master deliberately.
+
+Gated on an existing session rather than the master password, following
+EdgeCase's reasoning verbatim: someone with a live session already has
+the archive open, so this reveals nothing they do not have and writes
+nothing. Demanding the password would only discourage the checking the
+endpoint exists to encourage.
+
+Malformed key reports the length problem; well-formed wrong key says it
+does not open this archive and suggests issuing a new one — the same
+typo-versus-wrong-key distinction the recovery login makes.
+
+Settings gains "Check Recovery Key" beside the rotate button, shown only
+when the archive has one. Field cleared on close rather than left holding
+the key for whoever passes the screen next. Added `.password-success`,
+since the result reuses the `.password-error` slot and a successful check
+must not render in the failure colour.
+
+8 tests. The load-bearing one asserts the key file is byte-identical
+afterwards and that both credentials still work.
+
+### Node on Apollo, and the first lint of the frontend
+
+Apollo had no node, so `settings.js` shipped in the previous commit
+without even a syntax check. Debian 13 carries node 20 in its own repos —
+no NodeSource needed. Rick installed `nodejs` and `npm`.
+
+**`node --check` found nothing.** All 29 files clean, including
+everything written this week. (Note for next time: `.js` parses as
+CommonJS by default and these are ES modules, so `import` reads as a
+syntax error — needs `--input-type=module` with the file on stdin.)
+
+**ESLint found a real bug, in code nobody had touched this week.**
+`app.js:304` assigned to `selectedDestinationFolder`, which is
+module-local to `staging.js` and never exported. `app.js` is an ES module
+and therefore strict, so this was not creating an implicit global — it
+threw `ReferenceError`. The line sits inside a try/catch, so the
+user-visible symptom was: create a new folder from the stage-email
+destination picker, the folder IS created server-side, and the UI then
+reports "Failed to create folder" and does not select it.
+
+`staging.js` already exports `setSelectedDestinationFolder()` and
+`app.js` already imports it on line 24. One call site simply never used
+it. One-word fix.
+
+Exactly the class of bug the Python suite cannot see: 518 tests pass, no
+test executes any JavaScript, and the failure only appears when a person
+clicks one specific control.
+
+`eslint.config.mjs` is now committed rather than living in `/tmp` and
+being recreated each time. Rules narrow and boring: `no-undef`,
+`no-unused-vars`, and a few no-dupe/no-unreachable checks. No style
+opinions, nothing that would churn the codebase.
+
+```
+npx --yes eslint@9 --no-config-lookup -c eslint.config.mjs \
+  "web/static/js/**/*.js" --ignore-pattern "**/lucide.min.js"
+```
+
+State: **0 errors, 64 warnings.** The warnings are unused imports and
+unused `catch (e)` bindings. Left alone deliberately — silencing 64
+cosmetic warnings across 29 files would bury the signal the next time
+something real appears.
+
+Two of the original three "errors" were the config missing browser
+globals (`TextDecoder`, `ClipboardItem`), not code faults.
+
+**Honest accounting of the tooling:** the reason for wanting node was
+syntax checking, and syntax checking found nothing. All the value was in
+`no-undef`. Worth remembering when weighing similar tooling.
+
+### Tests
+
+518 pass (was 510). Full suite on Apollo: 11m36s.
+
+### Still open
+
+- **The Settings check control has not been used in a browser.** The
+  endpoint is tested through HTTP; the button, field, and result styling
+  are not. `.password-success` is a new class that has never rendered.
+- The staging fix wants confirming by hand — Rick would recognise
+  whether the old symptom matches something he had seen and worked
+  around.
+- Adversarial review, then `git tag v1.0.0` once the live archive has a
+  week of ordinary use behind it (migrated Sunday, so end of this week).

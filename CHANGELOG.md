@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **You can now check your recovery key without using it (Session 73).**
+  Settings → Security → Check Recovery Key confirms whether the copy you
+  have on file opens this archive. It changes nothing — not your
+  password, not your recovery key. Previously the only way to find out
+  was to run the recovery flow, which now sets a new password by design,
+  so testing the key cost you the password you were testing it against.
+
 ### Changed
 - **The recovery key now resets your password instead of opening the
   archive (Session 72).** Previously it logged you straight in and
@@ -112,6 +120,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   build shipped without the native extension correctly bundled.
 
 ### Fixed
+- **Creating a folder from the stage-email destination picker reported a
+  failure even though it worked (Session 73).** The folder was created,
+  but the screen said "Failed to create folder" and didn't select it, so
+  the obvious response was to try again and end up with duplicates. A
+  JavaScript error stopped the code just after the folder was saved.
+  Found by linting the frontend for the first time.
 - **Backup retention was never applied to automatic backups
   (Session 69).** Old backups were only cleaned up when you pressed
   "Backup Now" by hand. Scheduled backups — which is nearly all of them

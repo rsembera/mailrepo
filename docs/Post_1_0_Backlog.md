@@ -10,17 +10,9 @@ Organized by category, roughly priority-ordered within each.
 
 ## Security
 
-### Verify a recovery key without using it
-**Raised:** Session 72 (Aug 11, 2026). **Reference implementation: EdgeCase** (`/recovery-key/verify`).
-
-A user should be able to confirm that the key in their drawer is the one
-that opens this archive, without resetting anything. EdgeCase has this as
-a `@login_required` route; MailRepo has nothing equivalent — the Session
-68 verification drill needed a CLI script written for the occasion.
-
-An unverified recovery key is a promise, not a feature. Small: verify the
-key against the live key file, report yes/no, change nothing. Worth
-adding before `git tag v1.0.0`.
+### ~~Verify a recovery key without using it~~ — DONE Session 73
+Implemented in `1c6296f` as `POST /auth/api/verify-recovery-key` plus a
+Settings control. Full account in `Session_Log.md` under Session 73.
 
 ---
 
@@ -61,6 +53,27 @@ own task; will be done outside of these working sessions.
 ---
 
 ## Test suite
+
+### Frontend linting is now available — worth running before UI commits
+**Added:** Session 73.
+
+`eslint.config.mjs` is committed. Node 20 is available on Apollo via
+Debian's own repos; the MacBook already had it.
+
+```
+npx --yes eslint@9 --no-config-lookup -c eslint.config.mjs \
+  "web/static/js/**/*.js" --ignore-pattern "**/lucide.min.js"
+```
+
+Current state: 0 errors, 64 warnings. The warnings are unused imports
+and unused `catch (e)` bindings — deliberately not fixed, because
+silencing 64 cosmetic warnings across 29 files would bury the signal the
+next time something real appears. **Treat any new error as a real bug**;
+its first run found a `ReferenceError` that had been shipping.
+
+No Python test executes any JavaScript, so `no-undef` is the only
+automated check the frontend has. `node --check` adds nothing — it found
+zero problems across all 29 files.
 
 ### `authenticated_client` hides CSRF regressions
 **Found:** Session 68.

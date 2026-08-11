@@ -86,7 +86,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `auth.py` | 814 | Setup, login, logout, rate limiting, session management; recovery-key verification + server-side handoff to a mandatory password reset (no session granted), v3 upgrade flow, rotation API |
+| `auth.py` | 853 | Setup, login, logout, rate limiting, session management; recovery-key verification + server-side handoff to a mandatory password reset (no session granted), v3 upgrade flow, rotation API |
 | `backups.py` | 273 | Backup/restore endpoints, folder picker |
 | `main.py` | 81 | Page routes: index, create_archive, settings |
 
@@ -138,7 +138,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | File | Lines | What It Does |
 |------|-------|--------------|
 | `mail.js` | 2,301 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
-| `settings.js` | 1,411 | Settings: appearance, accounts, security, recovery-key status + rotation, backup, reset |
+| `settings.js` | 1,484 | Settings: appearance, accounts, security, recovery-key status + check + rotation, backup, reset |
 | `review.js` | 1,035 | Review staged items, destination editing, commit |
 | `backups.js` | 1,004 | Backup/restore UI, restore points, settings |
 | `folder-selection.js` | 897 | Bulk folder staging from IMAP/imports |
@@ -268,6 +268,20 @@ python main.py
 # Opens at http://127.0.0.1:5050
 ```
 
+### Linting
+
+Python is covered by `ruff check .`. The frontend has no automated tests
+at all — no Python test executes any JavaScript — so ESLint's `no-undef`
+is its only safety net. Run it before committing UI changes:
+
+```bash
+npx --yes eslint@9 --no-config-lookup -c eslint.config.mjs \
+  "web/static/js/**/*.js" --ignore-pattern "**/lucide.min.js"
+```
+
+Baseline is 0 errors, 64 warnings. Any new **error** is a real bug; the
+first run of this found a `ReferenceError` that had been shipping.
+
 ### First Run
 
 1. Create master password (12+ characters; Argon2id-derived master key)
@@ -284,7 +298,7 @@ python main.py
 
 ---
 
-## Test Suite (510 tests)
+## Test Suite (518 tests)
 
 | File | Coverage |
 |------|----------|
