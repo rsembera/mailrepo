@@ -301,7 +301,7 @@ async function createFolder(returnToStage) {
                 newItem.classList.add('selected');
             }
             
-            selectedDestinationFolder = data.folder.id;
+            setSelectedDestinationFolder(data.folder.id);
             document.getElementById('confirmStageBtn').disabled = false;
         } else {
             // Refresh sidebar to show new folder

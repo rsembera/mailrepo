@@ -39,3 +39,8 @@ backups/
 
 # But keep the config directory structure
 !config/.gitkeep
+
+# ESLint is a dev-only check (node --check + no-undef); MailRepo ships no
+# JS toolchain and has no build step. The config is committed; anything
+# npx drags in is not.
+node_modules/

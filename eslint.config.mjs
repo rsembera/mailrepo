@@ -1,0 +1,38 @@
+export default [
+  {
+    files: ["**/*.js"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        window: "readonly", document: "readonly", console: "readonly",
+        fetch: "readonly", setTimeout: "readonly", clearTimeout: "readonly",
+        setInterval: "readonly", clearInterval: "readonly",
+        localStorage: "readonly", sessionStorage: "readonly",
+        navigator: "readonly", location: "readonly", history: "readonly",
+        alert: "readonly", confirm: "readonly", prompt: "readonly",
+        FormData: "readonly", Blob: "readonly", URL: "readonly",
+        EventSource: "readonly", AbortController: "readonly",
+        requestAnimationFrame: "readonly", getComputedStyle: "readonly",
+        Event: "readonly", CustomEvent: "readonly", DOMParser: "readonly",
+        lucide: "readonly", Intl: "readonly", structuredClone: "readonly",
+        HTMLElement: "readonly", Node: "readonly", FileReader: "readonly",
+        crypto: "readonly", performance: "readonly", queueMicrotask: "readonly",
+        TextDecoder: "readonly", TextEncoder: "readonly", ClipboardItem: "readonly",
+      },
+    },
+    rules: {
+      "no-undef": "error",
+      "no-unused-vars": ["warn", { args: "none", varsIgnorePattern: "^_" }],
+      "no-dupe-keys": "error",
+      "no-dupe-args": "error",
+      "no-duplicate-case": "error",
+      "no-unreachable": "error",
+      "no-cond-assign": "error",
+      "no-constant-condition": "warn",
+      "no-self-assign": "error",
+      "no-empty": ["warn", { allowEmptyCatch: true }],
+      "no-redeclare": "error",
+    },
+  },
+];
