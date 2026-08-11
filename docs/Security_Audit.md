@@ -32,7 +32,8 @@ The recovery key is a printable 160-bit secret that opens the archive **without 
 | Never in the session | Flask sessions are signed, not encrypted; a key placed there would be readable in the browser cookie jar. Guarded by `test_recovery_key_never_enters_the_session` |
 | Rotatable | `rotate_recovery_key()` revokes the old key immediately, without a password change or re-encryption |
 | Rotation gated on password | An unlocked session alone cannot mint a durable second credential |
-| Post-recovery reset gated on the recovery login itself | The no-old-password reset at `/auth/login/recovery/new-password` is reachable only by a session that was established with the recovery key (`session["via_recovery_key"]`), and its form carries a CSRF token. Found and closed in Session 70: before the gate, any unlocked session could replace the master password without proving any credential — the same capability the rotation gate exists to withhold. Guarded by `test_password_reset_requires_a_recovery_login` |
+| Cannot open the archive | Since Session 72 the recovery key grants no session at all. `/auth/login/recovery` verifies it and hands a short-lived server-side token to a **mandatory** password reset; the key never enters a URL or a cookie. This is what keeps it a break-glass credential rather than a second password — otherwise a user who skipped the reset would reach for the printed key at every login. Guarded by `test_recovery_key_does_not_unlock_the_archive` and `test_reset_does_not_log_the_user_in` |
+| No auto-login after reset | The user signs in with the new password while the recovery key is still in hand — the cheapest confirmation the password is what they think it is |
 | Rate limited | Recovery-key login shares the password login's limiter — it is an equivalent credential and must not be the cheaper thing to attack |
 | Cleared from the DOM | The Settings rotation view blanks the key once acknowledged |
 
@@ -42,7 +43,7 @@ The recovery key is a printable 160-bit secret that opens the archive **without 
 
 **Not offered deliberately.** There is no "email me my recovery key", no cloud escrow, and no account-recovery path through Anthropic or anyone else. Every one of those would move the archive's security off the user's own premises, which is the property the product exists to provide.
 
-**Known divergence from EdgeCase (raised Session 71, not yet actioned).** MailRepo's recovery key currently grants a full authenticated session, with the password reset offered rather than required. EdgeCase treats the same credential strictly as a password-reset mechanism that cannot log you in at all. EdgeCase's model is the correct one for a credential that lives on paper, and MailRepo should adopt it before 1.0 — see `Post_1_0_Backlog.md`. Until then, the recovery key is closer to a permanent parallel password than to a break-glass credential, which is a stronger claim on the user's storage discipline than this page otherwise implies.
+**Resolved Session 72.** MailRepo has adopted EdgeCase's model. The recovery key no longer grants a session at all: `/auth/login/recovery` verifies it, hands a short-lived server-side token to the reset step, and the reset is mandatory. After a successful reset the user is not logged in — they sign in with the new password while the recovery key is still in hand. `session["via_recovery_key"]` no longer exists, and the Session 70 gating it supported is superseded. The recovery key is now a break-glass credential rather than a parallel password.
 
 **Rotation does not reach existing backups.** This is the most important limitation on this page, and it is a property of encrypted backups generally rather than a MailRepo shortcoming.
 

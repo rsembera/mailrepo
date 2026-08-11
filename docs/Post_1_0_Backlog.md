@@ -10,55 +10,23 @@ Organized by category, roughly priority-ordered within each.
 
 ## Security
 
-### Recovery key should reset the password, not grant a session
-**Raised:** Session 71 (Aug 10, 2026), by Rick. **Reference implementation: EdgeCase.**
+### Verify a recovery key without using it
+**Raised:** Session 72 (Aug 11, 2026). **Reference implementation: EdgeCase** (`/recovery-key/verify`).
 
-MailRepo currently treats the recovery key as a second password:
-`unlock_with_recovery_key()` grants a full authenticated session, and the
-post-recovery password reset is offered with a "Skip for now" link.
+A user should be able to confirm that the key in their drawer is the one
+that opens this archive, without resetting anything. EdgeCase has this as
+a `@login_required` route; MailRepo has nothing equivalent — the Session
+68 verification drill needed a CLI script written for the occasion.
 
-EdgeCase does not do this, and its design is better. There, the recovery
-key **cannot log you in at all**:
+An unverified recovery key is a promise, not a feature. Small: verify the
+key against the live key file, report yes/no, change nothing. Worth
+adding before `git tag v1.0.0`.
 
-- `/recover` verifies the key, then hands a short-lived **server-side
-  token** to `/recover/reset`. The key never sits in a cookie and the
-  master never enters the session.
-- `/recover/reset` exists only to set a new master password. There is no
-  authenticated state anywhere on that path.
-- After a successful reset it deliberately **does not log the user in**,
-  so they type the new password once while the recovery key is still in
-  their hand — the cheapest possible confirmation that the password is
-  what they think it is.
+---
 
-Why this matters, beyond tidiness. Someone using the recovery key has by
-definition lost their password. If they can skip the reset, they will
-need the key again at the next login, and the one after. A 32-character
-printed string used routinely does not stay in a drawer: it gets
-photographed, pasted into Notes, saved into a password manager. The
-break-glass credential migrates into exactly the everyday storage the
-threat model warns about, gradually enough that nobody notices deciding
-it. Forcing the reset kills that failure mode structurally rather than by
-nagging.
-
-The "Skip for now" link is a symptom. The actual divergence is the
-session grant.
-
-Work involved:
-- Unwind the session grant in `unlock_with_recovery_key()` and the
-  `via_recovery_key` flag.
-- Add a server-side token handoff between verification and reset.
-- Make the reset mandatory; drop the skip link.
-- Do not auto-login after reset.
-- Consider prompting recovery-key rotation afterwards — the key has been
-  handled, possibly on a machine with clipboard history. Prompt rather
-  than force: handing someone a new key to save while they are already
-  rattled trades one lockout risk for another.
-
-Roughly one session. Worth doing **before** `git tag v1.0.0`, since it
-changes the security model rather than the implementation.
-
-Note the direction of travel: for this feature EdgeCase is the reference
-and MailRepo is the port, which is the reverse of the usual relationship.
+### ~~Recovery key should reset the password, not grant a session~~ — DONE Session 72
+Implemented in `3cb2eda`. Kept here briefly for traceability; the full
+account is in `Session_Log.md` under Session 72.
 
 ---
 

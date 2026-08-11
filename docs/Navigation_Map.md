@@ -65,8 +65,8 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 |------|-------|--------------|
 | `imap.py` | 1,535 | IMAP client: connect, auth, folders, fetch, MOVE/COPY + UID-scoped expunge, Gmail-aware delete (incl. batched set delete), CONDSTORE |
 | `pdf_export.py` | 1,052 | PDF export: per-email PDFs, attachment merging, WeasyPrint |
-| `encryption.py` | 733 | Argon2id KDF + HKDF + AES-256-GCM (v2) plus the v3 envelope: random master wrapped under password and recovery key |
-| `password_change.py` | 603 | Password change — v2 full re-encryption, v3 rewrap; post-recovery reset, recovery-key rotation, on-disk backup gate, interruption marker |
+| `encryption.py` | 761 | Argon2id KDF + HKDF + AES-256-GCM (v2) plus the v3 envelope: random master wrapped under password and recovery key |
+| `password_change.py` | 613 | Password change — v2 full re-encryption, v3 rewrap; recovery-key password reset (needs no unlocked session), recovery-key rotation, on-disk backup gate, interruption marker |
 | `database.py` | 465 | SQLCipher connection, schema v5, FTS5, migrations, threading lock, hard refusal to open unencrypted |
 | `crypto_migration_v3.py` | 298 | v2 → v3 migration: re-encrypt under a random master, resumable via wrapped-master state file |
 | `importer.py` | 280 | mbox, Apple mbox, EML, PST import handling |
@@ -86,7 +86,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `auth.py` | 769 | Setup, login, logout, rate limiting, session management; recovery-key login, post-recovery password reset (gated to recovery-login sessions + CSRF), v3 upgrade flow, rotation API |
+| `auth.py` | 814 | Setup, login, logout, rate limiting, session management; recovery-key verification + server-side handoff to a mandatory password reset (no session granted), v3 upgrade flow, rotation API |
 | `backups.py` | 273 | Backup/restore endpoints, folder picker |
 | `main.py` | 81 | Page routes: index, create_archive, settings |
 
@@ -284,7 +284,7 @@ python main.py
 
 ---
 
-## Test Suite (505 tests)
+## Test Suite (510 tests)
 
 | File | Coverage |
 |------|----------|

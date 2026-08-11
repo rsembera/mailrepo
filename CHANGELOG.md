@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The recovery key now resets your password instead of opening the
+  archive (Session 72).** Previously it logged you straight in and
+  offered a password reset you could skip. That made it a second
+  password — and since anyone using it has by definition forgotten
+  theirs, skipping meant reaching for the printed key at every login,
+  which is how a key meant for a drawer ends up photographed or pasted
+  into a notes app. Now the key verifies, you choose a new password, and
+  you sign in with it. Your recovery key still works afterwards and is
+  unchanged. Supersedes the Session 70 gating below, which protected a
+  session that no longer exists on this path.
+
 ### Security
 - **The post-recovery password reset is now gated to the recovery login
   (Session 70).** The screen that sets a new password after a recovery-key

@@ -4787,3 +4787,105 @@ Expect the full suite to be slower on Apollo — Argon2id dominates
 runtime, ~7.5 min on the M4. Targeted runs against `test_auth.py`,
 `test_recovery_key_web.py` and `test_crypto_migration_v3.py` cover this
 change; background the full suite once at the end.
+
+---
+
+## Session 72 — August 11, 2026 (Apollo)
+
+First session on Apollo since 66. Implements the Session 71 backlog item.
+
+### Recovery key resets the password; it no longer grants a session
+
+Adopts EdgeCase's design wholesale. Worth noting the direction: EdgeCase
+was the reference and MailRepo the port, the reverse of the usual
+relationship between them.
+
+**Before.** `/auth/login/recovery` called `unlock_with_recovery_key()`,
+granted a full authenticated session, set `session["via_recovery_key"]`,
+and offered the password reset with a "Skip for now" link. That made the
+recovery key a second password. Someone who skipped would reach for the
+printed key at every subsequent login, and a 32-character string used
+routinely ends up photographed or pasted into a notes app — the
+break-glass credential migrating into everyday storage. The skip link was
+the symptom; the session grant was the problem.
+
+**After.**
+
+- `Encryption.verify_recovery_key()` checks a key and deliberately
+  discards the master, so verification leaves the archive locked.
+- `/auth/login/recovery` verifies only, then mints a server-side handoff
+  token. The key never enters a URL or a cookie — same reasoning as the
+  existing password-change job store, since the session is signed but not
+  encrypted. Single entry, 5-minute TTL.
+- `reset_password_with_recovery_key()` unwraps the master from the key
+  file using the key itself and rewraps under the new password. Needs no
+  unlocked session, adopts nothing into class state. Replaces
+  `set_password_after_recovery()`.
+- The reset is mandatory. No skip link; the token is the only way in.
+- After success the user is **not** logged in. They have typed the new
+  password exactly twice; using it once more while the recovery key is
+  still in hand is the cheapest confirmation it is what they think.
+- `session["via_recovery_key"]` is gone — there is no session on this
+  path to flag.
+
+**CSRF.** The reset route carries no session token and needs none: a user
+who forgot their password has no session. The handoff token is what stops
+a forged cross-site POST — 32 bytes of urlsafe randomness, minted only
+after a key verifies, never exposed to a page an attacker controls. The
+old `test_password_reset_requires_csrf` was replaced by a test that says
+this rather than deleted silently.
+
+**Also.** A malformed key no longer spends a rate-limit attempt. A typo
+is not a guess, and fumbling a 32-character string should not lock you
+out of your own recovery path. Picked up from EdgeCase on the second
+read; it was not in last night's notes.
+
+### A bug the tests caught
+
+`set_password_post_recovery` is now unauthenticated and had to join the
+`before_request` public-endpoint allowlist. Without it the route
+redirected to `/auth/login` — unreachable for exactly the person it
+exists for. Identical in shape to the Session 68 recovery-login bug, and
+caught the same way.
+
+### Method note
+
+Last night Claude described EdgeCase's design from Rick's one-line
+summary and got it wrong. This session started by reading it. Two details
+were not in the summary and would have been missed again: the
+malformed-key rate-limit exemption, and the existence of a separate
+`/recovery-key/verify` route for checking a key without changing
+anything. The second is a genuine feature MailRepo lacks — see below.
+
+EdgeCase on Apollo was 44 commits behind and had none of the recovery-key
+work; `git pull` first, or the reference is not there to read.
+
+### Tests
+
+510 pass. Rewrote the recovery-login suite for the new contract and added
+coverage for: the key not unlocking the archive, the key not appearing in
+the redirect URL or the session, the reset not logging the user in,
+single-use tokens, forged tokens, and an authenticated session being
+unable to reach the reset.
+
+Verified by mutation: restoring the session grant fails exactly
+`test_recovery_key_does_not_unlock_the_archive` and
+`test_reset_does_not_log_the_user_in`, and nothing else.
+
+**Apollo timing:** full suite 11m17s, against 7m21s on the MacBook Air
+M4 — roughly 50% slower, Argon2id dominating as usual. Targeted runs are
+still quick.
+
+### Still open
+
+- **Not clicked through.** Same caveat as every UI change this week: the
+  logic is tested via HTTP, but nobody has used the new two-step flow in
+  a browser. Now more worth doing than before, since the flow changed
+  shape rather than gaining a field.
+- **`/recovery-key/verify` equivalent.** EdgeCase lets a logged-in user
+  check their recovery key without changing anything. MailRepo has no
+  such route — the Session 68 drill needed a CLI script. Users should be
+  able to confirm the key in the drawer is the right one. Small, and
+  worth adding before the tag.
+- Rick's live archive is v3 and verified; this change does not touch
+  stored data, only the route flow.
