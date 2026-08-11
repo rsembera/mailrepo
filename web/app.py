@@ -73,9 +73,15 @@ def create_app(test_config: dict = None) -> Flask:
         # auth.login is: it is a way IN. Requiring an authenticated
         # session to reach it would make it unreachable by exactly the
         # person it exists for — someone locked out of their archive.
+        #
+        # auth.set_password_post_recovery likewise: since Session 71 the
+        # recovery key no longer grants a session, so the reset step has
+        # no session to check. Its gate is the server-side handoff token
+        # minted only after a key verifies.
         public_endpoints = {
             "auth.login",
             "auth.login_with_recovery_key",
+            "auth.set_password_post_recovery",
             "auth.setup",
             "static",
         }

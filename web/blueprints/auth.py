@@ -29,8 +29,8 @@ from core.password_change import (
     MAX_BACKUP_AGE_HOURS,
     PasswordChangeError,
     _restore_point_age_hours,
+    reset_password_with_recovery_key,
     rotate_recovery_key,
-    set_password_after_recovery,
 )
 from utils.backup import create_full_backup, get_verified_latest_restore_point
 from utils.log import get_logger
@@ -57,6 +57,50 @@ _LOCKOUT_SECONDS = 60
 _pw_change_jobs = {}  # job_id -> {"current", "new", "created_at"}
 _pw_change_lock = threading.Lock()
 _PW_CHANGE_TTL = 300  # seconds; abandoned (never-consumed) jobs purged
+
+
+# A recovery key that has been VERIFIED, held between /login/recovery and
+# /login/recovery/new-password. Server-process memory only, for the same
+# reason as the password-change jobs above: the session is a signed but
+# unencrypted cookie, and a recovery key placed there would be readable in
+# the browser's cookie jar.
+#
+# Short TTL: the user is mid-flow with the key in front of them, so there
+# is no reason for this to outlive a single sitting. Single-entry — a new
+# verification supersedes any pending one.
+_recovery_reset_handoff = {}  # token -> {"key", "created_at"}
+_recovery_handoff_lock = threading.Lock()
+_RECOVERY_HANDOFF_TTL = 300
+
+
+def _store_recovery_handoff(recovery_key):
+    token = secrets.token_urlsafe(32)
+    with _recovery_handoff_lock:
+        _recovery_reset_handoff.clear()
+        _recovery_reset_handoff[token] = {
+            "key": recovery_key,
+            "created_at": time.time(),
+        }
+    return token
+
+
+def _peek_recovery_handoff(token):
+    """Return the verified key for this token, or None. Does not consume."""
+    if not token:
+        return None
+    with _recovery_handoff_lock:
+        entry = _recovery_reset_handoff.get(token)
+        if not entry:
+            return None
+        if time.time() - entry["created_at"] > _RECOVERY_HANDOFF_TTL:
+            _recovery_reset_handoff.pop(token, None)
+            return None
+        return entry["key"]
+
+
+def _drop_recovery_handoff(token):
+    with _recovery_handoff_lock:
+        _recovery_reset_handoff.pop(token, None)
 
 
 def _gc_pw_change_jobs():
@@ -342,19 +386,12 @@ def login_with_recovery_key():
         recovery_key = request.form.get("recovery_key", "")
 
         try:
-            Encryption.unlock_with_recovery_key(recovery_key)
-            _clear_attempts(client_ip)
-            init_database()
-            cleanup_expired_trash()
-
-            session.clear()
-            session["authenticated"] = True
-            session["last_activity"] = time.time()
-            session["csrf_token"] = secrets.token_hex(32)
-            session["via_recovery_key"] = True
-            session.permanent = True
-
-            return make_response(redirect(url_for("auth.set_password_post_recovery")))
+            # Verify ONLY. This route deliberately does not unlock the
+            # archive or grant a session: the recovery key is a way to
+            # reset the password, not a second password. Granting a
+            # session here is what would let someone skip the reset and
+            # keep using the printed key as their daily credential.
+            Encryption.verify_recovery_key(recovery_key)
         except InvalidPasswordError:
             _record_failed_attempt(client_ip)
             return render_template(
@@ -362,43 +399,41 @@ def login_with_recovery_key():
                 error="That recovery key does not open this archive.",
             )
         except EncryptionError as e:
-            # Malformed input (wrong length, bad characters) lands here
-            # rather than in InvalidPasswordError, so the user is told they
-            # mistyped it rather than that it is the wrong key.
+            # Malformed input (wrong length, bad characters). A typo is
+            # not a guess, so it does not spend a rate-limit attempt —
+            # otherwise fumbling a 32-character string locks you out of
+            # your own recovery path.
             return render_template("auth/recovery_login.html", error=str(e))
+
+        _clear_attempts(client_ip)
+        token = _store_recovery_handoff(recovery_key)
+        return redirect(url_for("auth.set_password_post_recovery", token=token))
 
     return render_template("auth/recovery_login.html")
 
 
 @auth_bp.route("/login/recovery/new-password", methods=["GET", "POST"])
 def set_password_post_recovery():
-    """Set a new master password after unlocking with a recovery key.
+    """Set a new master password after a verified recovery key.
 
-    Someone who used their recovery key has almost always forgotten their
-    password. Letting them straight into the app would leave them locked
-    out again at the next login, so this is offered immediately — but not
-    forced, because a user may have had another reason to use the key.
+    Reachable only with a handoff token from /login/recovery, which is
+    minted only after the key verifies. No session is involved: the
+    verified key held server-side IS the authorisation, and it is what
+    performs the reset.
 
-    Gated to sessions established BY a recovery-key login. This is the
-    only route in the app that changes the master password without proof
-    of any credential — the recovery key shown at login IS the proof, and
-    session["via_recovery_key"] records that it was shown. Without the
-    gate, any unlocked session could replace the password, which is the
-    exact capability rotate_recovery_key deliberately withholds from
-    unlocked sessions by demanding the password.
+    This is mandatory rather than offered. Someone who used their
+    recovery key has by definition lost their password; letting them skip
+    would leave them reaching for the printed key at every subsequent
+    login, and a 32-character string used routinely ends up photographed
+    or pasted into a notes app — the break-glass credential migrating
+    into everyday storage.
     """
-    if not session.get("authenticated") or not Encryption.is_unlocked():
-        return redirect(url_for("auth.login"))
-
-    if not session.get("via_recovery_key"):
-        return redirect(url_for("main.index"))
+    token = request.args.get("token") or request.form.get("token", "")
+    recovery_key = _peek_recovery_handoff(token)
+    if not recovery_key:
+        return redirect(url_for("auth.login_with_recovery_key"))
 
     if request.method == "POST":
-        token = request.form.get("csrf_token", "")
-        expected = session.get("csrf_token", "")
-        if not expected or not secrets.compare_digest(token, expected):
-            return redirect(url_for("auth.login"))
-
         password = request.form.get("password", "")
         confirm = request.form.get("confirm", "")
 
@@ -409,16 +444,26 @@ def set_password_post_recovery():
             errors.append("Passwords do not match.")
 
         if errors:
-            return render_template("auth/post_recovery_password.html", errors=errors)
+            return render_template(
+                "auth/post_recovery_password.html", errors=errors, token=token
+            )
 
         try:
-            set_password_after_recovery(password)
-            session.pop("via_recovery_key", None)
-            session["csrf_token"] = secrets.token_hex(32)
-            flash("Master password updated.", "success")
-            return redirect(url_for("main.index"))
-        except PasswordChangeError as e:
-            return render_template("auth/post_recovery_password.html", errors=[str(e)])
+            reset_password_with_recovery_key(recovery_key, password)
+        except (PasswordChangeError, EncryptionError) as e:
+            return render_template(
+                "auth/post_recovery_password.html", errors=[str(e)], token=token
+            )
+
+        _drop_recovery_handoff(token)
+
+        # Deliberately does NOT log the user in. They have typed this
+        # password exactly twice; using it once more now, while the
+        # recovery key is still in their hand, is the cheapest possible
+        # confirmation that it is what they think it is.
+        return render_template("auth/post_recovery_password.html", done=True)
+
+    return render_template("auth/post_recovery_password.html", token=token)
 
     return render_template("auth/post_recovery_password.html")
 

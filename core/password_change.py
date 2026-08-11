@@ -312,32 +312,42 @@ def _change_password_v3(
     return {"files": 0, "credentials": 0, "rewrapped": True}
 
 
-def set_password_after_recovery(new_password: str) -> dict:
-    """Set a new master password using the already-unlocked master key.
+def reset_password_with_recovery_key(recovery_key: str, new_password: str) -> dict:
+    """Set a new master password using only the recovery key.
 
-    For the recovery-key path only. change_master_password() needs the old
-    password to unwrap the master; someone who just used a recovery key by
-    definition does not have it. Here the master is already in memory from
-    the recovery unwrap, so the new password wrapper can be built directly.
+    Requires NO unlocked session and grants none. The recovery key
+    unwraps the master directly from the key file; the master is rewrapped
+    under the new password and written back, and nothing is adopted into
+    Encryption's class state.
 
-    Requires an unlocked v3 archive. Does not touch the recovery key —
-    rotating that is a separate, deliberate action.
+    This replaces set_password_after_recovery(), which required the
+    archive to already be unlocked by a recovery-key login. That design
+    made the recovery key a way IN — a second password — which is exactly
+    what a break-glass credential should not be. See
+    Post_1_0_Backlog "Recovery key should reset the password, not grant a
+    session".
+
+    Raises InvalidPasswordError if the key does not open this archive,
+    EncryptionError if it is malformed.
     """
-    if not Encryption.is_unlocked():
-        raise PasswordChangeError("Encryption is locked. Log in and retry.")
+    if not Encryption.is_initialized():
+        raise PasswordChangeError("Encryption is not initialized.")
 
     if Encryption.salt_file_version() != 3:
-        raise PasswordChangeError("This archive predates recovery keys.")
-
-    master = Encryption._master
-    if master is None:
-        raise PasswordChangeError("No master key in memory.")
+        raise PasswordChangeError(
+            "This archive predates recovery keys and cannot be opened with one."
+        )
 
     blob = Encryption.read_salt_blob()
+
+    # Raises InvalidPasswordError (wrong key) or EncryptionError
+    # (malformed) — the caller distinguishes them for the user.
+    master = Encryption.unwrap_master_with_recovery_key(blob, recovery_key)
+
     new_blob = Encryption.rewrap_password(blob, master, new_password)
     Encryption.write_v3_salt_file(new_blob)
 
-    log.info("Master password set via recovery-key path")
+    log.info("Master password reset via recovery key (no session granted)")
     return {"files": 0, "credentials": 0, "rewrapped": True}
 
 

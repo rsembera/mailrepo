@@ -63,6 +63,22 @@ def _csrf(client):
         return sess.get("csrf_token", "")
 
 
+def _recovery_token(client, recovery_key):
+    """Verify a recovery key and return the handoff token from the redirect.
+
+    The recovery flow is two steps by design: verify, then reset. The
+    token is the only thing carried between them — no session, and the
+    key itself never appears in the URL.
+    """
+    response = client.post(
+        "/auth/login/recovery", data={"recovery_key": recovery_key}
+    )
+    assert response.status_code == 302, "recovery key did not verify"
+    location = response.headers["Location"]
+    assert "token=" in location, f"no handoff token in redirect: {location}"
+    return location.split("token=", 1)[1].split("&", 1)[0]
+
+
 @pytest.fixture
 def fresh_client(app):
     """A client against an app with no archive set up yet."""
@@ -135,14 +151,42 @@ class TestRecoveryLogin:
         html = archive["client"].get("/auth/login").get_data(as_text=True)
         assert "/auth/login/recovery" in html
 
-    def test_recovery_key_unlocks_and_redirects_to_password_reset(self, archive):
+    def test_recovery_key_does_not_unlock_the_archive(self, archive):
+        """The whole point of Session 71.
+
+        The recovery key verifies and hands off to the password reset. It
+        must NOT open the archive, or it is simply a second password and
+        the user can skip the reset and keep using it forever.
+        """
         response = archive["client"].post(
             "/auth/login/recovery",
             data={"recovery_key": archive["key"]},
         )
         assert response.status_code == 302
         assert "new-password" in response.headers["Location"]
-        assert Encryption.is_unlocked()
+
+        assert not Encryption.is_unlocked(), (
+            "recovery key granted an unlocked archive"
+        )
+        with archive["client"].session_transaction() as sess:
+            assert not sess.get("authenticated"), (
+                "recovery key granted an authenticated session"
+            )
+
+    def test_handoff_token_is_not_the_recovery_key(self, archive):
+        """The key must not travel in a URL or a cookie."""
+        response = archive["client"].post(
+            "/auth/login/recovery",
+            data={"recovery_key": archive["key"]},
+        )
+        location = response.headers["Location"]
+        compact = archive["key"].replace("-", "")
+        assert archive["key"] not in location
+        assert compact not in location
+
+        with archive["client"].session_transaction() as sess:
+            for value in sess.values():
+                assert compact not in str(value)
 
     def test_formatting_variations_are_accepted(self, archive):
         mangled = archive["key"].lower().replace("-", " ")
@@ -170,49 +214,102 @@ class TestRecoveryLogin:
 
     def test_new_password_after_recovery_works(self, archive):
         client = archive["client"]
-        client.post("/auth/login/recovery", data={"recovery_key": archive["key"]})
+        token = _recovery_token(client, archive["key"])
 
         response = client.post(
             "/auth/login/recovery/new-password",
-            data={"csrf_token": _csrf(client), "password": NEW_PASSWORD, "confirm": NEW_PASSWORD},
+            data={"token": token, "password": NEW_PASSWORD, "confirm": NEW_PASSWORD},
+        )
+        assert response.status_code == 200
+        assert b"Password updated" in response.data
+
+        Encryption.lock()
+        assert Encryption.unlock(NEW_PASSWORD)
+
+    def test_reset_does_not_log_the_user_in(self, archive):
+        """They have typed the new password exactly twice.
+
+        Using it once more now, while the recovery key is still in hand,
+        is the cheapest confirmation it is what they think it is.
+        """
+        client = archive["client"]
+        token = _recovery_token(client, archive["key"])
+        client.post(
+            "/auth/login/recovery/new-password",
+            data={"token": token, "password": NEW_PASSWORD, "confirm": NEW_PASSWORD},
+        )
+
+        with client.session_transaction() as sess:
+            assert not sess.get("authenticated")
+
+    def test_old_password_stops_working_after_reset(self, archive):
+        client = archive["client"]
+        token = _recovery_token(client, archive["key"])
+        client.post(
+            "/auth/login/recovery/new-password",
+            data={"token": token, "password": NEW_PASSWORD, "confirm": NEW_PASSWORD},
+        )
+
+        Encryption.lock()
+        with pytest.raises(InvalidPasswordError):
+            Encryption.unlock(PASSWORD)
+
+    def test_token_is_single_use(self, archive):
+        """Consumed on success, so a replay cannot reset again."""
+        client = archive["client"]
+        token = _recovery_token(client, archive["key"])
+        client.post(
+            "/auth/login/recovery/new-password",
+            data={"token": token, "password": NEW_PASSWORD, "confirm": NEW_PASSWORD},
+        )
+
+        response = client.post(
+            "/auth/login/recovery/new-password",
+            data={"token": token, "password": "YetAnother12345!", "confirm": "YetAnother12345!"},
         )
         assert response.status_code == 302
-
         Encryption.lock()
         assert Encryption.unlock(NEW_PASSWORD)
 
     def test_recovery_key_survives_the_password_reset(self, archive):
         client = archive["client"]
-        client.post("/auth/login/recovery", data={"recovery_key": archive["key"]})
+        token = _recovery_token(client, archive["key"])
         client.post(
             "/auth/login/recovery/new-password",
-            data={"csrf_token": _csrf(client), "password": NEW_PASSWORD, "confirm": NEW_PASSWORD},
+            data={"token": token, "password": NEW_PASSWORD, "confirm": NEW_PASSWORD},
         )
 
         Encryption.lock()
         assert Encryption.unlock_with_recovery_key(archive["key"])
 
-    def test_password_reset_page_requires_a_session(self, archive):
-        Encryption.lock()
+    def test_reset_page_needs_a_valid_token(self, archive):
         response = archive["client"].get("/auth/login/recovery/new-password")
         assert response.status_code == 302
-        assert "login" in response.headers["Location"]
+        assert "recovery" in response.headers["Location"]
 
-    def test_password_reset_requires_a_recovery_login(self, archive):
-        """A password login must NOT reach the no-old-password reset.
+    def test_forged_token_is_rejected(self, archive):
+        response = archive["client"].post(
+            "/auth/login/recovery/new-password",
+            data={"token": "not-a-real-token", "password": NEW_PASSWORD, "confirm": NEW_PASSWORD},
+        )
+        assert response.status_code == 302
+        Encryption.lock()
+        assert Encryption.unlock(PASSWORD), "password was changed without a valid token"
 
-        set_password_after_recovery() deliberately asks for no credential
-        -- the recovery key shown at login is the credential. A session
-        established with the password never showed one, so letting it in
-        would mean any unlocked session can replace the master password:
-        the exact capability rotate_recovery_key withholds by demanding
-        the password.
+    def test_an_authenticated_session_cannot_reach_the_reset(self, archive):
+        """A password login must not reach the no-old-password reset.
+
+        The reset asks for no credential — the verified recovery key IS
+        the credential. Without the token requirement, any logged-in
+        session could replace the master password, the exact capability
+        rotate_recovery_key withholds by demanding the password.
         """
         client = archive["client"]
         client.post("/auth/login", data={"password": PASSWORD})
 
         response = client.get("/auth/login/recovery/new-password")
         assert response.status_code == 302
+        assert "recovery" in response.headers["Location"]
         assert "new-password" not in response.headers["Location"]
 
         response = client.post(
@@ -226,21 +323,28 @@ class TestRecoveryLogin:
             Encryption.unlock(NEW_PASSWORD)
         assert Encryption.unlock(PASSWORD)
 
-    def test_password_reset_requires_csrf(self, archive):
-        """Missing or wrong token: redirected out, password unchanged."""
+    def test_the_handoff_token_is_what_protects_this_route(self, archive):
+        """No session CSRF token here, and none is needed.
+
+        The reset is deliberately unauthenticated — a user who forgot
+        their password has no session. What stops a forged cross-site
+        POST is the handoff token: 32 bytes of urlsafe randomness, minted
+        server-side only after a recovery key verified, and never sent
+        anywhere an attacker's page could read it.
+        """
         client = archive["client"]
-        client.post("/auth/login/recovery", data={"recovery_key": archive["key"]})
 
         response = client.post(
             "/auth/login/recovery/new-password",
             data={"password": NEW_PASSWORD, "confirm": NEW_PASSWORD},
         )
         assert response.status_code == 302
-        assert "login" in response.headers["Location"]
+        assert "recovery" in response.headers["Location"]
 
         Encryption.lock()
         with pytest.raises(InvalidPasswordError):
             Encryption.unlock(NEW_PASSWORD)
+        assert Encryption.unlock(PASSWORD)
 
 
 # ============================================================

@@ -312,6 +312,34 @@ class Encryption:
         return True
 
     @classmethod
+    def verify_recovery_key(cls, recovery_key: str) -> bool:
+        """Check a recovery key WITHOUT unlocking or changing anything.
+
+        Separate from unlock_with_recovery_key because verifying and
+        being let in are different acts. The recovery flow verifies here,
+        then resets the password — it never grants a session, so the key
+        cannot become a second password.
+
+        Raises InvalidPasswordError if the key does not open this
+        archive, EncryptionError if it is malformed or the archive
+        predates recovery keys.
+        """
+        if not cls.is_initialized():
+            raise EncryptionError("Encryption not initialized.")
+
+        blob = cls.read_salt_blob()
+        if blob[:4] != SALT_MAGIC_V3:
+            raise EncryptionError(
+                "This archive predates recovery keys and cannot be opened with one. "
+                "It can only be opened with its master password."
+            )
+
+        # Discards the master deliberately: nothing is adopted into class
+        # state, so a successful verification leaves the archive locked.
+        cls.unwrap_master_with_recovery_key(blob, recovery_key)
+        return True
+
+    @classmethod
     def unlock_with_recovery_key(cls, recovery_key: str) -> bool:
         """Unlock using the printed recovery key instead of the password.
 
