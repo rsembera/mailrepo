@@ -1176,6 +1176,35 @@ def cleanup_old_backups(retention, custom_location=None):
         save_manifest(manifest)
         log.info(f"Retention cleanup: Deleted {len(chains_to_delete)} old backup chain(s)")
 
+    # Orphaned incrementals: chains whose full backup is gone.
+    #
+    # These can never be restored — replay needs the full — but the loop
+    # above skips them, because it bails on `if not chain["full"]`. They
+    # accumulated in the manifest and on disk indefinitely. Only removed
+    # once past retention, so a chain whose full is briefly missing (an
+    # eviction, a sync in progress) is not destroyed on sight.
+    orphans_deleted = 0
+    for chain_id, chain in chains.items():
+        if chain["full"] or not chain["incrementals"]:
+            continue
+        newest_date = max(b["created_at"] for b in chain["incrementals"])
+        if newest_date >= cutoff_date:
+            continue
+        for incr in chain["incrementals"]:
+            incr_path = get_backup_path_for_entry(incr)
+            if incr_path.exists():
+                incr_path.unlink()
+            if incr in manifest["backups"]:
+                manifest["backups"].remove(incr)
+            orphans_deleted += 1
+
+    if orphans_deleted:
+        save_manifest(manifest)
+        log.info(
+            f"Retention cleanup: Deleted {orphans_deleted} orphaned "
+            f"incremental(s) with no surviving full backup"
+        )
+
     # Clean up old safety backups
     safety_deleted = 0
     for backup in safety_backups:

@@ -69,7 +69,9 @@ Comprehensive review of all security-critical code paths: encryption, authentica
 
 ## Encryption (core/encryption.py)
 
-| Check | Status | Detail |
+> ⚠️ **The table below describes the RETIRED v1 scheme (PBKDF2 + Fernet), removed in May 2026.** It is kept as the point-in-time record of the February audit. For what MailRepo does today, see the "Current scheme" table immediately after it.
+
+| Check (v1 — HISTORICAL) | Status | Detail |
 |-------|--------|--------|
 | Key derivation | ✅ | PBKDF2 with 480,000 iterations (SHA256) |
 | Salt generation | ✅ | 32-byte, secrets.token_bytes() |
@@ -79,6 +81,22 @@ Comprehensive review of all security-critical code paths: encryption, authentica
 | Password verification | ✅ | Constant-time via Fernet.decrypt() |
 | Key management | ✅ | In-memory with lock/unlock pattern |
 | Password change | ✅ | Re-encrypts all files and credentials |
+
+### Current scheme (v3 envelope, as of August 2026)
+
+| Check | Status | Detail |
+|-------|--------|--------|
+| Key derivation | ✅ | Argon2id, m=256 MiB, t=6, p=4 (`core/encryption.py`) |
+| Subkey derivation | ✅ | HKDF-Expand from the master, domain-separated info strings for file vs DB |
+| Salt generation | ✅ | 32-byte, `secrets.token_bytes()`; fresh salt on every rewrap |
+| Cipher | ✅ | AES-256-GCM, random 96-bit nonce per encryption |
+| Master key | ✅ | 32 random bytes, wrapped twice — under Argon2id(password) and under HKDF(recovery key). Independent of any password, which is what makes revocation real |
+| Key file | ✅ | MRC3, fixed 190 bytes; length validated before use |
+| Password storage | ✅ | Never stored. A wrong password fails the GCM tag on the wrapper — no separate verification token needed |
+| DB key | ✅ | SQLCipher via raw-key PRAGMA, derived from the master, never from the password directly |
+| Password change | ✅ | 61-byte rewrap of the password wrapper. No file walk, no DB rekey, no non-resumable window |
+| Recovery key | ✅ | 160 bits, generated not chosen, shown once, never stored. Resets the password; cannot open the archive (Session 72) |
+| Credential rotation | ✅ | Password and recovery key rotate independently; each rewrap leaves the other wrapper byte-identical |
 
 ## Authentication (web/blueprints/auth.py)
 
@@ -112,16 +130,16 @@ Comprehensive review of all security-critical code paths: encryption, authentica
 | Check | Status | Detail |
 |-------|--------|--------|
 | Auth enforcement | ✅ | before_request check on all routes |
-| CSRF validation | ✅ | All state-changing requests validated |
+| CSRF validation | ✅ | Middleware covers every state-changing request on a path containing `/api/`. Forms outside that (`/auth/upgrade`, `/auth/setup/recovery-key-saved`, `/archive/create`) carry and verify a token explicitly. `/archive/create` was missed until August 2026 — it is the pattern a maintainer copies, so new non-`/api/` forms must do the same |
 | Session timeout | ✅ | Enforced (except SSE streaming endpoints) |
 | Error responses | ✅ | 401 for auth, 403 for CSRF |
-| Public endpoints | ✅ | Whitelist: auth.login, auth.setup, static only |
+| Public endpoints | ✅ | Whitelist only: `auth.login`, `auth.login_with_recovery_key`, `auth.set_password_post_recovery`, `auth.setup`, `static`. The two recovery routes are public by necessity — a user locked out of their archive has no session, so gating them would make them unreachable by exactly the person they exist for. The reset step's gate is a server-side handoff token minted only after a recovery key verifies |
 
 ## IMAP (core/imap.py)
 
 | Check | Status | Detail |
 |-------|--------|--------|
-| Credential storage | ✅ | Fernet-encrypted in database |
+| Credential storage | ✅ | Encrypted in the database with the file key (AES-256-GCM since May 2026; this row read "Fernet-encrypted" until August) |
 | Connection security | ✅ | SSL/TLS by default (port 993) |
 | Connection testing | ✅ | Validated before saving credentials |
 | Auth failure handling | ✅ | Proper error messages, no credential leakage |

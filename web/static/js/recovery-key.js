@@ -21,6 +21,14 @@
 
     const recoveryKey = keyEl.textContent.trim();
 
+    function copyShortcutLabel() {
+        // MailRepo runs on Linux and macOS. Telling a Linux user to press
+        // Cmd+C at the one moment they must not lose this key is a poor
+        // time to be wrong about their keyboard.
+        var mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+        return mac ? 'Press Cmd+C' : 'Press Ctrl+C';
+    }
+
     function flash(button, message) {
         const original = button.textContent;
         button.textContent = message;
@@ -40,11 +48,11 @@
             if (navigator.clipboard && window.isSecureContext) {
                 navigator.clipboard.writeText(recoveryKey).then(
                     function () { flash(copyButton, 'Copied'); },
-                    function () { selectKeyText(); flash(copyButton, 'Press Cmd+C'); }
+                    function () { selectKeyText(); flash(copyButton, copyShortcutLabel()); }
                 );
             } else {
                 selectKeyText();
-                flash(copyButton, 'Press Cmd+C');
+                flash(copyButton, copyShortcutLabel());
             }
         });
     }

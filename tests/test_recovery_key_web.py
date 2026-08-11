@@ -64,19 +64,22 @@ def _csrf(client):
 
 
 def _recovery_token(client, recovery_key):
-    """Verify a recovery key and return the handoff token from the redirect.
+    """Verify a recovery key and return the handoff token.
 
-    The recovery flow is two steps by design: verify, then reset. The
-    token is the only thing carried between them — no session, and the
-    key itself never appears in the URL.
+    The recovery flow is two steps by design: verify, then reset. Since
+    Session 74 the verify step renders the reset form directly instead of
+    redirecting, so the token arrives in a hidden field rather than a
+    query string — it never enters browser history.
     """
     response = client.post(
         "/auth/login/recovery", data={"recovery_key": recovery_key}
     )
-    assert response.status_code == 302, "recovery key did not verify"
-    location = response.headers["Location"]
-    assert "token=" in location, f"no handoff token in redirect: {location}"
-    return location.split("token=", 1)[1].split("&", 1)[0]
+    assert response.status_code == 200, "recovery key did not verify"
+    html = response.get_data(as_text=True)
+    marker = 'name="token" value="'
+    assert marker in html, "no handoff token in the rendered reset form"
+    start = html.index(marker) + len(marker)
+    return html[start : html.index('"', start)]
 
 
 @pytest.fixture
@@ -162,8 +165,8 @@ class TestRecoveryLogin:
             "/auth/login/recovery",
             data={"recovery_key": archive["key"]},
         )
-        assert response.status_code == 302
-        assert "new-password" in response.headers["Location"]
+        assert response.status_code == 200
+        assert b"Set a new master password" in response.data
 
         assert not Encryption.is_unlocked(), (
             "recovery key granted an unlocked archive"
@@ -174,26 +177,43 @@ class TestRecoveryLogin:
             )
 
     def test_handoff_token_is_not_the_recovery_key(self, archive):
-        """The key must not travel in a URL or a cookie."""
+        """The key must not travel in a URL, a page, or a cookie."""
         response = archive["client"].post(
             "/auth/login/recovery",
             data={"recovery_key": archive["key"]},
         )
-        location = response.headers["Location"]
         compact = archive["key"].replace("-", "")
-        assert archive["key"] not in location
-        assert compact not in location
+        html = response.get_data(as_text=True)
+
+        # The rendered reset form carries the handoff token, never the key.
+        assert archive["key"] not in html
+        assert compact not in html
 
         with archive["client"].session_transaction() as sess:
             for value in sess.values():
                 assert compact not in str(value)
+
+    def test_handoff_token_does_not_enter_browser_history(self, archive):
+        """Suggestion 12.
+
+        The verify step used to redirect with ?token=..., putting the
+        token in history for its whole 5-minute life. It now renders the
+        reset form directly, so the token exists only in a hidden field.
+        """
+        response = archive["client"].post(
+            "/auth/login/recovery",
+            data={"recovery_key": archive["key"]},
+        )
+        assert response.status_code == 200, "verify step still redirects"
+        assert "Location" not in response.headers
 
     def test_formatting_variations_are_accepted(self, archive):
         mangled = archive["key"].lower().replace("-", " ")
         response = archive["client"].post(
             "/auth/login/recovery", data={"recovery_key": mangled}
         )
-        assert response.status_code == 302
+        assert response.status_code == 200
+        assert b"Set a new master password" in response.data
 
     def test_wrong_key_is_rejected(self, archive):
         response = archive["client"].post(

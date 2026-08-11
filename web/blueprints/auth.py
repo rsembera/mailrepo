@@ -407,7 +407,12 @@ def login_with_recovery_key():
 
         _clear_attempts(client_ip)
         token = _store_recovery_handoff(recovery_key)
-        return redirect(url_for("auth.set_password_post_recovery", token=token))
+
+        # Render the reset form directly rather than redirecting with the
+        # token in a query string. A redirect would put the token in
+        # browser history for the whole of its 5-minute life; here it
+        # exists only in a hidden field on the page in front of the user.
+        return render_template("auth/post_recovery_password.html", token=token)
 
     return render_template("auth/recovery_login.html")
 
