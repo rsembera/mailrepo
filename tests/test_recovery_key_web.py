@@ -766,3 +766,51 @@ class TestVerifyRecoveryKeyApi:
         response = self._check(v3_client, v3_client["key"])
         assert response.status_code == 200
         assert response.get_json()["verified"] is True
+
+
+class TestCreateArchiveCsrf:
+    """Finding 4. A state-changing form outside /api/ carried no token.
+
+    The middleware in web/app.py only covers paths containing /api/, so
+    this form needed the same explicit check the other /auth/ forms make.
+    """
+
+    @pytest.fixture
+    def logged_in(self, app):
+        client = app.test_client()
+        client.post("/auth/setup", data={"password": PASSWORD, "confirm": PASSWORD})
+        with client.session_transaction() as sess:
+            token = sess["csrf_token"]
+        return {"client": client, "csrf": token}
+
+    def _folder_count(self):
+        from core.database import Database
+
+        row = Database.fetchone("SELECT count(*) AS n FROM folders")
+        return row["n"]
+
+    def test_creates_with_a_valid_token(self, logged_in):
+        before = self._folder_count()
+        response = logged_in["client"].post(
+            "/archive/create",
+            data={"name": "Client Files", "csrf_token": logged_in["csrf"]},
+        )
+        assert response.status_code == 302
+        assert self._folder_count() == before + 1
+
+    def test_refuses_without_a_token(self, logged_in):
+        before = self._folder_count()
+        response = logged_in["client"].post(
+            "/archive/create", data={"name": "Forged"}
+        )
+        assert response.status_code == 302
+        assert "login" in response.headers["Location"]
+        assert self._folder_count() == before, "folder created without a CSRF token"
+
+    def test_refuses_with_a_wrong_token(self, logged_in):
+        before = self._folder_count()
+        logged_in["client"].post(
+            "/archive/create",
+            data={"name": "Forged", "csrf_token": "not-the-token"},
+        )
+        assert self._folder_count() == before

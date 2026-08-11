@@ -4,7 +4,17 @@ MailRepo - Main blueprint.
 Handles the main application views: inbox, archive, folders, staging.
 """
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+import secrets
+
+from flask import (
+    Blueprint,
+    flash,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 
 from core import Database
 
@@ -43,6 +53,16 @@ def create_archive():
     First-run experience lands here after password setup.
     """
     if request.method == "POST":
+        # State-changing form outside /api/, so the middleware CSRF check
+        # in web/app.py does not cover it — verify explicitly, the same
+        # way auth.upgrade_to_recovery_keys and recovery_key_confirmed do.
+        # Payload here is benign (a cross-site POST would create a folder),
+        # but this is the pattern a maintainer copies.
+        token = request.form.get("csrf_token", "")
+        expected = session.get("csrf_token", "")
+        if not expected or not secrets.compare_digest(token, expected):
+            return redirect(url_for("auth.login"))
+
         name = request.form.get("name", "").strip()
 
         # Validation

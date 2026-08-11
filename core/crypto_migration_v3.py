@@ -127,13 +127,42 @@ def _clear_migration_state() -> None:
 
 
 def needs_v3_migration() -> bool:
-    """True if an initialized archive is still on the v2 key format."""
+    """True if an initialized archive is still on the v2 key format.
+
+    Also clears any orphaned migration state, because this is the one
+    function guaranteed to run on a v3 archive at startup.
+
+    The state file wraps the CURRENT master under the OLD password's file
+    key. If it survives past a completed migration — a crash between the
+    key-file write and cleanup, or a data-dir restore that carries it
+    back — nothing else would ever remove it: _clear_migration_state() is
+    reachable only from the success path, which a v3 archive never enters
+    again.
+
+    That matters. The documented residual risk of not re-encrypting old
+    backups is "an old credential opens old data". An orphaned state file
+    turns that into "an old credential opens everything current", since
+    an attacker with the old password and any pre-migration backup (which
+    carries the old MRC2 salt) could derive the old file key and unwrap
+    the live master from it.
+    """
     if not Encryption.is_initialized():
         return False
     try:
-        return Encryption.salt_file_version() == 2
+        version = Encryption.salt_file_version()
     except Exception:
         return False
+
+    if version == 3:
+        if get_migration_state_path().exists():
+            log.warning(
+                "Removing orphaned v3 migration state: the archive is already "
+                "v3, so this file can only extend an old password's reach."
+            )
+            _clear_migration_state()
+        return False
+
+    return version == 2
 
 
 def migrate_to_v3(

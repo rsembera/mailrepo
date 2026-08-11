@@ -492,3 +492,49 @@ class TestRecoveryKeyRotation:
         rotate_recovery_key(PASSWORD)
         for rel, raw in before.items():
             assert (Config.get_archive_path() / rel).read_bytes() == raw
+
+
+class TestOrphanedMigrationState:
+    """Finding 5. The state file wraps the CURRENT master under the OLD
+    password's file key, and nothing removed it once the archive was v3."""
+
+    def test_orphaned_state_is_cleared_on_a_v3_archive(self, v2_archive):
+        from core.crypto_migration_v3 import (
+            get_migration_state_path,
+            needs_v3_migration,
+        )
+
+        migrate_to_v3(PASSWORD)
+        assert not get_migration_state_path().exists()
+
+        # Simulate the file surviving: a crash between the key-file write
+        # and cleanup, or a data-dir restore carrying it back.
+        get_migration_state_path().write_bytes(b"\x02" + b"\x00" * 60)
+
+        assert needs_v3_migration() is False
+        assert not get_migration_state_path().exists(), (
+            "orphaned state survived — an old password plus any "
+            "pre-migration backup could unwrap the live master from it"
+        )
+
+    def test_state_is_not_cleared_while_a_migration_is_pending(self, v2_archive):
+        """The guard must not delete state a re-run still needs."""
+        import core.crypto_migration_v3 as mig
+
+        original = mig.Database.acquire_for_migration
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("crash")
+
+        mig.Database.acquire_for_migration = boom
+        try:
+            with pytest.raises(RuntimeError):
+                migrate_to_v3(PASSWORD)
+        finally:
+            mig.Database.acquire_for_migration = original
+
+        # Still v2, so the migration is genuinely unfinished.
+        assert mig.needs_v3_migration() is True
+        assert mig.get_migration_state_path().exists(), (
+            "state needed to resume the migration was deleted"
+        )

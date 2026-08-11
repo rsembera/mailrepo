@@ -14,8 +14,10 @@ original password. The drill's one manual step (typing the master
 password) is unnecessary here because the fixture knows it.
 """
 
+import json
 import time
 import zipfile
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -632,3 +634,81 @@ class TestSafetyBackupLocation:
             "safety backup went to the repo-local dir, which never syncs "
             "off-machine"
         )
+
+
+class TestRetentionKeepsSomethingUsable:
+    """Finding 3. 'Keep at least one valid restore point' was a docstring
+    promise the code did not implement."""
+
+    def _age_manifest(self, backups_dir, hours, keep_newest_chain=None):
+        """Backdate every chain except one, so retention has work to do."""
+        manifest_path = backups_dir / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        old = (datetime.now() - timedelta(hours=hours)).isoformat()
+        for entry in manifest["backups"]:
+            if keep_newest_chain and entry.get("chain_id") == keep_newest_chain:
+                continue
+            entry["created_at"] = old
+        manifest_path.write_text(json.dumps(manifest))
+
+    def test_refuses_to_prune_when_the_kept_chain_is_broken(
+        self, archive_with_backup
+    ):
+        """The case that loses everything.
+
+        If the newest chain is corrupt and the older ones have aged past
+        retention, the old code deleted them and kept the one that does
+        not open. Since Session 69 cleanup runs on every automatic
+        backup, so this executes daily.
+        """
+        from utils.backup import cleanup_old_backups
+
+        backups_dir = Config.get_data_path().parent / "backups"
+
+        # A second, newer chain.
+        time.sleep(1.05)
+        newest = create_full_backup()
+        newest_chain = json.loads((backups_dir / "manifest.json").read_text())
+        newest_chain_id = next(
+            b["chain_id"]
+            for b in newest_chain["backups"]
+            if b["filename"] == newest["filename"]
+        )
+
+        self._age_manifest(backups_dir, hours=24 * 400, keep_newest_chain=newest_chain_id)
+
+        # Break the chain we would be keeping.
+        newest_path = backups_dir / newest["filename"]
+        newest_path.write_bytes(b"corrupt")
+
+        before = {p["filename"] for p in get_restore_points()}
+        cleanup_old_backups("1_year")
+        after = {p["filename"] for p in get_restore_points()}
+
+        assert before == after, (
+            "retention deleted older chains while keeping one that does not open"
+        )
+
+    def test_prunes_normally_when_the_kept_chain_verifies(self, archive_with_backup):
+        """The counterpart: the guard must not disable retention outright."""
+        from utils.backup import cleanup_old_backups
+
+        backups_dir = Config.get_data_path().parent / "backups"
+
+        time.sleep(1.05)
+        newest = create_full_backup()
+        manifest = json.loads((backups_dir / "manifest.json").read_text())
+        newest_chain_id = next(
+            b["chain_id"]
+            for b in manifest["backups"]
+            if b["filename"] == newest["filename"]
+        )
+
+        self._age_manifest(backups_dir, hours=24 * 400, keep_newest_chain=newest_chain_id)
+
+        before = len(get_restore_points())
+        cleanup_old_backups("1_year")
+        after = len(get_restore_points())
+
+        assert after < before, "retention did not prune a healthy, aged-out chain"
+        assert any(p["filename"] == newest["filename"] for p in get_restore_points())

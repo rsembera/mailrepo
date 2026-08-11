@@ -1075,7 +1075,11 @@ def cleanup_old_backups(retention, custom_location=None):
         return
 
     manifest = load_manifest()
-    backup_dir = Path(custom_location) if custom_location else get_backups_dir()
+
+    # No backup_dir here on purpose: every deletion resolves its path
+    # from the manifest entry via get_backup_path_for_entry(), so files
+    # written under a previous backup location are still found and
+    # removed rather than being orphaned on disk.
 
     cutoff_date = (datetime.now() - timedelta(days=retention_days)).isoformat()
 
@@ -1105,6 +1109,33 @@ def cleanup_old_backups(retention, custom_location=None):
     if len(sorted_chain_ids) <= 1:
         return
 
+    # ...but only if it actually works. The docstring promised "at least
+    # one VALID restore point" and the code checked only that a chain was
+    # newest. If the newest chain is corrupt, truncated or evicted and
+    # every older chain has aged past retention, this would delete the
+    # only chain that opens. Since Session 69 cleanup runs on every
+    # automatic backup, so the deletion side executes daily.
+    newest_chain_id = sorted_chain_ids[-1]
+    newest_points = [
+        p
+        for p in get_restore_points()
+        if p.get("chain_id") == newest_chain_id and p["type"] != "pre_restore"
+    ]
+    if not newest_points:
+        log.warning(
+            "Retention cleanup skipped: newest chain has no usable restore point."
+        )
+        return
+
+    newest_problems = verify_restore_point_files(newest_points[0])
+    if newest_problems:
+        log.warning(
+            "Retention cleanup skipped: the newest chain does not verify "
+            f"({'; '.join(newest_problems)}). Refusing to delete older "
+            "backups while the one being kept is unusable."
+        )
+        return
+
     chains_to_delete = []
 
     # Check each chain except the newest
@@ -1125,16 +1156,17 @@ def cleanup_old_backups(retention, custom_location=None):
         chain = chains[chain_id]
 
         for incr in chain["incrementals"]:
-            # Always use current backups directory (app may have moved)
-            incr_path = backup_dir / incr["filename"]
+            # Resolve per entry, not against the current directory: after a
+            # backup-location change, old-location files would otherwise be
+            # dropped from the manifest and left on disk forever.
+            incr_path = get_backup_path_for_entry(incr)
             if incr_path.exists():
                 incr_path.unlink()
             if incr in manifest["backups"]:
                 manifest["backups"].remove(incr)
 
         if chain["full"]:
-            # Always use current backups directory (app may have moved)
-            full_path = backup_dir / chain["full"]["filename"]
+            full_path = get_backup_path_for_entry(chain["full"])
             if full_path.exists():
                 full_path.unlink()
             if chain["full"] in manifest["backups"]:
@@ -1148,8 +1180,7 @@ def cleanup_old_backups(retention, custom_location=None):
     safety_deleted = 0
     for backup in safety_backups:
         if backup["created_at"] < cutoff_date:
-            # Always use current backups directory (app may have moved)
-            backup_path = backup_dir / backup["filename"]
+            backup_path = get_backup_path_for_entry(backup)
             if backup_path.exists():
                 backup_path.unlink()
             if backup in manifest["backups"]:

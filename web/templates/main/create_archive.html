@@ -28,6 +28,7 @@
         {% endif %}
         
         <form method="POST" class="auth-form">
+            <input type="hidden" name="csrf_token" value="{{ session.get('csrf_token', '') }}">
             <div class="form-group">
                 <label for="name">Archive Name</label>
                 <input 
