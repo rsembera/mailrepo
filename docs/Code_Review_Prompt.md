@@ -3,16 +3,23 @@
 This file is the prompt to paste into a fresh Claude conversation (or
 any other capable model) when you want an outside-eyes code review.
 
-The current version below is calibrated for the **pre-1.0-tag review**
-done at the end of Session 38 (May 31, 2026). If you reuse this for a
-later review (e.g. before tagging 1.1), update the "Recent work to
-scrutinize" section to point at the new work, but the surrounding
-framing — what counts as critical, what to skip, output format — is
-deliberately reusable.
+> **CURRENT VERSION: v2**, near the bottom of this file — "Version 2 —
+> pre-1.0-tag review, calibrated for Sessions 67–73". Scroll to it.
+>
+> **v1 below is HISTORICAL** and describes the codebase as it stood on
+> May 31, 2026 (Sessions 36–38, v1→v2 crypto, 68 tests). It is kept for
+> the record. Do not paste it — a reviewer given v1 today will start by
+> reporting that the brief is stale, which is exactly what happened the
+> first time v2 was used.
+
+Version 1 was calibrated for the **pre-1.0-tag review** done at the end
+of Session 38 (May 31, 2026). The surrounding framing — what counts as
+critical, what to skip, output format — is deliberately reusable; the
+"Recent work to scrutinize" section is what goes out of date.
 
 ---
 
-## The prompt
+## The prompt (v1 — HISTORICAL, superseded by v2 at the bottom of this file)
 
 ```
 You're doing a pre-tag code review of MailRepo, a local-first encrypted email
