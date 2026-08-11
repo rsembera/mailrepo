@@ -1,6 +1,6 @@
 # MailRepo — Navigation Map
 
-**Last Updated:** August 9, 2026
+**Last Updated:** August 11, 2026
 
 ---
 
@@ -9,10 +9,23 @@
 Feature-complete. Encryption refactor (v1 → v2) shipped May 29. v1
 cleanup + 1.0 declaration on May 30. Frontend dispatch model unified
 May 30–31 (zero inline onclicks, zero cross-module window dispatch
-remaining). Currently in the dogfooding window before `git tag v1.0.0`
-and the packaging milestone (.dmg / .deb).
+remaining).
 
-See `docs/Session_Log.md` (Sessions 36–38) for the road-to-1.0 details
+**August 9–11:** v3 envelope encryption landed — the master key is now
+32 random bytes wrapped separately under the password and under a
+printable recovery key, so password changes are a 61-byte rewrap rather
+than a full re-encryption, and a forgotten password is no longer fatal.
+The recovery key resets the password rather than opening the archive.
+Rick's live archive is migrated and verified under both credentials.
+Backup hardening followed: on-disk chain verification, restore-point
+credential labelling, and the fixes from the pre-tag adversarial review
+(Session 74), two of which were silent data loss in the restore path.
+
+Remaining before `git tag v1.0.0`: a week of ordinary use on the live
+archive (migrated Aug 9). Then the packaging milestone (.dmg / .deb).
+
+See `docs/Session_Log.md` (Sessions 36–38 for the road to 1.0, 67–74 for
+the recovery-key work and the pre-tag review) for details
 and `CHANGELOG.md` for the user-facing changelog under
 `[1.0.0] — Unreleased (dogfooding)`.
 
@@ -65,10 +78,10 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 |------|-------|--------------|
 | `imap.py` | 1,535 | IMAP client: connect, auth, folders, fetch, MOVE/COPY + UID-scoped expunge, Gmail-aware delete (incl. batched set delete), CONDSTORE |
 | `pdf_export.py` | 1,052 | PDF export: per-email PDFs, attachment merging, WeasyPrint |
-| `encryption.py` | 761 | Argon2id KDF + HKDF + AES-256-GCM (v2) plus the v3 envelope: random master wrapped under password and recovery key |
-| `password_change.py` | 613 | Password change — v2 full re-encryption, v3 rewrap; recovery-key password reset (needs no unlocked session), recovery-key rotation, on-disk backup gate, interruption marker |
+| `encryption.py` | 786 | Argon2id KDF + HKDF + AES-256-GCM (v2) plus the v3 envelope: random master wrapped under password and recovery key |
+| `password_change.py` | 636 | Password change — v2 full re-encryption, v3 rewrap; recovery-key password reset (needs no unlocked session), recovery-key rotation, on-disk backup gate, interruption marker |
 | `database.py` | 465 | SQLCipher connection, schema v5, FTS5, migrations, threading lock, hard refusal to open unencrypted |
-| `crypto_migration_v3.py` | 298 | v2 → v3 migration: re-encrypt under a random master, resumable via wrapped-master state file |
+| `crypto_migration_v3.py` | 335 | v2 → v3 migration: re-encrypt under a random master, resumable via wrapped-master state file |
 | `importer.py` | 280 | mbox, Apple mbox, EML, PST import handling |
 | `pending_commit.py` | 222 | Commit resume: save/restore interrupted commits |
 | `config.py` | 114 | Paths, constants, Flask config |
@@ -86,7 +99,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `auth.py` | 853 | Setup, login, logout, rate limiting, session management; recovery-key verification + server-side handoff to a mandatory password reset (no session granted), v3 upgrade flow, rotation API |
+| `auth.py` | 876 | Setup, login, logout, rate limiting, session management; recovery-key verification + server-side handoff to a mandatory password reset (no session granted), v3 upgrade flow, rotation API |
 | `backups.py` | 273 | Backup/restore endpoints, folder picker |
 | `main.py` | 81 | Page routes: index, create_archive, settings |
 
@@ -113,7 +126,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `backup.py` | 1,469 | Full/incremental backup, restore, retention, external state file (Libram-style), on-disk restore-chain verification |
+| `backup.py` | 1,615 | Full/incremental backup, restore, retention, external state file (Libram-style), on-disk restore-chain verification |
 | `log.py` | 51 | Logging setup, polling filter |
 | `__init__.py` | 34 | Shell command runner, path utilities |
 
@@ -298,14 +311,14 @@ first run of this found a `ReferenceError` that had been shipping.
 
 ---
 
-## Test Suite (518 tests)
+## Test Suite (535 tests)
 
 | File | Coverage |
 |------|----------|
 | `tests/test_recovery_key_web.py` | Recovery-key web flow end to end: setup shows the key (and never puts it in the session), recovery login, post-recovery password reset (incl. gating to recovery-login sessions and CSRF), v3 upgrade flow (incl. stale-backup-with-no-changes and CSRF), post-upgrade redirect destination, rotation API + CSRF (31 tests, Sessions 68–70) |
 | `tests/test_crypto_migration_v3.py` | v2 → v3 envelope migration: content survives, readable under both credentials, interrupted migration re-runs to completion, resume state halts rather than minting a new master; v3 password change as rewrap; recovery-key rotation (40 tests, Session 68) |
 | `tests/test_recovery_key.py` | v3 envelope: recovery-key format and parse tolerance, wrapping structure, unlock by either credential yielding identical keys, tamper detection, independent rewrap of each wrapper (40 tests, Session 68) |
-| `tests/test_restore.py` | Restore path: staged files decrypt to original plaintext, backup carries its own key material, incremental chains and deletion propagation, staging-is-not-production, complete/cancel, chain verification (21 tests, Session 68) |
+| `tests/test_restore.py` | Restore path: staged files decrypt to original plaintext, backup carries its own key material, incremental chains and deletion propagation, staging-is-not-production, complete/cancel, chain verification, restore-point credential labelling; plus Session 74 regressions — delete-then-recreate, missing mid-chain incremental, filename collisions, safety-backup visibility and location, retention refusing to prune when the kept chain is broken (41 tests, Sessions 68–74) |
 | `tests/test_auth.py` | Auth boundary: setup, login + rate-limit lockout, logout, CSRF enforcement, password-change job-id handoff end-to-end (22 tests, Session 40) |
 | `tests/test_encryption.py` | v2 `Encryption` lifecycle: init / unlock / lock / wrong-password (no v1 code remains) |
 | `tests/test_encryption_v2.py` | v2 encryption: Argon2id, HKDF, AES-256-GCM, file/DB round-trip |
@@ -354,16 +367,25 @@ As of Session 38 the codebase uses a uniform two-layer dispatch model:
 No remaining inline `onclick` attributes anywhere in the codebase.
 Two intentional `window.X` assignments remain: `getMountedImports`
 (cross-module lazy reference) and `skipBeforeUnloadWarning` (internal
-self-reference in app.js).
+self-reference in app.js). Plus `mailrepoLogout` in base.html, which is
+a template-scoped helper rather than a module export — logout is
+POST-only, so the template needs a way to submit it.
+
+`pendingMoveEmailIds` was a third cross-module global until Session 74;
+it is now a module-local in `move-email-modal.js` with an exported
+setter, the `staging.js` pattern.
 
 ---
 
 ## If Chat Context Disappears
 
 1. Read this file first.
-2. Read `docs/Session_Log.md` — most recent sessions are 36 (May 29
-   crypto refactor), 37 (May 30 1.0 ship), 38 (May 31 frontend
-   cleanup).
+2. Read `docs/Session_Log.md` — most recent sessions are 67–68 (Aug 9,
+   restore drill + v3 envelope encryption with recovery keys), 69–71
+   (Aug 9–10, restore-point credential labelling, retention fix,
+   recovery-key design), 72–73 (Aug 11, recovery key becomes a password
+   reset rather than a credential; verify-without-using), and 74
+   (Aug 11, pre-tag adversarial review and fixes).
 3. Read `docs/Post_1_0_Backlog.md` for what's still open.
 4. `git log --oneline -20` to see recent commits.
 5. Run `python main.py` to see current state.

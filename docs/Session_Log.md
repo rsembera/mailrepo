@@ -4997,3 +4997,136 @@ syntax checking, and syntax checking found nothing. All the value was in
   around.
 - Adversarial review, then `git tag v1.0.0` once the live archive has a
   week of ordinary use behind it (migrated Sunday, so end of this week).
+
+---
+
+## Session 74 — August 11, 2026 (Apollo, then MacBook)
+
+The pre-tag adversarial review, and fixing everything it found.
+
+Rick had a separate model review the codebase using the v2 prompt from
+`Code_Review_Prompt.md`. It returned 23 findings. Rick's instruction was
+"if we know about it, let's fix it" — so all of them were addressed
+rather than triaged into a backlog, except one that was wrong.
+
+### Method
+
+Every reproducible finding was reproduced in a sandbox **before** any
+code changed, and every fix was verified by reverting it and confirming
+the right test failed. This mattered: the same discipline that caught the
+phantom CSRF bug in Session 68 applies to confident claims arriving from
+outside, not just to Claude's own.
+
+The repro script for findings 1 and 2 hit **finding 6 unprompted on its
+first run** — four backups inside one second, all with the same filename,
+overwriting each other and invalidating the results. The review reported
+that its own repro had done the same thing.
+
+### Critical — both in the restore path
+
+**1. Delete-then-recreate lost files.** `prepare_restore()` accumulated
+deleted-file tombstones from every zip in the chain into one set and
+applied them after all extractions. A file deleted in incremental N and
+recreated in N+1 was extracted correctly, then removed by N's stale
+tombstone — the restore reported success while reconstructing a state
+that never existed. The trigger is ordinary use: permanently delete an
+archived email, later re-commit the same message to the same folder, and
+the path repeats exactly. Deletions are now applied per zip, immediately
+after that zip's own extraction.
+
+**2. A missing mid-chain incremental was invisible.**
+`get_restore_points()` skipped an incremental absent from disk and kept
+building the chain, producing a restore point of full + incr1 + incr3
+with incr2 silently gone. Every verification layer reported it clean.
+
+This is a hole in the Session 67 work, and worth stating plainly: that
+change verified every file in `files_needed` opens. It never asked
+whether `files_needed` was complete. The layer built to catch cloud
+eviction was blind to eviction happening one step earlier.
+
+### The rest
+
+3. Retention could delete the only *working* restore point — it kept the
+newest chain by date without checking it opened, and since Session 69
+cleanup runs on every automatic backup, the deletion side executes daily.
+Now verifies before pruning and skips loudly.
+
+4. `/archive/create` had no CSRF protection — outside `/api/`, so the
+middleware skipped it, and unlike the other non-`/api/` forms it carried
+no manual check.
+
+5. Orphaned `.v3_migration_state` extended an old password's reach. The
+file wraps the *current* master under the *old* password's file key, and
+the only cleanup site was unreachable once the archive was v3. That turns
+"an old credential opens old data" into "an old credential opens
+everything current".
+
+6, 7, 9, 10 — filename collisions; safety backups collapsing to one
+visible restore point; retention resolving paths against the current
+directory and orphaning files after a location change; safety backups
+going to the repo-local dir that never syncs off-machine.
+
+8, 11, 13–15, 17–23 — unmarked v2 file walk; logout as a state-changing
+GET; password-change jobs outliving their TTL; unguarded
+`request.get_json()`; truncated key file reported as a wrong password;
+three false comments; the last cross-module window global; secret-key
+chmod race; platform-wrong clipboard hint; orphaned incrementals never
+pruned; handoff token in the URL.
+
+**Rejected: nit 16.** It claimed two unreachable consecutive `return`s in
+`set_password_post_recovery`. They are at different indentation — one
+inside the POST branch, one the GET fallthrough. Both reachable.
+
+### Security_Audit.md
+
+The June addendum flagged that the document predated the v2 migration,
+but the tables below still asserted PBKDF2 and Fernet as current — and a
+reader skimming to the encryption table is exactly the one who misses a
+note at the top. The v1 table is now marked HISTORICAL and followed by a
+current v3 table. Three further rows were stale: IMAP credential storage
+still said Fernet, the public-endpoint whitelist omitted the two recovery
+routes, and "CSRF validation: all state-changing requests validated"
+overstated — which is precisely the gap that let `/archive/create` ship
+without a token.
+
+### Tests
+
+535 pass (was 518). New regression tests for findings 1, 2, 3, 4, 5, 6,
+7, 10 and 12, each verified by reverting its fix.
+
+### Found by Rick, not by tests
+
+Both move paths (single and multi-select) needed a human click-through
+after the window-global conversion — that path has no automated coverage
+at all. And the recovery-key check field was too narrow to show a
+39-character key, which defeats the entire purpose of a control whose job
+is comparing against the copy in your drawer.
+
+That is five UI issues this week found by using the app and zero found by
+the suite. The tests catch logic regressions; they are structurally blind
+to whether anything is usable.
+
+### Timing note
+
+Full suite: 8m20s on the MacBook Air M4, 11m46s on Apollo.
+
+One wasted run: a suite started on the M4 against freshly pulled code
+while edits were being made in parallel, so it tested a mix of both.
+Killed and re-run clean. Start the suite or edit, not both.
+
+### Commits
+- `b1206f7` — restore path: delete-then-recreate, mid-chain gaps, filename collisions, safety backups
+- `97fc29f` — regression tests for the above
+- `ab093ee` — retention safety, orphaned migration state, CSRF on archive creation
+- `2525579` — findings 8, 11, 13–15, 17–20, 22
+- `eab8524` — suggestion 12, nits 21 and 23, Security_Audit body
+- `84727e6` — widen the recovery-key fields
+- (this entry) — docs
+
+### Still open
+
+- `git tag v1.0.0`, once the live archive has a week of ordinary use.
+  Migrated Sunday, so around Friday.
+- The frontend still has no automated behavioural coverage. ESLint
+  `no-undef` is the only check, and every UI failure this week was found
+  by hand.

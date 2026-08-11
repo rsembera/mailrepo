@@ -120,6 +120,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   build shipped without the native extension correctly bundled.
 
 ### Fixed
+- **Restoring a backup could silently lose a message you had deleted and
+  later re-archived (Session 74).** If a message was permanently deleted
+  in one backup and the same message archived again in a later one,
+  restoring dropped it — and reported success. Deletions are now applied
+  in the correct order as each backup is replayed.
+- **A backup missing from the middle of a chain was ignored instead of
+  reported (Session 74).** If one incremental backup went missing — a
+  cloud file evicted, a sync interrupted — MailRepo quietly built a
+  restore from the ones either side of it and showed no problem. That
+  restore would have been missing everything the absent backup contained.
+  Missing backups are now reported, and MailRepo refuses to change your
+  password or upgrade your archive until the chain is whole.
+- **Old backups could be deleted while the newest one was unusable
+  (Session 74).** Cleanup kept the most recent backup without checking it
+  could actually be opened. It now verifies first, and does nothing if
+  the backup it would keep is damaged.
+- **Two backups made in the same second overwrote each other
+  (Session 74).** Backup filenames now include enough precision that this
+  cannot happen.
+- **Only the most recent safety backup was offered for restore
+  (Session 74).** MailRepo takes a safety backup before every restore,
+  but only the newest appeared in the list — and the moment you want an
+  older one is right after a restore that went wrong. All of them are now
+  listed.
+- **Safety backups were written where your other backups aren't
+  (Session 74).** They went to a folder inside the application rather
+  than your configured backup location, so they never reached iCloud, a
+  sync target, or any other machine.
+- **An interrupted password change now explains itself (Session 74).**
+  Stopping partway through re-encrypting left an archive that opened
+  normally and then failed on scattered messages, with nothing on screen
+  to say why. MailRepo now tells you what happened and that re-running
+  the password change with the same passwords will finish the job.
+- **Logging out is no longer possible by accident from another site
+  (Session 74)**, and creating an archive folder now carries the same
+  cross-site request protection as the rest of the application.
+- **A damaged key file no longer reports "invalid master password"
+  (Session 74).** It says the file appears truncated and to restore from
+  backup, which is the actual problem.
 - **Creating a folder from the stage-email destination picker reported a
   failure even though it worked (Session 73).** The folder was created,
   but the screen said "Failed to create folder" and didn't select it, so
