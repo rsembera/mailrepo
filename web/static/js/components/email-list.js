@@ -635,7 +635,8 @@ async function moveArchivedEmail(emailId) {
     if (!email) return;
     
     // Store the email ID for the move modal
-    window.pendingMoveEmailIds = [emailId];
+    const { setPendingMoveEmailIds } = await import('./move-email-modal.js');
+    setPendingMoveEmailIds([emailId]);
     
     // Open the move email modal
     const modal = document.getElementById('moveEmailModal');
@@ -692,7 +693,8 @@ async function moveSelectedArchivedEmails() {
     if (selectedArchivedEmails.size === 0) return;
     
     // Store the email IDs for the move modal
-    window.pendingMoveEmailIds = Array.from(selectedArchivedEmails);
+    const { setPendingMoveEmailIds } = await import('./move-email-modal.js');
+    setPendingMoveEmailIds(Array.from(selectedArchivedEmails));
     
     // Open the move email modal
     const modal = document.getElementById('moveEmailModal');

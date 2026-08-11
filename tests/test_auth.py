@@ -116,12 +116,23 @@ class TestLogout:
         # Isolate logout's contract (lock + clear + redirect) from the
         # auto-backup side effect, which is covered by test_backup.
         monkeypatch.setattr(auth, "_run_auto_backup_check", lambda: None)
-        resp = authenticated_client.get("/auth/logout")
+        resp = authenticated_client.post("/auth/logout")
         assert resp.status_code == 302
         assert "/auth/login" in resp.headers["Location"]
         assert Encryption.is_unlocked() is False
         with authenticated_client.session_transaction() as sess:
             assert "authenticated" not in sess
+
+    def test_logout_rejects_get(self, authenticated_client, monkeypatch):
+        """POST-only: a cross-site <img src> must not be able to force it.
+
+        Logout clears the session, locks the archive and triggers a backup
+        check — all state-changing.
+        """
+        monkeypatch.setattr(auth, "_run_auto_backup_check", lambda: None)
+        resp = authenticated_client.get("/auth/logout")
+        assert resp.status_code == 405
+        assert Encryption.is_unlocked() is True
 
 
 class TestRateLimit:

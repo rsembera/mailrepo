@@ -304,9 +304,17 @@ def migrate_to_v3(
         if progress_cb:
             progress_cb({"status": "finalizing", "message": "Writing new key file..."})
 
-        # The key file is written LAST. Until this line lands, the archive
-        # is still described by the v2 key file, and a crash leaves a
-        # re-runnable migration rather than an unopenable archive.
+        # The key file is written LAST, immediately after the DB rekey.
+        #
+        # Be precise about what that does and does not buy. A crash BEFORE
+        # the rekey leaves a re-runnable migration: the archive is still
+        # described by the v2 key file and the old password still opens
+        # it. A crash BETWEEN the rekey and this write does NOT — the
+        # database is on the new key while the key file still describes
+        # the old one, and recovery is restore-from-backup, exactly as
+        # the interruption marker tells the user. The window is two
+        # statements wide, which is why the verified-backup gate above is
+        # non-overridable.
         Encryption.write_v3_salt_file(blob)
         Encryption._adopt_master(master, version=3)
     finally:

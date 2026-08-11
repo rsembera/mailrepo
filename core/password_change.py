@@ -164,6 +164,16 @@ def change_master_password(
         )
 
     # 5. File walk: decrypt with old, encrypt with new, atomic replace.
+    #
+    #    Marked, even though the walk is resumable. A crash here leaves a
+    #    mixed-key archive that OPENS FINE with the old password and then
+    #    fails to decrypt scattered messages — the most confusing state
+    #    this code can produce, because nothing looks broken until you
+    #    open the wrong email. Re-running the change with the same two
+    #    passwords heals it (each file is tried old-key-then-new-key), but
+    #    only a user who knows that will try it.
+    _write_interruption_marker(point, phase="file_walk")
+
     if progress_cb:
         progress_cb({"status": "counting", "message": "Counting encrypted files..."})
 
@@ -561,6 +571,19 @@ def describe_interrupted_password_change(marker: dict) -> str:
             "and skips them. Use your existing master password.",
             "",
             "If the archive will not open at all, restore from backup.",
+        ]
+    elif marker.get("phase") == "file_walk":
+        lines = [
+            "A master password change was interrupted before it finished.",
+            f"It began at {started} and stopped while re-encrypting your mail.",
+            "",
+            "What this means: your archive still opens with your OLD password,",
+            "but some messages are already encrypted under the new one and will",
+            "not open until the change is completed. Nothing is lost.",
+            "",
+            "To finish: log in with your old password and run the password",
+            "change again, using the SAME old and new passwords. Files that",
+            "were already converted are detected and skipped.",
         ]
     else:
         lines = [

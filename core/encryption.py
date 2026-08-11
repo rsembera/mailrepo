@@ -298,6 +298,21 @@ class Encryption:
         salt = blob[4 : 4 + SALT_LENGTH]
         encrypted_verification = blob[4 + SALT_LENGTH :]
 
+        # Length check BEFORE deriving, so a truncated key file is
+        # reported as file damage rather than as a wrong password. The
+        # old code let a short file fall through to the decrypt below,
+        # where any exception became InvalidPasswordError — sending
+        # someone with disk corruption hunting for a password problem
+        # they do not have. (v3's fixed-length parse already gets this
+        # right.)
+        expected = 1 + GCM_NONCE_LENGTH + len(VERIFICATION_TOKEN) + GCM_TAG_LENGTH
+        if len(salt) != SALT_LENGTH or len(encrypted_verification) != expected:
+            raise EncryptionError(
+                f"Key file is {len(blob)} bytes, expected "
+                f"{4 + SALT_LENGTH + expected}. It appears truncated or "
+                f"corrupt — this is not a password problem. Restore from backup."
+            )
+
         master = cls._derive_master_v2(password, salt)
         file_key = cls._derive_subkey_v2(master, HKDF_INFO_FILE_V2)
 
@@ -756,6 +771,16 @@ def generate_flask_secret_key() -> str:
 
     secret_key = secrets.token_hex(32)
     secret_key_path.parent.mkdir(parents=True, exist_ok=True)
-    secret_key_path.write_text(secret_key)
+
+    # Create with 0600 rather than writing then chmod'ing. The old order
+    # left the key world-readable for the moment between the two calls.
+    fd = os.open(secret_key_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, secret_key.encode("ascii"))
+    finally:
+        os.close(fd)
+
+    # Belt and braces: O_CREAT honours the mode only when the file did
+    # not already exist, and umask can clear bits.
     os.chmod(secret_key_path, 0o600)
     return secret_key

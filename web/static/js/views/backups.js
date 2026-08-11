@@ -828,7 +828,7 @@ async function confirmRestore() {
                 'After restarting, log back in to see your restored data.');
             
             // Redirect to login page (effectively logging out)
-            window.location.href = '/auth/logout';
+            window.mailrepoLogout();
         } else {
             showMessage('Failed to prepare restore: ' + (data.error || 'Unknown error'), 'error');
         }

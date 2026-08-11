@@ -160,13 +160,6 @@ function renderSettingsView() {
     // Bind delegated handlers on the settings-specific root, NOT on the
     // shared emailList container. Listener dies with the view when another
     // view's render replaces emailList. See delegate.js docs.
-    //
-    // NOTE: closeModal, closeResetDatabaseModal, executeResetDatabase are
-    // intentionally NOT included here. They're called from inline onclicks
-    // in the index.html Flask template, so they stay on window. When the
-    // template HTML and modals.js get converted, those globals + the
-    // closeModal name-collision across settings/imports/modals can be
-    // consolidated.
     const root = emailList.querySelector('.settings-view-root');
     if (root) {
         bindActions(root, {

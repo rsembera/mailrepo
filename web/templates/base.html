@@ -56,7 +56,7 @@
             <p class="session-modal-hint">Any unsaved work may be lost.</p>
             <div class="session-modal-actions">
                 <button onclick="stayLoggedIn()" class="btn btn-primary">Stay Logged In</button>
-                <button onclick="window.location.href='/auth/logout'" class="btn btn-secondary">Log Out</button>
+                <button onclick="window.mailrepoLogout()" class="btn btn-secondary">Log Out</button>
             </div>
         </div>
     </div>
@@ -283,7 +283,7 @@
                 updateCountdown();
                 if (secondsRemaining <= 0) {
                     clearInterval(countdownInterval);
-                    window.location.href = '/auth/logout';
+                    window.mailrepoLogout();
                 }
             }, 1000);
             window.warningCountdownInterval = countdownInterval;
@@ -418,6 +418,19 @@
             document.body.appendChild(container);
         }
     })();
+    </script>
+
+    <script>
+    // Logout is state-changing (clears the session, locks the archive,
+    // triggers a backup check), so it is POST-only. Any navigation that
+    // used to be a plain link goes through here.
+    window.mailrepoLogout = function () {
+        var f = document.createElement('form');
+        f.method = 'POST';
+        f.action = '/auth/logout';
+        document.body.appendChild(f);
+        f.submit();
+    };
     </script>
 </body>
 </html>

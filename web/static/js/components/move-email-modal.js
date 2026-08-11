@@ -11,6 +11,16 @@ import { renderFolderTree } from './folder-tree.js';
 
 let selectedFolderId = null;
 
+// Emails queued for the move, set by email-list.js before it opens this
+// modal. Module-local with an exported setter rather than
+// window.pendingMoveEmailIds: the frontend's stated model is no
+// cross-module window globals, and this was the last one left.
+let pendingMoveEmailIds = [];
+
+export function setPendingMoveEmailIds(ids) {
+    pendingMoveEmailIds = ids || [];
+}
+
 /**
  * Render the folder tree for the move email modal.
  */
@@ -24,7 +34,7 @@ export async function renderMoveEmailFolderTree() {
     document.getElementById('confirmMoveEmailBtn').disabled = true;
     
     // Update modal title based on count
-    const emailIds = window.pendingMoveEmailIds || [];
+    const emailIds = pendingMoveEmailIds || [];
     const titleEl = document.querySelector('#moveEmailModal h2');
     if (titleEl) {
         if (emailIds.length > 1) {
@@ -57,7 +67,7 @@ export async function renderMoveEmailFolderTree() {
  * Confirm and execute the email move.
  */
 export async function confirmMoveEmail() {
-    const emailIds = window.pendingMoveEmailIds;
+    const emailIds = pendingMoveEmailIds;
     if (!emailIds || emailIds.length === 0 || !selectedFolderId) return;
 
     // Track which moves actually succeed so the view only drops those —
@@ -100,7 +110,7 @@ export async function confirmMoveEmail() {
     }
 
     closeModal('moveEmailModal');
-    window.pendingMoveEmailIds = null;
+    pendingMoveEmailIds = [];
 
     if (failedCount > 0) {
         showAlert(

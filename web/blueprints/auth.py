@@ -567,9 +567,16 @@ def upgrade_to_recovery_keys():
     )
 
 
-@auth_bp.route("/logout", methods=["GET", "POST"])
+@auth_bp.route("/logout", methods=["POST"])
 def logout():
-    """Log out, run backup check, and lock encryption."""
+    """Log out, run backup check, and lock encryption.
+
+    POST-only. This clears the session, locks the archive and triggers a
+    backup check — all state-changing, so a cross-site `<img src>` could
+    otherwise force it. Nuisance-tier at this threat model rather than
+    dangerous, but a state-changing GET is the kind of thing a maintainer
+    copies. Callers go through window.mailrepoLogout() in base.html.
+    """
     # Run automatic backup check before closing database
     _run_auto_backup_check()
 
@@ -720,12 +727,13 @@ def verify_password():
     if not session.get("authenticated"):
         return {"error": "Not authenticated"}, 401
 
-    data = request.get_json()
+    data = request.get_json() or {}
     current_password = data.get("current_password", "")
 
     try:
-        # Try to unlock with the provided password
-        # This verifies it matches without changing state
+        # Unlocking is the verification: a wrong password raises. This
+        # DOES re-adopt class state, but with identical values, since the
+        # archive is already unlocked when this endpoint is reachable.
         Encryption.unlock(current_password)
         return {"valid": True}
     except InvalidPasswordError:
@@ -740,7 +748,7 @@ def change_password_start():
     if not session.get("authenticated"):
         return {"error": "Not authenticated"}, 401
 
-    data = request.get_json()
+    data = request.get_json() or {}
     current_password = data.get("current_password", "")
     new_password = data.get("new_password", "")
 
@@ -779,9 +787,19 @@ def change_password_progress(job_id):
     if not session.get("authenticated"):
         return {"error": "Not authenticated"}, 401
 
-    # Consume the job exactly once.
+    # Consume the job exactly once, and enforce the TTL HERE as well as
+    # in _gc_pw_change_jobs(). That collector runs only when the next job
+    # is created, so a job that is never consumed and never followed by
+    # another holds both plaintext passwords in memory until the process
+    # restarts. Checking at consume time makes the TTL mean what it says.
+    cutoff = time.time() - _PW_CHANGE_TTL
     with _pw_change_lock:
         job = _pw_change_jobs.pop(job_id, None)
+        if job and job["created_at"] < cutoff:
+            job = None
+        # Opportunistic sweep, mirroring _peek_recovery_handoff.
+        for jid in [j for j, v in _pw_change_jobs.items() if v["created_at"] < cutoff]:
+            _pw_change_jobs.pop(jid, None)
     current_password = job["current"] if job else None
     new_password = job["new"] if job else None
 
