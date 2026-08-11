@@ -464,6 +464,24 @@
     max-width: 350px;
 }
 
+/* The recovery-key check reuses .password-change-form, but 350px is a
+   password-field width and a recovery key is 39 monospace characters.
+   Seeing the whole key at once is the entire point of this control —
+   you are comparing it against the copy in your drawer. */
+#checkRecoveryKeyForm {
+    max-width: 30rem;
+}
+
+/* Same reason: this panel renders a freshly generated key the user has
+   exactly one chance to write down. */
+#newRecoveryKeyDisplay {
+    max-width: 30rem;
+}
+
+#checkKeyValue {
+    width: 100%;
+}
+
 .password-change-form .form-group {
     margin-bottom: var(--space-md);
 }
