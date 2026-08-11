@@ -637,6 +637,45 @@ def _run_auto_backup_check():
         log.error(f"Auto-backup failed: {e}")
 
 
+@auth_bp.route("/api/verify-recovery-key", methods=["POST"])
+def api_verify_recovery_key():
+    """Check a recovery key without changing anything.
+
+    The counterpart to the recovery flow, which always resets the
+    password. Testing a key should not cost you your password, and a key
+    that has never been tested is one you are only assuming works.
+
+    Gated on an existing session rather than the master password. Someone
+    with a live session already has the archive open, so this reveals
+    nothing they do not have, and it writes nothing. Demanding the
+    password here would only discourage the checking this exists to
+    encourage.
+    """
+    if not session.get("authenticated"):
+        return {"error": "Not authenticated"}, 401
+
+    if not Encryption.has_recovery_key():
+        return {"error": "This archive has no recovery key."}, 400
+
+    data = request.get_json() or {}
+    recovery_key = data.get("recovery_key", "")
+
+    try:
+        Encryption.verify_recovery_key(recovery_key)
+        return {"verified": True}
+    except InvalidPasswordError:
+        return {
+            "verified": False,
+            "error": (
+                "That key does not open this archive. If it is the one you "
+                "have on file, generate a new one and replace it."
+            ),
+        }
+    except EncryptionError as e:
+        # Malformed — a typo, not a wrong key. Say which.
+        return {"verified": False, "error": str(e)}
+
+
 @auth_bp.route("/api/recovery-key-status", methods=["GET"])
 def recovery_key_status():
     """Whether this archive has a recovery key, for the settings screen."""

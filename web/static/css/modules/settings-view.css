@@ -530,6 +530,17 @@
     font-size: 0.875rem;
 }
 
+/* Same slot as .password-error — the recovery-key check reuses that
+   element for its result, and a successful check must not be rendered
+   in the colour the app uses for failure. */
+.password-success {
+    display: none;
+    color: var(--color-success, #15803D);
+    margin-bottom: var(--space-md);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
 .password-actions {
     display: flex;
     gap: var(--space-sm);

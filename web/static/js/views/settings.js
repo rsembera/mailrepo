@@ -364,6 +364,10 @@ function renderSecuritySection() {
             <p class="setting-hint" id="recoveryKeyStatus" style="margin-bottom: var(--space-md);">
                 Checking...
             </p>
+            <button class="btn btn-secondary" id="checkRecoveryKeyBtn" hidden>
+                <i data-lucide="shield-check"></i>
+                Check Recovery Key
+            </button>
             <button class="btn btn-secondary" id="rotateRecoveryKeyBtn" hidden>
                 <i data-lucide="rotate-ccw"></i>
                 Generate New Recovery Key
@@ -372,6 +376,24 @@ function renderSecuritySection() {
                 <i data-lucide="shield-plus"></i>
                 Add a Recovery Key
             </a>
+        </div>
+
+        <div id="checkRecoveryKeyForm" class="password-change-form">
+            <p class="setting-hint">
+                Checks whether the key you have on file opens this archive.
+                Changes nothing — not your password, not your recovery key.
+            </p>
+            <div class="form-group">
+                <label for="checkKeyValue">Recovery Key</label>
+                <input type="text" id="checkKeyValue" class="form-input recovery-key-input"
+                       placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
+                       autocomplete="off" spellcheck="false">
+            </div>
+            <div id="checkRecoveryKeyResult" class="password-error"></div>
+            <div class="password-actions">
+                <button class="btn btn-primary" id="confirmCheckRecoveryKeyBtn">Check Key</button>
+                <button class="btn btn-secondary" id="cancelCheckRecoveryKeyBtn">Done</button>
+            </div>
         </div>
 
         <div id="rotateRecoveryKeyForm" class="password-change-form">
@@ -431,6 +453,12 @@ function initRecoveryKeyHandlers() {
     const copyBtn = document.getElementById('copyNewRecoveryKeyBtn');
     const doneBtn = document.getElementById('doneNewRecoveryKeyBtn');
     const passwordEl = document.getElementById('rotateKeyPassword');
+    const checkBtn = document.getElementById('checkRecoveryKeyBtn');
+    const checkForm = document.getElementById('checkRecoveryKeyForm');
+    const checkInput = document.getElementById('checkKeyValue');
+    const checkResultEl = document.getElementById('checkRecoveryKeyResult');
+    const confirmCheckBtn = document.getElementById('confirmCheckRecoveryKeyBtn');
+    const cancelCheckBtn = document.getElementById('cancelCheckRecoveryKeyBtn');
 
     if (!statusEl) return;
 
@@ -439,10 +467,11 @@ function initRecoveryKeyHandlers() {
         .then((data) => {
             if (data.has_recovery_key) {
                 statusEl.textContent =
-                    'This archive has a recovery key. Generate a new one if the ' +
-                    'old one may have been seen by someone else — this revokes it ' +
-                    'immediately.';
+                    'This archive has a recovery key. Check it if you want to ' +
+                    'confirm the copy you have on file still works, or generate ' +
+                    'a new one if it may have been seen by someone else.';
                 if (rotateBtn) rotateBtn.hidden = false;
+                if (checkBtn) checkBtn.hidden = false;
             } else {
                 statusEl.textContent =
                     'This archive has no recovery key. Without one, a forgotten ' +
@@ -459,6 +488,68 @@ function initRecoveryKeyHandlers() {
             rotateBtn.hidden = true;
             rotateForm.style.display = 'block';
             if (passwordEl) passwordEl.focus();
+        });
+    }
+
+    if (checkBtn && checkForm) {
+        checkBtn.addEventListener('click', () => {
+            checkBtn.hidden = true;
+            checkForm.style.display = 'block';
+            if (checkResultEl) checkResultEl.style.display = 'none';
+            if (checkInput) {
+                checkInput.value = '';
+                checkInput.focus();
+            }
+        });
+    }
+
+    if (cancelCheckBtn && checkForm) {
+        cancelCheckBtn.addEventListener('click', () => {
+            checkForm.style.display = 'none';
+            if (checkBtn) checkBtn.hidden = false;
+            // Don't leave the key sitting in the field for the next
+            // person to walk past the screen.
+            if (checkInput) checkInput.value = '';
+            if (checkResultEl) checkResultEl.style.display = 'none';
+        });
+    }
+
+    if (confirmCheckBtn) {
+        confirmCheckBtn.addEventListener('click', async () => {
+            const key = checkInput ? checkInput.value : '';
+            if (!key.trim()) {
+                checkResultEl.textContent = 'Enter the recovery key to check.';
+                checkResultEl.className = 'password-error';
+                checkResultEl.style.display = 'block';
+                return;
+            }
+
+            confirmCheckBtn.disabled = true;
+            try {
+                const response = await fetch('/auth/api/verify-recovery-key', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ recovery_key: key }),
+                });
+                const data = await response.json();
+
+                if (data.verified) {
+                    checkResultEl.textContent =
+                        'This key opens your archive. Nothing was changed.';
+                    checkResultEl.className = 'password-success';
+                } else {
+                    checkResultEl.textContent =
+                        data.error || 'That key does not open this archive.';
+                    checkResultEl.className = 'password-error';
+                }
+                checkResultEl.style.display = 'block';
+            } catch (err) {
+                checkResultEl.textContent = 'Could not check the key: ' + err.message;
+                checkResultEl.className = 'password-error';
+                checkResultEl.style.display = 'block';
+            } finally {
+                confirmCheckBtn.disabled = false;
+            }
         });
     }
 

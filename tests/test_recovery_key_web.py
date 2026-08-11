@@ -673,3 +673,96 @@ class TestRotationApi:
             json={"password": PASSWORD},
         )
         assert response.status_code == 403
+
+
+# ============================================================
+# VERIFY API — check a key without using it
+# ============================================================
+
+
+class TestVerifyRecoveryKeyApi:
+    """Testing a key must not cost you your password.
+
+    The recovery flow always resets. Without this endpoint the only way
+    to find out whether the key in the drawer works is to use it — which
+    is why the Session 68 drill needed a CLI script written for it.
+    """
+
+    @pytest.fixture
+    def v3_client(self, app):
+        client = app.test_client()
+        response = client.post(
+            "/auth/setup", data={"password": PASSWORD, "confirm": PASSWORD}
+        )
+        key = extract_recovery_key(response.get_data(as_text=True))
+        with client.session_transaction() as sess:
+            token = sess["csrf_token"]
+        return {"client": client, "key": key, "csrf": token}
+
+    def _check(self, ctx, key):
+        return ctx["client"].post(
+            "/auth/api/verify-recovery-key",
+            json={"recovery_key": key},
+            headers={"X-CSRF-Token": ctx["csrf"]},
+        )
+
+    def test_correct_key_verifies(self, v3_client):
+        response = self._check(v3_client, v3_client["key"])
+        assert response.status_code == 200
+        assert response.get_json()["verified"] is True
+
+    def test_verification_changes_nothing(self, v3_client):
+        """The whole point: no password change, no key rotation."""
+        before = Encryption.read_salt_blob()
+
+        self._check(v3_client, v3_client["key"])
+
+        assert Encryption.read_salt_blob() == before, "key file was modified"
+        Encryption.lock()
+        assert Encryption.unlock(PASSWORD)
+        Encryption.lock()
+        assert Encryption.unlock_with_recovery_key(v3_client["key"])
+
+    def test_verification_does_not_unlock(self, v3_client):
+        """Verifying is not the same act as being let in."""
+        Encryption.lock()
+        self._check(v3_client, v3_client["key"])
+        assert not Encryption.is_unlocked()
+
+    def test_wrong_key_reports_not_verified(self, v3_client):
+        response = self._check(v3_client, Encryption.generate_recovery_key())
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["verified"] is False
+        assert "does not open" in data["error"]
+
+    def test_mistyped_key_says_so_rather_than_wrong_key(self, v3_client):
+        """A typo and a wrong key are different problems."""
+        response = self._check(v3_client, "TOO-SHORT")
+        data = response.get_json()
+        assert data["verified"] is False
+        assert "characters" in data["error"]
+        assert "does not open" not in data["error"]
+
+    def test_formatting_variations_accepted(self, v3_client):
+        mangled = v3_client["key"].lower().replace("-", " ")
+        assert self._check(v3_client, mangled).get_json()["verified"] is True
+
+    def test_requires_a_session(self, app):
+        client = app.test_client()
+        with app.app_context():
+            Encryption.initialize_v3(PASSWORD)
+        response = client.post(
+            "/auth/api/verify-recovery-key", json={"recovery_key": "whatever"}
+        )
+        assert response.status_code in (401, 403)
+
+    def test_does_not_require_the_master_password(self, v3_client):
+        """Deliberate: an existing session already has the archive open.
+
+        Demanding the password would only discourage the checking this
+        endpoint exists to encourage.
+        """
+        response = self._check(v3_client, v3_client["key"])
+        assert response.status_code == 200
+        assert response.get_json()["verified"] is True
