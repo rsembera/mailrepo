@@ -222,6 +222,33 @@
     margin-top: var(--space-md);
 }
 
+/* Custom retention period. Statutory retention varies by jurisdiction and
+   profession, so the presets above are shortcuts rather than the range. */
+.date-preset-custom {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+}
+
+.date-preset-custom input {
+    width: 5.5rem;
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    font-family: inherit;
+    color: var(--color-text);
+    background: var(--color-surface, #fff);
+}
+
+.date-preset-custom input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+}
+
 .date-preset-btn {
     padding: var(--space-sm) var(--space-md);
     border: 1px solid var(--color-border);

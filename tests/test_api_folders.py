@@ -174,3 +174,75 @@ class TestFolderRestore:
         data = response.get_json()
         assert data["folder"]["renamed"] is True
         assert data["folder"]["name"] == "Conflict (2)"
+
+
+class TestRetentionVaultPeriods:
+    """Retention periods are statutory and vary by jurisdiction and
+    profession, so the UI presets (1/3/5/7/10 years) are shortcuts, not
+    the supported range."""
+
+    def _make_folder(self, client, name):
+        response = client.post(
+            "/api/folders", json={"name": name}, content_type="application/json"
+        )
+        assert response.status_code == 201
+        return response.get_json()["folder"]["id"]
+
+    def test_accepts_an_arbitrary_retention_period(
+        self, authenticated_client, initialized_app
+    ):
+        """15 years is not a preset, and is a common medical-records term."""
+        import time
+
+        folder_id = self._make_folder(authenticated_client, "Medical Records")
+        fifteen_years = int(time.time()) + (15 * 365 * 24 * 3600)
+
+        response = authenticated_client.post(
+            f"/api/folders/{folder_id}/vault",
+            json={"retention_date": fifteen_years},
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+
+        listing = authenticated_client.get("/api/folders").get_json()
+        folder = next(f for f in listing["folders"] if f["id"] == folder_id)
+        assert folder["retention_date"] == fifteen_years
+
+    def test_accepts_a_period_longer_than_every_preset(
+        self, authenticated_client, initialized_app
+    ):
+        """Some obligations run for decades — 'life of the client plus N'
+        can exceed anything on the preset row."""
+        import time
+
+        folder_id = self._make_folder(authenticated_client, "Estate Files")
+        fifty_years = int(time.time()) + (50 * 365 * 24 * 3600)
+
+        response = authenticated_client.post(
+            f"/api/folders/{folder_id}/vault",
+            json={"retention_date": fifty_years},
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+
+    def test_rejects_a_non_numeric_retention_date(
+        self, authenticated_client, initialized_app
+    ):
+        folder_id = self._make_folder(authenticated_client, "Bad Input")
+        response = authenticated_client.post(
+            f"/api/folders/{folder_id}/vault",
+            json={"retention_date": "fifteen"},
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+
+    def test_rejects_a_missing_retention_date(
+        self, authenticated_client, initialized_app
+    ):
+        folder_id = self._make_folder(authenticated_client, "No Date")
+        response = authenticated_client.post(
+            f"/api/folders/{folder_id}/vault",
+            json={},
+            content_type="application/json",
+        )
+        assert response.status_code == 400

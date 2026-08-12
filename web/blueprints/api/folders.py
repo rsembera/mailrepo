@@ -441,7 +441,7 @@ def move_to_vault(folder_id):
     if folder["retention_date"]:
         return jsonify({"error": "Folder is already in vault"}), 400
 
-    data = request.get_json()
+    data = request.get_json() or {}
     retention_date = data.get("retention_date")
 
     if not retention_date:

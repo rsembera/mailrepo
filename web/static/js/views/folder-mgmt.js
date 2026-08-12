@@ -572,16 +572,60 @@ export function openMoveToVault(folderId) {
         }
     });
     
+    // Setting a retention period in years, shared by the preset buttons
+    // and the custom input so the two cannot drift apart.
+    const applyYears = (years) => {
+        const date = new Date();
+        date.setFullYear(date.getFullYear() + years);
+        vaultDatePicker.setDate(date);
+        updateVaultConfirmButton();
+    };
+
     // Set up preset buttons
     document.querySelectorAll('.date-preset-btn').forEach(btn => {
         btn.onclick = () => {
-            const years = parseInt(btn.dataset.years);
-            const date = new Date();
-            date.setFullYear(date.getFullYear() + years);
-            vaultDatePicker.setDate(date);
-            updateVaultConfirmButton();
+            const customEl = document.getElementById('vaultCustomYears');
+            if (customEl) customEl.value = '';
+            const errEl = document.getElementById('vaultCustomYearsError');
+            if (errEl) errEl.textContent = '';
+            applyYears(parseInt(btn.dataset.years));
         };
     });
+
+    // Custom retention period. Statutory retention varies by jurisdiction
+    // and profession — 15 years is common for medical records, and some
+    // obligations run longer than any preset here — so the presets are
+    // shortcuts, not the available range.
+    const customEl = document.getElementById('vaultCustomYears');
+    const customErrEl = document.getElementById('vaultCustomYearsError');
+    if (customEl) {
+        customEl.value = '';
+        const applyCustom = () => {
+            const raw = customEl.value.trim();
+            if (raw === '') {
+                customErrEl.textContent = '';
+                return;
+            }
+            const years = Number(raw);
+            if (!Number.isInteger(years) || years < 1 || years > 100) {
+                // Don't touch the picker on bad input: silently leaving a
+                // stale date selected while the field shows something else
+                // is how a folder gets the wrong deletion date.
+                customErrEl.textContent = 'Enter a whole number of years between 1 and 100.';
+                return;
+            }
+            customErrEl.textContent = '';
+            applyYears(years);
+        };
+
+        customEl.oninput = applyCustom;
+        customEl.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                applyCustom();
+            }
+        };
+    }
     
     // Set up confirm button
     const confirmBtn = document.getElementById('vaultConfirmBtn');
