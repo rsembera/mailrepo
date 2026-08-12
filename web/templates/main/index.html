@@ -566,12 +566,11 @@
                 <button type="button" class="date-preset-btn" data-years="5">5 Years</button>
                 <button type="button" class="date-preset-btn" data-years="7">7 Years</button>
                 <button type="button" class="date-preset-btn" data-years="10">10 Years</button>
-            </div>
-            <div class="date-preset-custom">
-                <label for="vaultCustomYears">or</label>
-                <input type="number" id="vaultCustomYears" min="1" max="100" step="1"
-                       inputmode="numeric" placeholder="15" aria-label="Custom number of years">
-                <span>years</span>
+                <span class="date-preset-custom">
+                    <input type="number" id="vaultCustomYears" min="1" max="100" step="1"
+                           inputmode="numeric" placeholder="15" aria-label="Custom number of years">
+                    <span class="date-preset-custom-suffix">Years</span>
+                </span>
             </div>
             <span class="helper-text" id="vaultCustomYearsError"></span>
         </div>

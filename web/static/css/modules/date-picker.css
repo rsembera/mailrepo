@@ -222,44 +222,56 @@
     margin-top: var(--space-md);
 }
 
-/* Custom retention period. Statutory retention varies by jurisdiction and
-   profession, so the presets above are shortcuts rather than the range. */
+/* Custom retention period, styled as a sixth chip in the preset row.
+   Statutory retention varies by jurisdiction and profession, so the
+   presets are shortcuts rather than the supported range — but a separate
+   "or __ years" line below the grid read as bolted on. Sitting in the
+   grid, it wraps with the buttons and reads as one of them. */
 .date-preset-custom {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    justify-content: flex-start;
-    gap: var(--space-sm);
-    margin-top: var(--space-md);
-    font-size: 0.9rem;
-    color: var(--color-text-muted);
-}
-
-.date-preset-custom label,
-.date-preset-custom span {
-    flex: 0 0 auto;
+    gap: 0.35rem;
+    padding: var(--space-sm) var(--space-md);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-background-secondary);
 }
 
 /* Specificity note: shared.css sets
-   `.form-group input[type="number"] { width: 100% }`, which is a
-   two-class selector and beats a bare `.date-preset-custom input`. That
-   is why this rule is written with the same shape rather than relying on
-   flex alone — the field was rendering wider than the entire preset grid
-   above it, for a box that holds two digits. */
+   `.form-group input[type="number"] { width: 100% }`, a two-class
+   selector that beats a bare `.date-preset-custom input`. Matched here
+   deliberately — do not "simplify" this selector. */
 .form-group .date-preset-custom input[type="number"] {
     flex: 0 0 auto;
-    width: 4.5rem;
-    padding: var(--space-sm) var(--space-md);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    font-size: 0.9rem;
-    font-family: inherit;
+    width: 2.6rem;
+    padding: 0;
+    border: none;
+    background: transparent;
+    font-family: var(--font-family);
+    font-size: 0.85rem;
+    font-weight: 500;
     color: var(--color-text);
-    background: var(--color-surface, #fff);
     text-align: center;
 }
 
-/* Hide the spinner arrows. This field is typed into, not stepped
-   through, and the arrows crowd a box this size. */
+.form-group .date-preset-custom input[type="number"]:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+.date-preset-custom:focus-within {
+    border-style: solid;
+    border-color: var(--color-primary);
+}
+
+.date-preset-custom-suffix {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--color-text-muted);
+}
+
+/* Spinner arrows: this field is typed into, not stepped through, and
+   they would break the chip shape. */
 .date-preset-custom input::-webkit-outer-spin-button,
 .date-preset-custom input::-webkit-inner-spin-button {
     -webkit-appearance: none;
@@ -269,12 +281,6 @@
 .date-preset-custom input[type="number"] {
     -moz-appearance: textfield;
     appearance: textfield;
-}
-
-.form-group .date-preset-custom input[type="number"]:focus {
-    outline: none;
-    border-color: var(--color-primary);
-    box-shadow: none;
 }
 
 .date-preset-btn {
