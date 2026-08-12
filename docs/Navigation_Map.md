@@ -311,7 +311,7 @@ first run of this found a `ReferenceError` that had been shipping.
 
 ---
 
-## Test Suite (535 tests)
+## Test Suite (539 tests)
 
 | File | Coverage |
 |------|----------|
@@ -328,7 +328,7 @@ first run of this found a `ReferenceError` that had been shipping.
 | `tests/test_database.py` | Schema, migrations, FTS5 |
 | `tests/test_database_threading.py` | Concurrent access, RLock behavior |
 | `tests/test_email_parser.py` | Header/body/attachment parsing |
-| `tests/test_api_folders.py` | Folder CRUD via API |
+| `tests/test_api_folders.py` | Folder CRUD via API; Retention Vault accepts arbitrary retention periods, not just the UI presets (14 tests) |
 | `tests/test_api_emails.py` | Emails API: FTS search (folder scoping, subfolder toggle, trash exclusion), folder listing, decrypt-and-parse viewer + raw source via real encrypted fixtures, soft-delete/restore (incl. needs-destination 409), permanent delete, flagging, move (28 tests, Session 41) |
 | `tests/test_api_imports.py` | Import + export API: mbox/eml scan + import validation, single-.eml import round-trip, import-email content + attachment from disk, unencrypted-ZIP folder export decrypt round-trip (19 tests, Session 41) |
 | `tests/test_api_accounts.py` | Accounts API: listing + runtime `is_gmail` detection, create/update validation, no-password update, cached-folder fast path, delete, server detection (23 tests, Session 41) |

@@ -5130,3 +5130,80 @@ Killed and re-run clean. Start the suite or edit, not both.
 - The frontend still has no automated behavioural coverage. ESLint
   `no-undef` is the only check, and every UI failure this week was found
   by hand.
+
+---
+
+## Session 75 — August 11, 2026 (MacBook, evening)
+
+Short session, one feature, prompted by Rick noticing a limitation while
+using the app.
+
+### Retention Vault: arbitrary retention periods
+
+The Move to Vault modal offered 1/3/5/7/10 years as quick-select buttons
+and nothing else. Statutory retention varies by jurisdiction and
+profession — 15 years is common for medical records, and "life of the
+client plus N" can exceed anything on that row. For an application aimed
+at lawyers and therapists, the presets being the only fast path was the
+wrong default.
+
+Worth noting what did NOT need changing: the date picker already accepted
+any date, and `move_to_vault` already took an arbitrary timestamp. This
+was purely a UI gap — a faster path to something already supported.
+
+`applyYears()` is now shared between the preset buttons and the custom
+input so the two cannot drift. Choosing a preset clears the custom field
+and vice versa, so the modal never displays one value while the picker
+holds another. Invalid input (non-integer, <1, >100) shows a message and
+deliberately does **not** touch the picker: silently leaving a stale date
+selected while the field reads something else is how a folder ends up
+with the wrong deletion date, and this modal's whole job is scheduling
+the destruction of correspondence.
+
+Also fixed an unguarded `request.get_json()` in `move_to_vault` — same
+class as the ones the review flagged in `auth.py`, where a JSON-less POST
+would 500.
+
+### Two layout passes, both prompted by Rick
+
+**`a001dd3`** — the field rendered wider than the entire preset grid
+above it, for a box holding two digits. Cause was specificity, not the
+`width` being wrong: `shared.css` sets
+`.form-group input[type="number"] { width: 100% }`, a two-class selector
+that beats a bare `.date-preset-custom input`.
+
+That is the **second CSS specificity bug in a week** — the `[hidden]`
+one in Session 68 was the same shape, a plausible-looking rule quietly
+losing to a more specific one elsewhere. Worth generalising: `shared.css`
+has broad `.form-group` rules that override module CSS unless matched in
+shape. Both were invisible from reading the JS, and both were found by
+Rick looking at the screen.
+
+**`957768d`** — with the size fixed it still read as bolted on: an
+"or __ years" line floating below a wrapped preset grid. Now a sixth chip
+inside the grid itself, same height and radius as the buttons, dashed
+border to signal "fill this in" against the five fixed options, solid on
+focus. Wraps with them.
+
+The first version was a field added to a form; the second was a control
+designed into a row. Rick's "seems a bit messy?" was the difference.
+
+### Tests
+
+4 new in `test_api_folders.py`: a 15-year period, a 50-year period,
+non-numeric input, and a missing date. 14 pass in that file. Full suite
+not re-run — the change is confined to one endpoint plus CSS/JS, and the
+endpoint's tests pass.
+
+### Commits
+- `de36e7d` — allow an arbitrary number of years
+- `a001dd3` — size the custom field correctly
+- `957768d` — fold it into the preset row
+- (this entry) — docs
+
+### Still open
+
+- `git tag v1.0.0`, once the live archive has a week of ordinary use.
+  Migrated Aug 9, so around Friday Aug 14.
+- Then packaging (.dmg / .deb). The WeasyPrint Homebrew dylib bundling
+  is the expected long pole.

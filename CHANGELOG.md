@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **The Retention Vault now accepts any retention period, not just the
+  presets (Session 75).** The quick-select buttons (1/3/5/7/10 years)
+  are shortcuts, but statutory retention varies by jurisdiction and
+  profession — 15 years is common for medical records, and some
+  obligations run longer than any preset. There is now a field beside
+  them for typing any number of years up to 100. The date picker always
+  accepted an arbitrary date; this is a faster way to reach one.
 - **You can now check your recovery key without using it (Session 73).**
   Settings → Security → Check Recovery Key confirms whether the copy you
   have on file opens this archive. It changes nothing — not your
