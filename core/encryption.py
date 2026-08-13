@@ -625,6 +625,63 @@ class Encryption:
     # ----------------------------------------------------------
 
     @classmethod
+    def _assert_password_wrapper_opens(cls, blob: bytes, kek_pw: bytes, master: bytes) -> None:
+        """Confirm an assembled blob's password wrapper reopens to the master.
+
+        Reads the wrapper back out of the finished blob rather than
+        checking the local variable, so a serialization error -- a field
+        written at the wrong offset, a salt and wrapper transposed --
+        fails here instead of producing a well-formed key file that
+        nothing can open.
+
+        Deliberately reuses the KEK already derived rather than deriving
+        it again from the password: a second Argon2id pass at m=256 MiB
+        would double the cost of a password change to prove only that the
+        KDF is deterministic, which is not a plausible failure mode. What
+        this does prove is that the bytes about to hit disk decrypt to
+        the master we hold.
+        """
+        fields = cls.parse_v3_salt_blob(blob)
+        try:
+            reopened = cls._decrypt_v2_with_key(fields["wrapped_pw"], kek_pw)
+        except Exception as e:
+            raise EncryptionError(
+                "Refusing to write the key file: the new password wrapper does not decrypt."
+            ) from e
+        if not secrets.compare_digest(reopened, master):
+            raise EncryptionError(
+                "Refusing to write the key file: the new password wrapper "
+                "opens to the wrong key."
+            )
+
+    @classmethod
+    def _assert_recovery_wrapper_opens(cls, blob: bytes, recovery_key: str, master: bytes) -> None:
+        """Confirm an assembled blob opens with the recovery key as printed.
+
+        Goes through the full public unwrap path, re-parsing the display
+        string and re-deriving from the salt stored in the blob. That is
+        the point: a recovery key is generated as bytes, rendered to a
+        hyphenated base32 string, and parsed back to derive the wrapping
+        key. If that round trip were ever subtly wrong, MailRepo would
+        print a key, report success, and the user would discover it was
+        dead on the single worst day they will ever have with this app.
+
+        Unlike the password side this costs only HKDF, not Argon2id, so
+        there is no reason not to check the whole path.
+        """
+        try:
+            reopened = cls.unwrap_master_with_recovery_key(blob, recovery_key)
+        except Exception as e:
+            raise EncryptionError(
+                "Refusing to write the key file: the new recovery key does not open it."
+            ) from e
+        if not secrets.compare_digest(reopened, master):
+            raise EncryptionError(
+                "Refusing to write the key file: the new recovery key "
+                "opens to the wrong key."
+            )
+
+    @classmethod
     def build_v3_salt_blob(cls, master: bytes, password: str, recovery_key: str) -> bytes:
         """Wrap the master key under both a password and a recovery key."""
         if len(master) != MASTER_KEY_LENGTH:
@@ -646,6 +703,12 @@ class Encryption:
             raise EncryptionError(
                 f"Built a v3 salt blob of {len(blob)} bytes, expected {V3_SALT_FILE_LENGTH}."
             )
+
+        # Both doors, before this blob is allowed anywhere near disk. This
+        # is the first key file an archive ever gets and the recovery key
+        # is printed off the back of it.
+        cls._assert_password_wrapper_opens(blob, kek_pw, master)
+        cls._assert_recovery_wrapper_opens(blob, recovery_key, master)
         return blob
 
     @staticmethod
@@ -704,7 +767,12 @@ class Encryption:
         salt_pw = secrets.token_bytes(SALT_LENGTH)
         kek_pw = cls._derive_master_v2(new_password, salt_pw)
         wrapped_pw = cls._encrypt_v2_with_key(master, kek_pw)
-        return SALT_MAGIC_V3 + salt_pw + wrapped_pw + fields["salt_rk"] + fields["wrapped_rk"]
+        new_blob = SALT_MAGIC_V3 + salt_pw + wrapped_pw + fields["salt_rk"] + fields["wrapped_rk"]
+
+        # A password wrapper that does not open locks the owner out of
+        # their own archive with only the recovery key left standing.
+        cls._assert_password_wrapper_opens(new_blob, kek_pw, master)
+        return new_blob
 
     @classmethod
     def rewrap_recovery_key(cls, blob: bytes, master: bytes, new_recovery_key: str) -> bytes:
@@ -720,7 +788,12 @@ class Encryption:
             cls.parse_recovery_key(new_recovery_key), salt_rk
         )
         wrapped_rk = cls._encrypt_v2_with_key(master, kek_rk)
-        return SALT_MAGIC_V3 + fields["salt_pw"] + fields["wrapped_pw"] + salt_rk + wrapped_rk
+        new_blob = SALT_MAGIC_V3 + fields["salt_pw"] + fields["wrapped_pw"] + salt_rk + wrapped_rk
+
+        # The key returned from here gets printed and filed away. Prove it
+        # opens the blob before anyone writes it on paper.
+        cls._assert_recovery_wrapper_opens(new_blob, new_recovery_key, master)
+        return new_blob
 
     # ----------------------------------------------------------
     # Atomic file replacement

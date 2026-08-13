@@ -20,7 +20,7 @@ from core.crypto_migration_v3 import (
     migrate_to_v3,
     needs_v3_migration,
 )
-from core.encryption import Encryption, InvalidPasswordError
+from core.encryption import Encryption, EncryptionError, InvalidPasswordError
 from core.password_change import (
     PasswordChangeError,
     change_master_password,
@@ -492,6 +492,98 @@ class TestRecoveryKeyRotation:
         rotate_recovery_key(PASSWORD)
         for rel, raw in before.items():
             assert (Config.get_archive_path() / rel).read_bytes() == raw
+
+
+class TestWrapperVerifiedBeforeWrite:
+    """A blob can be perfectly well-formed and still not open.
+
+    Structural validation checks magic bytes and length; it cannot tell a
+    working wrapper from a dead one. These tests corrupt the wrap step
+    itself and assert the key file is never written -- a silently dead
+    credential is discovered on the worst possible day.
+    """
+
+    NEW = "BrandNewPassword789!"
+
+    @staticmethod
+    def _junk_wrapper(data, key):
+        """Right length, right shape, opens to nothing."""
+        return b"\x02" + b"\x00" * 12 + b"\xff" * len(data) + b"\x00" * 16
+
+    def test_password_rewrap_refuses_an_unopenable_wrapper(self, v3_archive, monkeypatch):
+        monkeypatch.setattr(Encryption, "_encrypt_v2_with_key", self._junk_wrapper)
+        with pytest.raises(EncryptionError, match="does not decrypt"):
+            change_master_password(PASSWORD, self.NEW)
+
+    def test_password_rewrap_refuses_a_wrapper_holding_the_wrong_key(
+        self, v3_archive, monkeypatch
+    ):
+        """Decrypts cleanly, yields something that is not the master."""
+        real = Encryption._encrypt_v2_with_key.__func__
+
+        def wrong_payload(cls, data, key):
+            return real(cls, b"\x00" * len(data), key)
+
+        monkeypatch.setattr(Encryption, "_encrypt_v2_with_key", classmethod(wrong_payload))
+        with pytest.raises(EncryptionError, match="wrong key"):
+            change_master_password(PASSWORD, self.NEW)
+
+    def test_a_refused_password_change_leaves_the_key_file_untouched(
+        self, v3_archive, monkeypatch
+    ):
+        before = Encryption.read_salt_blob()
+        monkeypatch.setattr(Encryption, "_encrypt_v2_with_key", self._junk_wrapper)
+        with pytest.raises(EncryptionError):
+            change_master_password(PASSWORD, self.NEW)
+        monkeypatch.undo()
+        assert Encryption.read_salt_blob() == before
+        Encryption.lock()
+        assert Encryption.unlock(PASSWORD)
+
+    def test_rotation_refuses_a_broken_display_round_trip(self, v3_archive, monkeypatch):
+        """The failure this exists for: the printed key is not the key.
+
+        Simulates format/parse drift by having the second parse -- the one
+        the verify performs on the display string -- return different
+        bytes than the wrap used.
+        """
+        real_parse = Encryption.parse_recovery_key
+        calls = {"n": 0}
+
+        def drifting_parse(text):
+            calls["n"] += 1
+            raw = real_parse(text)
+            return bytes(b ^ 0xFF for b in raw) if calls["n"] > 1 else raw
+
+        monkeypatch.setattr(Encryption, "parse_recovery_key", staticmethod(drifting_parse))
+        with pytest.raises(EncryptionError, match="does not open it"):
+            rotate_recovery_key(PASSWORD)
+
+    def test_a_refused_rotation_leaves_the_old_key_working(self, v3_archive, monkeypatch):
+        before = Encryption.read_salt_blob()
+        monkeypatch.setattr(Encryption, "_encrypt_v2_with_key", self._junk_wrapper)
+        with pytest.raises(EncryptionError):
+            rotate_recovery_key(PASSWORD)
+        monkeypatch.undo()
+        assert Encryption.read_salt_blob() == before
+        Encryption.lock()
+        assert Encryption.unlock_with_recovery_key(v3_archive["recovery_key"])
+
+    def test_setup_refuses_to_build_an_unopenable_blob(self, monkeypatch):
+        """build_v3_salt_blob guards the first key file an archive gets."""
+        rk = Encryption.generate_recovery_key()
+        monkeypatch.setattr(Encryption, "_encrypt_v2_with_key", self._junk_wrapper)
+        with pytest.raises(EncryptionError, match="does not decrypt"):
+            Encryption.build_v3_salt_blob(b"\x11" * 32, PASSWORD, rk)
+
+    def test_the_guards_do_not_fire_in_normal_operation(self, v3_archive):
+        """The whole point: identical output on the success path."""
+        new_rk = rotate_recovery_key(PASSWORD)
+        change_master_password(PASSWORD, self.NEW)
+        Encryption.lock()
+        assert Encryption.unlock(self.NEW)
+        Encryption.lock()
+        assert Encryption.unlock_with_recovery_key(new_rk)
 
 
 class TestOrphanedMigrationState:
