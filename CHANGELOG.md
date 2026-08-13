@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **MailRepo now proves a new password or recovery key actually works
+  before it writes it (Session 76).** Setting up an archive, changing a
+  password and rotating a recovery key all end by rewriting the small
+  key file that holds your keys. That file was checked for the right
+  shape and size, which cannot tell a working key from a dead one. It is
+  now opened and verified before it is allowed to replace the old one,
+  and the write is refused outright if anything is wrong. In practice
+  nothing looks different — this exists so that a printed recovery key
+  can never be one that quietly does not work, discovered on the day you
+  need it.
+
 ### Added
 - **The Retention Vault now accepts any retention period, not just the
   presets (Session 75).** The quick-select buttons (1/3/5/7/10 years)

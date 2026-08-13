@@ -70,7 +70,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 ---
 
-## Backend (Python — 13,856 lines)
+## Backend (Python — 13,929 lines)
 
 ### Core (`/core/`)
 
@@ -78,7 +78,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 |------|-------|--------------|
 | `imap.py` | 1,535 | IMAP client: connect, auth, folders, fetch, MOVE/COPY + UID-scoped expunge, Gmail-aware delete (incl. batched set delete), CONDSTORE |
 | `pdf_export.py` | 1,052 | PDF export: per-email PDFs, attachment merging, WeasyPrint |
-| `encryption.py` | 786 | Argon2id KDF + HKDF + AES-256-GCM (v2) plus the v3 envelope: random master wrapped under password and recovery key |
+| `encryption.py` | 859 | Argon2id KDF + HKDF + AES-256-GCM (v2) plus the v3 envelope: random master wrapped under password and recovery key, each wrapper verified to open before the key file is written |
 | `password_change.py` | 636 | Password change — v2 full re-encryption, v3 rewrap; recovery-key password reset (needs no unlocked session), recovery-key rotation, on-disk backup gate, interruption marker |
 | `database.py` | 465 | SQLCipher connection, schema v5, FTS5, migrations, threading lock, hard refusal to open unencrypted |
 | `crypto_migration_v3.py` | 335 | v2 → v3 migration: re-encrypt under a random master, resumable via wrapped-master state file |
@@ -311,12 +311,12 @@ first run of this found a `ReferenceError` that had been shipping.
 
 ---
 
-## Test Suite (539 tests)
+## Test Suite (546 tests)
 
 | File | Coverage |
 |------|----------|
 | `tests/test_recovery_key_web.py` | Recovery-key web flow end to end: setup shows the key (and never puts it in the session), recovery login, post-recovery password reset (incl. gating to recovery-login sessions and CSRF), v3 upgrade flow (incl. stale-backup-with-no-changes and CSRF), post-upgrade redirect destination, rotation API + CSRF (31 tests, Sessions 68–70) |
-| `tests/test_crypto_migration_v3.py` | v2 → v3 envelope migration: content survives, readable under both credentials, interrupted migration re-runs to completion, resume state halts rather than minting a new master; v3 password change as rewrap; recovery-key rotation (40 tests, Session 68) |
+| `tests/test_crypto_migration_v3.py` | v2 → v3 envelope migration: content survives, readable under both credentials, interrupted migration re-runs to completion, resume state halts rather than minting a new master; v3 password change as rewrap; recovery-key rotation; wrappers verified to open before the key file is written (49 tests, Session 76) |
 | `tests/test_recovery_key.py` | v3 envelope: recovery-key format and parse tolerance, wrapping structure, unlock by either credential yielding identical keys, tamper detection, independent rewrap of each wrapper (40 tests, Session 68) |
 | `tests/test_restore.py` | Restore path: staged files decrypt to original plaintext, backup carries its own key material, incremental chains and deletion propagation, staging-is-not-production, complete/cancel, chain verification, restore-point credential labelling; plus Session 74 regressions — delete-then-recreate, missing mid-chain incremental, filename collisions, safety-backup visibility and location, retention refusing to prune when the kept chain is broken (41 tests, Sessions 68–74) |
 | `tests/test_auth.py` | Auth boundary: setup, login + rate-limit lockout, logout, CSRF enforcement, password-change job-id handoff end-to-end (22 tests, Session 40) |

@@ -5207,3 +5207,110 @@ endpoint's tests pass.
   Migrated Aug 9, so around Friday Aug 14.
 - Then packaging (.dmg / .deb). The WeasyPrint Homebrew dylib bundling
   is the expected long pole.
+
+---
+
+## Session 76 — August 13, 2026 (Apollo)
+
+Prove a new key wrapper opens before writing it. One day before the tag.
+
+### Where this came from
+
+Rick was working on Daybook and its recovery-key design, and a
+comparison against EdgeCase surfaced a claim about MailRepo: EdgeCase
+verifies a newly wrapped key actually decrypts back to the master before
+committing it, and MailRepo checks only that the blob is well-formed.
+
+Read cold against source, the claim held. `write_v3_salt_file` is two
+lines: `parse_v3_salt_blob(blob)` — magic bytes and length — then the
+atomic write. All three rewrap paths end there: `build_v3_salt_blob`
+(setup and migration), `rewrap_password` (password change and
+recovery-key reset), `rewrap_recovery_key` (rotation). Consistent
+across all three, so not an oversight in one spot.
+
+### Why it was worth doing anyway, and why it wasn't urgent
+
+The bug class this guards — a printed recovery key that does not open
+the archive — was already covered by two tests: the `format`/`parse`
+round trip in `test_recovery_key.py`, and `test_new_key_works`, which
+rotates, locks, and unlocks with the returned key. A broken round trip
+fails CI rather than shipping. The round trip is also structurally hard
+to break: 20 bytes is exactly 32 base32 characters with no padding, and
+`_RECOVERY_KEY_FIXUPS` only maps `0`/`1`/`8`, which cannot appear in
+valid base32 output.
+
+So: a real gap, already fenced upstream, and no risk to an archive
+either way — rotation does not touch the password wrapper, so the worst
+case is a dead second door rather than a lost one.
+
+It went in regardless, on "if we know about it, fix it" grounds. Tagging
+v1.0.0 with a written-down gap in the crypto write path is the wrong
+way to start.
+
+### What was rejected from the original plan
+
+The first sketch had `rewrap_password` return its KEK alongside the
+blob so the caller could verify. That changes a signature and every call
+site a day before a tag, for no gain — each builder already holds
+everything it needs to check its own output. The guards went inside the
+builders instead. Nothing outside `core/encryption.py` moved.
+
+### The cost asymmetry, which shaped the design
+
+The two sides are not the same price, and the naive "verify through the
+public unwrap path" would have been expensive on one of them.
+
+`_assert_password_wrapper_opens` reads the wrapper back out of the
+**assembled blob** and opens it with the KEK already in hand. Reading it
+back from the blob rather than from the local variable is the part that
+earns its keep: it catches a serialization error — a field written at
+the wrong offset, salt and wrapper transposed — which a check against
+the local variable cannot see. It deliberately does not re-derive from
+the password. Argon2id here is m=256 MiB, t=6; a second pass would
+double the cost of a password change to prove only that the KDF is
+deterministic, which is not a plausible failure mode.
+
+`_assert_recovery_wrapper_opens` does go through the full public path —
+`unwrap_master_with_recovery_key` on the finished blob, re-parsing the
+display string and re-deriving from the salt now stored in it. That
+round trip is the actual failure mode on the recovery side, and it costs
+HKDF rather than Argon2id, so there was no reason to check less.
+
+Net effect on the success path: byte-identical output. The only new
+behaviour is a raise on a path that should never execute.
+
+### Tests
+
+7 new in `TestWrapperVerifiedBeforeWrite`, covering both branches on the
+password side (a wrapper that will not decrypt, and one that decrypts to
+the wrong bytes), a simulated `format`/`parse` drift on the recovery
+side, the setup path, and the consequence that matters — a refused write
+leaves the key file untouched and the old credentials working.
+
+Each was verified by reverting the guards: 6 of 7 failed, and the one
+that still passed was `test_the_guards_do_not_fire_in_normal_operation`,
+which should pass either way. Without the guards,
+`test_a_refused_password_change_leaves_the_key_file_untouched` fails by
+*not raising* — which is to say the key file gets written with a dead
+wrapper. That is the whole finding, demonstrated.
+
+One error worth recording: the first version of the drift test reached
+for `Encryption.parse_recovery_key.__func__`. It is a `@staticmethod`,
+so accessing it off the class already yields a plain function.
+
+### Suite
+
+546 passed on Apollo, 12m38s. Was 539 (535 after Session 74, plus
+Session 75's 4, which had not had a full-suite run until now).
+
+No frontend changes, so ESLint was not re-run.
+
+### Commits
+- `4b9f8e7` — verify the wrapper opens before writing the key file
+- (this entry) — docs
+
+### Still open
+
+- `git tag v1.0.0`. The live archive was migrated Aug 9; a week of
+  ordinary use lands tomorrow, Friday Aug 14, as planned.
+- The frontend still has no automated behavioural coverage.
