@@ -5314,3 +5314,127 @@ No frontend changes, so ESLint was not re-run.
 - `git tag v1.0.0`. The live archive was migrated Aug 9; a week of
   ordinary use lands tomorrow, Friday Aug 14, as planned.
 - The frontend still has no automated behavioural coverage.
+
+
+---
+
+## Session 77 — August 15, 2026 (MacBook)
+
+### Restoring when there is no archive to log in to
+
+Rick hit this working on Daybook and suspected MailRepo shared it: after
+catastrophic data loss the app sends the user to a first-login screen
+with no way to restore from a backup. It does, and the shape of it was
+worse than described.
+
+**Confirmed, not assumed.** Built a throwaway archive in a temp dir,
+backed it up to an external folder, deleted things, and hit the routes
+with a test client. Three distinct failures.
+
+*The one Rick found.* `app.py` gates on `Encryption.is_initialized()`,
+which is only "does `data/.salt` exist". With that file gone every route
+redirects to `/auth/setup`, whose sole offer is a new master password.
+Deleting `data/` and `archive/` while leaving `backups/` intact:
+
+```
+is_initialized: False
+restore points visible: 1      <- a good restore point exists
+GET / -> 302 /auth/setup       <- and the app never mentions it
+```
+
+The data is right there, discoverable by code that already works, and
+the UI walks past it into creating a fresh archive.
+
+*Worse.* The manifest lives at `<app>/backups/manifest.json`, always
+local, regardless of `backup_location`. Zips honour the setting and go
+to iCloud; the index of them does not, and `get_all_backup_files()` does
+not include it, so it exists in exactly one copy on the machine most
+likely to die. Deleting the app directory including `backups/`, zips
+safe offsite: `restore points visible: 0`. Fixing the route alone gets a
+restore screen that says "no backups found".
+
+*Quieter.* Delete only `mailrepo.db` and leave `.salt`: login succeeds,
+`init_database()` makes a fresh empty one, and the user lands in a
+working app with zero archives. `backup_location` lived in that
+database. Silent partial loss with no warning.
+
+### What was built
+
+**Manifest sidecar.** `save_manifest()` writes a copy into every
+directory the manifest's backups live in. Put at that level so anything
+mutating the manifest — new backup, retention pruning — keeps copies
+current without each call site remembering to. Failures log and
+continue: a backup that succeeded must not report failure because a
+cloud folder was briefly unwritable, and the canonical manifest is
+already down by then.
+
+**Folder discovery.** `get_restore_points()` split so
+`build_restore_points(backups, override_dir=)` can resolve entries
+against a named folder — a recovered folder is rarely at the path it was
+written from. `discover_restore_points_in()` returns `(points, source)`,
+preferring the sidecar and falling back to
+`reconstruct_manifest_entries()`. `prepare_restore()` gained a sibling
+`prepare_restore_from_point()`, because the recovery path has its point
+in hand and cannot look it up by an id the missing local manifest
+defines.
+
+**Recovery routes.** `/auth/restore`, `/restore/scan`,
+`/restore/prepare` — public for the same reason `auth.login` is, since
+they exist for someone with no credential left to present. Narrow
+because the gate runs the other way: each refuses once
+`Encryption.is_initialized()` is true, so this cannot roll a live
+archive back over its owner, and a completed restore grants no access —
+the contents are still encrypted under the credentials in force when the
+backup was taken. Own CSRF token minted on the page; `prepare` re-scans
+rather than trusting an id and file list from the client. `setup.html`
+links here, which is the part that actually closes the gap.
+
+**Startup warning** for key-file-without-database, and a
+`no_current_key` credential note so the disaster case says which
+password opens the backup instead of returning `unknown` with an empty
+string.
+
+### The test that earned its keep
+
+`test_a_new_full_starts_a_new_chain` failed, and it was a real bug.
+Reconstruction sorted the folder listing by filename — but the type
+prefix leads, so every `full_` sorts ahead of every `incr_` regardless
+of date. A folder holding two chains would have been stitched into one
+with all the fulls at the front, and the restore would have
+reconstructed a state that never existed while every verification layer
+reported it clean. Now parses timestamps first and sorts
+chronologically.
+
+Worth recording as a principle: reconstruction is inference, and
+inference that looks right is the dangerous kind. Hence the
+`reconstructed` flag on the points and the screen saying the list came
+from filenames and to check the dates before overwriting anything.
+
+### Verified
+
+Total loss → `/auth/restore` → scan finds the offsite backup via sidecar
+→ prepare → restart → `complete_restore()` → unlock → original plaintext
+decrypts. Gate confirmed closed afterwards (302 to login, scan 403).
+CSRF rejects a client that never loaded the page.
+
+36 new tests in `tests/test_disaster_recovery.py`. Full suite 582 passed
+in 9m19s. ESLint 0 errors / 64 warnings, unchanged from baseline.
+
+### Notes for Rick
+
+- The sidecar only helps backups made from here on. Existing iCloud
+  backups have no sidecar and would come back through the reconstruction
+  path. **One manual backup after this lands writes a sidecar covering
+  the whole existing manifest**, upgrading them all at once. Worth doing
+  during dogfooding.
+- Daybook has the same shape of bug. The sidecar reasoning and the
+  inverted gate on the recovery route should both port.
+
+### Still open
+
+- `git tag v1.0.0`.
+- Manual verification of the credential badge + modal on password change
+  (unchanged from Session 76).
+- The frontend still has no automated behavioural coverage; the recovery
+  screen is now part of that gap, and it is a screen that only runs on
+  the worst day an archive ever has.

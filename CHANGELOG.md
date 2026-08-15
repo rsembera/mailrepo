@@ -10,6 +10,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Security
+- **You can now restore from a backup when there is no archive to log in
+  to (Session 77).** If this machine lost its data, MailRepo used to send
+  you to a "create a master password" screen with no mention of your
+  backups — so the obvious next step started an empty archive over the
+  top of a recoverable situation. There is now a restore screen reachable
+  before login, linked from that setup page. It is available only when
+  there is no archive on the machine, and restoring does not open
+  anything: the recovered mail is still encrypted with the password and
+  recovery key that were in use when the backup was made.
+- **Backup folders now describe themselves.** The record of which backup
+  belongs to which chain used to live only inside the application folder.
+  If you kept backups in iCloud Drive or another synced folder and lost
+  the machine, the backup files survived but nothing left could
+  interpret them. A copy of that record is now kept alongside the backups
+  themselves. If it is ever missing, MailRepo works out what it can from
+  the filenames and tells you plainly that it has done so.
+- **MailRepo now says which password opens a backup after total loss.**
+  Previously the restore screen went quiet in exactly that case, having
+  nothing on the machine to compare against.
+- **A missing database is no longer silent.** If your encryption key file
+  survives but the database does not, logging in used to create a new
+  empty archive with no warning. MailRepo now says so at startup, and
+  leaves the decision to you — that is also what a genuine first run
+  looks like.
 - **MailRepo now proves a new password or recovery key actually works
   before it writes it (Session 76).** Setting up an archive, changing a
   password and rotating a recovery key all end by rewriting the small

@@ -1,6 +1,6 @@
 # MailRepo — Navigation Map
 
-**Last Updated:** August 11, 2026
+**Last Updated:** August 15, 2026
 
 ---
 
@@ -93,13 +93,13 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `app.py` | 180 | Flask factory, blueprint registration, auth/CSRF middleware |
+| `app.py` | 212 | Flask factory, blueprint registration, auth/CSRF middleware |
 
 ### Blueprints (`/web/blueprints/`)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `auth.py` | 876 | Setup, login, logout, rate limiting, session management; recovery-key verification + server-side handoff to a mandatory password reset (no session granted), v3 upgrade flow, rotation API |
+| `auth.py` | 1,054 | Setup, login, logout, rate limiting, session management; recovery-key verification + server-side handoff to a mandatory password reset (no session granted), v3 upgrade flow, rotation API; pre-login disaster-recovery routes (`/auth/restore`, scan, prepare) gated on there being no archive |
 | `backups.py` | 273 | Backup/restore endpoints, folder picker |
 | `main.py` | 81 | Page routes: index, create_archive, settings |
 
@@ -126,7 +126,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `backup.py` | 1,615 | Full/incremental backup, restore, retention, external state file (Libram-style), on-disk restore-chain verification |
+| `backup.py` | 1,858 | Full/incremental backup, restore, retention, external state file (Libram-style), on-disk restore-chain verification, manifest sidecars written to every backup destination, folder discovery + filename-based chain reconstruction for disaster recovery |
 | `log.py` | 51 | Logging setup, polling filter |
 | `__init__.py` | 34 | Shell command runner, path utilities |
 
@@ -159,6 +159,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `trash.js` | 775 | Trash view: deleted folders, emails, restore, purge |
 | `folder-mgmt.js` | 667 | Manage folders: rename, color, create, delete |
 | `starred.js` | 369 | Starred email view |
+| `recover.js` | 168 | Pre-login disaster recovery: scan a backup folder, list restore points, stage a restore. Deliberately talks to nothing else — there is no session, database or settings when it runs |
 
 ### Components (`/js/components/`)
 
@@ -204,7 +205,8 @@ context-menu (69).
 | `main/index.html` | 693 | Main dashboard (three-pane layout); all interactivity via data-tpl-action |
 | `base.html` | 423 | Base layout, left rail, sidebar, content area, modals |
 | `auth/login.html` | 84 | Login form |
-| `auth/setup.html` | 68 | Master password setup |
+| `auth/setup.html` | 76 | Master password setup; links to disaster recovery so a lost archive is not mistaken for a first run |
+| `auth/recover.html` | 66 | Pre-login restore: backup-folder input, restore points, credential note |
 | `main/create_archive.html` | 63 | First-run archive creation |
 
 As of Session 38, `index.html` has zero inline onclick handlers. All
@@ -311,7 +313,7 @@ first run of this found a `ReferenceError` that had been shipping.
 
 ---
 
-## Test Suite (546 tests)
+## Test Suite (582 tests)
 
 | File | Coverage |
 |------|----------|
@@ -319,6 +321,7 @@ first run of this found a `ReferenceError` that had been shipping.
 | `tests/test_crypto_migration_v3.py` | v2 → v3 envelope migration: content survives, readable under both credentials, interrupted migration re-runs to completion, resume state halts rather than minting a new master; v3 password change as rewrap; recovery-key rotation; wrappers verified to open before the key file is written (49 tests, Session 76) |
 | `tests/test_recovery_key.py` | v3 envelope: recovery-key format and parse tolerance, wrapping structure, unlock by either credential yielding identical keys, tamper detection, independent rewrap of each wrapper (40 tests, Session 68) |
 | `tests/test_restore.py` | Restore path: staged files decrypt to original plaintext, backup carries its own key material, incremental chains and deletion propagation, staging-is-not-production, complete/cancel, chain verification, restore-point credential labelling; plus Session 74 regressions — delete-then-recreate, missing mid-chain incremental, filename collisions, safety-backup visibility and location, retention refusing to prune when the kept chain is broken (41 tests, Sessions 68–74) |
+| `tests/test_disaster_recovery.py` | Recovery with no archive to log in to: manifest sidecars written to every backup destination and surviving an unwritable one, folder discovery via sidecar or filename reconstruction, chain-reconstruction rules (incrementals join the preceding full, a new full starts a chain, orphans dropped, chronological not lexical ordering), credential note when no key file remains, route gates (public with no archive, dead once one exists, CSRF), and the full loop from total loss to decryptable mail (36 tests, Session 77) |
 | `tests/test_auth.py` | Auth boundary: setup, login + rate-limit lockout, logout, CSRF enforcement, password-change job-id handoff end-to-end (22 tests, Session 40) |
 | `tests/test_encryption.py` | v2 `Encryption` lifecycle: init / unlock / lock / wrong-password (no v1 code remains) |
 | `tests/test_encryption_v2.py` | v2 encryption: Argon2id, HKDF, AES-256-GCM, file/DB round-trip |
