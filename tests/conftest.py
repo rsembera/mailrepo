@@ -41,12 +41,6 @@ def reset_singletons(temp_data_dir, tmp_path, monkeypatch):
     # every test that depends on it.
     monkeypatch.setenv("MAILREPO_STATE_DIR", str(tmp_path / "mailrepo_state"))
 
-    # Confine the disaster-recovery filesystem sweep to the sandbox.
-    # Without this it walks the real home directory and finds the
-    # developer's own backups, so a test asserting "no backups exist"
-    # fails on the machine it was written on.
-    monkeypatch.setenv("MAILREPO_SEARCH_ROOTS", str(tmp_path))
-
     # Reset Config's cached path
     from core.config import Config
 

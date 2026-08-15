@@ -456,8 +456,9 @@ _backup_search_lock = threading.Lock()
 def _find_backups(force=False):
     """Locate this archive's backups, once per process unless forced.
 
-    Consults MailRepo's own record of where it has written backups
-    before falling back to searching the disk.
+    Reads MailRepo's own record of where it has written backups, plus
+    its default backups folder. No guessing and no disk search — a
+    location the record does not know is the folder picker's job.
     """
     from utils import backup
 

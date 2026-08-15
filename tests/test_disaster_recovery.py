@@ -611,8 +611,8 @@ class TestBackupLocationRecord:
         assert len(matching) == 1
 
 
-class TestRecordBeatsSearch:
-    """The record answers first; the sweep is the fallback."""
+class TestRecordNotSearch:
+    """MailRepo remembers where its backups are; it never hunts for them."""
 
     def test_known_location_is_found(self, archive_backed_up_offsite):
         from utils.backup import find_backup_locations
@@ -623,43 +623,63 @@ class TestRecordBeatsSearch:
         assert len(locations) == 1
         assert locations[0]["known"] is True
 
-    def test_no_filesystem_search_when_the_record_answers(
-        self, archive_backed_up_offsite, monkeypatch
-    ):
+    def test_no_disk_search_exists_at_all(self):
+        """The sweep was removed on purpose; this pins the removal.
+
+        It guessed at cloud-provider paths that move between OS versions
+        and it surfaced other applications' byte-identical backup
+        folders. A location the record does not know is the folder
+        picker's job, not a guess's.
+        """
         import utils.backup as backup_module
 
-        _wipe_local_data()
+        for name in ("search_for_backups", "sweep_for_backups", "_search_roots"):
+            assert not hasattr(backup_module, name)
 
-        def fail(*args, **kwargs):
-            raise AssertionError("searched the disk despite having a record")
-
-        monkeypatch.setattr(backup_module, "search_for_backups", fail)
-
-        assert backup_module.find_backup_locations()
-
-    def test_falls_back_to_search_on_a_new_machine(
-        self, archive_backed_up_offsite, monkeypatch
+    def test_new_machine_with_no_record_finds_nothing_silently(
+        self, archive_backed_up_offsite
     ):
-        """State file gone with the old disk; only the synced folder came across."""
-        import utils.backup as backup_module
+        """No record, no default-folder backups: an empty list, not a hunt.
+
+        The offsite folder still exists and is full of restorable
+        backups — but nothing on this machine knows about it, and
+        MailRepo must not go looking. The recovery screen offers the
+        folder picker for exactly this case.
+        """
+        from utils.backup import find_backup_locations
 
         _wipe_local_data()
         Config.get_backup_locations_file().unlink()
 
-        called = {"searched": False}
-        folder = archive_backed_up_offsite["folder"]
+        assert find_backup_locations() == []
 
-        def fake_search(*args, **kwargs):
-            called["searched"] = True
-            points, source = backup_module.discover_restore_points_in(folder)
-            return [{"path": str(folder), "known": False, "restore_points": points}]
+    def test_new_machine_finds_backups_in_the_default_folder(
+        self, archive_backed_up_offsite
+    ):
+        """Record gone, but a synced copy landed in MailRepo's own folder.
 
-        monkeypatch.setattr(backup_module, "search_for_backups", fake_search)
+        The default backups directory is the one location MailRepo may
+        check without guessing — it is MailRepo's own. Covers installs
+        that predate the location record.
+        """
+        import shutil
 
-        locations = backup_module.find_backup_locations()
+        from utils.backup import find_backup_locations
 
-        assert called["searched"] is True
+        _wipe_local_data()
+        Config.get_backup_locations_file().unlink()
+
+        shutil.copytree(
+            archive_backed_up_offsite["folder"],
+            Config.get_backup_path(),
+            dirs_exist_ok=True,
+        )
+
+        locations = find_backup_locations()
+
+        assert len(locations) == 1
         assert locations[0]["known"] is False
+        assert locations[0]["path"] == str(Config.get_backup_path())
 
 
 class TestApplicationStamp:

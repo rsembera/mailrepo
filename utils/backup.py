@@ -13,7 +13,6 @@ import json
 import os
 import re
 import shutil
-import time
 import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -1975,128 +1974,29 @@ def folder_holds_mailrepo_backups(folder):
     return False
 
 
-def _same_device_as_root(path):
-    """True if path sits on the boot volume.
+def find_backup_locations():
+    """Where this archive's backups are, without guessing.
 
-    macOS exposes the boot volume again under /Volumes/<name> via a
-    firmlink, which is not a symlink and does not collapse under
-    resolve(). Without this check, scanning /Volumes walks the entire
-    boot disk a second time under a different path and reports every
-    local folder as an "External drive".
-    """
-    try:
-        return Path(path).stat().st_dev == Path("/").stat().st_dev
-    except OSError:
-        return False
+    Two checks, both certain:
 
+    1. The record. MailRepo notes every folder it writes backups to, in
+       a file outside the application directory and outside the
+       database, so it survives the loss that makes it necessary. It
+       stores whatever location the user chose, on any platform.
+    2. MailRepo's own default backups folder — the one place backups go
+       when the user never chose a location, and the one place worth
+       checking when the record itself is gone (a machine so new that
+       even the state file never existed here).
 
-# Directories never worth descending into while hunting for backups.
-# Skipping them is what keeps a home-directory sweep to a couple of
-# seconds instead of a couple of minutes.
-_SEARCH_SKIP = {
-    "node_modules",
-    "venv",
-    ".venv",
-    "__pycache__",
-    "Applications",
-    "System",
-    "Library",
-    "Music",
-    "Photos Library.photoslibrary",
-    "Movies",
-    "Pictures",
-    ".git",
-    "site-packages",
-}
+    There is deliberately no filesystem search beyond these. An earlier
+    version swept the disk for anything that looked like backups; it
+    guessed at cloud-provider paths that turn out to move between OS
+    versions, and it surfaced EdgeCase's byte-identical backup folders.
+    A user who put backups somewhere of their own choosing knows where —
+    the folder picker on the recovery screen covers that case without a
+    single assumption.
 
-
-def _search_roots():
-    """Where to look for backups, best bets first.
-
-    Deliberately wider than detect_cloud_folders, which only guesses one
-    exact subfolder name per provider. After a disk loss the folder could
-    be named anything and sitting anywhere the user put it, so this
-    searches the plausible roots rather than testing one path.
-    """
-    home = Path.home()
-    roots = []
-
-    def add(path, depth):
-        try:
-            path = Path(path)
-            if path.is_dir():
-                roots.append((path, depth))
-        except OSError:
-            pass
-
-    # Explicit override, os.pathsep-separated. The test suite sets this
-    # so the fallback sweep cannot wander out of its sandbox and into a
-    # real home directory — without it, tests find the developer's own
-    # backups and assert against them.
-    override = os.environ.get("MAILREPO_SEARCH_ROOTS")
-    if override:
-        for entry in override.split(os.pathsep):
-            if entry:
-                add(entry, 4)
-        return roots
-
-    # The configured default, first and cheapest.
-    add(get_backups_dir(), 2)
-
-    # Cloud sync roots. Deeper budget: users nest these.
-    add(home / "Library" / "Mobile Documents" / "com~apple~CloudDocs", 4)
-    add(home / "Dropbox", 4)
-    add(home / "OneDrive", 4)
-    add(home / "Google Drive", 4)
-
-    cloud_storage = home / "Library" / "CloudStorage"
-    if cloud_storage.is_dir():
-        try:
-            for entry in cloud_storage.iterdir():
-                add(entry, 4)
-        except OSError:
-            pass
-
-    # Common hand-picked spots.
-    for name in ("Documents", "Desktop", "Backups", "MailRepo Backups"):
-        add(home / name, 3)
-
-    # External drives and mounted volumes. The boot volume reappears
-    # under /Volumes on macOS, so it is filtered out by device rather
-    # than by name — the name varies per machine.
-    for mount in ("/Volumes", "/media", "/mnt", "/run/media"):
-        mount_path = Path(mount)
-        if not mount_path.is_dir():
-            continue
-        try:
-            for entry in mount_path.iterdir():
-                if _same_device_as_root(entry):
-                    continue
-                add(entry, 3)
-        except OSError:
-            pass
-
-    # Home last and shallow: a wide net, but not an expensive one.
-    add(home, 2)
-
-    return roots
-
-
-def find_backup_locations(max_dirs=4000, budget_seconds=6.0):
-    """Where this archive's backups are, best evidence first.
-
-    Order matters. MailRepo records every folder it writes backups to, in
-    a file that deliberately lives outside the application directory and
-    outside the database — so the record survives the loss that makes it
-    necessary. That record is consulted first, and if it answers, no
-    searching happens at all.
-
-    The filesystem sweep is the fallback for the case the record cannot
-    cover: a genuinely new machine, where the state file went down with
-    the old disk and only the synced backup folder came across. Guessing
-    is the last resort, not the mechanism.
-
-    Each result carries `known=True` when it came from the record.
+    Results carry `known=True` when they came from the record.
     """
     results = []
     seen = set()
@@ -2134,115 +2034,36 @@ def find_backup_locations(max_dirs=4000, budget_seconds=6.0):
                 "newest": points[0]["created_at"],
                 "newest_display": points[0]["display_name"],
                 "restore_points": points,
-                "truncated_search": False,
             }
         )
 
     if results:
         return results
 
-    return search_for_backups(max_dirs=max_dirs, budget_seconds=budget_seconds)
+    # No record. Check the one folder MailRepo itself owns before giving
+    # up — an install that predates the location record, or a default
+    # setup whose backups folder survived, lands here.
+    default_dir = get_backups_dir()
+    try:
+        if default_dir.is_dir() and folder_holds_mailrepo_backups(default_dir):
+            points, source = discover_restore_points_in(default_dir)
+            if points:
+                results.append(
+                    {
+                        "path": str(default_dir),
+                        "label": _describe_location(default_dir),
+                        "source": source,
+                        "known": False,
+                        "restore_point_count": len(points),
+                        "newest": points[0]["created_at"],
+                        "newest_display": points[0]["display_name"],
+                        "restore_points": points,
+                    }
+                )
+    except Exception as e:
+        log.warning(f"Default backups folder could not be read: {e}")
 
-
-def search_for_backups(max_dirs=4000, budget_seconds=6.0):
-    """Hunt for backup folders without being told where to look.
-
-    The recovery screen cannot ask someone to paste a path. This walks
-    the plausible roots, bounded by both a directory count and a wall
-    clock so a pathological filesystem cannot hang the one screen a user
-    reaches on their worst day. Hitting either bound returns what was
-    found so far — the folder picker is the fallback, not an error.
-
-    Returns a list of dicts, newest backup first, each carrying the
-    restore points already resolved so the caller can offer a restore
-    rather than another prompt.
-    """
-    deadline = time.monotonic() + budget_seconds
-    seen = set()
-    found = []
-    dirs_visited = 0
-    truncated = False
-
-    for root, max_depth in _search_roots():
-        if dirs_visited >= max_dirs or time.monotonic() > deadline:
-            truncated = True
-            break
-
-        queue = [(root, 0)]
-
-        while queue:
-            if dirs_visited >= max_dirs or time.monotonic() > deadline:
-                truncated = True
-                break
-
-            directory, depth = queue.pop(0)
-
-            try:
-                resolved = directory.resolve()
-            except OSError:
-                continue
-
-            if resolved in seen:
-                continue
-            seen.add(resolved)
-            dirs_visited += 1
-
-            try:
-                entries = list(directory.iterdir())
-            except OSError:
-                continue
-
-            names = {e.name for e in entries}
-
-            if _looks_like_backup_folder(names):
-                # Do not descend into a backup folder: its contents are
-                # zips, not more folders worth searching. That holds even
-                # when the folder turns out to belong to another app.
-                if not folder_holds_mailrepo_backups(directory):
-                    log.info(f"Skipping {directory}: not MailRepo backups")
-                    continue
-
-                try:
-                    points, source = discover_restore_points_in(directory)
-                except Exception as e:
-                    log.warning(f"Found backups in {directory} but could not read them: {e}")
-                    continue
-
-                if points:
-                    found.append(
-                        {
-                            "path": str(directory),
-                            "label": _describe_location(directory),
-                            "source": source,
-                            "known": False,
-                            "restore_point_count": len(points),
-                            "newest": points[0]["created_at"],
-                            "newest_display": points[0]["display_name"],
-                            "restore_points": points,
-                        }
-                    )
-                continue
-
-            if depth >= max_depth:
-                continue
-
-            for entry in entries:
-                if entry.name.startswith("."):
-                    continue
-                if entry.name in _SEARCH_SKIP:
-                    continue
-                try:
-                    if entry.is_dir() and not entry.is_symlink():
-                        queue.append((entry, depth + 1))
-                except OSError:
-                    continue
-
-    found.sort(key=lambda item: item["newest"], reverse=True)
-
-    for item in found:
-        item["truncated_search"] = truncated
-
-    return found
+    return results
 
 
 def _describe_location(path):

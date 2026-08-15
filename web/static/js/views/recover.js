@@ -139,16 +139,18 @@ function renderLocations(locations) {
 
     if (!locations.length) {
         subtitle.textContent =
-            'MailRepo could not find any backups on this machine. If your ' +
-            'backups are on an external drive or a folder that is not synced ' +
-            'yet, choose the folder below.';
+            'MailRepo has no record of backups on this machine. If you ' +
+            'kept backups, choose their folder below. If they are on ' +
+            'another computer, a network drive, or an external disk, ' +
+            'connect it or copy the folder onto this machine first, then ' +
+            'choose it.';
         return;
     }
 
     const known = locations.some((location) => location.known);
     subtitle.textContent = known
         ? 'These are the backup folders MailRepo has been writing to.'
-        : 'MailRepo found these backups on this machine.';
+        : 'MailRepo found these backups in its own backups folder.';
 
     locations.forEach((location) => locationsBox.appendChild(locationCard(location)));
 }
