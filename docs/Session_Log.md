@@ -5438,3 +5438,122 @@ in 9m19s. ESLint 0 errors / 64 warnings, unchanged from baseline.
 - The frontend still has no automated behavioural coverage; the recovery
   screen is now part of that gap, and it is a screen that only runs on
   the worst day an archive ever has.
+
+
+---
+
+## Session 78 — August 15, 2026 (MacBook)
+
+### MailRepo now knows where its own backups are
+
+Rick, on the Session 77 recovery work: *"it can't just skip EdgeCase. It
+has to know where its own backups are."* Correct, and the objection went
+deeper than the bug it was pointing at.
+
+Session 77 made restore reachable, but left MailRepo **guessing**. It
+swept the disk for folders that looked like backups, then tried to
+recognise its own by opening a zip and checking for `data/mailrepo.db`.
+Running that against this actual machine found EdgeCase's backup folder
+and offered it as a MailRepo restore point.
+
+The two are indistinguishable from outside. Verified on a real pair:
+
+```
+EdgeCase: data/edgecase.db, data/.salt, data/.secret_key, ...
+MailRepo: data/mailrepo.db, data/.salt, data/.secret_key, ...
+```
+
+Same filename convention, same key-file paths. Restoring one into the
+other is worse than a failed restore: `complete_restore` finds no
+database to copy and overwrites this archive's key file with the other
+application's, leaving an archive that opens with nothing.
+
+Filtering EdgeCase out by database name was treating the symptom. The
+cause was that MailRepo neither marked its own backups nor remembered
+where it had sent them.
+
+### The two missing halves
+
+**It didn't record where backups go.** `backup_location` lived in the
+encrypted database — the one file guaranteed to be gone in the scenario
+the record is needed for. Needing it and having lost it were the same
+event. Now `Config.get_state_path()` gives a small state directory
+*outside* the application folder (Application Support on macOS, XDG
+config on Linux, `MAILREPO_STATE_DIR` to override), and
+`record_backup_location()` writes to it on every backup — called from
+inside `save_manifest` so nothing has to remember to.
+
+**It didn't mark its own backups.** `save_manifest` now stamps each
+manifest with `app` and `app_version` before writing it anywhere.
+`folder_holds_mailrepo_backups()` trusts that stamp first, falling back
+to inspecting a full backup only for folders written before stamping
+existed. That fallback cannot be dropped — every backup made to date is
+unstamped, and refusing those would make recovery useless to precisely
+the person it exists for.
+
+`find_backup_locations()` is the entry point now: **the record answers
+first**, and only a genuinely new machine — state file gone with the old
+disk, synced folder the only survivor — falls through to the sweep.
+Measured at 0.000s against 0.68s, and it cannot confuse another app's
+folder for its own because it isn't looking at folders at all.
+
+### Also fixed while in there
+
+- **Boot-volume double-scan.** macOS re-exposes the boot volume under
+  `/Volumes/<name>` via a firmlink, which is not a symlink and does not
+  collapse under `resolve()`. The sweep walked the whole disk a second
+  time and labelled local folders "External drive". Filtered by device
+  id, since the volume name varies per machine.
+- **`/auth/setup` now redirects to `/auth/restore` when backups exist**,
+  `?new=1` as the escape hatch. Leading with a page whose obvious action
+  starts an empty archive over a recoverable situation was the original
+  bug; a link at the bottom was not enough of a fix.
+- **No more typing paths.** The screen opens by volunteering what it
+  found. New public routes `/auth/restore/search` and
+  `/auth/restore/browse`; the picker flags which folders hold backups
+  and which belong to another application — named rather than hidden,
+  since silently omitting a folder the user can plainly see reads as
+  MailRepo failing to find it.
+
+### Two test-harness bugs worth remembering
+
+Both the same shape: the harness quietly voiding the property under test.
+
+1. `conftest` initially set `MAILREPO_STATE_DIR` *inside* `temp_data_dir`
+   — i.e. inside the app folder, destroying the exact property the state
+   file exists to have. Caught by a test asserting the invariant
+   directly (`app_dir not in record.parents`) rather than testing
+   behaviour that happened to depend on it.
+2. The fallback sweep walked the **real home directory** during tests
+   and found the developer's own iCloud backups, so "no backups exist"
+   failed on the machine it was written on. Now confined by
+   `MAILREPO_SEARCH_ROOTS`.
+
+### Verified
+
+Total loss of the app directory with the state file surviving: record
+answers instantly, no search. State file also destroyed (new machine):
+falls through to the sweep and still finds it. EdgeCase folder refused
+in both paths and through the manual picker. Setup redirects to restore;
+`?new=1` still works. Full loop from total loss to decrypted plaintext.
+
+62 tests in `tests/test_disaster_recovery.py`, 608 in the suite, ESLint
+0 errors / 64 warnings.
+
+### Notes for Rick
+
+- **Run one manual backup.** It stamps and records your live iCloud
+  folder, moving it off the reconstruction path and onto the recorded
+  one. Currently that folder shows 187 restore points via filename
+  reconstruction.
+- **EdgeCase should get the same stamp.** Until it does, the two are
+  separable only by database name. The stamp, the state file and the
+  inverted setup redirect all port directly.
+
+### Still open
+
+- `git tag v1.0.0`.
+- Manual verification of the credential badge + modal on password change.
+- Frontend still has no automated behavioural coverage; the recovery
+  screen is now a fair amount of untested JS, on a screen that only runs
+  on the worst day an archive ever has.

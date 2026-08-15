@@ -10,6 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Security
+- **MailRepo now keeps its own record of where your backups are
+  (Session 78).** That record used to live inside the encrypted
+  database — the one file certain to be missing when you need it. It is
+  now kept separately from the archive, so after a total loss MailRepo
+  can offer your backups straight away instead of hunting for them.
+- **Backups are marked as MailRepo's own.** Other applications can write
+  backup files that look identical from the outside, and restoring one
+  of those by mistake would leave an archive that opens with nothing.
+  MailRepo now labels its own backups and will not offer anyone else's.
+  Backups made before this change are still recognised.
+- **The restore screen no longer asks you to type a folder path.** It
+  opens by showing the backups it already knows about. If you are on a
+  new machine it looks for them, and there is a folder picker if you
+  want to point at somewhere specific.
+- **A machine with no archive now offers to restore first.** Previously
+  it opened the "create a master password" screen, where the obvious
+  next step starts an empty archive over the top of a recoverable
+  situation. There is still a link for genuinely starting fresh.
 - **You can now restore from a backup when there is no archive to log in
   to (Session 77).** If this machine lost its data, MailRepo used to send
   you to a "create a master password" screen with no mention of your
