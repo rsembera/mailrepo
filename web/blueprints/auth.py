@@ -8,11 +8,13 @@ import json
 import secrets
 import threading
 import time
+from pathlib import Path
 
 from flask import (
     Blueprint,
     Response,
     flash,
+    jsonify,
     make_response,
     redirect,
     render_template,
@@ -260,6 +262,182 @@ def setup():
             return render_template("auth/setup.html", errors=[str(e)])
 
     return render_template("auth/setup.html")
+
+
+# ============================================================================
+# Disaster recovery
+#
+# These routes are public, and deliberately so — the same reasoning that
+# makes auth.login public. They exist for someone whose archive is gone:
+# requiring a session to reach them would make them unreachable by
+# precisely the person they are for, since a session requires a key file
+# that no longer exists.
+#
+# What keeps this narrow:
+#   - They are dead the moment an archive exists. Every one of them
+#     redirects to login when Encryption.is_initialized() is true, so
+#     this is not a way to roll a live archive back over its owner.
+#   - Completing a restore grants no access to anything. The restored
+#     database and archive are still encrypted under the credentials
+#     that were in force when the backup was taken.
+#   - MailRepo binds loopback, though that is the weakest of the three
+#     and is not relied on here.
+# ============================================================================
+
+
+def _recovery_gate():
+    """Redirect away from the recovery routes once an archive exists."""
+    if Encryption.is_initialized():
+        return redirect(url_for("auth.login"))
+    return None
+
+
+def _recovery_csrf_token():
+    """Mint (or reuse) a CSRF token for the recovery screen.
+
+    There is no authenticated session here, so this token is not proving
+    identity — nothing to prove it against. It stops a page in another
+    tab from firing off a restore, which is destructive.
+    """
+    token = session.get("recovery_csrf")
+    if not token:
+        token = secrets.token_hex(32)
+        session["recovery_csrf"] = token
+    return token
+
+
+def _check_recovery_csrf():
+    """Accept the token from the header base.html already sends, or the body."""
+    expected = session.get("recovery_csrf", "")
+    if not expected:
+        return False
+
+    supplied = request.headers.get("X-CSRF-Token", "")
+    if not supplied and request.is_json:
+        supplied = (request.get_json(silent=True) or {}).get("csrf_token", "")
+    if not supplied:
+        supplied = request.form.get("csrf_token", "")
+
+    return secrets.compare_digest(supplied, expected)
+
+
+@auth_bp.route("/restore")
+def recover():
+    """Restore from a backup when there is no archive to log in to."""
+    gate = _recovery_gate()
+    if gate:
+        return gate
+
+    default_folder = str(Config.get_backup_path())
+
+    return render_template(
+        "auth/recover.html",
+        csrf_token=_recovery_csrf_token(),
+        default_folder=default_folder,
+    )
+
+
+@auth_bp.route("/restore/scan", methods=["POST"])
+def recover_scan():
+    """List restore points found in a folder."""
+    if Encryption.is_initialized():
+        return jsonify({"success": False, "error": "This archive is already set up."}), 403
+
+    if not _check_recovery_csrf():
+        return jsonify({"success": False, "error": "Invalid request token."}), 403
+
+    from utils import backup
+
+    data = request.get_json(silent=True) or {}
+    folder = (data.get("folder") or "").strip()
+
+    if not folder:
+        folder = str(Config.get_backup_path())
+
+    try:
+        resolved = Path(folder).expanduser().resolve()
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Invalid path: {e}"}), 400
+
+    if not resolved.exists():
+        return jsonify({"success": False, "error": "That folder does not exist."}), 400
+    if not resolved.is_dir():
+        return jsonify({"success": False, "error": "That path is not a folder."}), 400
+
+    try:
+        points, source = backup.discover_restore_points_in(resolved)
+    except PermissionError:
+        return jsonify(
+            {"success": False, "error": "MailRepo cannot read that folder."}
+        ), 403
+    except Exception as e:
+        log.error(f"Recovery scan failed for {resolved}: {e}")
+        return jsonify({"success": False, "error": f"Could not read that folder: {e}"}), 500
+
+    return jsonify(
+        {
+            "success": True,
+            "folder": str(resolved),
+            "source": source,
+            "restore_points": points,
+        }
+    )
+
+
+@auth_bp.route("/restore/prepare", methods=["POST"])
+def recover_prepare():
+    """Stage a restore found by a recovery scan.
+
+    Re-scans rather than trusting an id and a file list from the client.
+    The scan is cheap, and it means the paths that get opened are ones
+    this route derived itself from a folder the user named.
+    """
+    if Encryption.is_initialized():
+        return jsonify({"success": False, "error": "This archive is already set up."}), 403
+
+    if not _check_recovery_csrf():
+        return jsonify({"success": False, "error": "Invalid request token."}), 403
+
+    from utils import backup
+
+    data = request.get_json(silent=True) or {}
+    folder = (data.get("folder") or "").strip()
+    point_id = (data.get("restore_point_id") or "").strip()
+
+    if not point_id:
+        return jsonify({"success": False, "error": "No restore point specified."}), 400
+
+    if not folder:
+        folder = str(Config.get_backup_path())
+
+    try:
+        resolved = Path(folder).expanduser().resolve()
+        points, _source = backup.discover_restore_points_in(resolved)
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Could not read that folder: {e}"}), 400
+
+    point = next((p for p in points if p["id"] == point_id), None)
+    if not point:
+        return jsonify({"success": False, "error": "That restore point is no longer there."}), 404
+
+    problems = backup.verify_restore_point_files(point)
+    if problems:
+        return jsonify({"success": False, "error": "; ".join(problems)}), 400
+
+    try:
+        backup.prepare_restore_from_point(point)
+    except Exception as e:
+        log.error(f"Recovery restore failed: {e}")
+        return jsonify({"success": False, "error": f"Restore could not be staged: {e}"}), 500
+
+    return jsonify(
+        {
+            "success": True,
+            "message": (
+                "Restore staged. Quit MailRepo and start it again to finish."
+            ),
+        }
+    )
 
 
 @auth_bp.route("/setup/recovery-key-saved", methods=["POST"])

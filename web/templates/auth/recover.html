@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Restore from Backup - {{ app_name }}{% endblock %}
+
+{% block body_class %}auth-page{% endblock %}
+
+{% block content %}
+<div class="auth-container auth-container-wide">
+    <div class="auth-card auth-card-wide">
+        <div class="auth-header">
+            <div class="auth-logo">
+                <img src="{{ url_for('static', filename='assets/icon.png') }}" alt="MailRepo">
+            </div>
+            <h1>Restore from a backup</h1>
+            <p class="auth-subtitle">
+                MailRepo found no archive on this machine. If you have a
+                backup, you can restore it here instead of starting over.
+            </p>
+        </div>
+
+        <div id="recover-error" class="error-box" hidden>
+            <ul><li id="recover-error-text"></li></ul>
+        </div>
+
+        <div class="form-group">
+            <label for="recover-folder">Backup folder</label>
+            <input
+                type="text"
+                id="recover-folder"
+                value="{{ default_folder }}"
+                spellcheck="false"
+                autocapitalize="off"
+                autocomplete="off"
+            >
+            <span class="helper-text">
+                If your backups go to iCloud Drive, Dropbox or a synced
+                folder, enter that folder's path here.
+            </span>
+        </div>
+
+        <div class="form-actions">
+            <button type="button" id="recover-scan" class="btn btn-primary btn-full">
+                Look for backups
+            </button>
+        </div>
+
+        <div id="recover-results" hidden>
+            <p id="recover-source" class="helper-text"></p>
+            <div id="recover-points" class="recover-points"></div>
+        </div>
+
+        <div class="auth-footer">
+            <p class="security-note">
+                Restoring replaces everything on this machine with the
+                contents of the backup, and brings back the master password
+                and recovery key that were in use when it was made.
+            </p>
+            <p><a href="{{ url_for('auth.setup') }}">Start a new archive instead</a></p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{{ url_for('static', filename='js/views/recover.js') }}"></script>
+{% endblock %}

@@ -78,11 +78,21 @@ def create_app(test_config: dict = None) -> Flask:
         # recovery key no longer grants a session, so the reset step has
         # no session to check. Its gate is the server-side handoff token
         # minted only after a key verifies.
+        #
+        # auth.recover / recover_scan / recover_prepare are public for the
+        # same reason, in its sharpest form: they are for someone whose
+        # key file is gone, so there is no credential left for them to
+        # present. They gate on the opposite condition instead — each one
+        # refuses once an archive exists, which is what stops them being
+        # a way to roll a live archive back over its owner.
         public_endpoints = {
             "auth.login",
             "auth.login_with_recovery_key",
             "auth.set_password_post_recovery",
             "auth.setup",
+            "auth.recover",
+            "auth.recover_scan",
+            "auth.recover_prepare",
             "static",
         }
 

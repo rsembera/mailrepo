@@ -11,6 +11,7 @@ User-facing simplification:
 import hashlib
 import json
 import os
+import re
 import shutil
 import zipfile
 from datetime import datetime, timedelta
@@ -231,10 +232,59 @@ def load_manifest():
     }
 
 
+def manifest_destinations(manifest):
+    """Every distinct directory this manifest's backups actually live in.
+
+    Excludes the canonical location, which save_manifest writes anyway.
+    """
+    canonical = get_backups_dir().resolve()
+    destinations = {}
+
+    for entry in manifest.get("backups", []):
+        raw = entry.get("backup_dir")
+        if not raw:
+            continue
+        try:
+            resolved = Path(raw).resolve()
+        except Exception:
+            continue
+        if resolved == canonical:
+            continue
+        destinations[resolved] = True
+
+    return list(destinations)
+
+
 def save_manifest(manifest):
-    """Save backup manifest to disk (atomic, crash-safe write)."""
+    """Save backup manifest to disk (atomic, crash-safe write).
+
+    Also drops a copy into every directory the manifest's backups live
+    in. The canonical manifest sits inside the application folder, so a
+    disk loss that takes the app takes the index with it — leaving the
+    zips intact in iCloud and completely undiscoverable, because nothing
+    remaining on disk knows which zip belongs to which chain.
+
+    A sidecar makes each backup destination a self-describing unit: the
+    folder plus its manifest is everything needed to rebuild. Written
+    here rather than at each call site so that anything mutating the
+    manifest — new backup, retention pruning — keeps the copies current
+    without having to remember to.
+
+    Sidecar failures are logged, never raised. A backup that succeeded
+    must not be reported as failed because a cloud folder was briefly
+    unwritable, and the canonical manifest is already safely written by
+    the time we get here.
+    """
     ensure_backup_dir()
     _atomic_write_text(get_manifest_file(), json.dumps(manifest, indent=2))
+
+    payload = json.dumps(manifest, indent=2)
+    for destination in manifest_destinations(manifest):
+        try:
+            destination.mkdir(parents=True, exist_ok=True)
+            _atomic_write_text(destination / "manifest.json", payload)
+        except Exception as e:
+            log.warning(f"Could not write manifest sidecar to {destination}: {e}")
 
 
 # ============================================================================
@@ -703,8 +753,24 @@ def get_restore_points():
 
     Returns list of restore points with display info.
     """
-    manifest = load_manifest()
-    backups = manifest["backups"]
+    return build_restore_points(load_manifest()["backups"])
+
+
+def build_restore_points(backups, override_dir=None):
+    """Build restore points from a list of manifest entries.
+
+    Split out of get_restore_points so the disaster-recovery path can
+    reuse it against a manifest found in a backup folder rather than the
+    local one. `override_dir` resolves every entry's file against that
+    folder instead of its recorded backup_dir — a recovered folder is
+    rarely at the path it was written from (different machine, different
+    home directory, iCloud mounted elsewhere).
+    """
+
+    def resolve(entry):
+        if override_dir is not None:
+            return Path(override_dir) / entry["filename"]
+        return get_backup_path_for_entry(entry)
 
     # Group by chain
     chains = {}
@@ -748,7 +814,7 @@ def get_restore_points():
         if backup.get("type") != "pre_restore":
             continue
 
-        backup_path = get_backup_path_for_entry(backup)
+        backup_path = resolve(backup)
         if not backup_path.exists():
             continue
 
@@ -785,7 +851,7 @@ def get_restore_points():
 
         # Full backup as restore point
         full_backup = chain["full"]
-        backup_path = get_backup_path_for_entry(full_backup)
+        backup_path = resolve(full_backup)
 
         if backup_path.exists():
             # Format date with time
@@ -823,7 +889,7 @@ def get_restore_points():
         # than being quietly dropped here.
         files_needed = [str(backup_path)]
         for i, incr in enumerate(chain["incrementals"]):
-            incr_path = get_backup_path_for_entry(incr)
+            incr_path = resolve(incr)
             files_needed = files_needed + [str(incr_path)]
 
             # Format date with time
@@ -865,6 +931,148 @@ def get_restore_points():
     return restore_points
 
 
+# ============================================================================
+# Disaster recovery: finding backups when the local index is gone
+# ============================================================================
+
+# full_2026-08-15_111308.zip / incr_2026-08-15_111309_412773.zip
+_BACKUP_FILENAME_RE = re.compile(
+    r"^(full|incr|pre_restore)_(\d{4}-\d{2}-\d{2})_(\d{6})(?:_(\d{1,6}))?\.zip$"
+)
+
+# Filenames use "incr"; manifest entries say "incremental".
+_TYPE_FROM_PREFIX = {
+    "full": "full",
+    "incr": "incremental",
+    "pre_restore": "pre_restore",
+}
+
+
+def reconstruct_manifest_entries(folder):
+    """Rebuild manifest entries from the zips in a folder, by filename.
+
+    The last resort, for when a backup folder survived but its manifest
+    did not. Backup filenames carry type and a sortable timestamp, and
+    the writer only ever appends to the newest chain, so the structure
+    is recoverable: each `full_` opens a chain, every `incr_` after it
+    joins that chain, and `pre_restore_` files stand alone.
+
+    This is inference, not a record. It is wrong if two machines wrote
+    to one folder, since their chains would interleave by time and get
+    stitched into one. Entries are marked `reconstructed` so the caller
+    can say so plainly rather than presenting a guess as a fact.
+    """
+    folder = Path(folder)
+    entries = []
+
+    try:
+        names = [p.name for p in folder.iterdir() if p.is_file()]
+    except OSError as e:
+        log.warning(f"Could not read backup folder {folder}: {e}")
+        return entries
+
+    # Parse first, then sort CHRONOLOGICALLY. Sorting the filenames
+    # directly does not work: the type prefix leads, so every "full_"
+    # sorts ahead of every "incr_" regardless of date, and a folder
+    # holding two chains gets stitched into one with all the fulls at the
+    # front. Timestamp order is the whole basis for inferring which full
+    # an incremental belongs to.
+    parsed = []
+    for name in names:
+        match = _BACKUP_FILENAME_RE.match(name)
+        if not match:
+            continue
+
+        prefix, date_part, time_part, micro = match.groups()
+        try:
+            created = datetime.strptime(f"{date_part} {time_part}", "%Y-%m-%d %H%M%S")
+        except ValueError:
+            continue
+
+        parsed.append((created, micro or "", name, _TYPE_FROM_PREFIX[prefix]))
+
+    parsed.sort(key=lambda item: (item[0], item[1], item[2]))
+
+    current_chain = None
+
+    for created, _micro, name, backup_type in parsed:
+        if backup_type == "pre_restore":
+            chain_id = f"pre_restore_{name}"
+        elif backup_type == "full":
+            current_chain = created.strftime("%Y%m%d_%H%M%S")
+            chain_id = current_chain
+        else:
+            if current_chain is None:
+                # Incremental with no preceding full: an orphan. Kept out
+                # rather than invented a chain for — build_restore_points
+                # drops orphaned incrementals anyway.
+                continue
+            chain_id = current_chain
+
+        size = 0
+        try:
+            size = (folder / name).stat().st_size
+        except OSError:
+            pass
+
+        entries.append(
+            {
+                "filename": name,
+                "type": backup_type,
+                "chain_id": chain_id,
+                "created_at": created.isoformat(),
+                "backup_size": size,
+                "backup_dir": str(folder),
+                "reconstructed": True,
+            }
+        )
+
+    return entries
+
+
+def discover_restore_points_in(folder):
+    """Find restore points in a folder that is not the local backups dir.
+
+    The recovery entry point: the user knows where their backups are,
+    and nothing on this machine does. Prefers the manifest sidecar
+    written alongside the zips; falls back to filename reconstruction
+    when there isn't one.
+
+    Returns (points, source) where source is "manifest", "reconstructed",
+    or "empty" — the caller needs to tell the user which, because a
+    reconstructed chain deserves a second look at the dates before
+    anyone overwrites anything with it.
+    """
+    folder = Path(folder)
+
+    if not folder.is_dir():
+        raise ValueError(f"Not a folder: {folder}")
+
+    sidecar = folder / "manifest.json"
+    if sidecar.exists():
+        try:
+            with open(sidecar, "r") as f:
+                manifest = json.load(f)
+            points = build_restore_points(manifest.get("backups", []), override_dir=folder)
+            if points:
+                return points, "manifest"
+            # A sidecar listing nothing that is actually present is worse
+            # than no sidecar — fall through and look at real files.
+            log.warning(f"Manifest in {folder} matched no files on disk; reconstructing")
+        except (json.JSONDecodeError, ValueError, OSError) as e:
+            log.warning(f"Could not read manifest in {folder}: {e}")
+
+    entries = reconstruct_manifest_entries(folder)
+    if not entries:
+        return [], "empty"
+
+    points = build_restore_points(entries, override_dir=folder)
+    for point in points:
+        point["reconstructed"] = True
+
+    return points, ("reconstructed" if points else "empty")
+
+
 def prepare_restore(restore_point_id):
     """
     Prepare for restore by extracting to staging folder.
@@ -878,6 +1086,17 @@ def prepare_restore(restore_point_id):
     if not point:
         raise ValueError(f"Restore point not found: {restore_point_id}")
 
+    return prepare_restore_from_point(point)
+
+
+def prepare_restore_from_point(point):
+    """Stage a restore from an already-resolved restore point.
+
+    Same work as prepare_restore, minus the lookup. The recovery path
+    has its point in hand from a folder scan, and cannot look it up by
+    id because the local manifest that ids refer to is exactly what is
+    missing.
+    """
     # Create pre-restore backup first (safety net)
     create_pre_restore_backup()
 
@@ -920,7 +1139,7 @@ def prepare_restore(restore_point_id):
 
     # Write restore marker
     marker = {
-        "restore_point_id": restore_point_id,
+        "restore_point_id": point["id"],
         "prepared_at": datetime.now().isoformat(),
         "point_info": point,
     }
@@ -1375,6 +1594,30 @@ def describe_restore_point_credentials(files_needed, current_blob=None):
                     "Created before the May 2026 encryption upgrade. This "
                     "build cannot open it — the old scheme was removed. It "
                     "is not a usable restore point and can be deleted."
+                ),
+            }
+
+        if current is None:
+            # No key file on this machine at all — the disaster case, and
+            # the one place this function matters most. There is nothing
+            # to compare against, but silence here is the wrong answer:
+            # after a total loss the user is about to type a password,
+            # and needs to know which one.
+            if backup["version"] == 2:
+                return {
+                    "status": "no_current_key",
+                    "note": (
+                        "Opens with the master password that was in use "
+                        "when this backup was made. It predates recovery "
+                        "keys, so no recovery key will open it."
+                    ),
+                }
+            return {
+                "status": "no_current_key",
+                "note": (
+                    "Opens with the master password and recovery key that "
+                    "were in use when this backup was made — not any you "
+                    "have set since."
                 ),
             }
 

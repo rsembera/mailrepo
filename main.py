@@ -202,6 +202,35 @@ def main():
     except Exception as e:
         log.error(f"Password-change interruption check failed: {e}")
 
+    # Key file but no database: partial data loss, and the quietest of the
+    # loss cases. Login succeeds — the key file is all unlock needs — and
+    # then init_database() creates a fresh empty one, so the user is
+    # dropped into a working archive containing nothing, with no
+    # indication anything is wrong. Their backup_location lived in that
+    # database too, so the restore screen looks empty as well.
+    #
+    # Nothing is done automatically here. Recreating the database is the
+    # correct behaviour for a genuine first run, and this cannot tell the
+    # two apart with certainty. It says so instead.
+    try:
+        from core.config import Config
+
+        if Config.has_master_password() and not Config.get_database_path().exists():
+            message = (
+                "MailRepo found your encryption key file but no database.\n\n"
+                "This usually means the database was deleted or lost while the\n"
+                "key file survived. Logging in will create a NEW, EMPTY archive\n"
+                "— your old mail will not come back on its own, and the backup\n"
+                "location you had configured is stored in the missing database.\n\n"
+                "If you have backups, restore before archiving anything new:\n"
+                "  Settings -> Backups -> Restore.\n\n"
+                "If this IS a first run, or you meant to start fresh, carry on."
+            )
+            log.warning("Key file present but database missing")
+            print(f"\n{'=' * 70}\n{message}\n{'=' * 70}\n", file=sys.stderr)
+    except Exception as e:
+        log.error(f"Missing-database check failed: {e}")
+
     app = create_app()
 
     # Register cleanup handlers
