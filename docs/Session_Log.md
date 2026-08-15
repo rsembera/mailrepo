@@ -5628,3 +5628,9 @@ the default-folder fallback. 63 in the file, **609 in the suite**
   treatment; all three port directly.
 - Frontend behavioural coverage gap unchanged; recover.js is manual-
   verification only.
+
+**Addendum (same day):** Rick asked whether the fix is fully
+device-independent. It is, with one cosmetic exception found on
+review: the home-directory location label said "This Mac" on every
+platform. Now "This computer". One-line change, 63 recovery tests
+green, committed and pushed separately.
