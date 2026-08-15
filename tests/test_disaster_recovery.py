@@ -551,3 +551,274 @@ class TestFullRecovery:
         complete_restore()
 
         assert app.test_client().get("/auth/restore").status_code == 302
+
+
+# ============================================================
+# KNOWING WHERE ITS OWN BACKUPS ARE
+# ============================================================
+
+
+class TestBackupLocationRecord:
+    """Searching is guessing. The record is the mechanism."""
+
+    def test_backup_records_where_it_was_written(self, archive_backed_up_offsite):
+        from core.config import Config
+
+        assert Config.get_backup_locations_file().exists()
+
+    def test_record_names_the_offsite_folder(self, archive_backed_up_offsite):
+        from utils.backup import get_known_locations
+
+        paths = {entry["path"] for entry in get_known_locations()}
+        assert str(archive_backed_up_offsite["folder"]) in paths
+
+    def test_record_lives_outside_the_application_folder(self, archive_backed_up_offsite):
+        """Needing this record and having lost it must not be the same event."""
+        from core.config import Config
+
+        record = Config.get_backup_locations_file().resolve()
+        app_dir = Config.get_base_path().resolve()
+
+        assert app_dir not in record.parents
+
+    def test_record_survives_losing_the_whole_archive(self, archive_backed_up_offsite):
+        from utils.backup import get_known_locations
+
+        _wipe_local_data()
+
+        paths = {entry["path"] for entry in get_known_locations()}
+        assert str(archive_backed_up_offsite["folder"]) in paths
+
+    def test_vanished_locations_are_not_offered(self, archive_backed_up_offsite, tmp_path):
+        from utils.backup import get_known_locations, record_backup_location
+
+        gone = tmp_path / "unplugged_drive"
+        gone.mkdir()
+        record_backup_location(gone)
+        gone.rmdir()
+
+        paths = {entry["path"] for entry in get_known_locations()}
+        assert str(gone) not in paths
+
+    def test_recording_twice_does_not_duplicate(self, archive_backed_up_offsite):
+        from utils.backup import get_known_locations, record_backup_location
+
+        folder = archive_backed_up_offsite["folder"]
+        record_backup_location(folder)
+        record_backup_location(folder)
+
+        matching = [e for e in get_known_locations() if e["path"] == str(folder)]
+        assert len(matching) == 1
+
+
+class TestRecordBeatsSearch:
+    """The record answers first; the sweep is the fallback."""
+
+    def test_known_location_is_found(self, archive_backed_up_offsite):
+        from utils.backup import find_backup_locations
+
+        _wipe_local_data()
+        locations = find_backup_locations()
+
+        assert len(locations) == 1
+        assert locations[0]["known"] is True
+
+    def test_no_filesystem_search_when_the_record_answers(
+        self, archive_backed_up_offsite, monkeypatch
+    ):
+        import utils.backup as backup_module
+
+        _wipe_local_data()
+
+        def fail(*args, **kwargs):
+            raise AssertionError("searched the disk despite having a record")
+
+        monkeypatch.setattr(backup_module, "search_for_backups", fail)
+
+        assert backup_module.find_backup_locations()
+
+    def test_falls_back_to_search_on_a_new_machine(
+        self, archive_backed_up_offsite, monkeypatch
+    ):
+        """State file gone with the old disk; only the synced folder came across."""
+        import utils.backup as backup_module
+
+        _wipe_local_data()
+        Config.get_backup_locations_file().unlink()
+
+        called = {"searched": False}
+        folder = archive_backed_up_offsite["folder"]
+
+        def fake_search(*args, **kwargs):
+            called["searched"] = True
+            points, source = backup_module.discover_restore_points_in(folder)
+            return [{"path": str(folder), "known": False, "restore_points": points}]
+
+        monkeypatch.setattr(backup_module, "search_for_backups", fake_search)
+
+        locations = backup_module.find_backup_locations()
+
+        assert called["searched"] is True
+        assert locations[0]["known"] is False
+
+
+class TestApplicationStamp:
+    """MailRepo marks its own backups rather than inferring them later."""
+
+    def test_backup_folder_is_stamped(self, archive_backed_up_offsite):
+        from utils.backup import read_folder_stamp
+
+        stamp = read_folder_stamp(archive_backed_up_offsite["folder"])
+        assert stamp["app"] == "mailrepo"
+
+    def test_stamped_folder_is_recognised(self, archive_backed_up_offsite):
+        from utils.backup import folder_holds_mailrepo_backups
+
+        assert folder_holds_mailrepo_backups(archive_backed_up_offsite["folder"])
+
+    def test_another_apps_folder_is_refused(self, tmp_path):
+        """EdgeCase's layout is identical apart from the database name."""
+        from utils.backup import folder_holds_mailrepo_backups
+
+        folder = tmp_path / "EdgeCase Backups"
+        folder.mkdir()
+        with zipfile.ZipFile(folder / "full_2026-01-01_120000.zip", "w") as zf:
+            zf.writestr("data/edgecase.db", b"x")
+            zf.writestr("data/.salt", b"y")
+            zf.writestr("data/.secret_key", b"z")
+
+        assert folder_holds_mailrepo_backups(folder) is False
+
+    def test_another_apps_stamp_is_refused(self, tmp_path):
+        from utils.backup import folder_holds_mailrepo_backups
+
+        folder = tmp_path / "Other Backups"
+        folder.mkdir()
+        (folder / "manifest.json").write_text(json.dumps({"app": "edgecase", "backups": []}))
+        with zipfile.ZipFile(folder / "full_2026-01-01_120000.zip", "w") as zf:
+            zf.writestr("data/mailrepo.db", b"x")
+
+        assert folder_holds_mailrepo_backups(folder) is False
+
+    def test_unstamped_legacy_folder_still_works(self, archive_backed_up_offsite):
+        """Every backup made before stamping existed must remain usable."""
+        from utils.backup import folder_holds_mailrepo_backups
+
+        folder = archive_backed_up_offsite["folder"]
+        (folder / "manifest.json").unlink()
+
+        assert folder_holds_mailrepo_backups(folder) is True
+
+    def test_discovery_refuses_another_apps_folder(self, tmp_path):
+        folder = tmp_path / "EdgeCase Backups"
+        folder.mkdir()
+        with zipfile.ZipFile(folder / "full_2026-01-01_120000.zip", "w") as zf:
+            zf.writestr("data/edgecase.db", b"x")
+
+        with pytest.raises(ValueError, match="different application"):
+            discover_restore_points_in(folder)
+
+
+class TestSetupLeadsWithRestore:
+    """A lost archive must not land on 'create a master password'."""
+
+    def _clear_cache(self):
+        import web.blueprints.auth as auth_module
+
+        auth_module._backup_search_cache["done"] = False
+        auth_module._backup_search_cache["results"] = []
+
+    def test_setup_redirects_to_restore_when_backups_exist(
+        self, archive_backed_up_offsite
+    ):
+        app = archive_backed_up_offsite["app"]
+        _wipe_local_data()
+        self._clear_cache()
+
+        response = app.test_client().get("/auth/setup")
+
+        assert response.status_code == 302
+        assert "/auth/restore" in response.headers["Location"]
+
+    def test_new_archive_escape_hatch_still_works(self, archive_backed_up_offsite):
+        """Someone genuinely starting a second archive must not be trapped."""
+        app = archive_backed_up_offsite["app"]
+        _wipe_local_data()
+        self._clear_cache()
+
+        assert app.test_client().get("/auth/setup?new=1").status_code == 200
+
+    def test_setup_is_normal_when_there_are_no_backups(self, client):
+        self._clear_cache()
+        assert client.get("/auth/setup").status_code == 200
+
+
+class TestRecoveryRoutesArePublic:
+    """Every recovery endpoint must be reachable without a session."""
+
+    def _token(self, client):
+        import re
+
+        response = client.get("/auth/restore")
+        return re.search(rb'name="csrf-token" content="([^"]*)"', response.data).group(1).decode()
+
+    def test_search_is_reachable_with_no_archive(self, client):
+        """Regression: a new route added but left out of public_endpoints
+        gets a 302 to setup and returns HTML to a fetch() expecting JSON."""
+        token = self._token(client)
+        response = client.post("/auth/restore/search", json={"csrf_token": token})
+
+        assert response.status_code == 200
+        assert response.get_json()["success"] is True
+
+    def test_browse_is_reachable_with_no_archive(self, client):
+        token = self._token(client)
+        response = client.post("/auth/restore/browse", json={"csrf_token": token})
+
+        assert response.status_code == 200
+        assert response.get_json()["success"] is True
+
+    def test_search_finds_the_recorded_location(self, archive_backed_up_offsite):
+        import web.blueprints.auth as auth_module
+
+        app = archive_backed_up_offsite["app"]
+        _wipe_local_data()
+        auth_module._backup_search_cache["done"] = False
+
+        client = app.test_client()
+        token = self._token(client)
+        data = client.post(
+            "/auth/restore/search", json={"csrf_token": token}
+        ).get_json()
+
+        assert len(data["locations"]) == 1
+        assert data["locations"][0]["known"] is True
+
+    def test_browse_flags_folders_holding_backups(self, archive_backed_up_offsite):
+        app = archive_backed_up_offsite["app"]
+        folder = archive_backed_up_offsite["folder"]
+        _wipe_local_data()
+
+        client = app.test_client()
+        token = self._token(client)
+        data = client.post(
+            "/auth/restore/browse",
+            json={"path": str(folder.parent), "csrf_token": token},
+        ).get_json()
+
+        flagged = [f for f in data["folders"] if f["has_backups"]]
+        assert str(folder) in {f["path"] for f in flagged}
+
+    def test_browse_requires_the_page_token(self, client):
+        assert client.post("/auth/restore/browse", json={}).status_code == 403
+
+    def test_search_requires_the_page_token(self, client):
+        assert client.post("/auth/restore/search", json={}).status_code == 403
+
+    def test_search_refuses_once_an_archive_exists(self, initialized_app):
+        app, _ = initialized_app
+        assert app.test_client().post("/auth/restore/search", json={}).status_code == 403
+
+    def test_browse_refuses_once_an_archive_exists(self, initialized_app):
+        app, _ = initialized_app
+        assert app.test_client().post("/auth/restore/browse", json={}).status_code == 403

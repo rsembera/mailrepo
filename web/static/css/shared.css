@@ -839,3 +839,85 @@ a.btn:hover {
     color: var(--color-text, #0F172A);
     margin: 0;
 }
+
+.recover-location {
+    background: var(--color-surface-alt, #F8FAFC);
+    border: 1px solid var(--color-border, #CBD5E1);
+    border-radius: var(--radius-lg);
+    padding: var(--space-md);
+    margin-bottom: var(--space-md);
+}
+
+.recover-location-name {
+    font-weight: 600;
+    font-size: 1.0625rem;
+}
+
+.recover-location-path {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: 0.8125rem;
+    color: var(--color-text-muted, #64748B);
+    word-break: break-all;
+    margin: 0 0 var(--space-sm);
+}
+
+.recover-picker {
+    border: 1px solid var(--color-border, #CBD5E1);
+    border-radius: var(--radius-lg);
+    padding: var(--space-md);
+    margin-bottom: var(--space-md);
+}
+
+.recover-picker-path {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: 0.8125rem;
+    word-break: break-all;
+    margin: 0 0 var(--space-sm);
+}
+
+.recover-picker-list {
+    max-height: 15rem;
+    overflow-y: auto;
+    border: 1px solid var(--color-border, #CBD5E1);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-md);
+}
+
+.recover-picker-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    width: 100%;
+    padding: var(--space-sm) var(--space-md);
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--color-border, #CBD5E1);
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+}
+
+.recover-picker-row:last-child {
+    border-bottom: none;
+}
+
+.recover-picker-row:hover {
+    background: var(--color-surface-alt, #F8FAFC);
+}
+
+.recover-picker-tag {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.125rem 0.5rem;
+    border-radius: var(--radius-sm);
+    background: var(--color-success-bg, #DCFCE7);
+    color: var(--color-success-text, #166534);
+    flex-shrink: 0;
+}
+
+.recover-picker-tag-muted {
+    background: var(--color-surface-alt, #F1F5F9);
+    color: var(--color-text-muted, #64748B);
+}

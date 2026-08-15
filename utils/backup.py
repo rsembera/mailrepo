@@ -13,6 +13,7 @@ import json
 import os
 import re
 import shutil
+import time
 import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -232,6 +233,109 @@ def load_manifest():
     }
 
 
+# Identity stamped into every backup folder MailRepo writes to.
+#
+# Needed because filenames do not identify an application. EdgeCase
+# writes `full_<date>_<time>.zip` containing `data/.salt` and
+# `data/.secret_key` at exactly the same paths — the two are
+# indistinguishable by name and by key material. Verified on a real pair:
+#
+#     EdgeCase: data/edgecase.db, data/.salt, data/.secret_key, ...
+#     MailRepo: data/mailrepo.db, data/.salt, data/.secret_key, ...
+#
+# Restoring one into the other would find no database to copy and would
+# overwrite this archive's key file with the other application's. So
+# MailRepo marks what is its own rather than inferring it later.
+APP_ID = "mailrepo"
+
+
+def read_folder_stamp(folder):
+    """Read the application stamp from a backup folder, or None."""
+    sidecar = Path(folder) / "manifest.json"
+    if not sidecar.exists():
+        return None
+    try:
+        with open(sidecar, "r") as f:
+            manifest = json.load(f)
+    except (json.JSONDecodeError, ValueError, OSError):
+        return None
+
+    if not isinstance(manifest, dict) or "app" not in manifest:
+        return None
+
+    return {"app": manifest.get("app"), "app_version": manifest.get("app_version")}
+
+
+def get_known_locations():
+    """Folders MailRepo has recorded sending backups to.
+
+    Read on recovery BEFORE any filesystem search. Searching is guessing;
+    this is the record. Entries that no longer exist are dropped from the
+    result but left in the file — an external drive that is merely
+    unplugged should not be forgotten.
+    """
+    path = Config.get_backup_locations_file()
+    if not path.exists():
+        return []
+
+    try:
+        with open(path, "r") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, ValueError, OSError) as e:
+        log.warning(f"Could not read backup locations file: {e}")
+        return []
+
+    locations = []
+    for entry in data.get("locations", []):
+        raw = entry.get("path")
+        if not raw:
+            continue
+        try:
+            if Path(raw).is_dir():
+                locations.append(entry)
+        except OSError:
+            continue
+
+    locations.sort(key=lambda e: e.get("last_written", ""), reverse=True)
+    return locations
+
+
+def record_backup_location(folder):
+    """Remember that backups were written here.
+
+    Stored outside the application directory and outside the database,
+    because both are gone in the situation this exists for. This is the
+    difference between MailRepo knowing where its backups are and
+    scanning the disk hoping to recognise them.
+    """
+    folder = Path(folder)
+    path = Config.get_backup_locations_file()
+
+    try:
+        existing = {}
+        if path.exists():
+            with open(path, "r") as f:
+                data = json.load(f)
+            for entry in data.get("locations", []):
+                if entry.get("path"):
+                    existing[entry["path"]] = entry
+
+        existing[str(folder)] = {
+            "path": str(folder),
+            "last_written": datetime.now().isoformat(),
+            "app": APP_ID,
+        }
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _atomic_write_text(
+            path,
+            json.dumps({"app": APP_ID, "locations": list(existing.values())}, indent=2),
+        )
+    except Exception as e:
+        # Never fail a backup over bookkeeping.
+        log.warning(f"Could not record backup location {folder}: {e}")
+
+
 def manifest_destinations(manifest):
     """Every distinct directory this manifest's backups actually live in.
 
@@ -276,13 +380,23 @@ def save_manifest(manifest):
     the time we get here.
     """
     ensure_backup_dir()
-    _atomic_write_text(get_manifest_file(), json.dumps(manifest, indent=2))
+
+    # Stamp the manifest with this application's identity before it is
+    # written anywhere, so every folder MailRepo touches says whose it
+    # is. Recognition then needs no inference about zip contents.
+    manifest = dict(manifest)
+    manifest["app"] = APP_ID
+    manifest["app_version"] = Config.VERSION
 
     payload = json.dumps(manifest, indent=2)
+    _atomic_write_text(get_manifest_file(), payload)
+    record_backup_location(get_backups_dir())
+
     for destination in manifest_destinations(manifest):
         try:
             destination.mkdir(parents=True, exist_ok=True)
             _atomic_write_text(destination / "manifest.json", payload)
+            record_backup_location(destination)
         except Exception as e:
             log.warning(f"Could not write manifest sidecar to {destination}: {e}")
 
@@ -1048,6 +1162,20 @@ def discover_restore_points_in(folder):
     if not folder.is_dir():
         raise ValueError(f"Not a folder: {folder}")
 
+    # Refuse another application's backups outright. EdgeCase's are
+    # byte-for-byte plausible here — same filenames, same key-file paths
+    # — and restoring one would overwrite this archive's key file with
+    # another app's while finding no database to go with it. Checked on
+    # the manual path as well as the search path, or the folder picker
+    # becomes the hole the search was careful to close.
+    if not folder_holds_mailrepo_backups(folder):
+        if _looks_like_backup_folder({p.name for p in folder.iterdir() if p.is_file()}):
+            raise ValueError(
+                "That folder holds backups from a different application, "
+                "not MailRepo."
+            )
+        return [], "empty"
+
     sidecar = folder / "manifest.json"
     if sidecar.exists():
         try:
@@ -1792,6 +1920,350 @@ def detect_cloud_folders():
         cloud_folders.append({"name": "OneDrive", "path": str(onedrive / "MailRepo Backups")})
 
     return cloud_folders
+
+
+def _looks_like_backup_folder(names):
+    """True if this directory's file names look like a MailRepo backup set."""
+    if "manifest.json" in names:
+        return True
+    return any(_BACKUP_FILENAME_RE.match(name) for name in names)
+
+
+def folder_holds_mailrepo_backups(folder):
+    """Confirm a folder holds THIS application's backups.
+
+    Checked in order of authority:
+
+    1. The stamp in the sidecar manifest. MailRepo marks every folder it
+       writes to, so its own backups identify themselves.
+    2. Failing that, the contents of a full backup. Folders written
+       before stamping existed carry no marker, and refusing those would
+       make recovery useless to the person who has been backing up
+       diligently all along — exactly the person it is for.
+
+    The fallback stays narrow: the database name is the only thing that
+    separates a MailRepo backup from an EdgeCase one (see APP_ID).
+    """
+    folder = Path(folder)
+
+    stamp = read_folder_stamp(folder)
+    if stamp is not None:
+        return stamp.get("app") == APP_ID
+
+    try:
+        candidates = sorted(
+            (p for p in folder.iterdir() if p.is_file() and p.name.startswith("full_")),
+            reverse=True,
+        )
+    except OSError:
+        return False
+
+    for candidate in candidates[:3]:
+        try:
+            with zipfile.ZipFile(candidate, "r") as zf:
+                names = zf.namelist()
+        except Exception:
+            continue
+
+        if any(name.endswith("data/mailrepo.db") or name == "mailrepo.db" for name in names):
+            return True
+
+        # A readable full backup that is definitively something else.
+        # Stop rather than hoping an older one disagrees.
+        return False
+
+    return False
+
+
+def _same_device_as_root(path):
+    """True if path sits on the boot volume.
+
+    macOS exposes the boot volume again under /Volumes/<name> via a
+    firmlink, which is not a symlink and does not collapse under
+    resolve(). Without this check, scanning /Volumes walks the entire
+    boot disk a second time under a different path and reports every
+    local folder as an "External drive".
+    """
+    try:
+        return Path(path).stat().st_dev == Path("/").stat().st_dev
+    except OSError:
+        return False
+
+
+# Directories never worth descending into while hunting for backups.
+# Skipping them is what keeps a home-directory sweep to a couple of
+# seconds instead of a couple of minutes.
+_SEARCH_SKIP = {
+    "node_modules",
+    "venv",
+    ".venv",
+    "__pycache__",
+    "Applications",
+    "System",
+    "Library",
+    "Music",
+    "Photos Library.photoslibrary",
+    "Movies",
+    "Pictures",
+    ".git",
+    "site-packages",
+}
+
+
+def _search_roots():
+    """Where to look for backups, best bets first.
+
+    Deliberately wider than detect_cloud_folders, which only guesses one
+    exact subfolder name per provider. After a disk loss the folder could
+    be named anything and sitting anywhere the user put it, so this
+    searches the plausible roots rather than testing one path.
+    """
+    home = Path.home()
+    roots = []
+
+    def add(path, depth):
+        try:
+            path = Path(path)
+            if path.is_dir():
+                roots.append((path, depth))
+        except OSError:
+            pass
+
+    # Explicit override, os.pathsep-separated. The test suite sets this
+    # so the fallback sweep cannot wander out of its sandbox and into a
+    # real home directory — without it, tests find the developer's own
+    # backups and assert against them.
+    override = os.environ.get("MAILREPO_SEARCH_ROOTS")
+    if override:
+        for entry in override.split(os.pathsep):
+            if entry:
+                add(entry, 4)
+        return roots
+
+    # The configured default, first and cheapest.
+    add(get_backups_dir(), 2)
+
+    # Cloud sync roots. Deeper budget: users nest these.
+    add(home / "Library" / "Mobile Documents" / "com~apple~CloudDocs", 4)
+    add(home / "Dropbox", 4)
+    add(home / "OneDrive", 4)
+    add(home / "Google Drive", 4)
+
+    cloud_storage = home / "Library" / "CloudStorage"
+    if cloud_storage.is_dir():
+        try:
+            for entry in cloud_storage.iterdir():
+                add(entry, 4)
+        except OSError:
+            pass
+
+    # Common hand-picked spots.
+    for name in ("Documents", "Desktop", "Backups", "MailRepo Backups"):
+        add(home / name, 3)
+
+    # External drives and mounted volumes. The boot volume reappears
+    # under /Volumes on macOS, so it is filtered out by device rather
+    # than by name — the name varies per machine.
+    for mount in ("/Volumes", "/media", "/mnt", "/run/media"):
+        mount_path = Path(mount)
+        if not mount_path.is_dir():
+            continue
+        try:
+            for entry in mount_path.iterdir():
+                if _same_device_as_root(entry):
+                    continue
+                add(entry, 3)
+        except OSError:
+            pass
+
+    # Home last and shallow: a wide net, but not an expensive one.
+    add(home, 2)
+
+    return roots
+
+
+def find_backup_locations(max_dirs=4000, budget_seconds=6.0):
+    """Where this archive's backups are, best evidence first.
+
+    Order matters. MailRepo records every folder it writes backups to, in
+    a file that deliberately lives outside the application directory and
+    outside the database — so the record survives the loss that makes it
+    necessary. That record is consulted first, and if it answers, no
+    searching happens at all.
+
+    The filesystem sweep is the fallback for the case the record cannot
+    cover: a genuinely new machine, where the state file went down with
+    the old disk and only the synced backup folder came across. Guessing
+    is the last resort, not the mechanism.
+
+    Each result carries `known=True` when it came from the record.
+    """
+    results = []
+    seen = set()
+
+    for entry in get_known_locations():
+        directory = Path(entry["path"])
+        try:
+            resolved = directory.resolve()
+        except OSError:
+            continue
+        if resolved in seen:
+            continue
+
+        if not folder_holds_mailrepo_backups(directory):
+            continue
+
+        try:
+            points, source = discover_restore_points_in(directory)
+        except Exception as e:
+            log.warning(f"Recorded location {directory} could not be read: {e}")
+            continue
+
+        if not points:
+            continue
+
+        seen.add(resolved)
+        results.append(
+            {
+                "path": str(directory),
+                "label": _describe_location(directory),
+                "source": source,
+                "known": True,
+                "last_written": entry.get("last_written"),
+                "restore_point_count": len(points),
+                "newest": points[0]["created_at"],
+                "newest_display": points[0]["display_name"],
+                "restore_points": points,
+                "truncated_search": False,
+            }
+        )
+
+    if results:
+        return results
+
+    return search_for_backups(max_dirs=max_dirs, budget_seconds=budget_seconds)
+
+
+def search_for_backups(max_dirs=4000, budget_seconds=6.0):
+    """Hunt for backup folders without being told where to look.
+
+    The recovery screen cannot ask someone to paste a path. This walks
+    the plausible roots, bounded by both a directory count and a wall
+    clock so a pathological filesystem cannot hang the one screen a user
+    reaches on their worst day. Hitting either bound returns what was
+    found so far — the folder picker is the fallback, not an error.
+
+    Returns a list of dicts, newest backup first, each carrying the
+    restore points already resolved so the caller can offer a restore
+    rather than another prompt.
+    """
+    deadline = time.monotonic() + budget_seconds
+    seen = set()
+    found = []
+    dirs_visited = 0
+    truncated = False
+
+    for root, max_depth in _search_roots():
+        if dirs_visited >= max_dirs or time.monotonic() > deadline:
+            truncated = True
+            break
+
+        queue = [(root, 0)]
+
+        while queue:
+            if dirs_visited >= max_dirs or time.monotonic() > deadline:
+                truncated = True
+                break
+
+            directory, depth = queue.pop(0)
+
+            try:
+                resolved = directory.resolve()
+            except OSError:
+                continue
+
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            dirs_visited += 1
+
+            try:
+                entries = list(directory.iterdir())
+            except OSError:
+                continue
+
+            names = {e.name for e in entries}
+
+            if _looks_like_backup_folder(names):
+                # Do not descend into a backup folder: its contents are
+                # zips, not more folders worth searching. That holds even
+                # when the folder turns out to belong to another app.
+                if not folder_holds_mailrepo_backups(directory):
+                    log.info(f"Skipping {directory}: not MailRepo backups")
+                    continue
+
+                try:
+                    points, source = discover_restore_points_in(directory)
+                except Exception as e:
+                    log.warning(f"Found backups in {directory} but could not read them: {e}")
+                    continue
+
+                if points:
+                    found.append(
+                        {
+                            "path": str(directory),
+                            "label": _describe_location(directory),
+                            "source": source,
+                            "known": False,
+                            "restore_point_count": len(points),
+                            "newest": points[0]["created_at"],
+                            "newest_display": points[0]["display_name"],
+                            "restore_points": points,
+                        }
+                    )
+                continue
+
+            if depth >= max_depth:
+                continue
+
+            for entry in entries:
+                if entry.name.startswith("."):
+                    continue
+                if entry.name in _SEARCH_SKIP:
+                    continue
+                try:
+                    if entry.is_dir() and not entry.is_symlink():
+                        queue.append((entry, depth + 1))
+                except OSError:
+                    continue
+
+    found.sort(key=lambda item: item["newest"], reverse=True)
+
+    for item in found:
+        item["truncated_search"] = truncated
+
+    return found
+
+
+def _describe_location(path):
+    """A human label for where a backup folder lives."""
+    path = Path(path)
+    text = str(path)
+    home = str(Path.home())
+
+    if "com~apple~CloudDocs" in text:
+        return f"iCloud Drive — {path.name}"
+    if "/Dropbox/" in text or text.endswith("/Dropbox"):
+        return f"Dropbox — {path.name}"
+    if "/OneDrive" in text:
+        return f"OneDrive — {path.name}"
+    if "Google Drive" in text or "GoogleDrive" in text:
+        return f"Google Drive — {path.name}"
+    if text.startswith("/Volumes/") or text.startswith("/media/") or text.startswith("/mnt/"):
+        return f"External drive — {path.name}"
+    if text.startswith(home):
+        return f"This Mac — {path.name}"
+    return str(path)
 
 
 def check_backup_needed(frequency="daily"):

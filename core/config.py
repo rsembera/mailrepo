@@ -5,6 +5,7 @@ Handles application paths, settings, and environment configuration.
 """
 
 import os
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -74,6 +75,41 @@ class Config:
     def get_secret_key_path(cls) -> Path:
         """Path to the Flask secret key file."""
         return cls.get_data_path() / ".secret_key"
+
+    @classmethod
+    def get_state_path(cls) -> Path:
+        """Small state that must OUTLIVE the application directory.
+
+        Everything else MailRepo writes lives under the base path, which
+        is precisely what a disk loss takes. The record of where backups
+        were sent cannot live there: needing it and having lost it are
+        the same event. It also cannot live in the database, which is
+        encrypted and equally gone.
+
+        So this sits in the OS location for application state, outside
+        the app folder and outside the archive. Overridable with
+        MAILREPO_STATE_DIR, which the test suite uses to keep out of a
+        real home directory.
+        """
+        env_path = os.environ.get("MAILREPO_STATE_DIR")
+        if env_path:
+            return Path(env_path)
+
+        home = Path.home()
+
+        if sys.platform == "darwin":
+            return home / "Library" / "Application Support" / "MailRepo"
+
+        xdg = os.environ.get("XDG_CONFIG_HOME")
+        if xdg:
+            return Path(xdg) / "mailrepo"
+
+        return home / ".config" / "mailrepo"
+
+    @classmethod
+    def get_backup_locations_file(cls) -> Path:
+        """Where MailRepo records the folders it has sent backups to."""
+        return cls.get_state_path() / "backup_locations.json"
 
     @classmethod
     def ensure_directories(cls) -> None:

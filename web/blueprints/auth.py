@@ -219,6 +219,15 @@ def setup():
     if Encryption.is_initialized():
         return redirect(url_for("auth.login"))
 
+    # If backups exist, restoring is almost certainly what is wanted, so
+    # lead with it rather than putting it behind a link on a page whose
+    # obvious action starts an empty archive over the top of a
+    # recoverable situation. ?new=1 is the way past, for someone who
+    # really is starting a second archive alongside their backups.
+    if request.method == "GET" and not request.args.get("new"):
+        if _find_backups():
+            return redirect(url_for("auth.recover"))
+
     if request.method == "POST":
         password = request.form.get("password", "")
         confirm = request.form.get("confirm", "")
@@ -436,6 +445,112 @@ def recover_prepare():
             "message": (
                 "Restore staged. Quit MailRepo and start it again to finish."
             ),
+        }
+    )
+
+
+_backup_search_cache = {"done": False, "results": []}
+_backup_search_lock = threading.Lock()
+
+
+def _find_backups(force=False):
+    """Locate this archive's backups, once per process unless forced.
+
+    Consults MailRepo's own record of where it has written backups
+    before falling back to searching the disk.
+    """
+    from utils import backup
+
+    with _backup_search_lock:
+        if _backup_search_cache["done"] and not force:
+            return _backup_search_cache["results"]
+
+        try:
+            results = backup.find_backup_locations()
+        except Exception as e:
+            log.error(f"Backup search failed: {e}")
+            results = []
+
+        _backup_search_cache["done"] = True
+        _backup_search_cache["results"] = results
+        return results
+
+
+@auth_bp.route("/restore/search", methods=["POST"])
+def recover_search():
+    """Re-run the backup search on demand."""
+    if Encryption.is_initialized():
+        return jsonify({"success": False, "error": "This archive is already set up."}), 403
+
+    if not _check_recovery_csrf():
+        return jsonify({"success": False, "error": "Invalid request token."}), 403
+
+    force = bool((request.get_json(silent=True) or {}).get("force"))
+    locations = _find_backups(force=force)
+
+    return jsonify({"success": True, "locations": locations})
+
+
+@auth_bp.route("/restore/browse", methods=["POST"])
+def recover_browse():
+    """List subfolders so the user can point at a backup without typing.
+
+    A pared-down twin of the authenticated folder picker in the backups
+    blueprint. Kept separate rather than shared because that one sits
+    behind the auth gate, and the whole point here is that there is no
+    session to gate on.
+    """
+    if Encryption.is_initialized():
+        return jsonify({"success": False, "error": "This archive is already set up."}), 403
+
+    if not _check_recovery_csrf():
+        return jsonify({"success": False, "error": "Invalid request token."}), 403
+
+    from utils import backup
+
+    requested = ((request.get_json(silent=True) or {}).get("path") or "").strip()
+
+    try:
+        current = Path(requested).expanduser().resolve() if requested else Path.home()
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Invalid path: {e}"}), 400
+
+    if not current.is_dir():
+        return jsonify({"success": False, "error": "That folder does not exist."}), 400
+
+    folders = []
+    try:
+        for entry in sorted(current.iterdir(), key=lambda p: p.name.lower()):
+            if entry.name.startswith(".") or not entry.is_dir():
+                continue
+            try:
+                names = {p.name for p in entry.iterdir() if p.is_file()}
+                holds_backups = backup.folder_holds_mailrepo_backups(entry)
+            except (OSError, PermissionError):
+                names, holds_backups = set(), False
+
+            folders.append(
+                {
+                    "name": entry.name,
+                    "path": str(entry),
+                    # Flagged in the listing so the user can see which
+                    # folder to pick instead of opening each in turn.
+                    "has_backups": holds_backups,
+                    "other_app_backups": bool(
+                        not holds_backups and backup._looks_like_backup_folder(names)
+                    ),
+                }
+            )
+    except PermissionError:
+        return jsonify({"success": False, "error": "MailRepo cannot read that folder."}), 403
+
+    return jsonify(
+        {
+            "success": True,
+            "current_path": str(current),
+            "parent_path": str(current.parent) if current.parent != current else None,
+            "folders": folders,
+            "current_has_backups": backup.folder_holds_mailrepo_backups(current),
         }
     )
 

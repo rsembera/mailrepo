@@ -12,9 +12,8 @@
                 <img src="{{ url_for('static', filename='assets/icon.png') }}" alt="MailRepo">
             </div>
             <h1>Restore from a backup</h1>
-            <p class="auth-subtitle">
-                MailRepo found no archive on this machine. If you have a
-                backup, you can restore it here instead of starting over.
+            <p class="auth-subtitle" id="recover-subtitle">
+                Looking for your backups…
             </p>
         </div>
 
@@ -22,31 +21,28 @@
             <ul><li id="recover-error-text"></li></ul>
         </div>
 
-        <div class="form-group">
-            <label for="recover-folder">Backup folder</label>
-            <input
-                type="text"
-                id="recover-folder"
-                value="{{ default_folder }}"
-                spellcheck="false"
-                autocapitalize="off"
-                autocomplete="off"
-            >
-            <span class="helper-text">
-                If your backups go to iCloud Drive, Dropbox or a synced
-                folder, enter that folder's path here.
-            </span>
-        </div>
+        <div id="recover-locations"></div>
 
-        <div class="form-actions">
-            <button type="button" id="recover-scan" class="btn btn-primary btn-full">
-                Look for backups
+        <div class="form-actions" id="recover-actions" hidden>
+            <button type="button" id="recover-browse" class="btn btn-secondary">
+                Choose a folder myself
+            </button>
+            <button type="button" id="recover-rescan" class="btn btn-secondary">
+                Look again
             </button>
         </div>
 
-        <div id="recover-results" hidden>
-            <p id="recover-source" class="helper-text"></p>
-            <div id="recover-points" class="recover-points"></div>
+        <div id="recover-picker" class="recover-picker" hidden>
+            <p class="recover-picker-path" id="recover-picker-path"></p>
+            <div class="recover-picker-list" id="recover-picker-list"></div>
+            <div class="form-actions">
+                <button type="button" id="recover-picker-use" class="btn btn-primary">
+                    Use this folder
+                </button>
+                <button type="button" id="recover-picker-cancel" class="btn btn-secondary">
+                    Cancel
+                </button>
+            </div>
         </div>
 
         <div class="auth-footer">
@@ -55,7 +51,7 @@
                 contents of the backup, and brings back the master password
                 and recovery key that were in use when it was made.
             </p>
-            <p><a href="{{ url_for('auth.setup') }}">Start a new archive instead</a></p>
+            <p><a href="{{ url_for('auth.setup') }}?new=1">Start a new archive instead</a></p>
         </div>
     </div>
 </div>

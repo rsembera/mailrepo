@@ -28,10 +28,24 @@ def temp_data_dir(tmp_path):
 
 
 @pytest.fixture(autouse=True)
-def reset_singletons(temp_data_dir, monkeypatch):
+def reset_singletons(temp_data_dir, tmp_path, monkeypatch):
     """Reset all singleton state before each test."""
     # Set environment variable BEFORE importing modules
     monkeypatch.setenv("MAILREPO_DATA_DIR", str(temp_data_dir))
+
+    # Keep the backup-locations record out of the real home directory,
+    # and as a SIBLING of the app folder rather than a child. In
+    # production it lives in the OS application-state directory
+    # precisely so that losing the app folder does not lose it; nesting
+    # it under temp_data_dir here would quietly void that property for
+    # every test that depends on it.
+    monkeypatch.setenv("MAILREPO_STATE_DIR", str(tmp_path / "mailrepo_state"))
+
+    # Confine the disaster-recovery filesystem sweep to the sandbox.
+    # Without this it walks the real home directory and finds the
+    # developer's own backups, so a test asserting "no backups exist"
+    # fails on the machine it was written on.
+    monkeypatch.setenv("MAILREPO_SEARCH_ROOTS", str(tmp_path))
 
     # Reset Config's cached path
     from core.config import Config

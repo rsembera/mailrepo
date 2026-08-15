@@ -93,6 +93,8 @@ def create_app(test_config: dict = None) -> Flask:
             "auth.recover",
             "auth.recover_scan",
             "auth.recover_prepare",
+            "auth.recover_search",
+            "auth.recover_browse",
             "static",
         }
 
