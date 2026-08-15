@@ -5557,3 +5557,74 @@ in both paths and through the manual picker. Setup redirects to restore;
 - Frontend still has no automated behavioural coverage; the recovery
   screen is now a fair amount of untested JS, on a screen that only runs
   on the worst day an archive ever has.
+
+---
+
+## Session 79 — August 15, 2026 (MacBook)
+
+### The disk search is gone
+
+Rick's decision, made in plain-language terms and the better for it:
+recovery should either *remember* where backups are or *ask* — never
+hunt. Continuation of the Session 77–78 chat, picked up fresh with the
+tree mid-refactor (the quick/deep sweep split was on disk, uncommitted,
+two tests failing).
+
+Rather than finish the sweep, it was removed entirely. The case for
+removal, all of it observed rather than hypothesised in Sessions 77–78:
+
+- It hardcoded cloud-provider paths that move between OS versions —
+  Dropbox mounts under `~/Library/CloudStorage` on this very machine,
+  not `~/Dropbox`.
+- It surfaced EdgeCase's byte-identical backup folders, which forced
+  the app-stamp work just to fence in the guessing.
+- It walked the developer's real home directory during tests until
+  confined by an env var that existed only to confine it.
+- Everything it offered is covered better: the record (Session 78)
+  answers instantly for any location the user ever chose, and the
+  folder picker covers unknown locations with consent and zero
+  assumptions.
+
+Removed: `search_for_backups`, `sweep_for_backups`,
+`_collect_from_roots`, `_search_roots`, `_SEARCH_SKIP`,
+`_same_device_as_root`, the `MAILREPO_SEARCH_ROOTS` confinement, and
+the now-unused `time` import. Net −162 lines.
+
+### What recovery is now
+
+1. **The record** — backups noted where they were written, in a state
+   file outside the app folder. Location-agnostic and platform-agnostic
+   because it stores what the user chose.
+2. **The default folder** — the one directory MailRepo may check
+   without guessing, because it is MailRepo's own. Covers installs
+   predating the record.
+3. **The picker** — everything else, by asking. The empty state now
+   also says the one thing no local code can solve: backups on another
+   computer or a disconnected drive must be connected or copied here
+   first, then chosen.
+
+### Verified
+
+Full loop both ways: total loss with record surviving (setup redirects
+to restore, backups offered, `known=True`) and new machine with record
+gone (nothing offered, no hunting, picker flags the folder, restore
+completes, plaintext decrypts, gate closes). One false alarm during
+verification: the picker appeared not to flag a folder, which turned
+out to be `/tmp` vs `/private/tmp` symlink spelling in the test script
+itself, not the route.
+
+Tests: the two that pinned auto-sweep now pin its absence, plus one for
+the default-folder fallback. 63 in the file, **609 in the suite**
+(9m58s). ESLint 0 errors / 64 warnings, unchanged.
+
+### Still open
+
+- `git tag v1.0.0`.
+- Manual verification of the credential badge + modal on password change.
+- **Run one manual backup during dogfooding** — stamps and records the
+  live iCloud folder, moving it off filename reconstruction onto the
+  recorded path.
+- EdgeCase should get the same stamp + record + setup-redirect
+  treatment; all three port directly.
+- Frontend behavioural coverage gap unchanged; recover.js is manual-
+  verification only.

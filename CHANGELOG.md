@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Security
+- **Finding backups after a disaster is now remember-or-ask, never
+  guess (Session 79).** MailRepo already keeps its own note of every
+  folder it sends backups to, stored safely outside the archive; after
+  a loss it offers those backups straight away. If that note is gone
+  too (a brand-new computer), it checks only its own default backups
+  folder and otherwise asks you to choose the folder with a picker.
+  The automatic disk search from earlier this week has been removed:
+  it guessed at cloud folder locations that vary between systems and
+  could surface another application's backups. Nothing you could do
+  before has been lost -- choosing a folder yourself covers every case
+  the search did, without the guessing.
 - **MailRepo now keeps its own record of where your backups are
   (Session 78).** That record used to live inside the encrypted
   database — the one file certain to be missing when you need it. It is
