@@ -2083,7 +2083,7 @@ def _describe_location(path):
     if text.startswith("/Volumes/") or text.startswith("/media/") or text.startswith("/mnt/"):
         return f"External drive — {path.name}"
     if text.startswith(home):
-        return f"This Mac — {path.name}"
+        return f"This computer — {path.name}"
     return str(path)
 
 
