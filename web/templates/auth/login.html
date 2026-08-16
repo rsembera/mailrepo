@@ -20,6 +20,8 @@
             {{ error }}
         </div>
         {% endif %}
+
+        {% include "auth/_restored_banner.html" %}
         
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}

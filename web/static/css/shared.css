@@ -449,6 +449,27 @@ a.btn:hover {
     margin-bottom: var(--space-xl);
 }
 
+/* After a restore, the login screens name the credentials the archive
+   wants. Amber, matching .credential-badge: a caution, not an error —
+   nothing has gone wrong yet, and if the user knows the old password
+   nothing will. */
+.restored-notice {
+    background: #FEF3C7;
+    border: 1px solid #FDE68A;
+    color: #92400E;
+    padding: var(--space-lg);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-xl);
+    font-size: 0.9375rem;
+    text-align: left;
+}
+
+.restored-notice a {
+    color: #92400E;
+    font-weight: 600;
+    text-decoration: underline;
+}
+
 /* ============================================
    FLASH MESSAGES
    ============================================ */

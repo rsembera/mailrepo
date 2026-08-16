@@ -24,6 +24,7 @@ from core.config import Config
 from core.encryption import Encryption
 from utils.backup import (
     check_restore_pending,
+    clear_restore_unverified,
     complete_restore,
     create_full_backup,
     create_incremental_backup,
@@ -522,9 +523,17 @@ class TestFullRecovery:
         restored = Config.get_archive_path() / "1" / "000.eml.enc"
         assert Encryption.decrypt(restored.read_bytes()) == plaintext
 
-    def test_recovery_routes_close_after_a_successful_restore(
+    def test_recovery_routes_stay_open_until_the_restore_is_vouched_for(
         self, archive_backed_up_offsite
     ):
+        """Session 80 changed this contract, and this test with it: it
+        used to pin the door closing the moment complete_restore ran —
+        which was the defect. The restored data opens with the
+        credentials of the moment the backup was TAKEN; until someone
+        proves they hold them, the way back to a different backup
+        (including the pre-restore safety copy) must stay open. The
+        vouch — a demonstrated credential on either login path — is
+        what closes it."""
         app = archive_backed_up_offsite["app"]
         folder = archive_backed_up_offsite["folder"]
 
@@ -550,6 +559,13 @@ class TestFullRecovery:
         )
         complete_restore()
 
+        # An archive exists, but nobody has vouched for it: still open.
+        assert app.test_client().get("/auth/restore").status_code == 200
+
+        # The vouch closes it. Both login paths call exactly this after
+        # a credential is demonstrated; the full login round trips are
+        # proved in test_unverified_restore.py.
+        clear_restore_unverified()
         assert app.test_client().get("/auth/restore").status_code == 302
 
 

@@ -33,6 +33,16 @@ def reset_singletons(temp_data_dir, tmp_path, monkeypatch):
     # Set environment variable BEFORE importing modules
     monkeypatch.setenv("MAILREPO_DATA_DIR", str(temp_data_dir))
 
+    # This re-rooting is also what isolates the unverified-restore
+    # marker (data/.restore_unverified): it is deleted on every
+    # successful login, so an unisolated auth test would silently
+    # unlink the real install's marker. EdgeCase needed a dedicated
+    # fixture for this because its DATA_DIR was not per-test; here the
+    # whole data directory already is. test_unverified_restore.py
+    # carries a tripwire asserting the marker path lives under the
+    # per-test temp dir, so moving the marker elsewhere (e.g. the state
+    # dir) reopens this question loudly rather than quietly.
+
     # Keep the backup-locations record out of the real home directory,
     # and as a SIBLING of the app folder rather than a child. In
     # production it lives in the OS application-state directory

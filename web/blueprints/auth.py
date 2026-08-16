@@ -283,9 +283,11 @@ def setup():
 # that no longer exists.
 #
 # What keeps this narrow:
-#   - They are dead the moment an archive exists. Every one of them
-#     redirects to login when Encryption.is_initialized() is true, so
-#     this is not a way to roll a live archive back over its owner.
+#   - They are dead unless the door is open. Every one of them refuses
+#     via _recovery_door_open(): closed once an archive exists that
+#     someone has proved they can open, so this is not a way to roll a
+#     live archive back over its owner. The door reopens only for an
+#     UNVERIFIED restore — data nobody has vouched for yet.
 #   - Completing a restore grants no access to anything. The restored
 #     database and archive are still encrypted under the credentials
 #     that were in force when the backup was taken.
@@ -294,11 +296,99 @@ def setup():
 # ============================================================================
 
 
+def _recovery_door_open():
+    """May the disaster-recovery routes be used right now?
+
+    Two states qualify:
+      - true first run: no key file at all (the door's original purpose)
+      - an UNVERIFIED restore: a key file exists, but it arrived by
+        restore and nobody has proved they can open it yet. If the
+        backup's password turns out to be lost, login is a wall — and
+        without this, the recovery routes would be dead the moment the
+        restore landed, leaving no way back to a different backup,
+        including the pre-restore safety copy. A demonstrated credential
+        (password login, or a verified recovery key) clears the marker
+        and closes the door, so an archive in normal use is never
+        reachable this way. Not a rollback hole: the only state exposed
+        is an archive nobody has vouched for, and whoever could exploit
+        the window could have used the recovery door moments earlier.
+    """
+    from utils import backup
+
+    return not Encryption.is_initialized() or backup.restore_unverified()
+
+
 def _recovery_gate():
-    """Redirect away from the recovery routes once an archive exists."""
-    if Encryption.is_initialized():
+    """Redirect away from the recovery routes when the door is closed."""
+    if not _recovery_door_open():
         return redirect(url_for("auth.login"))
     return None
+
+
+def _restore_login_context():
+    """What the login screen needs to say about a just-restored archive.
+
+    Two independent signals, both read WITHOUT consuming:
+      - RESTORE_COMPLETED (set at startup when a staged restore was
+        applied): carries the date and the credential note chosen with
+        the restore point. Popped only on a successful vouch.
+      - the unverified-restore marker: still present means nobody has
+        opened the restored data yet, so the screen also offers the way
+        back ("restore a different backup").
+
+    Without this, a perfectly correct restore is indistinguishable from
+    a rejected password — the user types their current password, is
+    refused, and has no way to know the archive now wants an older one.
+    Read on every render of the login screens, so it survives failed
+    attempts, which is precisely when it is needed.
+    """
+    from flask import current_app
+
+    from utils import backup
+
+    restored = current_app.config.get("RESTORE_COMPLETED")
+    unverified = backup.restore_unverified()
+
+    if not restored and not unverified:
+        return {}
+
+    note = ""
+    date = ""
+    if restored:
+        note = restored.get("credential_note", "")
+        date = (restored.get("original_date") or "")[:10]
+    if not note:
+        note = (
+            "It opens with the master password that was in use when the "
+            "backup was made — not necessarily your current one."
+        )
+
+    return {
+        "restored_banner": True,
+        "restored_date": date,
+        "restored_note": note,
+        "restore_retry_available": unverified,
+    }
+
+
+def _vouch_for_restored_data():
+    """A credential has been demonstrated against the data on disk.
+
+    Clears the unverified-restore marker (closing the recovery door) and
+    retires the startup banner. Called from both ways in — login() and
+    login_with_recovery_key() — because both are demonstrations, not
+    inferences: the password unwrapped the key file and opened the
+    database; verify_recovery_key performs the full recovery-side unwrap.
+    Consistent with Daybook's ruling of Aug 16 (7cecbb8, 'a session
+    proves the password and nothing else'): what counts is the
+    credential actually proved against this archive, and here one was.
+    """
+    from flask import current_app
+
+    from utils import backup
+
+    backup.clear_restore_unverified()
+    current_app.config.pop("RESTORE_COMPLETED", None)
 
 
 def _recovery_csrf_token():
@@ -349,7 +439,7 @@ def recover():
 @auth_bp.route("/restore/scan", methods=["POST"])
 def recover_scan():
     """List restore points found in a folder."""
-    if Encryption.is_initialized():
+    if not _recovery_door_open():
         return jsonify({"success": False, "error": "This archive is already set up."}), 403
 
     if not _check_recovery_csrf():
@@ -401,7 +491,7 @@ def recover_prepare():
     The scan is cheap, and it means the paths that get opened are ones
     this route derived itself from a folder the user named.
     """
-    if Encryption.is_initialized():
+    if not _recovery_door_open():
         return jsonify({"success": False, "error": "This archive is already set up."}), 403
 
     if not _check_recovery_csrf():
@@ -480,7 +570,7 @@ def _find_backups(force=False):
 @auth_bp.route("/restore/search", methods=["POST"])
 def recover_search():
     """Re-run the backup search on demand."""
-    if Encryption.is_initialized():
+    if not _recovery_door_open():
         return jsonify({"success": False, "error": "This archive is already set up."}), 403
 
     if not _check_recovery_csrf():
@@ -501,7 +591,7 @@ def recover_browse():
     behind the auth gate, and the whole point here is that there is no
     session to gate on.
     """
-    if Encryption.is_initialized():
+    if not _recovery_door_open():
         return jsonify({"success": False, "error": "This archive is already set up."}), 403
 
     if not _check_recovery_csrf():
@@ -601,6 +691,11 @@ def login():
     if session.get("authenticated") and Encryption.is_unlocked():
         return redirect(url_for("main.index"))
 
+    # After a restore, this screen is the one place that can say which
+    # password the archive wants. Passed to every render below so the
+    # banner survives failed attempts — exactly when it is needed.
+    restore_ctx = _restore_login_context()
+
     # Check rate limit
     client_ip = request.remote_addr or "unknown"
     allowed, seconds_remaining = _check_rate_limit(client_ip)
@@ -610,6 +705,7 @@ def login():
             "auth/login.html",
             error=f"Too many failed attempts. Please wait {seconds_remaining} seconds.",
             lockout_seconds=seconds_remaining,
+            **restore_ctx,
         )
 
     if request.method == "POST":
@@ -620,6 +716,12 @@ def login():
             _clear_attempts(client_ip)  # Success - clear attempts
             init_database()
             cleanup_expired_trash()
+
+            # The password unwrapped the key file and opened the
+            # database: whoever is here can vouch for the data on disk.
+            # If it arrived by restore, the unverified marker comes off
+            # and the recovery door closes.
+            _vouch_for_restored_data()
 
             # Clear any stale session data before setting new values
             session.clear()
@@ -642,11 +744,13 @@ def login():
             return response
         except InvalidPasswordError:
             _record_failed_attempt(client_ip)
-            return render_template("auth/login.html", error="Invalid password.")
+            return render_template(
+                "auth/login.html", error="Invalid password.", **restore_ctx
+            )
         except EncryptionError as e:
-            return render_template("auth/login.html", error=str(e))
+            return render_template("auth/login.html", error=str(e), **restore_ctx)
 
-    return render_template("auth/login.html")
+    return render_template("auth/login.html", **restore_ctx)
 
 
 @auth_bp.route("/login/recovery", methods=["GET", "POST"])
@@ -660,11 +764,16 @@ def login_with_recovery_key():
     if not Encryption.is_initialized():
         return redirect(url_for("auth.setup"))
 
+    # A restored archive whose password is lost lands exactly here, so
+    # this screen carries the restore banner too.
+    restore_ctx = _restore_login_context()
+
     if not Encryption.has_recovery_key():
         return render_template(
             "auth/login.html",
             error="This archive predates recovery keys and can only be opened "
             "with its master password.",
+            **restore_ctx,
         )
 
     client_ip = request.remote_addr or "unknown"
@@ -674,6 +783,7 @@ def login_with_recovery_key():
             "auth/recovery_login.html",
             error=f"Too many failed attempts. Please wait {seconds_remaining} seconds.",
             lockout_seconds=seconds_remaining,
+            **restore_ctx,
         )
 
     if request.method == "POST":
@@ -691,15 +801,27 @@ def login_with_recovery_key():
             return render_template(
                 "auth/recovery_login.html",
                 error="That recovery key does not open this archive.",
+                **restore_ctx,
             )
         except EncryptionError as e:
             # Malformed input (wrong length, bad characters). A typo is
             # not a guess, so it does not spend a rate-limit attempt —
             # otherwise fumbling a 32-character string locks you out of
             # your own recovery path.
-            return render_template("auth/recovery_login.html", error=str(e))
+            return render_template(
+                "auth/recovery_login.html", error=str(e), **restore_ctx
+            )
 
         _clear_attempts(client_ip)
+
+        # verify_recovery_key performed the full recovery-side unwrap of
+        # the key file on disk: a credential was DEMONSTRATED against
+        # this archive, not inferred. That is a vouch — if the data
+        # arrived by restore, the unverified marker comes off here just
+        # as it does on password login. (Daybook's Aug 16 ruling: only
+        # what has been proved counts. This was proved.)
+        _vouch_for_restored_data()
+
         token = _store_recovery_handoff(recovery_key)
 
         # Render the reset form directly rather than redirecting with the
@@ -708,7 +830,7 @@ def login_with_recovery_key():
         # exists only in a hidden field on the page in front of the user.
         return render_template("auth/post_recovery_password.html", token=token)
 
-    return render_template("auth/recovery_login.html")
+    return render_template("auth/recovery_login.html", **restore_ctx)
 
 
 @auth_bp.route("/login/recovery/new-password", methods=["GET", "POST"])

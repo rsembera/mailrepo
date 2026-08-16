@@ -177,12 +177,15 @@ def main():
         sys.exit(1)
 
     # Check for pending restore before opening database
+    restore_result = None
     try:
         from utils import backup
 
-        result = backup.complete_restore()
-        if result:
-            log.info(f"Restore completed from: {result.get('restore_point', 'unknown')}")
+        restore_result = backup.complete_restore()
+        if restore_result:
+            log.info(
+                f"Restore completed from: {restore_result.get('restore_point', 'unknown')}"
+            )
     except Exception as e:
         log.error(f"Restore failed: {e}")
 
@@ -232,6 +235,12 @@ def main():
         log.error(f"Missing-database check failed: {e}")
 
     app = create_app()
+
+    # Carry the restore result to the web layer: the login screen is the
+    # one place that can say which credentials the restored archive
+    # wants, and it cannot say so without this.
+    if restore_result and "error" not in restore_result:
+        app.config["RESTORE_COMPLETED"] = restore_result
 
     # Register cleanup handlers
     atexit.register(lambda: _cleanup(app))

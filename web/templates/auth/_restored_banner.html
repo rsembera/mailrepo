@@ -1,0 +1,15 @@
+{# Shown after a restore, on both login screens. Survives failed
+   attempts — which is precisely when it is needed: without it, a
+   correct restore is indistinguishable from a rejected password.
+   While the restore is unverified, it also offers the way back. #}
+{% if restored_banner %}
+<div class="restored-notice">
+    <strong>This archive was restored from a backup{% if restored_date %} ({{ restored_date }}){% endif %}.</strong>
+    {{ restored_note }}
+    {% if restore_retry_available %}
+    <br>Can't open it?
+    <a href="{{ url_for('auth.recover') }}">Restore a different backup</a>
+    — including the safety backup of what was here before.
+    {% endif %}
+</div>
+{% endif %}

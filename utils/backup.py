@@ -1381,11 +1381,72 @@ def complete_restore():
     # Clean up staging
     shutil.rmtree(staging_dir)
 
+    # Mark the restore UNVERIFIED until someone proves they can open it.
+    # From this moment the data on disk is data nobody has vouched for:
+    # if the backup's password turns out to be lost, the login screen is
+    # a wall and — without this marker — the recovery routes are dead
+    # too, because a key file now exists. The marker keeps the recovery
+    # door open (auth's _recovery_door_open) so the user can go back and
+    # restore a DIFFERENT backup, including the pre-restore safety
+    # backup. The first successful login (or verified recovery key)
+    # deletes it, which is also what closes the door — so an archive in
+    # normal use, which by definition has been opened since its last
+    # restore, is never exposed by it.
+    set_restore_unverified()
+
     return {
         "restored_at": datetime.now().isoformat(),
         "restore_point": marker["restore_point_id"],
         "original_date": marker["point_info"]["created_at"],
+        # Carried from the point the user chose: the login screen after
+        # the relaunch is the one place that can say which password the
+        # restored archive wants — without it, a perfectly correct
+        # restore is indistinguishable from a rejected password. .get()
+        # because markers staged by older builds carry no note.
+        "credential_note": marker["point_info"].get("credential_note", ""),
+        "credential_status": marker["point_info"].get("credential_status", ""),
     }
+
+
+def _restore_unverified_marker():
+    """Path of the unverified-restore marker.
+
+    In the data directory beside the key files it describes, so it lives
+    and dies with the data it vouches for. NOT in get_all_backup_files
+    (which names its files explicitly), so it never rides into a backup
+    zip — full, incremental, or pre-restore — and the manifest sidecar
+    machinery records zips, so it never appears there either.
+    """
+    return get_data_dir() / ".restore_unverified"
+
+
+def set_restore_unverified():
+    """Record that the data on disk came from a restore no one has
+    opened yet. Failure is logged, never raised — refusing to finish a
+    restore over a bookkeeping file would be worse than the gap."""
+    try:
+        marker = _restore_unverified_marker()
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(json.dumps({"restored_at": datetime.now().isoformat()}))
+    except Exception as e:
+        log.warning(f"Could not write restore-unverified marker: {e}")
+
+
+def restore_unverified():
+    """True if the last restore has not yet been opened successfully."""
+    try:
+        return _restore_unverified_marker().exists()
+    except OSError:
+        return False
+
+
+def clear_restore_unverified():
+    """A demonstrated credential vouches for the restored data; the
+    recovery door closes behind it."""
+    try:
+        _restore_unverified_marker().unlink(missing_ok=True)
+    except OSError as e:
+        log.warning(f"Could not clear restore-unverified marker: {e}")
 
 
 def cancel_restore():
