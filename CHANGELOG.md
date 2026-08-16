@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Security
+- **A restored archive now has a way back if its password turns out to
+  be lost (Session 80).** A backup opens with the credentials that were
+  in use when it was made, and after a restore the login screen now
+  says so: it shows the restore date and which password the archive
+  wants, and the message stays up even after a failed attempt — which
+  is exactly when you need it. Until you log in once, the restore is
+  treated as unverified: the pre-login restore screen stays available,
+  with a "Restore a different backup" link right on the login page, so
+  you can go back and try another backup — including the safety copy
+  MailRepo made of what was there before. The first successful login
+  (with the password, or with a verified recovery key) confirms the
+  restore and closes that door again, so an archive in normal use is
+  never affected. Previously, restoring a backup you could not open
+  left no way back at all.
 - **Finding backups after a disaster is now remember-or-ask, never
   guess (Session 79).** MailRepo already keeps its own note of every
   folder it sends backups to, stored safely outside the archive; after

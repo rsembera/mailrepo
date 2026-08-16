@@ -5634,3 +5634,115 @@ device-independent. It is, with one cosmetic exception found on
 review: the home-directory location label said "This Mac" on every
 platform. Now "This computer". One-line change, 63 recovery tests
 green, committed and pushed separately.
+
+---
+
+## Session 80 — August 16, 2026 (MacBook)
+
+### The way back from a restore nobody can open
+
+The residual gap in the restore story, found through Daybook and fixed
+in both siblings today — EdgeCase's 3d1b7a5 this morning, MailRepo now.
+A backup carries its key file as it stood, so a restored archive opens
+with the credentials of the moment it was TAKEN. MailRepo said this
+plainly on the restore screen — and then nothing after. Once the user
+quit and relaunched, the login screen was silent: a correct restore
+was indistinguishable from a rejected password. And if the credentials
+were genuinely lost, the recovery gate was a hard
+`Encryption.is_initialized()` check — the door slammed shut the moment
+the restore landed, leaving no way back to a different backup,
+including the pre-restore safety copy. Rollback story: delete files by
+hand.
+
+### What changed
+
+1. **A restore is UNVERIFIED until someone proves they can open it.**
+   `complete_restore()` writes `data/.restore_unverified` at the end.
+   It sits beside the key files it describes, and stays out of every
+   zip by construction: `get_all_backup_files()` names its files
+   explicitly rather than globbing, so full, incremental, and
+   pre-restore backups never pick it up, and the sidecar machinery
+   records zips, so it never appears there either.
+2. **While the marker stands, the recovery door stays open.**
+   `_recovery_door_open()` — "not initialized OR unverified restore" —
+   now gates all five recovery routes. Not a rollback hole: the only
+   state exposed is an archive nobody has vouched for yet, and whoever
+   could exploit the window could have used the recovery door moments
+   earlier.
+3. **A demonstrated credential closes it.** Both ways in vouch:
+   password login (the password unwrapped the key file and opened the
+   database) and recovery-key login (`verify_recovery_key` performs the
+   full recovery-side unwrap). Daybook ruled this morning (7cecbb8, "a
+   session proves the password and nothing else") that only what has
+   been PROVED counts — both of these are demonstrations, not
+   inferences, so clearing on both is consistent with the family, not
+   a divergence. The comment in auth.py cites the ruling.
+4. **The login screen says so.** main.py carries `complete_restore()`'s
+   result into `app.config["RESTORE_COMPLETED"]`; a shared banner
+   partial (`auth/_restored_banner.html`, included by login.html AND
+   recovery_login.html — the second screen is exactly where someone
+   with a lost password lands) names the restored date and the
+   credential note chosen with the restore point. Peeked, not popped,
+   so it survives failed attempts — precisely when it is needed. While
+   the marker stands it also offers the way back: "Can't open it?
+   Restore a different backup." Popped only on the vouch.
+
+### Wrinkles checked rather than assumed
+
+- **Second restore from the unverified state** takes its pre-restore
+  safety copy cleanly — but the `backup_location` setting lives in the
+  locked database, so the existing try/except falls back and the
+  safety zip lands in the DEFAULT backups folder, not the configured
+  cloud one. Documented behaviour, pinned by a test.
+- **The recovery CSRF token does not survive the quit-and-relaunch**,
+  and does not need to: `recover()` mints a fresh token on every GET
+  and recover.js reads it from the rendered meta tag. A stale
+  pre-relaunch tab gets a plain "Invalid request token" and a reload
+  fixes it.
+- **The marker survives a crash** between complete_restore and first
+  login — it is a file, written before complete_restore returns.
+  Pinned by test_marker_survives_a_relaunch.
+
+### One existing test updated — the contract got stricter
+
+`test_recovery_routes_close_after_a_successful_restore` pinned the
+defect verbatim: door shut the moment complete_restore ran. Renamed to
+`..._stay_open_until_the_restore_is_vouched_for` and rewritten to the
+new contract. Per Daybook's commit this morning: a test updated because
+the contract got stricter is the contract working.
+
+### Proofs
+
+22 new tests in `tests/test_unverified_restore.py`: marker roundtrip
+and isolation tripwire, never-in-a-zip (full and pre-restore), set by
+complete_restore and carrying the note, relaunch survival, door open
+with the marker / closed without / closed again once cleared, both
+vouch paths clearing it and both failure paths not, banner content
+surviving a failed attempt, generic note when only the marker stands,
+no banner in normal use, no way-back link once vouched, and the
+second-restore safety copy.
+
+All four sealing mutations run and each turned exactly its own guard
+red: complete_restore not setting the marker (2 red), the door
+reverted to is_initialized-only (2 red), login() not vouching (1 red),
+recovery-key verify not vouching (1 red). Reverted, verified clean.
+
+Suite 609 → 631. ESLint 0 errors / 64 warnings, unchanged (no JS
+touched).
+
+### Notes for the log
+
+- MailRepo's conftest already isolates the marker structurally — the
+  autouse fixture re-roots the whole data dir per test, which EdgeCase
+  did not have and needed a dedicated fixture for. Documented in
+  conftest, with a tripwire test asserting the marker path lives under
+  the per-test temp dir so moving it (e.g. to the state dir) reopens
+  the question loudly.
+- Process slip caught mid-session: `pytest ... | tail -3` reports
+  tail's exit code, not pytest's, so a `&&`-chained follow-up ran on a
+  "pass" that wasn't. The pre-existing-test failure was present in the
+  targeted batch and invisible. Checked `$?` explicitly thereafter;
+  worth remembering.
+- First template partial in the codebase
+  (`auth/_restored_banner.html`) — two login screens carrying the same
+  banner would otherwise drift.
