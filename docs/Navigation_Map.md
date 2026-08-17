@@ -78,7 +78,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 |------|-------|--------------|
 | `imap.py` | 1,535 | IMAP client: connect, auth, folders, fetch, MOVE/COPY + UID-scoped expunge, Gmail-aware delete (incl. batched set delete), CONDSTORE |
 | `pdf_export.py` | 1,052 | PDF export: per-email PDFs, attachment merging, WeasyPrint |
-| `encryption.py` | 859 | Argon2id KDF + HKDF + AES-256-GCM (v2) plus the v3 envelope: random master wrapped under password and recovery key, each wrapper verified to open before the key file is written |
+| `encryption.py` | 912 | Argon2id KDF + HKDF + AES-256-GCM (v2) plus the v3 envelope: random master wrapped under password and recovery key, each wrapper verified to open before the key file is written; work factor via argon2_parameters() — production everywhere, cheap only when the test suite's double guard (MAILREPO_FAST_KDF + MAILREPO_DATA_DIR) is met |
 | `password_change.py` | 636 | Password change — v2 full re-encryption, v3 rewrap; recovery-key password reset (needs no unlocked session), recovery-key rotation, on-disk backup gate, interruption marker |
 | `database.py` | 465 | SQLCipher connection, schema v5, FTS5, migrations, threading lock, hard refusal to open unencrypted |
 | `crypto_migration_v3.py` | 335 | v2 → v3 migration: re-encrypt under a random master, resumable via wrapped-master state file |
@@ -314,10 +314,11 @@ first run of this found a `ReferenceError` that had been shipping.
 
 ---
 
-## Test Suite (631 tests)
+## Test Suite (639 tests)
 
 | File | Coverage |
 |------|----------|
+| `tests/test_kdf_cost.py` | The KDF work factor: production Argon2id numbers pinned as literals, the cheap path requiring both env vars (flag alone useless, sandbox alone useless), and a full-cost v3 round trip + a timing floor proving production derivation still works and is still expensive — the two things the fast suite can no longer speak to (8 tests, Session 81) |
 | `tests/test_unverified_restore.py` | The unverified-restore marker: set by complete_restore (with the credential note carried through), never inside any zip, survives a relaunch, recovery door open while it stands and closed on either side of it, both login paths clearing it (password, verified recovery key) and both failure paths not, the login banner surviving failed attempts, second restore from the unverified state taking its safety copy; isolation tripwire on the marker path; all guards proved mutation-capable (22 tests, Session 80) |
 | `tests/test_recovery_key_web.py` | Recovery-key web flow end to end: setup shows the key (and never puts it in the session), recovery login, post-recovery password reset (incl. gating to recovery-login sessions and CSRF), v3 upgrade flow (incl. stale-backup-with-no-changes and CSRF), post-upgrade redirect destination, rotation API + CSRF (31 tests, Sessions 68–70) |
 | `tests/test_crypto_migration_v3.py` | v2 → v3 envelope migration: content survives, readable under both credentials, interrupted migration re-runs to completion, resume state halts rather than minting a new master; v3 password change as rewrap; recovery-key rotation; wrappers verified to open before the key file is written (49 tests, Session 76) |

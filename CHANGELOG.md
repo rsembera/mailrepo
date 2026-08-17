@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Nothing about the app itself — a development change worth recording
+  (Session 81).** The automated test suite now runs its cryptography at
+  a reduced work factor (a technique ported from a sibling project), so
+  a full run takes seconds instead of ten minutes. Your archive is not
+  affected: the production password-hashing strength is unchanged,
+  pinned by dedicated tests, and unreachable from the fast path by
+  design — an installed copy of MailRepo cannot be switched to the
+  cheap parameters even by misconfiguration.
+
 ### Security
 - **A restored archive now has a way back if its password turns out to
   be lost (Session 80).** A backup opens with the credentials that were

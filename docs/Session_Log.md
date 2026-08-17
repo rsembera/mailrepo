@@ -5746,3 +5746,68 @@ touched).
 - First template partial in the codebase
   (`auth/_restored_banner.html`) — two login screens carrying the same
   banner would otherwise drift.
+
+---
+
+## Session 81 — August 16, 2026 (MacBook, evening)
+
+### The suite in 19 seconds — Daybook's fast-KDF port
+
+Rick asked why the tests take forever and remembered Daybook did
+something about it. It did, yesterday: production Argon2id costs most
+of a second per hash and the suite performs hundreds of them — the
+parameters were nearly the whole runtime (Daybook's run had hit 25
+minutes on Apollo; ours was 9m48s on the M4, ~12 min on Apollo).
+
+Ported directly. MailRepo's shape made it clean: every password-side
+derivation already goes through one function (`_derive_master_v2`), and
+the recovery-key side is HKDF — no Argon2, untouched. The parameters
+now come from `argon2_parameters()`: production strength everywhere,
+cheap (t=1, 1 MiB) only when BOTH `MAILREPO_FAST_KDF` and
+`MAILREPO_DATA_DIR` are set. Not mocking — same algorithm, same call
+site, archives still genuinely encrypted and genuinely reopened; only
+the work factor changes.
+
+The double guard is the safety, same doctrine as Daybook: the
+parameters are not recorded in the key file, so an archive created
+cheaply cannot be opened at production strength or the reverse —
+getting this wrong locks someone out permanently, so the cheap path
+must be unreachable by accident. A real install never sets the
+data-dir override, so it can never reach it. One deliberate divergence
+in rationale: Daybook's sandbox-alone-does-nothing case protects its
+demo server; ours protects any future package or second-archive setup
+that legitimately sets `MAILREPO_DATA_DIR`.
+
+### What the fast suite can no longer prove, proved separately
+
+`tests/test_kdf_cost.py` (8 tests, mirroring Daybook's):
+- the production numbers pinned as literals (6 / 262,144 / 1 / 32) —
+  the guard that notices if the cheap values ever become the real ones
+- the cheap path needs both keys: default is production, flag alone
+  does nothing, sandbox alone does nothing, both together are cheap
+- a full v3 round trip at full cost — both credentials, both wrappers
+- a timing floor (>0.25s per unlock, far under the ~750ms measured) so
+  a parameter change that quietly made derivation cheap cannot leave
+  every test green
+
+### One latent footgun surfaced
+
+Two Session-76 tests called `monkeypatch.undo()` to lift a junk-wrapper
+patch. `undo()` reverts EVERYTHING on the shared per-test monkeypatch —
+conftest's env vars included. Harmless before, because Config caches
+its paths; fatal now, because `argon2_parameters()` reads the env live,
+so mid-test the fixture archive (created cheap) was being unlocked at
+production cost and correctly refused — the cost-mismatch guard working
+as designed against its own test suite. Both tests now scope the patch
+with `pytest.MonkeyPatch.context()` instead; no other `undo()` calls
+exist in the tests (checked).
+
+### Numbers
+
+Full suite: **639 tests, 18.6s** (was 631 in 9m48s before this session
+pair; 8 tests added here). The two deliberate full-cost tests are
+~1.4s each and worth it. Crypto-heavy files that took minutes now run
+in ~1s. ESLint untouched (no JS).
+
+Apollo note: pull before next session there; its runs should drop from
+~12 min to well under a minute.
