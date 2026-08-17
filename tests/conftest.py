@@ -33,6 +33,14 @@ def reset_singletons(temp_data_dir, tmp_path, monkeypatch):
     # Set environment variable BEFORE importing modules
     monkeypatch.setenv("MAILREPO_DATA_DIR", str(temp_data_dir))
 
+    # Run Argon2id at the cheap work factor (ported from Daybook, Session
+    # 81). Real algorithm, same call site, smaller cost — the suite's
+    # runtime was almost entirely password hashing. The cheap path
+    # requires BOTH this flag and the data-dir override above; a real
+    # install has neither. test_kdf_cost.py pins the production numbers
+    # and proves a full-cost round trip separately.
+    monkeypatch.setenv("MAILREPO_FAST_KDF", "1")
+
     # This re-rooting is also what isolates the unverified-restore
     # marker (data/.restore_unverified): it is deleted on every
     # successful login, so an unisolated auth test would silently

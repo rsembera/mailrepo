@@ -529,13 +529,21 @@ class TestWrapperVerifiedBeforeWrite:
             change_master_password(PASSWORD, self.NEW)
 
     def test_a_refused_password_change_leaves_the_key_file_untouched(
-        self, v3_archive, monkeypatch
+        self, v3_archive
     ):
         before = Encryption.read_salt_blob()
-        monkeypatch.setattr(Encryption, "_encrypt_v2_with_key", self._junk_wrapper)
-        with pytest.raises(EncryptionError):
-            change_master_password(PASSWORD, self.NEW)
-        monkeypatch.undo()
+        # A scoped patch, NOT monkeypatch.undo(): undo() reverts
+        # everything on the shared per-test monkeypatch, including
+        # conftest's env — MAILREPO_FAST_KDF among them — which flips
+        # derivation to production cost mid-test and (correctly) locks
+        # the cheaply-created fixture archive out. Session 81 found this
+        # the hard way; the cost-mismatch guard working as designed.
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                Encryption, "_encrypt_v2_with_key", self._junk_wrapper
+            )
+            with pytest.raises(EncryptionError):
+                change_master_password(PASSWORD, self.NEW)
         assert Encryption.read_salt_blob() == before
         Encryption.lock()
         assert Encryption.unlock(PASSWORD)
@@ -559,12 +567,15 @@ class TestWrapperVerifiedBeforeWrite:
         with pytest.raises(EncryptionError, match="does not open it"):
             rotate_recovery_key(PASSWORD)
 
-    def test_a_refused_rotation_leaves_the_old_key_working(self, v3_archive, monkeypatch):
+    def test_a_refused_rotation_leaves_the_old_key_working(self, v3_archive):
         before = Encryption.read_salt_blob()
-        monkeypatch.setattr(Encryption, "_encrypt_v2_with_key", self._junk_wrapper)
-        with pytest.raises(EncryptionError):
-            rotate_recovery_key(PASSWORD)
-        monkeypatch.undo()
+        # Scoped for the same reason as the password-change twin above.
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                Encryption, "_encrypt_v2_with_key", self._junk_wrapper
+            )
+            with pytest.raises(EncryptionError):
+                rotate_recovery_key(PASSWORD)
         assert Encryption.read_salt_blob() == before
         Encryption.lock()
         assert Encryption.unlock_with_recovery_key(v3_archive["recovery_key"])

@@ -75,10 +75,58 @@ VERIFICATION_TOKEN = b"MAILREPO_PASSWORD_OK"
 # Argon2id parameters measured on the MacBook Air M4: ~750ms at t=6.
 # Memory is the GPU-resistance knob; 256 MiB is invisible on machines with
 # >=8 GB RAM and meaningfully raises offline cracking cost.
+#
+# **THESE ARE THE PRODUCTION NUMBERS AND A TEST PINS THEM** (test_kdf_cost.py).
+# They are also nearly the entire runtime of the test suite, which is why
+# `argon2_parameters()` below exists.
 ARGON2_TIME_COST = 6  # iterations
 ARGON2_MEMORY_COST = 262_144  # 256 MiB, in KiB
 ARGON2_PARALLELISM = 1  # cleaner than p=2 for a latency-bound single derivation
 ARGON2_KEY_LENGTH = 32
+
+# The cheap parameters the suite runs under. Still real Argon2id, still the
+# same code path, still a genuinely encrypted archive genuinely reopened —
+# only the work factor changes. Nothing is mocked. (Ported from Daybook,
+# August 16.)
+ARGON2_FAST_TIME_COST = 1
+ARGON2_FAST_MEMORY_COST = 1_024  # 1 MiB
+
+
+def argon2_parameters() -> tuple[int, int, int]:
+    """(time_cost, memory_cost, parallelism) for password derivation.
+
+    WHY THIS IS A FUNCTION. At production strength every password hash
+    costs most of a second, and the suite performs hundreds of them — a
+    full run took ~10 minutes on the M4 and ~12 on Apollo (Session 80),
+    slow enough to shape how the work gets done: suites backgrounded,
+    batching, and once a run left going while another started beside it.
+    The parameters are nearly the whole runtime.
+
+    **NOT MOCKING, AND THE DISTINCTION MATTERS.** This is the same
+    algorithm through the same call site with a smaller work factor: the
+    archive is still encrypted by Argon2id-derived keys and still
+    reopened by re-deriving them. What a lower cost stops proving is that
+    the derivation is SLOW — so test_kdf_cost.py asserts the production
+    numbers directly and runs a full v3 round trip at full cost.
+
+    **BOTH VARIABLES ARE REQUIRED, AND THAT IS THE SAFETY.** The
+    parameters are not recorded in the key file — unwrapping recomputes
+    them from these constants — so an archive created cheaply CANNOT be
+    opened at production strength, or the reverse. Getting this wrong
+    does not degrade security quietly; it locks someone out of their
+    archive permanently.
+
+    So `MAILREPO_FAST_KDF` alone does nothing. `MAILREPO_DATA_DIR` must
+    also be set, which throughout this project means "this is not the
+    real install" — the tests set it to a per-test temp dir, and a real
+    install never sets it, so a real archive cannot reach the cheap path
+    however the environment is misconfigured.
+    """
+    if os.environ.get("MAILREPO_FAST_KDF") and os.environ.get("MAILREPO_DATA_DIR"):
+        return ARGON2_FAST_TIME_COST, ARGON2_FAST_MEMORY_COST, ARGON2_PARALLELISM
+
+    return ARGON2_TIME_COST, ARGON2_MEMORY_COST, ARGON2_PARALLELISM
+
 
 # HKDF-Expand info strings. The .v2 suffix means a future v3 KDF would
 # derive cryptographically distinct keys even if the master collided.
@@ -459,13 +507,18 @@ class Encryption:
 
     @classmethod
     def _derive_master_v2(cls, password: str, salt: bytes) -> bytes:
-        """Argon2id derivation of the master key."""
+        """Argon2id derivation of the master key.
+
+        Work factor comes from argon2_parameters(): production strength
+        everywhere except the test suite's double-guarded cheap path.
+        """
+        time_cost, memory_cost, parallelism = argon2_parameters()
         return hash_secret_raw(
             secret=password.encode("utf-8"),
             salt=salt,
-            time_cost=ARGON2_TIME_COST,
-            memory_cost=ARGON2_MEMORY_COST,
-            parallelism=ARGON2_PARALLELISM,
+            time_cost=time_cost,
+            memory_cost=memory_cost,
+            parallelism=parallelism,
             hash_len=ARGON2_KEY_LENGTH,
             type=Argon2Type.ID,
         )
