@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **A Retention Vault folder listed with 100 emails no longer opens
+  empty (Session 82).** The Vault list counts a folder plus everything
+  in its subfolders, because that is what permanent deletion destroys.
+  Opening the folder counted only the emails sitting in it directly, so
+  a client folder whose mail is filed in year subfolders showed 100 in
+  the list and "0 emails" when opened. No emails were ever missing.
+  Each subfolder now shows its own count beside its name, and the
+  header says how many are in the folder itself and how many are
+  further down.
+
 ### Changed
 - **Nothing about the app itself — a development change worth recording
   (Session 81).** The automated test suite now runs its cryptography at

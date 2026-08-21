@@ -5811,3 +5811,62 @@ in ~1s. ESLint untouched (no JS).
 
 Apollo note: pull before next session there; its runs should drop from
 ~12 min to well under a minute.
+
+
+---
+
+## Session 82 — August 21, 2026 (MacBook)
+
+### Two screens counting different things
+
+Rick opened a Vault folder listed as `20240502-EK (100)` and got
+"0 emails · Delete by: 2035-05-09" with "No emails in this folder"
+under it. Nothing was lost. The folder holds no mail directly; all
+100 emails live in its 2024 and 2025 subfolders.
+
+`/api/folders/vault` counted the whole tree. That is the right number
+for that screen — permanent deletion takes the folder and everything
+beneath it, and the confirmation dialog quotes the same figure. The
+folder view called `/api/folders/<id>/emails`, which returns direct
+children only, like every other list in the app. Both were correct in
+isolation and contradicted each other on screen.
+
+### What changed
+
+Ruled out changing the list to a direct count: the permadelete
+confirmation would then say "delete all 0 emails?" about a folder
+holding 100, which trades a confusing screen for a dangerous one.
+
+So the counts stay recursive and the folder view learned to explain
+itself. `/api/folders/vault` now also returns `counts` — a tree total
+keyed by id for **every** vault folder, not just the top-level ones.
+The old code ran one `COUNT(*)` per folder inside a nested function
+defined in a loop; it is now a single grouped query plus a memoised
+roll-up over a prebuilt child map.
+
+The folder view uses `counts` in three places:
+- each subfolder link carries its own total (`2024 (57), 2025 (43)`),
+  so the subfolder numbers visibly add up to the parent's row
+- the header reads `0 emails here · 100 in subfolders` instead of a
+  bare `0 emails`
+- the empty state points upward when there is somewhere to point
+
+### Tests
+
+Five, in `TestVaultSubfolderCounts`: counts returned for subfolders
+and not only the top, the reported empty-parent case, nesting deeper
+than one level, trashed emails excluded, non-vault folders absent
+from the map. Two sealing mutations, each reddening exactly its own
+guard — dropping the `deleted_at` filter fails only the trash test;
+restricting `counts` to top-level folders fails only the three that
+read subfolder entries.
+
+644 tests (was 639), 19s, all green. ESLint unchanged: 0 errors, the
+same 64 pre-existing warnings.
+
+### Noted, not fixed
+
+The main archive view renders subfolder links the same way, without
+counts. It does not have the same contradiction — its header count is
+direct and no other screen claims otherwise — so it is cosmetic
+rather than a bug. Worth considering for consistency post-1.0.

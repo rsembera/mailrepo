@@ -112,7 +112,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `filesystem.py` | 807 | File browser for imports, path validation, PST conversion |
 | `imports.py` | 744 | Mount/unmount imports, browse imported emails/folders |
 | `progress_commit.py` | 701 | SSE streaming for commit operations; batched Gmail deletes; unified post-action failure accounting + logging (Sessions 47/54/57) |
-| `folders.py` | 670 | Archive folder CRUD, trash, restore, vault, retention |
+| `folders.py` | 695 | Archive folder CRUD, trash, restore, vault, retention (vault listing also returns per-folder tree counts) |
 | `accounts.py` | 495 | IMAP account CRUD, Gmail auto-detection, folder listing |
 | `commit.py` | 488 | Email/folder commit workflow |
 | `email_parser.py` | 336 | Email parsing: headers, body, attachments, body text extraction |
@@ -155,7 +155,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `review.js` | 1,035 | Review staged items, destination editing, commit |
 | `backups.js` | 1,004 | Backup/restore UI, restore points, settings |
 | `folder-selection.js` | 897 | Bulk folder staging from IMAP/imports |
-| `vault.js` | 859 | Retention vault: move to vault, restore, permanent delete |
+| `vault.js` | 880 | Retention vault: move to vault, restore, permanent delete; subfolder links carry tree counts |
 | `trash.js` | 775 | Trash view: deleted folders, emails, restore, purge |
 | `folder-mgmt.js` | 667 | Manage folders: rename, color, create, delete |
 | `starred.js` | 369 | Starred email view |
@@ -334,7 +334,7 @@ first run of this found a `ReferenceError` that had been shipping.
 | `tests/test_database.py` | Schema, migrations, FTS5 |
 | `tests/test_database_threading.py` | Concurrent access, RLock behavior |
 | `tests/test_email_parser.py` | Header/body/attachment parsing |
-| `tests/test_api_folders.py` | Folder CRUD via API; Retention Vault accepts arbitrary retention periods, not just the UI presets (14 tests) |
+| `tests/test_api_folders.py` | Folder CRUD via API; Retention Vault accepts arbitrary retention periods, not just the UI presets; vault listing returns a tree email count for every vault folder so a folder holding only subfolders does not read as empty (19 tests) |
 | `tests/test_api_emails.py` | Emails API: FTS search (folder scoping, subfolder toggle, trash exclusion), folder listing, decrypt-and-parse viewer + raw source via real encrypted fixtures, soft-delete/restore (incl. needs-destination 409), permanent delete, flagging, move (28 tests, Session 41) |
 | `tests/test_api_imports.py` | Import + export API: mbox/eml scan + import validation, single-.eml import round-trip, import-email content + attachment from disk, unencrypted-ZIP folder export decrypt round-trip (19 tests, Session 41) |
 | `tests/test_api_accounts.py` | Accounts API: listing + runtime `is_gmail` detection, create/update validation, no-password update, cached-folder fast path, delete, server detection (23 tests, Session 41) |
