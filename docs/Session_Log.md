@@ -5934,3 +5934,39 @@ tests that read nested totals.
 
 645 tests, 18.7s, all green. ESLint: 0 errors, the same 64
 pre-existing warnings.
+
+
+---
+
+## Session 84 — August 21, 2026 (MacBook)
+
+### Review of Sessions 82–83, and one loose end
+
+Read both days' commits against the code rather than the log. The
+counting rule holds: `tree_email_counts()` excludes trashed folders
+from the walk and soft-deleted emails from the grouped query, both
+views sum only the subfolders they display, and `nestedEmailCount` is
+read only when the current view is an archive folder (the Starred
+view's borrowed `type: 'folder'` never renders an empty list through
+that path). Nothing to change there.
+
+### What was wrong
+
+The toolbar "Search emails…" box (`handleSearch` in `app.js`) narrows
+`state.emails` and re-renders. With no matches it landed in the folder
+empty state. That has always been slightly wrong ("This folder is
+empty" for a folder with emails that did not match), but Session 83
+made it confidently wrong: a folder with direct emails and subfolder
+totals now said "they are in the subfolders above" about emails that
+were right there.
+
+### Fix
+
+`state.searchFilterActive` is set around the filtered render (try/
+finally, so the flag and the swapped list are both restored even if
+the render throws). The empty state checks it first and reports "No
+Matches · No emails match your search", leaving the two folder
+messages for genuinely empty folders.
+
+Frontend only; no test surface. ESLint 0 errors, same 64 warnings.
+645 tests, all green.

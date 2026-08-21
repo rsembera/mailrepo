@@ -138,10 +138,10 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `app.js` | 730 | Init, event listeners, rail nav, nav guards, template-bindings wiring |
+| `app.js` | 738 | Init, event listeners, rail nav, nav guards, template-bindings wiring |
 | `template-bindings.js` | 143 | Single delegated handler for index.html data-tpl-action attrs (Session 38) |
 | `delegate.js` | 116 | `bindActions(container, handlers)` helper for per-view delegation |
-| `state.js` | 134 | Central state object, session persistence |
+| `state.js` | 137 | Central state object, session persistence |
 | `utils.js` | 90 | escapeHtml, formatDate, debounce, extractName |
 | `modals.js` | 144 | Alert/confirm/prompt + canonical closeModal + registerModalCloseHandler |
 | `recovery-key.js` | 123 | One-time recovery-key screen: copy / print / download, beforeunload guard |
@@ -166,7 +166,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | File | Lines | What It Does |
 |------|-------|--------------|
 | `export-modal.js` | 867 | Bulk export UI: scope picker, scope-aware password, progress |
-| `email-list.js` | 785 | Email list rendering, selection, toolbar, filter input |
+| `email-list.js` | 793 | Email list rendering, selection, toolbar, filter input |
 | `sidebar.js` | 744 | Sidebar: archive folders, IMAP folders, imports, resize |
 | `imports.js` | 728 | Import mount/unmount, browse, folder/email display |
 | `staging.js` | 561 | Staging workflow, destination picker, stage/unstage |

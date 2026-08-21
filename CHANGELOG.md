@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the vault, the header says how many are in the folder itself and
   how many are further down, and an empty folder with mail below it says
   so instead of claiming to be empty.
+- **A toolbar search with no matches says so (Session 84).** It used
+  to fall into the folder's own empty state, which after the change
+  above could claim the emails were in the subfolders when they were
+  right there and simply did not match.
 
 ### Changed
 - **Nothing about the app itself — a development change worth recording
