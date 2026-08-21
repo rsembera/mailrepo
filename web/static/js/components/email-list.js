@@ -205,14 +205,22 @@ export function renderEmailList() {
     if (state.emails.length === 0) {
         // An archive folder whose mail is all filed in subfolders is not
         // empty, and the subfolder links above say where it went.
+        // A search that matched nothing is a different story from an
+        // empty folder and must not borrow either folder message.
         const nested = isArchiveView ? (state.nestedEmailCount || 0) : 0;
+        let emptyText;
+        if (state.searchFilterActive) {
+            emptyText = 'No emails match your search.';
+        } else if (nested > 0) {
+            emptyText = 'No emails here — they are in the subfolders above.';
+        } else {
+            emptyText = 'This folder is empty.';
+        }
         emailListEl.innerHTML = `
             <div class="empty-state">
                 <i data-lucide="mail-x" class="empty-icon"></i>
-                <h3>No Emails</h3>
-                <p>${nested > 0
-                    ? 'No emails here — they are in the subfolders above.'
-                    : 'This folder is empty.'}</p>
+                <h3>${state.searchFilterActive ? 'No Matches' : 'No Emails'}</h3>
+                <p>${emptyText}</p>
             </div>
         `;
         if (typeof lucide !== 'undefined') lucide.createIcons();

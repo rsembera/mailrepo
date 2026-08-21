@@ -322,6 +322,7 @@ function handleSearch(e) {
     const query = e.target.value.toLowerCase().trim();
     
     if (!query) {
+        state.searchFilterActive = false;
         renderEmailList();
         return;
     }
@@ -332,10 +333,17 @@ function handleSearch(e) {
         email.snippet?.toLowerCase().includes(query)
     );
     
+    // Flag the narrowing so an empty result reads as "no matches", not as
+    // "this folder is empty" (or worse, "they are in the subfolders above").
     const original = state.emails;
     state.emails = filtered;
-    renderEmailList();
-    state.emails = original;
+    state.searchFilterActive = true;
+    try {
+        renderEmailList();
+    } finally {
+        state.emails = original;
+        state.searchFilterActive = false;
+    }
 }
 
 // Flag to skip beforeunload warning on intentional navigation (logout)
