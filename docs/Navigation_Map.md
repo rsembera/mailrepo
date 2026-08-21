@@ -108,11 +108,11 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | File | Lines | What It Does |
 |------|-------|--------------|
 | `exports.py` | 997 | Bulk PDF/encrypted-ZIP export pipeline + SSE progress |
-| `emails.py` | 824 | Archived email operations: view, move, delete, batch, download |
+| `emails.py` | 839 | Archived email operations: view, move, delete, batch, download; folder listing carries per-subfolder tree counts |
 | `filesystem.py` | 807 | File browser for imports, path validation, PST conversion |
 | `imports.py` | 744 | Mount/unmount imports, browse imported emails/folders |
 | `progress_commit.py` | 701 | SSE streaming for commit operations; batched Gmail deletes; unified post-action failure accounting + logging (Sessions 47/54/57) |
-| `folders.py` | 695 | Archive folder CRUD, trash, restore, vault, retention (vault listing also returns per-folder tree counts) |
+| `folders.py` | 711 | Archive folder CRUD, trash, restore, vault, retention; `tree_email_counts()` is the single roll-up behind every folder size the app shows |
 | `accounts.py` | 495 | IMAP account CRUD, Gmail auto-detection, folder listing |
 | `commit.py` | 488 | Email/folder commit workflow |
 | `email_parser.py` | 336 | Email parsing: headers, body, attachments, body text extraction |
@@ -141,7 +141,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `app.js` | 730 | Init, event listeners, rail nav, nav guards, template-bindings wiring |
 | `template-bindings.js` | 143 | Single delegated handler for index.html data-tpl-action attrs (Session 38) |
 | `delegate.js` | 116 | `bindActions(container, handlers)` helper for per-view delegation |
-| `state.js` | 130 | Central state object, session persistence |
+| `state.js` | 134 | Central state object, session persistence |
 | `utils.js` | 90 | escapeHtml, formatDate, debounce, extractName |
 | `modals.js` | 144 | Alert/confirm/prompt + canonical closeModal + registerModalCloseHandler |
 | `recovery-key.js` | 123 | One-time recovery-key screen: copy / print / download, beforeunload guard |
@@ -150,12 +150,12 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `mail.js` | 2,301 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
+| `mail.js` | 2,319 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
 | `settings.js` | 1,484 | Settings: appearance, accounts, security, recovery-key status + check + rotation, backup, reset |
 | `review.js` | 1,035 | Review staged items, destination editing, commit |
 | `backups.js` | 1,004 | Backup/restore UI, restore points, settings |
 | `folder-selection.js` | 897 | Bulk folder staging from IMAP/imports |
-| `vault.js` | 880 | Retention vault: move to vault, restore, permanent delete; subfolder links carry tree counts |
+| `vault.js` | 881 | Retention vault: move to vault, restore, permanent delete; subfolder links carry tree counts |
 | `trash.js` | 775 | Trash view: deleted folders, emails, restore, purge |
 | `folder-mgmt.js` | 667 | Manage folders: rename, color, create, delete |
 | `starred.js` | 369 | Starred email view |
@@ -166,7 +166,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | File | Lines | What It Does |
 |------|-------|--------------|
 | `export-modal.js` | 867 | Bulk export UI: scope picker, scope-aware password, progress |
-| `email-list.js` | 778 | Email list rendering, selection, toolbar, filter input |
+| `email-list.js` | 785 | Email list rendering, selection, toolbar, filter input |
 | `sidebar.js` | 744 | Sidebar: archive folders, IMAP folders, imports, resize |
 | `imports.js` | 728 | Import mount/unmount, browse, folder/email display |
 | `staging.js` | 561 | Staging workflow, destination picker, stage/unstage |
@@ -334,7 +334,7 @@ first run of this found a `ReferenceError` that had been shipping.
 | `tests/test_database.py` | Schema, migrations, FTS5 |
 | `tests/test_database_threading.py` | Concurrent access, RLock behavior |
 | `tests/test_email_parser.py` | Header/body/attachment parsing |
-| `tests/test_api_folders.py` | Folder CRUD via API; Retention Vault accepts arbitrary retention periods, not just the UI presets; vault listing returns a tree email count for every vault folder so a folder holding only subfolders does not read as empty (19 tests) |
+| `tests/test_api_folders.py` | Folder CRUD via API; Retention Vault accepts arbitrary retention periods, not just the UI presets; per-subfolder tree counts so a folder holding only subfolders does not read as empty, in the archive and the vault alike (20 tests) |
 | `tests/test_api_emails.py` | Emails API: FTS search (folder scoping, subfolder toggle, trash exclusion), folder listing, decrypt-and-parse viewer + raw source via real encrypted fixtures, soft-delete/restore (incl. needs-destination 409), permanent delete, flagging, move (28 tests, Session 41) |
 | `tests/test_api_imports.py` | Import + export API: mbox/eml scan + import validation, single-.eml import round-trip, import-email content + attachment from disk, unencrypted-ZIP folder export decrypt round-trip (19 tests, Session 41) |
 | `tests/test_api_accounts.py` | Accounts API: listing + runtime `is_gmail` detection, create/update validation, no-password update, cached-folder fast path, delete, server detection (23 tests, Session 41) |

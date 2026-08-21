@@ -5870,3 +5870,67 @@ The main archive view renders subfolder links the same way, without
 counts. It does not have the same contradiction — its header count is
 direct and no other screen claims otherwise — so it is cosmetic
 rather than a bug. Worth considering for consistency post-1.0.
+
+
+---
+
+## Session 83 — August 21, 2026 (MacBook)
+
+### One counting rule, both views
+
+Rick's call on the note from Session 82: align the archive view now
+rather than after 1.0. Straightforward, and it turned out to be the
+better shape rather than just the consistent one.
+
+The archive view had the same defect, quieter. Its subfolder links
+carried no counts, and its empty state said "This folder is empty" for
+a folder holding a hundred emails one level down. Nothing on that
+screen contradicted it, so it read as unhelpful rather than wrong.
+
+### Consolidated rather than duplicated
+
+Session 82 put a `counts` map on `/api/folders/vault`. Copying that
+pattern to the archive side would have meant two mechanisms and two
+staleness stories. Instead:
+
+- `tree_email_counts()` in `folders.py` is the roll-up — one grouped
+  query for direct counts, one memoised walk, `{folder_id: total}` for
+  every folder not in the trash. Every folder size the app shows now
+  comes from here.
+- `/api/folders/<id>/emails` returns `subfolder_counts` for its direct
+  children alongside the emails. Both views already call this endpoint
+  on every folder open, so the numbers are computed fresh each time and
+  cannot go stale after a move, delete or commit — which matters more
+  in the archive than in the read-only vault.
+- Yesterday's `counts` key is removed. The vault view now reads the
+  same field the archive view does, and derives its header total by
+  summing the subfolder links it is already rendering.
+
+### On screen
+
+Both views: `2024 (57), 2025 (43)` beside subfolder names, a header
+that splits here from below (`0 archived emails here · 100 in
+subfolders`), and an empty state that points upward when there is
+somewhere to point. `.subfolder-count` is defined once in
+`email-list.css`; the vault-scoped duplicate is gone.
+
+`state.nestedEmailCount` carries the below-here number into
+`renderEmailList()`, which is shared with the IMAP view — it is only
+read when the current view is an archive folder.
+
+### Tests
+
+Six, replacing yesterday's five, now against the shared endpoint:
+per-subfolder counts, counts reaching through deeper nesting, trashed
+emails excluded, trashed subfolders absent from the map, a folder with
+no subfolders reporting `{}`, and the Vault row total equalling what
+the folder view accounts for (`emails + subfolder_counts`) — the
+regression that started this pair of sessions.
+
+Two sealing mutations, each reddening exactly its own guard: dropping
+`deleted_at IS NULL` from the child query fails only the trashed-
+subfolder test; emptying the roll-up's recursion fails only the two
+tests that read nested totals.
+
+645 tests, 18.7s, all green. ESLint: 0 errors, the same 64
+pre-existing warnings.
