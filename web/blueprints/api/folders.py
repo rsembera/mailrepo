@@ -350,7 +350,15 @@ def empty_trash():
 
 @api_bp.route("/folders/vault", methods=["GET"])
 def list_vault_folders():
-    """Get all folders in the Retention Vault (have retention_date set)."""
+    """Get all folders in the Retention Vault (have retention_date set).
+
+    Counts are tree totals: a folder's own emails plus everything beneath
+    it. The Vault list shows that number because it is what permanent
+    deletion destroys. The same number is returned for every vault folder,
+    not only the top-level ones, so the folder view can show a count beside
+    each subfolder link -- otherwise a parent holding nothing directly
+    reads as empty while its row in the list says 100.
+    """
     now = int(time.time())
 
     # Get top-level vault folders (those with retention_date set, not deleted)
@@ -364,29 +372,44 @@ def list_vault_folders():
     # Build a map for quick lookups
     folder_map = {f["id"]: dict(f) for f in all_folders}
 
+    # Direct (non-recursive) email count per folder, in a single query.
+    direct_counts = {
+        row["folder_id"]: row["cnt"]
+        for row in Database.fetchall(
+            """SELECT folder_id, COUNT(*) AS cnt
+               FROM messages
+               WHERE deleted_at IS NULL
+               GROUP BY folder_id"""
+        )
+    }
+
+    # Child lists, so the roll-up below does not rescan every folder.
+    children_of = {}
+    for f in all_folders:
+        children_of.setdefault(f["parent_id"], []).append(f["id"])
+
+    tree_counts = {}
+
+    def count_tree_emails(folder_id):
+        if folder_id in tree_counts:
+            return tree_counts[folder_id]
+        total = direct_counts.get(folder_id, 0)
+        for child_id in children_of.get(folder_id, []):
+            total += count_tree_emails(child_id)
+        tree_counts[folder_id] = total
+        return total
+
     # Find top-level vault folders (have retention_date, and parent doesn't have retention_date)
     vault_folders = []
+    counts = {}
     for f in all_folders:
         if f["retention_date"] is not None:
+            email_count = count_tree_emails(f["id"])
+            counts[str(f["id"])] = email_count
+
             # Check if this is a top-level vault folder (parent not in vault)
             parent = folder_map.get(f["parent_id"])
             if parent is None or parent["retention_date"] is None:
-                # This is a top-level vault folder
-                # Count emails in this folder and all descendants
-                def count_tree_emails(folder_id):
-                    count = Database.fetchone(
-                        "SELECT COUNT(*) as cnt FROM messages WHERE folder_id = ? AND deleted_at IS NULL",
-                        (folder_id,),
-                    )["cnt"]
-                    children = [
-                        fid for fid, data in folder_map.items() if data["parent_id"] == folder_id
-                    ]
-                    for child_id in children:
-                        count += count_tree_emails(child_id)
-                    return count
-
-                email_count = count_tree_emails(f["id"])
-
                 vault_folders.append(
                     {
                         "id": f["id"],
@@ -400,7 +423,9 @@ def list_vault_folders():
 
     overdue_count = sum(1 for f in vault_folders if f["is_overdue"])
 
-    return jsonify({"folders": vault_folders, "overdue_count": overdue_count})
+    return jsonify(
+        {"folders": vault_folders, "overdue_count": overdue_count, "counts": counts}
+    )
 
 
 @api_bp.route("/folders/vault/overdue-count", methods=["GET"])

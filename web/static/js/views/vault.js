@@ -32,6 +32,7 @@ let viewingFolder = null;  // null = folder list, object = viewing folder's emai
 let vaultEmails = [];
 let vaultBreadcrumbs = [];  // Stack of {id, name} for navigation
 let vaultSubfolders = [];   // Subfolders of current viewing folder
+let vaultCounts = {};       // folder id -> emails in that folder and everything below it
 
 // DOM references
 let contextTitle = null;
@@ -56,11 +57,13 @@ async function loadVaultFolders() {
         if (!response.ok) throw new Error('Failed to load vault');
         const data = await response.json();
         vaultFolders = data.folders || [];
+        vaultCounts = data.counts || {};
         return data;
     } catch (error) {
         console.error('Error loading vault folders:', error);
         vaultFolders = [];
-        return { folders: [], overdue_count: 0 };
+        vaultCounts = {};
+        return { folders: [], overdue_count: 0, counts: {} };
     }
 }
 
@@ -364,7 +367,16 @@ function renderVaultFolderContents() {
         ? 'OVERDUE' 
         : (topLevelFolder ? `Delete by: ${formatDate(topLevelFolder.retention_date)}` : '');
     
-    if (contextMeta) contextMeta.textContent = dateText ? `${vaultEmails.length} emails · ${dateText}` : `${vaultEmails.length} emails`;
+    // vaultEmails holds only what sits directly in this folder. The Vault
+    // list counts the whole tree, so say where the rest of them are rather
+    // than reporting "0 emails" for a folder the list called 100.
+    const treeTotal = vaultCounts[String(viewingFolder.id)];
+    const nestedCount = treeTotal === undefined ? 0 : treeTotal - vaultEmails.length;
+    const countText = nestedCount > 0
+        ? `${vaultEmails.length} emails here · ${nestedCount} in subfolders`
+        : `${vaultEmails.length} emails`;
+    
+    if (contextMeta) contextMeta.textContent = dateText ? `${countText} · ${dateText}` : countText;
     
     // Build navigation bar (breadcrumbs + subfolders) like main view
     let navBarHtml = '';
@@ -392,7 +404,13 @@ function renderVaultFolderContents() {
             navBarHtml += `<span class="subfolder-label">Subfolders:</span> `;
             navBarHtml += vaultSubfolders.map((sf, i) => {
                 const separator = i < vaultSubfolders.length - 1 ? ', ' : '';
-                return `<a href="#" data-action="openFolder" data-folder-id="${sf.id}" data-is-subfolder="1" class="subfolder-link">${escapeHtml(sf.name)}</a>${separator}`;
+                // Tree total, so the subfolder numbers add up to the count
+                // shown against this folder in the Vault list.
+                const count = vaultCounts[String(sf.id)];
+                const countHtml = count === undefined
+                    ? ''
+                    : ` <span class="subfolder-count">(${count})</span>`;
+                return `<a href="#" data-action="openFolder" data-folder-id="${sf.id}" data-is-subfolder="1" class="subfolder-link">${escapeHtml(sf.name)}${countHtml}</a>${separator}`;
             }).join('');
             navBarHtml += `</div>`;
         }
@@ -417,9 +435,12 @@ function renderVaultFolderContents() {
     `;
     
     if (vaultEmails.length === 0) {
+        const emptyText = hasSubfolders && nestedCount > 0
+            ? 'No emails here — they are in the subfolders above'
+            : 'No emails in this folder';
         html += `
             <div class="empty-state">
-                <p>No emails in this folder</p>
+                <p>${escapeHtml(emptyText)}</p>
             </div>
         `;
     } else {

@@ -246,3 +246,134 @@ class TestRetentionVaultPeriods:
             content_type="application/json",
         )
         assert response.status_code == 400
+
+
+class TestVaultSubfolderCounts:
+    """A vault folder holding nothing directly but everything in its
+    subfolders used to show (100) in the list and "0 emails" when opened.
+    The list is right -- permanent deletion takes the whole tree -- so the
+    endpoint hands back a tree count for every vault folder, letting the
+    folder view say where those emails actually are."""
+
+    def _make_folder(self, client, name, parent_id=None):
+        payload = {"name": name}
+        if parent_id is not None:
+            payload["parent_id"] = parent_id
+        response = client.post("/api/folders", json=payload, content_type="application/json")
+        assert response.status_code == 201
+        return response.get_json()["folder"]["id"]
+
+    def _add_messages(self, folder_id, count, deleted=False):
+        import secrets
+
+        from core import Database
+
+        for _ in range(count):
+            token = secrets.token_hex(6)
+            Database.execute(
+                """INSERT INTO messages
+                   (folder_id, message_id, subject, filepath, deleted_at)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    folder_id,
+                    f"<{token}@test>",
+                    "Retained correspondence",
+                    f"archive/{folder_id}/{token}.eml.enc",
+                    1739633400 if deleted else None,
+                ),
+            )
+        Database.commit()
+
+    def _vault(self, client, folder_id):
+        import time
+
+        response = client.post(
+            f"/api/folders/{folder_id}/vault",
+            json={"retention_date": int(time.time()) + (7 * 365 * 24 * 3600)},
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+
+    def test_counts_are_returned_for_subfolders_not_just_the_top(
+        self, authenticated_client, initialized_app
+    ):
+        """The subfolder numbers have to add up to the number the Vault
+        list shows against their parent."""
+        parent_id = self._make_folder(authenticated_client, "20240502-EK")
+        child_2024 = self._make_folder(authenticated_client, "2024", parent_id)
+        child_2025 = self._make_folder(authenticated_client, "2025", parent_id)
+        self._add_messages(child_2024, 6)
+        self._add_messages(child_2025, 4)
+        self._vault(authenticated_client, parent_id)
+
+        data = authenticated_client.get("/api/folders/vault").get_json()
+
+        counts = data["counts"]
+        assert counts[str(child_2024)] == 6
+        assert counts[str(child_2025)] == 4
+        assert counts[str(parent_id)] == 10
+
+        listed = next(f for f in data["folders"] if f["id"] == parent_id)
+        assert listed["email_count"] == counts[str(parent_id)]
+
+    def test_a_parent_holding_nothing_directly_still_counts_its_tree(
+        self, authenticated_client, initialized_app
+    ):
+        """The reported case: nothing in the folder itself, everything one
+        level down."""
+        parent_id = self._make_folder(authenticated_client, "Empty Parent")
+        child_id = self._make_folder(authenticated_client, "2025", parent_id)
+        self._add_messages(child_id, 3)
+        self._vault(authenticated_client, parent_id)
+
+        data = authenticated_client.get("/api/folders/vault").get_json()
+
+        assert data["counts"][str(parent_id)] == 3
+        emails = authenticated_client.get(f"/api/folders/{parent_id}/emails").get_json()
+        assert emails["emails"] == []
+
+    def test_counts_reach_through_more_than_one_level(
+        self, authenticated_client, initialized_app
+    ):
+        """Client folders nest deeper than one year of correspondence."""
+        top_id = self._make_folder(authenticated_client, "Client")
+        mid_id = self._make_folder(authenticated_client, "2025", top_id)
+        leaf_id = self._make_folder(authenticated_client, "Q3", mid_id)
+        self._add_messages(leaf_id, 5)
+        self._vault(authenticated_client, top_id)
+
+        counts = authenticated_client.get("/api/folders/vault").get_json()["counts"]
+
+        assert counts[str(leaf_id)] == 5
+        assert counts[str(mid_id)] == 5
+        assert counts[str(top_id)] == 5
+
+    def test_counts_ignore_soft_deleted_emails(self, authenticated_client, initialized_app):
+        """Trashed emails are not in the folder, so they must not inflate
+        the number the folder view explains."""
+        parent_id = self._make_folder(authenticated_client, "Mixed")
+        child_id = self._make_folder(authenticated_client, "2025", parent_id)
+        self._add_messages(child_id, 2)
+        self._add_messages(child_id, 7, deleted=True)
+        self._vault(authenticated_client, parent_id)
+
+        counts = authenticated_client.get("/api/folders/vault").get_json()["counts"]
+
+        assert counts[str(child_id)] == 2
+        assert counts[str(parent_id)] == 2
+
+    def test_folders_outside_the_vault_are_not_counted(
+        self, authenticated_client, initialized_app
+    ):
+        """counts is keyed by vault folder; an ordinary archive folder has
+        no business being in it."""
+        vault_parent = self._make_folder(authenticated_client, "Retained")
+        self._add_messages(vault_parent, 1)
+        self._vault(authenticated_client, vault_parent)
+        ordinary_id = self._make_folder(authenticated_client, "Active Matter")
+        self._add_messages(ordinary_id, 9)
+
+        counts = authenticated_client.get("/api/folders/vault").get_json()["counts"]
+
+        assert str(vault_parent) in counts
+        assert str(ordinary_id) not in counts
