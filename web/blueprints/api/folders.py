@@ -348,16 +348,61 @@ def empty_trash():
 # ============================================================
 
 
+def tree_email_counts():
+    """Emails per folder, counting the folder's own mail plus everything
+    filed beneath it.
+
+    Two screens once disagreed because one counted a tree and the other
+    counted a folder: the Vault listed a folder as holding 100 and the
+    folder itself opened empty. Every screen that shows a folder's size
+    now reads it from here. The tree total is the honest number for a
+    parent -- it is what permanent deletion destroys, and it is what
+    explains a folder whose mail all lives one level down.
+
+    Returns {folder_id: count} for every folder not in the trash.
+    Trashed folders and soft-deleted emails are excluded.
+    """
+    folders = Database.fetchall("SELECT id, parent_id FROM folders WHERE deleted_at IS NULL")
+
+    # Direct (non-recursive) counts for every folder in a single query,
+    # rather than one COUNT(*) per folder walked.
+    direct_counts = {
+        row["folder_id"]: row["cnt"]
+        for row in Database.fetchall(
+            """SELECT folder_id, COUNT(*) AS cnt
+               FROM messages
+               WHERE deleted_at IS NULL
+               GROUP BY folder_id"""
+        )
+    }
+
+    children_of = {}
+    for f in folders:
+        children_of.setdefault(f["parent_id"], []).append(f["id"])
+
+    totals = {}
+
+    def roll_up(folder_id):
+        if folder_id in totals:
+            return totals[folder_id]
+        total = direct_counts.get(folder_id, 0)
+        for child_id in children_of.get(folder_id, []):
+            total += roll_up(child_id)
+        totals[folder_id] = total
+        return total
+
+    for f in folders:
+        roll_up(f["id"])
+
+    return totals
+
+
 @api_bp.route("/folders/vault", methods=["GET"])
 def list_vault_folders():
     """Get all folders in the Retention Vault (have retention_date set).
 
-    Counts are tree totals: a folder's own emails plus everything beneath
-    it. The Vault list shows that number because it is what permanent
-    deletion destroys. The same number is returned for every vault folder,
-    not only the top-level ones, so the folder view can show a count beside
-    each subfolder link -- otherwise a parent holding nothing directly
-    reads as empty while its row in the list says 100.
+    Each folder's count is a tree total, because permanent deletion from
+    the vault takes the folder and everything under it.
     """
     now = int(time.time())
 
@@ -372,40 +417,13 @@ def list_vault_folders():
     # Build a map for quick lookups
     folder_map = {f["id"]: dict(f) for f in all_folders}
 
-    # Direct (non-recursive) email count per folder, in a single query.
-    direct_counts = {
-        row["folder_id"]: row["cnt"]
-        for row in Database.fetchall(
-            """SELECT folder_id, COUNT(*) AS cnt
-               FROM messages
-               WHERE deleted_at IS NULL
-               GROUP BY folder_id"""
-        )
-    }
-
-    # Child lists, so the roll-up below does not rescan every folder.
-    children_of = {}
-    for f in all_folders:
-        children_of.setdefault(f["parent_id"], []).append(f["id"])
-
-    tree_counts = {}
-
-    def count_tree_emails(folder_id):
-        if folder_id in tree_counts:
-            return tree_counts[folder_id]
-        total = direct_counts.get(folder_id, 0)
-        for child_id in children_of.get(folder_id, []):
-            total += count_tree_emails(child_id)
-        tree_counts[folder_id] = total
-        return total
+    counts = tree_email_counts()
 
     # Find top-level vault folders (have retention_date, and parent doesn't have retention_date)
     vault_folders = []
-    counts = {}
     for f in all_folders:
         if f["retention_date"] is not None:
-            email_count = count_tree_emails(f["id"])
-            counts[str(f["id"])] = email_count
+            email_count = counts.get(f["id"], 0)
 
             # Check if this is a top-level vault folder (parent not in vault)
             parent = folder_map.get(f["parent_id"])
@@ -423,9 +441,7 @@ def list_vault_folders():
 
     overdue_count = sum(1 for f in vault_folders if f["is_overdue"])
 
-    return jsonify(
-        {"folders": vault_folders, "overdue_count": overdue_count, "counts": counts}
-    )
+    return jsonify({"folders": vault_folders, "overdue_count": overdue_count})
 
 
 @api_bp.route("/folders/vault/overdue-count", methods=["GET"])

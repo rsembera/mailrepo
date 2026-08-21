@@ -16,6 +16,7 @@ from utils.log import get_logger
 
 from . import api_bp
 from .email_parser import decode_email_header, extract_body_text
+from .folders import tree_email_counts
 
 log = get_logger()
 
@@ -200,7 +201,12 @@ def search_emails():
 
 @api_bp.route("/folders/<int:folder_id>/emails", methods=["GET"])
 def get_folder_emails(folder_id):
-    """Get all emails in an archive folder."""
+    """Get all emails in an archive folder.
+
+    Also returns a count for each direct subfolder, so a folder whose mail
+    is all filed one level down can say so instead of looking empty. The
+    subfolder numbers are tree totals and add up to the folder's own total.
+    """
     folder = Database.fetchone("SELECT id FROM folders WHERE id = ?", (folder_id,))
     if not folder:
         return jsonify({"error": "Folder not found"}), 404
@@ -225,7 +231,16 @@ def get_folder_emails(folder_id):
         for m in messages
     ]
 
-    return jsonify({"emails": emails})
+    counts = tree_email_counts()
+    subfolder_counts = {
+        str(child["id"]): counts.get(child["id"], 0)
+        for child in Database.fetchall(
+            "SELECT id FROM folders WHERE parent_id = ? AND deleted_at IS NULL",
+            (folder_id,),
+        )
+    }
+
+    return jsonify({"emails": emails, "subfolder_counts": subfolder_counts})
 
 
 def _decode_header(header):

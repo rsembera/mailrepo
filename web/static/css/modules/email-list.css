@@ -354,6 +354,13 @@
     text-decoration: underline;
 }
 
+/* Email count beside a subfolder link. Muted so the folder name stays the
+   thing you read first. Matches the Retention Vault treatment. */
+.subfolder-count {
+    color: var(--color-text-muted);
+    font-weight: 400;
+}
+
 /* ============================================
    EMAIL LIST TOOLBAR
    ============================================ */

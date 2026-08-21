@@ -412,10 +412,5 @@
     text-decoration: underline;
 }
 
-/* Email count beside a subfolder link. Muted so the folder name stays
-   the thing you read first, but present so an empty parent explains
-   itself instead of contradicting the Vault list. */
-.vault-subfolder-links .subfolder-count {
-    color: var(--color-text-muted);
-    font-weight: 400;
-}
+/* Subfolder email counts are styled once for both views by
+   .subfolder-count in email-list.css. */

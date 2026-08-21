@@ -293,16 +293,28 @@ export async function loadFolderEmails(folderId) {
         
         const data = await response.json();
         state.emails = data.emails || [];
+        const subfolderCounts = data.subfolder_counts || {};
         
         const folder = state.folders.find(f => f.id == folderId);
         if (contextTitle) contextTitle.textContent = folder?.name || 'Archive';
-        if (contextMeta) contextMeta.textContent = `${state.emails.length} archived emails`;
         
         // Check for subfolders (exclude deleted and retention vault folders)
         const subfolders = state.folders.filter(f => f.parent_id == folderId && !f.deleted_at && !f.retention_date);
         
+        // state.emails holds only what sits directly in this folder. Say
+        // where the rest of it is instead of reporting a bare count that
+        // the subfolder links then contradict.
+        state.nestedEmailCount = subfolders.reduce(
+            (sum, sf) => sum + (subfolderCounts[String(sf.id)] || 0), 0
+        );
+        if (contextMeta) {
+            contextMeta.textContent = state.nestedEmailCount > 0
+                ? `${state.emails.length} archived emails here · ${state.nestedEmailCount} in subfolders`
+                : `${state.emails.length} archived emails`;
+        }
+        
         // Render subfolders + emails
-        renderFolderContents(folderId, subfolders);
+        renderFolderContents(folderId, subfolders, subfolderCounts);
         
     } catch (error) {
         console.error('Error loading emails:', error);
@@ -1070,7 +1082,7 @@ function renderImapNavigation(accountId, folderPath) {
 /**
  * Render folder contents: subfolders (if any) followed by emails.
  */
-function renderFolderContents(folderId, subfolders) {
+function renderFolderContents(folderId, subfolders, subfolderCounts = {}) {
     if (!emailList) return;
     
     const subfoldersBar = document.getElementById('subfoldersBar');
@@ -1109,7 +1121,13 @@ function renderFolderContents(folderId, subfolders) {
             html += `<span class="subfolder-label">Subfolders:</span> `;
             html += subfolders.map((sf, i) => {
                 const separator = i < subfolders.length - 1 ? ', ' : '';
-                return `<a href="#" data-action="navSubfolder" data-folder-id="${sf.id}" class="subfolder-link">${escapeHtml(sf.name)}</a>${separator}`;
+                // Tree total, matching the Retention Vault: the subfolder
+                // numbers add up to the parent's own total.
+                const count = subfolderCounts[String(sf.id)];
+                const countHtml = count === undefined
+                    ? ''
+                    : ` <span class="subfolder-count">(${count})</span>`;
+                return `<a href="#" data-action="navSubfolder" data-folder-id="${sf.id}" class="subfolder-link">${escapeHtml(sf.name)}${countHtml}</a>${separator}`;
             }).join('');
             html += `</div>`;
         }

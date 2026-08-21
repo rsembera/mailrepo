@@ -32,7 +32,7 @@ let viewingFolder = null;  // null = folder list, object = viewing folder's emai
 let vaultEmails = [];
 let vaultBreadcrumbs = [];  // Stack of {id, name} for navigation
 let vaultSubfolders = [];   // Subfolders of current viewing folder
-let vaultCounts = {};       // folder id -> emails in that folder and everything below it
+let vaultSubfolderCounts = {};  // subfolder id -> emails in it and everything below it
 
 // DOM references
 let contextTitle = null;
@@ -57,13 +57,11 @@ async function loadVaultFolders() {
         if (!response.ok) throw new Error('Failed to load vault');
         const data = await response.json();
         vaultFolders = data.folders || [];
-        vaultCounts = data.counts || {};
         return data;
     } catch (error) {
         console.error('Error loading vault folders:', error);
         vaultFolders = [];
-        vaultCounts = {};
-        return { folders: [], overdue_count: 0, counts: {} };
+        return { folders: [], overdue_count: 0 };
     }
 }
 
@@ -277,6 +275,7 @@ async function openVaultFolder(folderId, isSubfolder = false) {
         
         const data = await response.json();
         vaultEmails = data.emails || [];
+        vaultSubfolderCounts = data.subfolder_counts || {};
         
         // Find subfolders (children in vault that aren't deleted)
         vaultSubfolders = state.folders.filter(f => 
@@ -331,6 +330,7 @@ async function navigateVaultBreadcrumb(folderId) {
         
         const data = await response.json();
         vaultEmails = data.emails || [];
+        vaultSubfolderCounts = data.subfolder_counts || {};
         
         vaultSubfolders = state.folders.filter(f => 
             f.parent_id === folderId && 
@@ -367,11 +367,12 @@ function renderVaultFolderContents() {
         ? 'OVERDUE' 
         : (topLevelFolder ? `Delete by: ${formatDate(topLevelFolder.retention_date)}` : '');
     
-    // vaultEmails holds only what sits directly in this folder. The Vault
-    // list counts the whole tree, so say where the rest of them are rather
-    // than reporting "0 emails" for a folder the list called 100.
-    const treeTotal = vaultCounts[String(viewingFolder.id)];
-    const nestedCount = treeTotal === undefined ? 0 : treeTotal - vaultEmails.length;
+    // vaultEmails holds only what sits directly in this folder. The rest of
+    // the folder's mail is one or more levels down, so say where it is
+    // rather than reporting "0 emails" for a folder the list called 100.
+    const nestedCount = vaultSubfolders.reduce(
+        (sum, sf) => sum + (vaultSubfolderCounts[String(sf.id)] || 0), 0
+    );
     const countText = nestedCount > 0
         ? `${vaultEmails.length} emails here · ${nestedCount} in subfolders`
         : `${vaultEmails.length} emails`;
@@ -406,7 +407,7 @@ function renderVaultFolderContents() {
                 const separator = i < vaultSubfolders.length - 1 ? ', ' : '';
                 // Tree total, so the subfolder numbers add up to the count
                 // shown against this folder in the Vault list.
-                const count = vaultCounts[String(sf.id)];
+                const count = vaultSubfolderCounts[String(sf.id)];
                 const countHtml = count === undefined
                     ? ''
                     : ` <span class="subfolder-count">(${count})</span>`;

@@ -203,11 +203,16 @@ export function renderEmailList() {
                          folderName.toLowerCase().includes('[gmail]/sent');
     
     if (state.emails.length === 0) {
+        // An archive folder whose mail is all filed in subfolders is not
+        // empty, and the subfolder links above say where it went.
+        const nested = isArchiveView ? (state.nestedEmailCount || 0) : 0;
         emailListEl.innerHTML = `
             <div class="empty-state">
                 <i data-lucide="mail-x" class="empty-icon"></i>
                 <h3>No Emails</h3>
-                <p>This folder is empty.</p>
+                <p>${nested > 0
+                    ? 'No emails here — they are in the subfolders above.'
+                    : 'This folder is empty.'}</p>
             </div>
         `;
         if (typeof lucide !== 'undefined') lucide.createIcons();

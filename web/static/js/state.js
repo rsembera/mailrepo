@@ -59,6 +59,10 @@ export const state = {
     // clobbering it with another view's content.
     activeScreen: 'mail',
     emails: [],
+    // Emails filed in the current archive folder's subfolders rather than in
+    // the folder itself. Set when an archive folder loads; read by the empty
+    // state so a folder holding only subfolders does not claim to be empty.
+    nestedEmailCount: 0,
     staged: new Map(),      // Map<emailId, {email, destinationFolderId, sourceAccountId, sourceFolder}>
     stagedFolders: [],      // Array<{accountId, folder, destinationFolderId}> for bulk folder staging
     selectedEmails: new Set(),
