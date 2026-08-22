@@ -19,7 +19,6 @@ import zipfile
 
 import pytest
 
-from core.config import Config
 from core.database import Database
 from core.encryption import Encryption
 from utils.backup import (

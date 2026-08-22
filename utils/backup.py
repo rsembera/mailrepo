@@ -392,8 +392,15 @@ def save_manifest(manifest):
     record_backup_location(get_backups_dir())
 
     for destination in manifest_destinations(manifest):
+        # manifest_destinations walks the whole backup history, so it can
+        # name a folder that no longer exists — an old install path, a
+        # deleted cloud folder. Do not recreate it: its zips are gone, and
+        # a manifest there would describe nothing while making the folder
+        # look like a recovery location. Real destinations always exist,
+        # because the zip was written into them before we got here.
+        if not destination.is_dir():
+            continue
         try:
-            destination.mkdir(parents=True, exist_ok=True)
             _atomic_write_text(destination / "manifest.json", payload)
             record_backup_location(destination)
         except Exception as e:

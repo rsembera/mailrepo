@@ -16,7 +16,6 @@ Two things were broken, and fixing either alone leaves you stuck:
 
 import json
 import zipfile
-from pathlib import Path
 
 import pytest
 
@@ -28,7 +27,6 @@ from utils.backup import (
     complete_restore,
     create_full_backup,
     create_incremental_backup,
-    describe_restore_point_credentials,
     discover_restore_points_in,
     get_restore_points,
     load_manifest,
@@ -146,6 +144,36 @@ class TestManifestSidecar:
         save_manifest(load_manifest())  # must not raise
 
         assert (Config.get_backup_path() / "manifest.json").exists()
+
+    def test_vanished_destination_is_not_resurrected(self, initialized_app, tmp_path):
+        """A folder that is gone stays gone.
+
+        The manifest remembers every folder a backup was ever written to.
+        If one of them has since been deleted, its zips went with it, so
+        writing a sidecar there would recreate an empty folder holding a
+        manifest that describes nothing — and then offer it on the
+        recovery screen as a location with zero restore points.
+        """
+        from utils.backup import get_known_locations
+
+        ghost = tmp_path / "old_install" / "backups"
+        assert not ghost.exists()
+
+        manifest = load_manifest()
+        manifest.setdefault("backups", []).append(
+            {
+                "filename": "mailrepo_full_20240101_000000.zip",
+                "type": "full",
+                "chain_id": "ghost-chain",
+                "backup_dir": str(ghost),
+            }
+        )
+
+        save_manifest(manifest)
+
+        assert not ghost.exists()
+        paths = {entry["path"] for entry in get_known_locations()}
+        assert str(ghost) not in paths
 
 
 # ============================================================
