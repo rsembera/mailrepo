@@ -10,6 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **A backup folder you deleted stays deleted (Session 85).** Every
+  backup writes a copy of its index into each folder backups have ever
+  gone to, and until now it created that folder first if it was
+  missing. So a destination from an old install, or a cloud folder you
+  had removed, came back on every backup as an empty folder holding
+  nothing but an index — and was then offered on the recovery screen
+  as a place to restore from, with zero restore points in it. A folder
+  that is gone is now left alone: its backups went with it, and an
+  index there would describe nothing. Ported from the same fix in
+  EdgeCase.
 - **A folder whose emails are filed in subfolders no longer looks empty
   (Sessions 82-83).** The Retention Vault counted a folder plus
   everything beneath it, because that is what permanent deletion

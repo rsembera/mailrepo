@@ -5970,3 +5970,59 @@ messages for genuinely empty folders.
 
 Frontend only; no test surface. ESLint 0 errors, same 64 warnings.
 645 tests, all green.
+
+## Session 85 — August 22, 2026 (MacBook)
+
+### Ported from EdgeCase: `save_manifest` resurrected missing backup destinations
+
+EdgeCase `c5ba41e` fixed a bug MailRepo shares verbatim. `save_manifest`
+writes a sidecar `manifest.json` into every directory returned by
+`manifest_destinations`, which walks the entire backup history. Before
+writing it called `destination.mkdir(parents=True, exist_ok=True)`, so
+any `backup_dir` that had ever appeared in the manifest — a long-gone
+install path, a removed cloud folder — was recreated on every backup as
+an empty folder holding only a manifest. `record_backup_location` then
+re-recorded it in `backup_locations.json`, and the recovery screen
+offered a folder with zero restore points.
+
+### Fix
+
+In the sidecar loop, skip any destination where `not
+destination.is_dir()` and drop the `mkdir`. If the folder is gone its
+zips are gone, and a manifest there describes nothing. Verified before
+porting the comment that MailRepo's ordering matches EdgeCase's: real
+destinations always exist because `validate_backup_location` (called
+by `create_full_backup` / `create_incremental_backup`) and the
+pre-restore safety path both create the folder before the zip is
+written, and `save_manifest` runs after the zip.
+
+### Regression test
+
+`TestManifestSidecar.test_vanished_destination_is_not_resurrected` in
+`tests/test_disaster_recovery.py`: one manifest entry whose
+`backup_dir` is a non-existent path under `tmp_path`; after
+`save_manifest` the path must still not exist and must be absent from
+`get_known_locations()`. Proved red against the pre-fix code (`git
+stash` on `utils/backup.py` only, run, `stash pop`, `cmp` against a
+snapshot to confirm the fix came back intact) and green after.
+
+### Cleanup on the MacBook
+
+Nothing to clean. Every one of the 190 manifest entries points at the
+iCloud folder, which is live. `backup_locations.json` (which lives
+under `~/Library/Application Support/MailRepo/`, not Preferences)
+holds two entries, both live: the canonical `backups/` dir and iCloud.
+`~/apps/` does not exist. The canonical `backups/` dir contains only
+`manifest.json`, which is expected — it is the canonical manifest, not
+a sidecar, and all zips go to iCloud.
+
+### Housekeeping
+
+`ruff check` flagged three pre-existing unused imports (two in
+`test_disaster_recovery.py`, one in `test_unverified_restore.py`);
+cleared. `ruff format --check` reports 12 files it would reformat;
+formatting is not enforced in this project and was left alone.
+
+646 tests, all green (~19s). ruff check clean.
+
+Code commit: `6752383`.
