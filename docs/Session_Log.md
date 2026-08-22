@@ -6026,3 +6026,44 @@ formatting is not enforced in this project and was left alone.
 646 tests, all green (~19s). ruff check clean.
 
 Code commit: `6752383`.
+
+
+## Session 86 — August 22, 2026 (MacBook)
+
+### UI copy sweep, part two
+
+Full pass over the codebase for verbose or unclear helper text,
+messages, tooltips, and confirmation dialogs — templates, JS modals,
+backend flash/error strings. Most of the app's copy held up: auth
+flow, ~98 `showAlert`/`showConfirm` call sites, tooltip `title`
+attributes, backend `flash()` and JSON error messages, the search-help
+panel, empty states, and the About/Reset Database/App-Password modals
+were all already tight. Five genuine issues found and fixed:
+
+- **Thread-size hint** (`settings.js`) — three sentences under a
+  dropdown, trimmed to two.
+- **Session-timeout hint** (`settings.js`) — was a bare fragment
+  ("Shorter timeouts for shared spaces") with no clear referent;
+  rewritten as an instruction.
+- **Export-encryption note** (`export-modal.js`) — repeated "AES-256
+  password-protected ZIP" that the checkbox label right above it
+  already states, on top of cramming three separate facts (app
+  compatibility ×2, password-sharing caveat) into one dense line.
+  Dropped the redundant opener.
+- **Apple Mail import hint** (`index.html`) — "For folders exported
+  from Apple Mail with subfolders" reads ambiguously, as if "with
+  subfolders" could modify "Apple Mail." Reworded.
+- **Resume-interrupted-commit dialog** (`app.js`) — closing question
+  restated "commit" from the sentence before it and added a redundant
+  "Would you like to" ahead of a dialog whose buttons already ask the
+  question. Merged into one line.
+
+No behavior changes — text only. `node --check` clean on all three
+touched JS files.
+
+Navigation_Map line counts refreshed for the four touched files;
+`settings.js` and `index.html` had also drifted from an earlier,
+unlogged copy pass (commit `940e9ab`) that predates this session and
+wasn't followed by a map update.
+
+Code commit: `3cce3f7`.

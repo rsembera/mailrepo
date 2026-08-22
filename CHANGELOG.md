@@ -36,6 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   right there and simply did not match.
 
 ### Changed
+- **UI copy sweep, part two (Session 86).** Five more spots of verbose
+  or unclear helper text tightened: the thread-size and session-timeout
+  hints in Settings, the export-encryption note (which repeated
+  "AES-256 password-protected ZIP" right under a checkbox that already
+  says so), an ambiguously-worded Apple Mail import hint, and the
+  resume-interrupted-commit dialog. No behavior changes.
 - **Nothing about the app itself — a development change worth recording
   (Session 81).** The automated test suite now runs its cryptography at
   a reduced work factor (a technique ported from a sibling project), so

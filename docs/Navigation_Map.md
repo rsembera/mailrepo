@@ -138,7 +138,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `app.js` | 738 | Init, event listeners, rail nav, nav guards, template-bindings wiring |
+| `app.js` | 737 | Init, event listeners, rail nav, nav guards, template-bindings wiring |
 | `template-bindings.js` | 143 | Single delegated handler for index.html data-tpl-action attrs (Session 38) |
 | `delegate.js` | 116 | `bindActions(container, handlers)` helper for per-view delegation |
 | `state.js` | 137 | Central state object, session persistence |
@@ -151,7 +151,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | File | Lines | What It Does |
 |------|-------|--------------|
 | `mail.js` | 2,319 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
-| `settings.js` | 1,484 | Settings: appearance, accounts, security, recovery-key status + check + rotation, backup, reset |
+| `settings.js` | 1,468 | Settings: appearance, accounts, security, recovery-key status + check + rotation, backup, reset |
 | `review.js` | 1,035 | Review staged items, destination editing, commit |
 | `backups.js` | 1,004 | Backup/restore UI, restore points, settings |
 | `folder-selection.js` | 897 | Bulk folder staging from IMAP/imports |
@@ -202,7 +202,7 @@ context-menu (69).
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `main/index.html` | 693 | Main dashboard (three-pane layout); all interactivity via data-tpl-action |
+| `main/index.html` | 697 | Main dashboard (three-pane layout); all interactivity via data-tpl-action |
 | `base.html` | 423 | Base layout, left rail, sidebar, content area, modals |
 | `auth/login.html` | 92 | Login form; includes the restored-from-backup banner |
 | `auth/setup.html` | 76 | Master password setup; links to disaster recovery so a lost archive is not mistaken for a first run |
