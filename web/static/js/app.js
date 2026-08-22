@@ -626,9 +626,8 @@ async function checkPendingCommit() {
         const { showConfirm } = await import('./modals.js');
         const resume = await showConfirm(
             'Resume Interrupted Commit',
-            `A commit was interrupted ${timeAgo}. ` +
-            `${data.committed} of ${data.total} items were committed before the interruption.\n\n` +
-            `Would you like to resume and commit the remaining ${data.pending} item${data.pending !== 1 ? 's' : ''}?`,
+            `A commit was interrupted ${timeAgo} \u2014 ${data.committed} of ${data.total} items completed. ` +
+            `Resume the remaining ${data.pending} item${data.pending !== 1 ? 's' : ''}?`,
             {
                 confirmText: 'Resume',
                 cancelText: 'Discard',

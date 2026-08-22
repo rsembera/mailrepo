@@ -273,7 +273,7 @@ function renderAccountsSection() {
                 <div class="custom-select-option" data-value="1000">1,000 messages</div>
                 <div class="custom-select-option" data-value="2000">2,000 messages</div>
             </div>
-            <p class="setting-hint">When you use "Stage thread", MailRepo walks the conversation on the mail server. This caps how many messages it will gather — a safety limit against very large mailing-list threads. Most correspondence is well under 500.</p>
+            <p class="setting-hint">Limits how many messages "Stage thread" will gather from a conversation. Most threads are well under 500.</p>
         </div>
     `;
 }
@@ -292,7 +292,7 @@ function renderSecuritySection() {
                 <div class="custom-select-option" data-value="120">2 hours</div>
                 <div class="custom-select-option" data-value="0">Never (not recommended)</div>
             </div>
-            <p class="setting-hint">Shorter timeouts for shared spaces</p>
+            <p class="setting-hint">Use a shorter timeout on shared or public machines.</p>
         </div>
         
         <hr class="settings-divider">

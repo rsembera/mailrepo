@@ -287,7 +287,7 @@ function _renderFormView() {
                     <div class="export-password-feedback" id="export-password-feedback"></div>
                     <div class="export-encryption-note">
                         <i data-lucide="info"></i>
-                        <span>Recipient notes: macOS users need The Unarchiver (free). Windows 11 (23H2+) and Linux unzip 6.0+ support AES natively. The password is not stored anywhere \u2014 share it with the recipient out of band.</span>
+                        <span>macOS needs The Unarchiver (free); Windows 11 23H2+ and Linux unzip 6.0+ open it natively. Share the password separately \u2014 it's not stored anywhere.</span>
                     </div>
                 </div>
             </div>
