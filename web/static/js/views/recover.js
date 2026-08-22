@@ -287,9 +287,8 @@ async function usePickedFolder() {
 async function confirmRestore(point, folder, button) {
     const warning =
         `Restore the backup from ${point.display_name}?\n\n` +
-        'This replaces everything currently on this machine, and brings ' +
-        'back the master password and recovery key that were in use when ' +
-        'the backup was made.';
+        'This replaces all data on this machine with the backup, ' +
+        'including its original password and recovery key.';
 
     if (!window.confirm(warning)) {
         return;

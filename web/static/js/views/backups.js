@@ -824,8 +824,7 @@ async function confirmRestore() {
             // Show modal explaining next steps, then redirect to login
             const { showAlert } = await import('../modals.js');
             await showAlert('Restore Prepared', 
-                'The restore has been staged. You must restart the MailRepo server to complete the restore.\n\n' +
-                'After restarting, log back in to see your restored data.');
+                'Restore staged. Restart MailRepo to complete it.');
             
             // Redirect to login page (effectively logging out)
             window.mailrepoLogout();

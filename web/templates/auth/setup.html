@@ -59,16 +59,13 @@
         
         <div class="auth-footer">
             <p class="security-note">
-                <strong>Already had an archive?</strong> If this machine lost
-                its data, don't create a new password —
-                <a href="{{ url_for('auth.recover') }}">restore from a backup</a>
-                instead. Setting a new password here starts an empty archive.
+                <strong>Already had an archive?</strong>
+                <a href="{{ url_for('auth.recover') }}">Restore from a backup</a>
+                instead — creating a new password starts an empty archive.
             </p>
             <p class="security-note">
-                <strong>Important:</strong> your archive is encrypted with this
-                password and MailRepo cannot recover it for you. After the next
-                step you'll be given a recovery key — save it, and it will let
-                you back in if you ever forget the password.
+                <strong>Important:</strong> MailRepo cannot recover a forgotten
+                password. You'll get a recovery key next — save it somewhere safe.
             </p>
         </div>
     </div>

@@ -122,7 +122,7 @@ async function _findAndStageThread({ accountId, folder, uid, subject, destinatio
     if (messages.length === 0) {
         await showAlert(
             'No thread found',
-            'Could not locate this message on the server. It may have been moved or deleted.'
+            'Could not find this message on the server — it may have been moved or deleted.'
         );
         return;
     }

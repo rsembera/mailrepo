@@ -25,21 +25,15 @@
         {% endif %}
 
         <p>
-            Right now your master password is the only way to open this
-            archive. If you forget it, the mail inside is unrecoverable —
-            there is no reset, because MailRepo has no copy of your key.
+            A recovery key is a printable backup credential that opens the
+            archive if you forget your password. It also makes future
+            password changes instant.
         </p>
 
         <p>
-            This upgrade gives you a printable recovery key that opens the
-            archive on its own. It also makes future password changes
-            instant, instead of re-encrypting every message.
-        </p>
-
-        <p>
-            The upgrade re-encrypts your archive once. That takes seconds
-            for a typical archive and a couple of minutes for a very large
-            one. Your mail is not modified — only the key protecting it.
+            The upgrade re-encrypts your archive once — seconds for a
+            typical archive, a couple of minutes for a very large one.
+            Your mail is not modified.
         </p>
 
         {% if backup_ok %}

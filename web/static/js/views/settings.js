@@ -70,7 +70,7 @@ function renderSettingsView() {
                     <i data-lucide="palette" class="section-icon"></i>
                     <div class="section-text">
                         <h3>Appearance</h3>
-                        <p>Customize the look and feel of MailRepo</p>
+                        <p>Theme and display</p>
                     </div>
                 </div>
                 <div class="settings-section-body" id="appearanceBody" style="display: none;">
@@ -85,7 +85,7 @@ function renderSettingsView() {
                     <i data-lucide="mail" class="section-icon"></i>
                     <div class="section-text">
                         <h3>Email Accounts</h3>
-                        <p>Connect IMAP email accounts to archive from</p>
+                        <p>Connected email accounts</p>
                     </div>
                 </div>
                 <div class="settings-section-body" id="accountsBody" style="display: none;">
@@ -100,7 +100,7 @@ function renderSettingsView() {
                     <i data-lucide="shield" class="section-icon"></i>
                     <div class="section-text">
                         <h3>Security</h3>
-                        <p>Session timeout and password settings</p>
+                        <p>Session, password, and recovery key</p>
                     </div>
                 </div>
                 <div class="settings-section-body" id="securityBody" style="display: none;">
@@ -115,7 +115,7 @@ function renderSettingsView() {
                     <i data-lucide="trash-2" class="section-icon"></i>
                     <div class="section-text">
                         <h3>Trash</h3>
-                        <p>Automatic cleanup of deleted items</p>
+                        <p>Auto-delete trashed items</p>
                     </div>
                 </div>
                 <div class="settings-section-body" id="trashBody" style="display: none;">
@@ -292,16 +292,13 @@ function renderSecuritySection() {
                 <div class="custom-select-option" data-value="120">2 hours</div>
                 <div class="custom-select-option" data-value="0">Never (not recommended)</div>
             </div>
-            <p class="setting-hint">Shorter timeouts recommended for shared spaces</p>
+            <p class="setting-hint">Shorter timeouts for shared spaces</p>
         </div>
         
         <hr class="settings-divider">
         
         <div class="form-group">
             <label>Password</label>
-            <p class="setting-hint" style="margin-bottom: var(--space-md);">
-                Your password protects your IMAP credentials and encrypted archives.
-            </p>
             <button class="btn btn-primary" id="changePasswordBtn">
                 <i data-lucide="key"></i>
                 Change Password
@@ -373,8 +370,7 @@ function renderSecuritySection() {
 
         <div id="checkRecoveryKeyForm" class="password-change-form">
             <p class="setting-hint">
-                Checks whether the key you have on file opens this archive.
-                Changes nothing — not your password, not your recovery key.
+                Checks whether your saved key opens this archive. Nothing is changed.
             </p>
             <div class="form-group">
                 <label for="checkKeyValue">Recovery Key</label>
@@ -391,8 +387,7 @@ function renderSecuritySection() {
 
         <div id="rotateRecoveryKeyForm" class="password-change-form">
             <p class="setting-hint">
-                This immediately revokes your current recovery key. Anything
-                printed or saved with the old key stops working.
+                This revokes your current key immediately. The old key stops working.
             </p>
             <div class="form-group">
                 <label for="rotateKeyPassword">Current Password</label>
@@ -412,8 +407,8 @@ function renderSecuritySection() {
 
         <div id="newRecoveryKeyDisplay" class="password-change-form">
             <p class="setting-hint">
-                <strong>Save this now.</strong> It is shown once and is not
-                stored anywhere. Your previous recovery key no longer works.
+                <strong>Save this now</strong> — it's shown once and not stored.
+                Your old key no longer works.
             </p>
             <div class="recovery-key-display">
                 <code id="newRecoveryKeyValue"></code>
@@ -460,15 +455,12 @@ function initRecoveryKeyHandlers() {
         .then((data) => {
             if (data.has_recovery_key) {
                 statusEl.textContent =
-                    'This archive has a recovery key. Check it if you want to ' +
-                    'confirm the copy you have on file still works, or generate ' +
-                    'a new one if it may have been seen by someone else.';
+                    'This archive has a recovery key. You can check it or generate a new one below.';
                 if (rotateBtn) rotateBtn.hidden = false;
                 if (checkBtn) checkBtn.hidden = false;
             } else {
                 statusEl.textContent =
-                    'This archive has no recovery key. Without one, a forgotten ' +
-                    'password means the archive cannot be opened.';
+                    'No recovery key. Without one, a forgotten password locks the archive permanently.';
                 if (upgradeBtn) upgradeBtn.hidden = false;
             }
         })
@@ -527,8 +519,7 @@ function initRecoveryKeyHandlers() {
                 const data = await response.json();
 
                 if (data.verified) {
-                    checkResultEl.textContent =
-                        'This key opens your archive. Nothing was changed.';
+                    checkResultEl.textContent = 'This key is valid.';
                     checkResultEl.className = 'password-success';
                 } else {
                     checkResultEl.textContent =
@@ -796,7 +787,7 @@ async function handleChangePassword() {
                     break;
                 case 'complete':
                     progressBar.style.width = '100%';
-                    progressMsg.textContent = 'Password changed. Saving backup and logging out...';
+                    progressMsg.textContent = 'Password changed. Saving backup…';
                     eventSource.close();
                     // Skip the click-to-dismiss alert and go straight into the
                     // logout flow. The auto-backup at logout runs against
@@ -807,7 +798,7 @@ async function handleChangePassword() {
                         const modal = document.getElementById('logoutModal');
                         const status = document.getElementById('logoutStatus');
                         if (modal) modal.classList.add('active');
-                        if (status) status.textContent = 'Saving backup of your re-encrypted archive. This may take up to a minute.';
+                        if (status) status.textContent = 'Saving backup… this may take a minute.';
                         if (typeof lucide !== 'undefined') lucide.createIcons();
                         try {
                             const response = await fetch('/auth/logout', { method: 'POST' });
@@ -826,7 +817,7 @@ async function handleChangePassword() {
         
         eventSource.onerror = () => {
             eventSource.close();
-            errorEl.textContent = 'Connection lost during password change. Please check if the change completed.';
+            errorEl.textContent = 'Connection lost. Check whether the password change completed.';
             errorEl.style.display = 'block';
             confirmBtn.disabled = false;
             cancelBtn.disabled = false;
@@ -854,7 +845,7 @@ function renderTrashSection() {
                 <div class="custom-select-option" data-value="90">90 days</div>
                 <div class="custom-select-option" data-value="365">1 year</div>
             </div>
-            <p class="setting-hint">Deleted folders and their emails will be permanently removed after this period.</p>
+            <p class="setting-hint">Trashed items are permanently removed after this period.</p>
         </div>
     `;
 }
