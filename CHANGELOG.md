@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Vector logo and icon (Session 87).** The MailRepo logo and mark
+  now exist as SVG (`logo.svg`, `icon.svg`), recreated from the
+  raster originals. App icons for the macOS and Linux packages will
+  render from these at full sharpness in every size.
+
 ### Fixed
 - **A backup folder you deleted stays deleted (Session 85).** Every
   backup writes a copy of its index into each folder backups have ever

@@ -6067,3 +6067,48 @@ unlogged copy pass (commit `940e9ab`) that predates this session and
 wasn't followed by a map update.
 
 Code commit: `3cce3f7`.
+
+## Session 87 — August 29, 2026 (MacBook)
+
+### Packaging estimate, and the logo went vector
+
+Two threads today. First, a release-readiness read: packaging and
+release land at roughly 5-7 working sessions (.deb 1-2, .dmg 2-3 with
+the WeasyPrint dylib bundling as the expected long pole, release
+mechanics ~1). Decisions made along the way: **bundle readpst in the
+.dmg** rather than degrade gracefully — otool shows it needs only four
+Homebrew dylibs (libgsf, two glib libs, libintl), which ride the same
+install_name_tool + individual-signing pass WeasyPrint's dylibs
+already require; and **the .deb targets Debian Trixie**, built
+natively on Apollo (Python 3.13 floor). Ubuntu is explicitly not a
+target, so no container build.
+
+### logo.svg and icon.svg
+
+Rick asked for an SVG duplicate of the logo. Built by measurement, not
+by eye: colors sampled from logo.png (#3A9579 / #6FBCA1 / #354E48),
+geometry recovered by scanning pixel runs. The scans corrected two
+wrong first guesses — the lock's V is short (45-degree edges ending
+~y=345, not a long pin), and the envelope's lower diagonals run at 45
+degrees from the bottom corners and terminate against the flap lines
+partway up, so the four lines never share a vertex (Rick caught this
+by eye before the scan confirmed it). The keyhole is punched through
+the whole mark with a mask, matching the PNG's transparent keyhole,
+and was made slightly smaller than the original at Rick's direction,
+with a shorter stem.
+
+The wordmark is traced to paths with fontTools (SF Pro variable font
+instanced at wght 700, opsz 28), so rendering is identical on Trixie
+or anywhere else with no font dependency. icon.svg is the mark-only
+square-viewBox variant — the vector source for the .icns and hicolor
+sets at packaging time, replacing any upscale from the 500px PNG.
+
+Iterated against Chrome headless renders composited beside the
+original; Rick approved the final side-by-side.
+
+Assets only — no code changes, so no test-suite run. Desktop
+Commander's write_file corrupted the .svg on first write (binary
+garbage on disk); shell heredoc used instead, worth remembering for
+future SVG work.
+
+Code commit: `609b3c5`.
