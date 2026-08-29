@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="70 -22 500 500" width="500" height="500">
+  <!-- MailRepo icon: mark-only variant of logo.svg (see that file for notes). -->
+  <defs>
+    <mask id="keyhole">
+      <rect x="0" y="0" width="666" height="665" fill="#FFFFFF"/>
+      <circle cx="320" cy="201" r="40" fill="#000000"/>
+      <path d="M 311 236 L 329 236 L 334 294 Q 335 302 327 302 L 313 302
+               Q 305 302 306 294 Z" fill="#000000"/>
+    </mask>
+  </defs>
+  <g mask="url(#keyhole)">
+    <rect x="112" y="176" width="416" height="270" rx="20"
+          fill="#6FBCA1" stroke="#3A9579" stroke-width="22"/>
+    <path d="M 123 436 L 256 303 M 517 436 L 384 303"
+          fill="none" stroke="#3A9579" stroke-width="22" stroke-linecap="round"/>
+    <path d="M 118 186 L 320 362 L 522 186"
+          fill="none" stroke="#3A9579" stroke-width="23" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M 230.5 200 L 230.5 114 A 89.5 89.5 0 0 1 409.5 114 L 409.5 200"
+          fill="none" stroke="#FFFFFF" stroke-width="53" stroke-linecap="round"/>
+    <path d="M 230.5 200 L 230.5 114 A 89.5 89.5 0 0 1 409.5 114 L 409.5 200"
+          fill="none" stroke="#354E48" stroke-width="29" stroke-linecap="round"/>
+    <path d="M 221 112 L 419 112 Q 447 112 447 138 L 447 208
+             Q 447 224 436 235 L 344 327 Q 320 353 296 327
+             L 204 235 Q 193 224 193 208 L 193 138 Q 193 112 221 112 Z"
+          fill="none" stroke="#FFFFFF" stroke-width="12" stroke-linejoin="round"/>
+    <path d="M 221 112 L 419 112 Q 447 112 447 138 L 447 208
+             Q 447 224 436 235 L 344 327 Q 320 353 296 327
+             L 204 235 Q 193 224 193 208 L 193 138 Q 193 112 221 112 Z"
+          fill="#354E48"/>
+  </g>
+</svg>
