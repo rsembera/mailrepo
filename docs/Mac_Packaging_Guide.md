@@ -215,8 +215,26 @@ note that testing this with the bare Contents/MacOS/python bypasses the
 bootstrap and silently falls back to the Homebrew path, which is
 exactly the false-pass to avoid.
 
-Next: clean-account acceptance test on this DMG (install to
-/Applications from the DMG like a user, fresh data dir, setup → import
-→ commit → search → export → backup → restore, and add a real IMAP
-account and fetch a folder — the one TLS step that needs credentials),
-then the .deb.
+**Acceptance test: PASSED (Session 88).** Quarantined DMG, Finder
+install, Gatekeeper verified-developer prompt, then the full workflow:
+setup with recovery key, import, stage/commit, FTS search, print,
+attachment download, PDF export, recovery-key check, backup, live IMAP
+fetch with real credentials, clean shutdown. The test caught and fixed:
+the elastic-picker bug in its two remaining copies (export destination
+— which needed the modal pinned, not the list, because flex:1 ignores
+a height on the list — and backup destination), and the backup picker's
+odd-one-out click model, now unified on Finder convention across all
+three pickers. Three sign→notarize→staple rounds total; each caught
+something real.
+
+**Release artifact: dist/MailRepo-1.0.0.dmg (61.7 MB)**
+SHA-256: 9c1e5529b921d2c7ba5d7e8093c16dfdf1d42f395ee8bca4fc7c0ec13d22de13
+(publish this hash next to the download link)
+
+One transient: a detached-shell notarytool run once failed to find the
+keychain profile mid-chain; the same profile worked immediately in a
+fresh call. If it recurs, resume from the submit step — the build and
+signing before it were fine.
+
+Next: the .deb on Apollo (wake it first), then tag/release/website per
+the launch sequence.

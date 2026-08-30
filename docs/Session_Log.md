@@ -6368,3 +6368,30 @@ interpreter bypasses the bootstrap and false-passes via Homebrew.
 Authenticated fetch (needs real credentials) added to the acceptance
 checklist. Also this stretch: repo metadata set via gh (description,
 homepage, 11 topics) ahead of going public.
+
+### Seventh stretch: acceptance test — PASSED, .dmg is done
+
+Rick drove the full user journey on a quarantined DMG installed via
+Finder: Gatekeeper's verified-developer prompt (the good one), setup,
+import, commit, search, print, export, recovery-key check, backup,
+live IMAP fetch on real credentials, clean shutdown. Safety rails for
+testing on the dev machine: his real backup_locations.json moved aside
+first (the packaged app's state dir IS his dev state dir — a
+migration note for when he switches daily drivers), quarantine bit set
+manually so Gatekeeper actually engaged, everything restored and the
+test archive deleted after.
+
+The test earned its keep three times: the elastic-picker bug turned
+out to have two more copies (export destination and backup
+destination) — the export one resisted the first fix because its list
+is flex:1, so the height had to be pinned on the MODAL, not the list —
+and the backup picker was the 1-of-3 outlier that navigated on single
+click, now unified on Finder convention. Three full
+sign→notarize→staple rounds; every one was caused by a real find.
+
+**MailRepo-1.0.0.dmg: 61.7 MB, signed, notarized, stapled, accepted.**
+SHA-256 9c1e5529…de13, recorded in the guide for the website.
+
+Session 88 in total: from zero packaging artifacts to a shipped-grade
+macOS installer, with eight pre-existing bugs found and fixed along
+the way. Remaining: .deb on Apollo, tag/release, website, launch.
