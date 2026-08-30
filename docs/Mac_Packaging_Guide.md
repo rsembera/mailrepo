@@ -190,6 +190,22 @@ DMG background + dmgbuild settings done; test DMG mounts with correct
 layout. Show/hide password toggle shipped (see Daybook PLAN.md 9ab for
 the traps it ports around).
 
-Next: (1) sign with the Developer ID → notarize → staple → rebuild the
-DMG from the signed app (Rick at the keyboard for keychain prompts);
-(2) clean-account acceptance test on the signed build.
+Signed, notarized, and stapled (Session 88): app submission accepted,
+app stapled, Gatekeeper assessment passed; the DMG built from the
+stapled app was then signed, notarized (also accepted), and stapled
+itself. Artifact: dist/MailRepo-1.0.0.dmg (~62 MB). Full sequence used,
+now the canonical release recipe:
+
+1. `./venv/bin/python setup_app.py py2app`
+2. `./venv/bin/python packaging/bundle_dylibs.py dist/MailRepo.app --sign "$IDENT"`
+3. sign every remaining .so/.dylib individually, then readpst, then the
+   .app with `--deep --options runtime --timestamp`
+4. `codesign --verify --deep --strict` + `spctl --assess`
+5. ditto zip → `notarytool submit --keychain-profile "EdgeCase Notarization" --wait`
+6. `stapler staple dist/MailRepo.app`
+7. `dmgbuild -s packaging/dmg_settings.py "MailRepo" dist/MailRepo-<v>.dmg`
+8. sign the DMG, notarize it, staple it
+
+Next: clean-account acceptance test on this DMG (install to
+/Applications from the DMG like a user, fresh data dir, setup → import
+→ commit → search → export → backup → restore), then the .deb.

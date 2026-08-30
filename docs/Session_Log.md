@@ -6335,3 +6335,21 @@ notarization → staple → rebuild DMG from the signed app (needs Rick
 for keychain prompts), then a clean-account acceptance run.
 
 Code commit: `95034fb`.
+
+### Sixth stretch: signed, notarized, stapled
+
+The release run, EdgeCase's recipe verbatim (no entitlements needed —
+same stack, same result): every .so and .dylib signed individually,
+readpst, then the bundle with hardened runtime; verify clean; zip;
+notarytool submission 752c5c37 **Accepted**; app stapled; Gatekeeper
+assessment passed. The DMG was then built from the stapled app, itself
+signed, notarized (**Accepted**), and stapled.
+
+**dist/MailRepo-1.0.0.dmg exists, ~62 MB, and will pass Gatekeeper on
+any Mac.** Session 88 began with no packaging artifacts at all.
+
+Remaining before the .dmg ships: a clean-account acceptance run —
+install from the DMG like a user would, fresh data dir, setup through
+import, commit, search, export, backup, restore. Deliberately left for
+fresh eyes rather than the end of a twelve-hour day. Then the .deb on
+Apollo (unreachable today — wake it first).
