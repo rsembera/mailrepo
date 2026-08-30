@@ -206,6 +206,17 @@ now the canonical release recipe:
 7. `dmgbuild -s packaging/dmg_settings.py "MailRepo" dist/MailRepo-<v>.dmg`
 8. sign the DMG, notarize it, staple it
 
+TLS / IMAP from the bundle: verified (Session 88). py2app's __boot__.py
+sets SSL_CERT_FILE/SSL_CERT_DIR to Resources/openssl.ca (a bundled
+Mozilla CA set, 192 roots), so certificate verification does not depend
+on Homebrew's /opt/homebrew/etc/openssl@3/cert.pem. Verified handshakes
+to Gmail, Office 365, and iCloud IMAP using only the bundled roots —
+note that testing this with the bare Contents/MacOS/python bypasses the
+bootstrap and silently falls back to the Homebrew path, which is
+exactly the false-pass to avoid.
+
 Next: clean-account acceptance test on this DMG (install to
 /Applications from the DMG like a user, fresh data dir, setup → import
-→ commit → search → export → backup → restore), then the .deb.
+→ commit → search → export → backup → restore, and add a real IMAP
+account and fetch a folder — the one TLS step that needs credentials),
+then the .deb.

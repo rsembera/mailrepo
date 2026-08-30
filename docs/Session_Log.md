@@ -6353,3 +6353,18 @@ install from the DMG like a user would, fresh data dir, setup through
 import, commit, search, export, backup, restore. Deliberately left for
 fresh eyes rather than the end of a twelve-hour day. Then the .deb on
 Apollo (unreachable today — wake it first).
+
+### Postscript: Rick's "dumb question" that wasn't
+
+"Do we need to test if the bundled app can fetch mail?" Yes, and the
+test found the one plausible failure before ruling it out. TLS trust is
+a data-file dependency, invisible to the dylib audit: the bare bundled
+interpreter reads CA roots from Homebrew's cert.pem, which a clean Mac
+does not have. py2app already covers it — __boot__.py points
+SSL_CERT_FILE at a bundled 192-root Mozilla CA set — and verified
+handshakes to Gmail, Office 365, and iCloud IMAP succeeded on bundled
+roots alone. Trap recorded in the guide: testing with the bare
+interpreter bypasses the bootstrap and false-passes via Homebrew.
+Authenticated fetch (needs real credentials) added to the acceptance
+checklist. Also this stretch: repo metadata set via gh (description,
+homepage, 11 topics) ahead of going public.
