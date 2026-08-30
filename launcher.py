@@ -53,6 +53,77 @@ os.environ["MAILREPO_DESKTOP"] = "1"
 sys.path.insert(0, str(Path(__file__).parent))
 
 
+def _bundle_contents() -> Path | None:
+    """Contents/ of the .app when running packaged, else None."""
+    resources = os.environ.get("RESOURCEPATH")  # set by py2app's bootstrap
+    if getattr(sys, "frozen", False) and resources:
+        return Path(resources).parent
+    return None
+
+
+def _use_bundled_native_libraries(contents: Path) -> None:
+    """Route WeasyPrint's dlopen-by-name to Contents/Frameworks, and readpst
+    to Contents/Helpers.
+
+    WeasyPrint opens pango, harfbuzz, fontconfig & co. with cffi by bare
+    name ('libpango-1.0.dylib'). dyld resolves such names through its
+    search path, which cannot be changed from inside a hardened-runtime
+    process, and it does NOT consult already-loaded images (verified,
+    Session 88: pre-loading the bundled copies still opened Homebrew's).
+    So the one dlopen WeasyPrint uses is wrapped: a bare name that matches
+    a bundled library becomes that library's absolute path. Anything else
+    passes through untouched.
+    """
+    import cffi
+
+    frameworks = contents / "Frameworks"
+    bundled = {p.name: p for p in frameworks.glob("*.dylib")}
+    original = cffi.FFI.dlopen
+
+    def stem(leaf: str) -> str:
+        # 'libgobject-2.0.0.dylib' -> 'gobject-2.0.0'; 'gobject-2.0' -> 'gobject-2.0'
+        if leaf.endswith(".dylib"):
+            leaf = leaf[: -len(".dylib")]
+        return leaf[3:] if leaf.startswith("lib") else leaf
+
+    by_stem = {stem(leaf): path for leaf, path in bundled.items()}
+
+    def resolve(name):
+        if not isinstance(name, str) or "/" in name:
+            return name  # absolute path or non-string: untouched
+        wanted = stem(name)
+        if wanted in by_stem:
+            return str(by_stem[wanted])
+        # Unversioned request ('pango-1.0') for a versioned file
+        # ('pango-1.0.0'), and the Windows-style spelling ('gobject-2.0-0')
+        # with its last '-' read as '.'.
+        head, _, tail = wanted.rpartition("-")
+        for candidate in (wanted, f"{head}.{tail}" if head else wanted):
+            for bundled_stem, path in by_stem.items():
+                if bundled_stem == candidate or bundled_stem.startswith(candidate + "."):
+                    return str(path)
+        # Inside the bundle a bare name that is not bundled must fail here,
+        # not fall through to whatever dyld finds on this particular Mac —
+        # a Homebrew copy would load a second glib and still be missing on
+        # the user's machine. WeasyPrint catches OSError and tries its next
+        # spelling.
+        raise OSError(f"{name}: not bundled in {frameworks}")
+
+    def dlopen(self, name, flags=0):
+        return original(self, resolve(name), flags)
+
+    cffi.FFI.dlopen = dlopen
+
+    helpers = contents / "Helpers"
+    if helpers.is_dir():
+        os.environ["PATH"] = f"{helpers}{os.pathsep}{os.environ.get('PATH', '')}"
+
+
+_contents = _bundle_contents()
+if _contents is not None:
+    _use_bundled_native_libraries(_contents)
+
+
 def _is_mailrepo(port: int, timeout: float = 2.0) -> bool:
     """True if a MailRepo server is already answering on this port."""
     import urllib.request
