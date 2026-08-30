@@ -6264,3 +6264,48 @@ recovery-key screen's "anyone with this key can open your archive"
 could say "reset your password and open" — Rick's call.
 
 Tests: 664 passing (+5). ESLint: 0 errors. Code commit: `a5002d8`.
+
+### Fourth stretch (after archive-path verification): toggle, buttons, Daybook's lessons
+
+All five archived-email actions passed in the built app — Print, View
+source, attachment open, attachment download, Download .eml. The
+desktop bridge is verified on both the POST path and the link path.
+That closes the shell work.
+
+Then two of Rick's items, and the second became the interesting one.
+
+**Show/hide password toggle**, everywhere a password is typed. Started
+from EdgeCase's cda8719, rewired from inline onclick to listeners.
+First version had a CSS reserve keeping text clear of the eye — and
+Rick's long-password screenshot showed it inert, which turned out to be
+Daybook's bug reproduced exactly (Rick supplied the write-up; Daybook
+PLAN.md item 9ab): `.form-group input[type="password"] { padding: ... }`
+outweighs any wrapper rule and the shorthand wipes padding-right, so
+the fix passes every static check while doing nothing. And it is keyed
+on the input's type, Daybook's other trap — revealing flips type to
+text. The port that stuck: the reserve is the only lever (Daybook's
+core finding), so the JS that owns the button sets it inline, computed
+from the button's measured band + 4px. Immune to load order, not
+type-keyed, self-recalibrating — the relationship, not the numbers.
+
+Second Daybook-adjacent find: re-masking on submit "worked" in the DOM
+and was invisible on screen — the webview stops repainting once
+navigation starts, so a revealed password stayed readable through the
+whole KDF wait. The handler now holds the submit, re-masks, lets one
+frame paint, then resubmits (requestSubmit, preserving the submitter).
+
+**Unmount button** was oversized because sidebar.css sized
+`.unmount-btn i` — and lucide replaces the <i> with an <svg>, so the
+rule matched nothing and the icon fell back to lucide's 24px default.
+Fixed for this button; 24 more ` i {` rules across the CSS modules are
+a listed audit (layouts have been visually tuned around the fallback,
+so no blind bulk change).
+
+Also: auth pages now load the SVG icon instead of the raster one.
+
+Product ruling (Rick): mounted imports staying transient across
+sessions is by design and stays — the archive is the durable thing.
+Print opening a PDF in Preview rather than a print dialog also stays:
+preview-before-print suits the audience.
+
+Tests: 664 passing. ESLint: 0 errors. Code commit: `33bf3d3`.

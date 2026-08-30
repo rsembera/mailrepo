@@ -20,7 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **View source on import previews (Session 88).** Inspect an email's
   raw headers before deciding to archive it, not only after.
 
+- **Show/hide password toggle (Session 88).** An eye button on every
+  password field — setup, login, recovery, password change, account
+  setup. A mistyped master password costs a full key-derivation wait,
+  so being able to check before submitting matters here more than in
+  most apps. The field always re-masks the moment you submit.
+
 ### Fixed
+- **Unmount button size (Session 88).** The × next to a mounted import
+  now matches the sidebar's compact icons instead of towering over them.
 - **Folder picker no longer jumps (Session 88).** Selecting a folder
   used to grow the dialog and shift the list, so a double-click could
   open the folder below the one you aimed at. The dialog now holds
