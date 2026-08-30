@@ -6213,3 +6213,54 @@ served, PDF written, `readpst -V` answered, and `DYLD_PRINT_LIBRARIES`
 showed zero `/opt/homebrew` paths. 157 MB.
 
 Tests: 659 passing. Code commit: `1beee81`.
+
+### Third stretch: the bridge, and what the new shell shook loose
+
+Rick's call: pywebview window, not browser-plus-menu-bar — Joe User
+expects a native-looking app. Ported EdgeCase's desktop.py shape, then
+built the bridge for the two things a webview cannot do. Print goes to
+Python, which renders the document with the bundled WeasyPrint (remote
+resources refused, as in pdf_export) and opens the PDF in Preview — a
+real print dialog, which window.print() in WKWebView is not. "Open in
+new tab" and same-origin target=_blank links are fetched in-page (the
+page holds the session cookie; Python never touches it) and handed to
+macOS by bytes. `<a download>` and blob saves go through pywebview's
+native Save panel untouched.
+
+Testing the built app against `test_files/` found three pre-existing
+bugs a browser had been hiding:
+
+1. **The folder picker jumped.** Single-clicking a folder revealed the
+   "Selected" panel; the modal grew and re-centred between the two
+   clicks of a double-click, so the second click landed one row down
+   (Rick aimed at `test_files`, got `tests`). Panel is now always in
+   the layout, and the list is a fixed 350px so the dialog never
+   resizes to its contents — Rick's diagnosis, and correct.
+2. **Import-preview attachment buttons were inert** — bound to
+   #viewerBody, rendered in #viewerAttachments. Nobody had clicked
+   them.
+3. **View source did nothing on previews** — no route. Rick pushed back
+   on my first fix (hide the button): inspecting headers *before*
+   archiving is a real workflow for this audience. Added
+   POST /api/import/source, with the raw-bytes lookup lifted out of
+   /api/import/email into `_locate_import_raw_email` and shared.
+   Download .eml stays archive-only and is hidden on previews (the file
+   is already on disk).
+
+Also: `setup_app.py` loses its `resources` entry — py2app copies
+templates and static inside the `web` package already, and the entry
+made a second unused copy.
+
+Verified on an import preview in the built app: Print, View source,
+attachment open, attachment download all correct. **Not yet tested:**
+the same five from an archived email (the `<a href>` path rather than
+the POST path), plus Download .eml — Rick hit his session limit.
+
+Noted for later, not fixed: the login page's session poller logs a
+harmless 401 in the console; the left icon rail pushes its top icons
+off-screen when the viewport is short (seen with the Web Inspector
+docked; the 680px minimum window height is the only guard); the
+recovery-key screen's "anyone with this key can open your archive"
+could say "reset your password and open" — Rick's call.
+
+Tests: 664 passing (+5). ESLint: 0 errors. Code commit: `a5002d8`.

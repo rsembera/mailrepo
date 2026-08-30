@@ -77,7 +77,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | File | Lines | What It Does |
 |------|-------|--------------|
 | `main.py` | 305 | Command-line entry: `prepare_app()` runs the pre-flight checks (SQLCipher, pending restore, interrupted-state warnings) and builds the app; `main()` serves it with waitress and wires the checkpoint-and-backup shutdown |
-| `launcher.py` | 244 | Packaged-app entry (Session 88): pywebview window around the server; archive under Application Support / XDG data; free-port pick; second instance refused; shutdown on window close |
+| `launcher.py` | 323 | Packaged-app entry (Session 88): pywebview window around the server; archive under Application Support / XDG data; free-port pick; second instance refused; shutdown on window close; DesktopApi bridge (open_bytes, print_html) for what a webview cannot do |
 | `setup_app.py` | 140 | py2app manifest — first-party code declared as packages; `install_requires` cleared so py2app builds from the venv |
 | `packaging/bundle_dylibs.py` | 155 | Post-py2app pass: otool closure of WeasyPrint's and readpst's Homebrew libraries into Contents/Frameworks + Helpers, install-name rewrite, re-sign, leak check |
 | `assets/icon.icns`, `packaging/icons/` | — | App icons rendered from `web/static/assets/icon.svg` (macOS .icns, Linux hicolor set) |
@@ -120,7 +120,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `exports.py` | 997 | Bulk PDF/encrypted-ZIP export pipeline + SSE progress |
 | `emails.py` | 839 | Archived email operations: view, move, delete, batch, download; folder listing carries per-subfolder tree counts |
 | `filesystem.py` | 807 | File browser for imports, path validation, PST conversion |
-| `imports.py` | 744 | Mount/unmount imports, browse imported emails/folders |
+| `imports.py` | 796 | Mount/unmount imports, browse imported emails/folders |
 | `progress_commit.py` | 701 | SSE streaming for commit operations; batched Gmail deletes; unified post-action failure accounting + logging (Sessions 47/54/57) |
 | `folders.py` | 711 | Archive folder CRUD, trash, restore, vault, retention; `tree_email_counts()` is the single roll-up behind every folder size the app shows |
 | `accounts.py` | 495 | IMAP account CRUD, Gmail auto-detection, folder listing |
@@ -148,6 +148,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
+| `desktop.js` | 82 | Desktop-shell bridge (Session 88): no-ops in a browser; in the packaged app routes open-in-new-tab, print, and same-origin _blank links through DesktopApi |
 | `app.js` | 737 | Init, event listeners, rail nav, nav guards, template-bindings wiring |
 | `template-bindings.js` | 143 | Single delegated handler for index.html data-tpl-action attrs (Session 38) |
 | `delegate.js` | 116 | `bindActions(container, handlers)` helper for per-view delegation |
@@ -324,7 +325,7 @@ first run of this found a `ReferenceError` that had been shipping.
 
 ---
 
-## Test Suite (659 tests)
+## Test Suite (664 tests)
 
 | File | Coverage |
 |------|----------|

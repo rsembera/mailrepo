@@ -15,14 +15,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   command line runs, with the archive kept in the standard
   application-data folder, one instance at a time, and the usual
   backup-and-checkpoint on close. App icons for macOS and Linux are
-  generated from the vector mark. Not yet shipped — the PDF engine's
-  native libraries still have to be bundled and the build signed.
+  generated from the vector mark. Not yet shipped — the build still
+  has to be signed and notarized.
+- **View source on import previews (Session 88).** Inspect an email's
+  raw headers before deciding to archive it, not only after.
+
+### Fixed
+- **Folder picker no longer jumps (Session 88).** Selecting a folder
+  used to grow the dialog and shift the list, so a double-click could
+  open the folder below the one you aimed at. The dialog now holds
+  still; only the list scrolls.
+- **Attachment buttons on import previews work (Session 88).** Open
+  and download had been wired to the wrong container and did nothing.
 - **Vector logo and icon (Session 87).** The MailRepo logo and mark
   now exist as SVG (`logo.svg`, `icon.svg`), recreated from the
   raster originals. App icons for the macOS and Linux packages will
   render from these at full sharpness in every size.
 
-### Fixed
 - **A backup folder you deleted stays deleted (Session 85).** Every
   backup writes a copy of its index into each folder backups have ever
   gone to, and until now it created that folder first if it was

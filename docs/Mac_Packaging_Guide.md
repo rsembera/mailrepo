@@ -177,6 +177,11 @@ launches and serves, sqlcipher3 and argon2 verified inside the bundle,
 WeasyPrint and readpst running on bundled libraries with zero
 `/opt/homebrew` lines (157 MB .app, ad-hoc signed).
 
-Next: (1) desktop-mode JS for print and inline attachment view, tested
-against the built .app; (2) dmg_background.png; (3) sign → notarize →
-DMG per the steps above; (4) clean-account acceptance test.
+Desktop bridge (launcher.py DesktopApi + web/static/js/desktop.js)
+done and verified on import previews.
+
+Next: (1) verify the archived-email paths in the built app — Print,
+View source, attachment open, attachment download, Download .eml
+(these use `<a href>` links, not the POST path already tested);
+(2) dmg_background.png; (3) sign → notarize → DMG per the steps above;
+(4) clean-account acceptance test.
