@@ -143,28 +143,14 @@ Environment variables:
     sys.exit(0)
 
 
-def main():
-    """Application entry point."""
+def prepare_app():
+    """Run the pre-flight checks and build the Flask app.
 
-    # Check for --help first
-    if "--help" in sys.argv or "-h" in sys.argv:
-        show_help()
-
-    # Console logging with timestamps (WARNING+). Console-only by design:
-    # error strings can contain folder names, which shouldn't hit disk.
-    logging.basicConfig(
-        level=logging.WARNING,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
-
-    # Suppress polling endpoint logging
-    werkzeug_logger = logging.getLogger("werkzeug")
-    werkzeug_logger.addFilter(PollingFilter())
-
-    # Quiet Waitress queue warnings (normal for single-user app)
-    waitress_log = logging.getLogger("waitress")
-    waitress_log.setLevel(logging.ERROR)
-
+    Shared by the command-line entry point below and by launcher.py (the
+    packaged desktop app). Everything that must happen BEFORE the database
+    is opened lives here, in this order: the SQLCipher check, a pending
+    restore, and the two interrupted-state warnings.
+    """
     # Fail fast if SQLCipher is missing. Checked before anything touches the
     # database so a broken install/packaged build reports cleanly at launch
     # instead of raising partway through an operation.
@@ -241,6 +227,33 @@ def main():
     # wants, and it cannot say so without this.
     if restore_result and "error" not in restore_result:
         app.config["RESTORE_COMPLETED"] = restore_result
+
+    return app
+
+
+def main():
+    """Application entry point."""
+
+    # Check for --help first
+    if "--help" in sys.argv or "-h" in sys.argv:
+        show_help()
+
+    # Console logging with timestamps (WARNING+). Console-only by design:
+    # error strings can contain folder names, which shouldn't hit disk.
+    logging.basicConfig(
+        level=logging.WARNING,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+    # Suppress polling endpoint logging
+    werkzeug_logger = logging.getLogger("werkzeug")
+    werkzeug_logger.addFilter(PollingFilter())
+
+    # Quiet Waitress queue warnings (normal for single-user app)
+    waitress_log = logging.getLogger("waitress")
+    waitress_log.setLevel(logging.ERROR)
+
+    app = prepare_app()
 
     # Register cleanup handlers
     atexit.register(lambda: _cleanup(app))
