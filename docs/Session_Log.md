@@ -6309,3 +6309,29 @@ Print opening a PDF in Preview rather than a print dialog also stays:
 preview-before-print suits the audience.
 
 Tests: 664 passing. ESLint: 0 errors. Code commit: `33bf3d3`.
+
+### Fifth stretch: the DMG itself
+
+`dmgbuild` (installed into the venv) replaces EdgeCase's hdiutil
+recipe, which copied a background image into the volume but never
+wired it to the Finder window — the settings file sets window, retina
+background (tiffutil 1x+2x), and icon positions deterministically and
+headless. Gotcha: dmgbuild exec()s the settings without __file__, so
+paths are cwd-relative; the file refuses to run outside the repo root.
+
+The artwork took three rounds with Rick, all of them right calls: the
+top logo came out (the real app icon is the branding — a second mark
+read as "two different icons"), the captions moved up (Finder chrome
+eats ~60px of window height; text below y≈300 of the original 360
+window was invisible), and the window tightened to 540x320 to kill the
+dead band up top. The geometry contract — icon slots, arrow endpoints,
+caption ceiling — is stated identically in dmg_background.svg and
+dmg_settings.py, since moving one without the other breaks silently.
+Drag direction stays left→right; that is the convention.
+
+Test DMG built from the ad-hoc app mounts with correct layout,
+approved on screen. Remaining for the .dmg: Developer ID signing →
+notarization → staple → rebuild DMG from the signed app (needs Rick
+for keychain prompts), then a clean-account acceptance run.
+
+Code commit: `95034fb`.

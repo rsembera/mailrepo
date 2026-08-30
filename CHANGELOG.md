@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   command line runs, with the archive kept in the standard
   application-data folder, one instance at a time, and the usual
   backup-and-checkpoint on close. App icons for macOS and Linux are
-  generated from the vector mark. Not yet shipped — the build still
+  generated from the vector mark, and the installer image shows the
+  usual drag-to-Applications layout. Not yet shipped — the build still
   has to be signed and notarized.
 - **View source on import previews (Session 88).** Inspect an email's
   raw headers before deciding to archive it, not only after.

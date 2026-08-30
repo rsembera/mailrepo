@@ -72,7 +72,10 @@ xcrun notarytool store-credentials "MailRepo Notarization" \
 - `assets/icon.icns` — **done** (Session 88), rendered from
   `web/static/assets/icon.svg` with Inkscape at 16–1024px, `iconutil`.
 - `packaging/icons/hicolor/` — the Linux set, cut at the same time.
-- `packaging/dmg_background.png` — still to create ("drag to Applications").
+- `packaging/dmg_background.svg/.png/.tiff` — **done** (Session 88); the
+  TIFF (1x+2x) is what Finder uses. Geometry contract with
+  `packaging/dmg_settings.py`: window 540x320, icons at (140,125) and
+  (400,125); captions must sit above y=260 (Finder chrome).
 - `setup_app.py` — **done**; see its maintenance note.
 
 ## setup_app.py notes
@@ -122,7 +125,9 @@ xcrun stapler staple "MailRepo.app"
 rm MailRepo.zip
 ```
 
-5. DMG:
+5. DMG (dmgbuild, run from the repo root — the settings file checks):
+   `./venv/bin/dmgbuild -s packaging/dmg_settings.py "MailRepo" dist/MailRepo-<version>.dmg`
+   Old hdiutil route for reference:
 
 ```bash
 mkdir dmg_temp && cp -R "MailRepo.app" dmg_temp/
@@ -180,8 +185,11 @@ WeasyPrint and readpst running on bundled libraries with zero
 Desktop bridge (launcher.py DesktopApi + web/static/js/desktop.js)
 done and verified on import previews.
 
-Next: (1) verify the archived-email paths in the built app — Print,
-View source, attachment open, attachment download, Download .eml
-(these use `<a href>` links, not the POST path already tested);
-(2) dmg_background.png; (3) sign → notarize → DMG per the steps above;
-(4) clean-account acceptance test.
+Archived-email paths verified in the built app (all five actions).
+DMG background + dmgbuild settings done; test DMG mounts with correct
+layout. Show/hide password toggle shipped (see Daybook PLAN.md 9ab for
+the traps it ports around).
+
+Next: (1) sign with the Developer ID → notarize → staple → rebuild the
+DMG from the signed app (Rick at the keyboard for keychain prompts);
+(2) clean-account acceptance test on the signed build.
