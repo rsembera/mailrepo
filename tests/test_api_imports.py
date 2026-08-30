@@ -163,6 +163,52 @@ class TestGetImportEmail:
         assert "distinct body content" in email["text_body"]
 
 
+class TestGetImportEmailSource:
+    """View source for a mounted import (Session 88): the raw bytes, so
+    headers can be inspected before an email is archived."""
+
+    def test_requires_source(self, authenticated_client, initialized_app):
+        resp = authenticated_client.post("/api/import/source", json={"uid": "eml-0"})
+        assert resp.status_code == 400
+
+    def test_source_not_found(self, authenticated_client, initialized_app):
+        resp = authenticated_client.post(
+            "/api/import/source", json={"sourcePath": "/no/file.mbox", "uid": "mbox-0"}
+        )
+        assert resp.status_code == 404
+
+    def test_returns_raw_source_of_eml(self, authenticated_client, initialized_app, tmp_path):
+        f = tmp_path / "src.eml"
+        raw = _eml_bytes(subject="Source subject", body="raw body here")
+        f.write_bytes(raw)
+        resp = authenticated_client.post(
+            "/api/import/source",
+            json={"emailSourcePath": str(f), "uid": "eml-0", "importType": "eml"},
+        )
+        assert resp.status_code == 200
+        source = resp.get_json()["source"]
+        assert "Subject: Source subject" in source
+        assert "raw body here" in source
+        assert source == raw.decode("utf-8")
+
+    def test_eml_directory_lookup_by_uid(self, authenticated_client, initialized_app, tmp_path):
+        (tmp_path / "a.eml").write_bytes(_eml_bytes(subject="First"))
+        resp = authenticated_client.post(
+            "/api/import/source",
+            json={"sourcePath": str(tmp_path), "uid": "eml-0", "importType": "eml"},
+        )
+        assert resp.status_code == 200
+        assert "Subject: First" in resp.get_json()["source"]
+
+    def test_unauthenticated_is_refused(self, client, initialized_app, tmp_path):
+        f = tmp_path / "src.eml"
+        f.write_bytes(_eml_bytes())
+        resp = client.post(
+            "/api/import/source", json={"emailSourcePath": str(f), "uid": "eml-0"}
+        )
+        assert resp.status_code in (401, 302)
+
+
 class TestImportAttachment:
     def test_requires_source(self, authenticated_client, initialized_app):
         resp = authenticated_client.post(

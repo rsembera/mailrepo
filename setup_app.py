@@ -108,10 +108,9 @@ OPTIONS = {
         'pytest',
         'ruff',
     ],
-    'resources': [
-        'web/templates',
-        'web/static',
-    ],
+    # No 'resources' entry: py2app copies web/templates and web/static
+    # inside the `web` package itself (which is what Flask serves), so a
+    # resources entry only produced a second, unused copy.
 }
 
 # Guarded so the manifest above can be imported and inspected (by

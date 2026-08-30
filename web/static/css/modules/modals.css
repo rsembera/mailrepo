@@ -361,8 +361,10 @@
 .file-picker-list {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
-    max-height: 350px;
-    min-height: 200px;
+    /* Fixed, not min/max: a list that resizes to its contents makes the
+       whole dialog jump on every folder change. The list scrolls; the
+       dialog holds still. */
+    height: 350px;
     overflow-y: auto;
 }
 
@@ -419,6 +421,15 @@
     display: flex;
     align-items: center;
     gap: var(--space-xs);
+    min-height: 40px;
+    box-sizing: border-box;
+}
+
+/* Always in the layout: revealing this panel used to grow the modal and
+   re-centre it between the two clicks of a double-click, so the second
+   click landed on the next row. Hidden, not removed. */
+.file-picker-selected.is-empty {
+    visibility: hidden;
 }
 
 .file-picker-selected span:first-child {

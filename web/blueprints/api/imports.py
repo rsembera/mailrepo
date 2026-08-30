@@ -141,6 +141,111 @@ def import_eml():
         return jsonify({"success": False, "error": result["error"]}), 500
 
 
+def _locate_import_raw_email(
+    source_path, uid: str, import_type: str, folder_path: str, email_source_path: str
+) -> bytes | None:
+    """Find one email's raw bytes inside a mounted import.
+
+    Shared by the preview and view-source routes. Direct file paths
+    (.eml, .emlx) are read as-is; everything else is a UID lookup that
+    depends on the import type.
+    """
+    from .email_parser import _parse_eml_directory, get_raw_email_from_import
+
+    raw_email = None
+
+    # If we have a direct path to the email file, use it (EML files, Apple emlx)
+    # But NOT for mbox files - those need UID-based lookup
+    if email_source_path:
+        email_path = Path(email_source_path).expanduser()
+        if email_path.exists() and email_path.is_file():
+            suffix = email_path.suffix.lower()
+            # Only use direct file reading for individual email files
+            if suffix == ".emlx":
+                # Parse Apple .emlx format
+                with open(email_path, "rb") as f:
+                    content = f.read()
+                first_newline = content.find(b"\n")
+                if first_newline > 0:
+                    email_content = content[first_newline + 1 :]
+                    plist_marker = email_content.rfind(b"<?xml version=")
+                    if plist_marker > 0:
+                        email_content = email_content[:plist_marker]
+                    raw_email = email_content
+            elif suffix == ".eml":
+                # Regular .eml file
+                with open(email_path, "rb") as f:
+                    raw_email = f.read()
+            # For mbox files, fall through to UID-based lookup below
+
+    # Fallback lookups - only if direct file reading didn't work
+    if not raw_email:
+        if import_type == "eml":
+            # EML directory - find specific file
+            if uid.startswith("eml-"):
+                results = _parse_eml_directory(str(source_path))
+                for r_uid, r_bytes in results:
+                    if r_uid == uid:
+                        raw_email = r_bytes
+                        break
+        elif import_type == "apple-mbox":
+            # Apple Mail export - parse directly using same logic as filesystem.py
+            import mailbox
+            import os
+
+            # Use folder_path which points to the specific .mbox directory
+            mbox_dir = folder_path if folder_path else str(source_path)
+
+            # Check for mbox file inside the .mbox directory
+            mbox_file = os.path.join(mbox_dir, "mbox")
+            if os.path.isfile(mbox_file):
+                # UID format from filesystem.py: f"apple-{basename}-{i}"
+                # e.g., "apple-mbox-0" where "mbox" is basename of the mbox file
+                try:
+                    mbox = mailbox.mbox(mbox_file)
+                    for i, message in enumerate(mbox):
+                        expected_uid = f"apple-{os.path.basename(mbox_file)}-{i}"
+                        if expected_uid == uid:
+                            raw_email = message.as_bytes()
+                            break
+                except Exception:
+                    pass
+
+            # Check for Messages directory with .emlx files
+            if not raw_email:
+                messages_dir = os.path.join(mbox_dir, "Messages")
+                if os.path.isdir(messages_dir):
+                    # UID format: f"emlx-{filename}"
+                    for entry in os.scandir(messages_dir):
+                        if entry.name.endswith(".emlx") and entry.is_file():
+                            expected_uid = f"emlx-{entry.name}"
+                            if expected_uid == uid:
+                                try:
+                                    with open(entry.path, "rb") as f:
+                                        content = f.read()
+                                    # .emlx format: first line is byte count, then email, then plist
+                                    first_newline = content.find(b"\n")
+                                    if first_newline > 0:
+                                        email_content = content[first_newline + 1 :]
+                                        plist_marker = email_content.rfind(b"<?xml version=")
+                                        if plist_marker > 0:
+                                            email_content = email_content[:plist_marker]
+                                        raw_email = email_content
+                                        break
+                                except Exception:
+                                    pass
+        elif import_type == "pst":
+            # PST converted to mbox - use emailSourcePath which points to specific mbox file
+            if email_source_path:
+                raw_email = get_raw_email_from_import(email_source_path, uid)
+            else:
+                # Fallback to source_path (shouldn't normally happen)
+                raw_email = get_raw_email_from_import(str(source_path), uid)
+        else:
+            # Standard mbox
+            raw_email = get_raw_email_from_import(str(source_path), uid)
+    return raw_email
+
 @api_bp.route("/import/email", methods=["POST"])
 def get_import_email():
     """
@@ -158,8 +263,6 @@ def get_import_email():
     import email as email_lib
     from email.header import decode_header
     from email.utils import parsedate_to_datetime
-
-    from .email_parser import _parse_eml_directory, get_raw_email_from_import
 
     data = request.get_json() or {}
     source_path = data.get("sourcePath", "").strip()
@@ -297,98 +400,9 @@ def get_import_email():
         return attachments
 
     try:
-        raw_email = None
-
-        # If we have a direct path to the email file, use it (EML files, Apple emlx)
-        # But NOT for mbox files - those need UID-based lookup
-        if email_source_path:
-            email_path = Path(email_source_path).expanduser()
-            if email_path.exists() and email_path.is_file():
-                suffix = email_path.suffix.lower()
-                # Only use direct file reading for individual email files
-                if suffix == ".emlx":
-                    # Parse Apple .emlx format
-                    with open(email_path, "rb") as f:
-                        content = f.read()
-                    first_newline = content.find(b"\n")
-                    if first_newline > 0:
-                        email_content = content[first_newline + 1 :]
-                        plist_marker = email_content.rfind(b"<?xml version=")
-                        if plist_marker > 0:
-                            email_content = email_content[:plist_marker]
-                        raw_email = email_content
-                elif suffix == ".eml":
-                    # Regular .eml file
-                    with open(email_path, "rb") as f:
-                        raw_email = f.read()
-                # For mbox files, fall through to UID-based lookup below
-
-        # Fallback lookups - only if direct file reading didn't work
-        if not raw_email:
-            if import_type == "eml":
-                # EML directory - find specific file
-                if uid.startswith("eml-"):
-                    results = _parse_eml_directory(str(source_path))
-                    for r_uid, r_bytes in results:
-                        if r_uid == uid:
-                            raw_email = r_bytes
-                            break
-            elif import_type == "apple-mbox":
-                # Apple Mail export - parse directly using same logic as filesystem.py
-                import mailbox
-                import os
-
-                # Use folder_path which points to the specific .mbox directory
-                mbox_dir = folder_path if folder_path else str(source_path)
-
-                # Check for mbox file inside the .mbox directory
-                mbox_file = os.path.join(mbox_dir, "mbox")
-                if os.path.isfile(mbox_file):
-                    # UID format from filesystem.py: f"apple-{basename}-{i}"
-                    # e.g., "apple-mbox-0" where "mbox" is basename of the mbox file
-                    try:
-                        mbox = mailbox.mbox(mbox_file)
-                        for i, message in enumerate(mbox):
-                            expected_uid = f"apple-{os.path.basename(mbox_file)}-{i}"
-                            if expected_uid == uid:
-                                raw_email = message.as_bytes()
-                                break
-                    except Exception:
-                        pass
-
-                # Check for Messages directory with .emlx files
-                if not raw_email:
-                    messages_dir = os.path.join(mbox_dir, "Messages")
-                    if os.path.isdir(messages_dir):
-                        # UID format: f"emlx-{filename}"
-                        for entry in os.scandir(messages_dir):
-                            if entry.name.endswith(".emlx") and entry.is_file():
-                                expected_uid = f"emlx-{entry.name}"
-                                if expected_uid == uid:
-                                    try:
-                                        with open(entry.path, "rb") as f:
-                                            content = f.read()
-                                        # .emlx format: first line is byte count, then email, then plist
-                                        first_newline = content.find(b"\n")
-                                        if first_newline > 0:
-                                            email_content = content[first_newline + 1 :]
-                                            plist_marker = email_content.rfind(b"<?xml version=")
-                                            if plist_marker > 0:
-                                                email_content = email_content[:plist_marker]
-                                            raw_email = email_content
-                                            break
-                                    except Exception:
-                                        pass
-            elif import_type == "pst":
-                # PST converted to mbox - use emailSourcePath which points to specific mbox file
-                if email_source_path:
-                    raw_email = get_raw_email_from_import(email_source_path, uid)
-                else:
-                    # Fallback to source_path (shouldn't normally happen)
-                    raw_email = get_raw_email_from_import(str(source_path), uid)
-            else:
-                # Standard mbox
-                raw_email = get_raw_email_from_import(str(source_path), uid)
+        raw_email = _locate_import_raw_email(
+            source_path, uid, import_type, folder_path, email_source_path
+        )
 
         if not raw_email:
             return jsonify({"error": "Email not found in import source"}), 404
@@ -433,6 +447,44 @@ def get_import_email():
     except Exception as e:
         return jsonify({"error": f"Failed to read email: {str(e)}"}), 500
 
+
+
+@api_bp.route("/import/source", methods=["POST"])
+def get_import_email_source():
+    """Raw source of an email in a mounted import — the counterpart of
+    /folders/<id>/emails/<id>/source for mail that is not yet archived,
+    so headers can be inspected before deciding to archive it."""
+    data = request.get_json() or {}
+    source_path = data.get("sourcePath", "").strip()
+    uid = data.get("uid", "").strip()
+    import_type = data.get("importType", "mbox")
+    folder_path = data.get("folderPath", "")
+    email_source_path = data.get("emailSourcePath", "").strip()
+
+    if not source_path and not email_source_path:
+        return jsonify({"error": "Source path is required"}), 400
+    if not uid:
+        return jsonify({"error": "UID is required"}), 400
+
+    source_path = Path(source_path).expanduser() if source_path else None
+    if source_path and not source_path.exists():
+        return jsonify({"error": "Source not found"}), 404
+
+    try:
+        raw_email = _locate_import_raw_email(
+            source_path, uid, import_type, folder_path, email_source_path
+        )
+    except Exception as e:
+        log.error(f"Error reading import source: {e}")
+        return jsonify({"error": "Failed to read email source"}), 500
+    if not raw_email:
+        return jsonify({"error": "Email not found in import source"}), 404
+
+    try:
+        source = raw_email.decode("utf-8")
+    except UnicodeDecodeError:
+        source = raw_email.decode("latin-1")
+    return jsonify({"source": source})
 
 @api_bp.route("/import/attachment", methods=["POST"])
 def download_import_attachment():

@@ -16,10 +16,15 @@ What this does that main.py does not:
      when that window closes.
 """
 
+import base64
 import os
 import platform
+import re
+import shutil
 import socket
+import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -194,6 +199,79 @@ def _serve(app, port: int) -> None:
     serve(app, host="127.0.0.1", port=port, _quiet=True)
 
 
+class DesktopApi:
+    """What the page can ask the desktop shell to do (window.pywebview.api).
+
+    A browser opens an attachment in a new tab and prints with its own
+    dialog; a pywebview window can do neither. Both come back to the same
+    move: put the bytes in a file and hand it to macOS, which opens the
+    right application — Preview for a PDF, and Preview's print dialog is
+    a real one.
+
+    The page does the fetching (it holds the session cookie); Python only
+    ever receives bytes. Files land in a per-run 0700 directory that is
+    wiped on the next launch, not deleted immediately, because the
+    viewer reads them lazily (EdgeCase's arrangement, kept as is).
+    """
+
+    def __init__(self):
+        self._dir = None
+
+    def _viewer_dir(self) -> Path:
+        if self._dir is None:
+            parent = Path(tempfile.gettempdir()) / f"mailrepo-viewer-{os.getuid()}"
+            shutil.rmtree(parent, ignore_errors=True)
+            parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            parent.chmod(0o700)
+            self._dir = Path(tempfile.mkdtemp(prefix="run-", dir=parent))
+        return self._dir
+
+    def _place(self, filename: str, data: bytes) -> Path:
+        safe = re.sub(r"[\\/:\x00-\x1f]", "_", Path(filename or "file").name).strip() or "file"
+        folder = Path(tempfile.mkdtemp(dir=self._viewer_dir()))
+        path = folder / safe
+        path.write_bytes(data)
+        path.chmod(0o600)
+        return path
+
+    @staticmethod
+    def _open(path: Path) -> None:
+        if platform.system() == "Darwin":
+            subprocess.run(["open", str(path)], check=False)
+        else:
+            subprocess.run(["xdg-open", str(path)], check=False)
+
+    def open_bytes(self, filename: str, data_b64: str) -> bool:
+        """Open a file (attachment, source text) in the default application."""
+        try:
+            self._open(self._place(filename, base64.b64decode(data_b64)))
+            return True
+        except Exception as e:  # noqa: BLE001 — surfaced to the page as False
+            print(f"open_bytes failed: {e}", file=sys.stderr)
+            return False
+
+    def print_html(self, title: str, html: str) -> bool:
+        """Render a print document to PDF and open it; the user prints from there.
+
+        Remote resources are refused, as in core.pdf_export: an email's
+        tracking pixel must not phone home because someone pressed Print.
+        """
+        try:
+            from weasyprint import HTML, default_url_fetcher
+
+            def fetcher(url):
+                if url.startswith("data:"):
+                    return default_url_fetcher(url)
+                return {"mime_type": "image/png", "string": b""}
+
+            pdf = HTML(string=html, url_fetcher=fetcher).write_pdf()
+            self._open(self._place(f"{title or 'Email'}.pdf", pdf))
+            return True
+        except Exception as e:  # noqa: BLE001
+            print(f"print_html failed: {e}", file=sys.stderr)
+            return False
+
+
 def run_desktop() -> None:
     import webview
 
@@ -225,6 +303,7 @@ def run_desktop() -> None:
         width=1280,
         height=820,
         min_size=(1024, 680),
+        js_api=DesktopApi(),
     )
 
     def on_closing():

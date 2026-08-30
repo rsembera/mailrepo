@@ -32,6 +32,7 @@ import { initBackupsView, showBackupsView } from './views/backups.js';
 import { initReviewView, showReviewView } from './views/review.js';
 import { initImports, getImportEmails, getMountedImports, renderImportsSection } from './components/imports.js';
 import { initTemplateBindings, registerHandler as registerTemplateHandler } from './template-bindings.js';
+import { initDesktopLinkHandling } from './desktop.js';
 
 // ============================================
 // DOM ELEMENTS
@@ -66,6 +67,7 @@ const elements = {
 // ============================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    initDesktopLinkHandling();
     // Restore staged items from sessionStorage (e.g., when returning from review page)
     restoreStagedFromSession();
     

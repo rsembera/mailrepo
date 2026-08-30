@@ -65,7 +65,7 @@ def test_first_party_roots_are_declared(manifest):
 
 def test_user_data_directories_are_not_bundled(manifest):
     """archive/, data/, config/, backups/ are the user's mail, not code."""
-    bundled = set(manifest.OPTIONS["packages"]) | set(manifest.OPTIONS["resources"])
+    bundled = set(manifest.OPTIONS["packages"]) | set(manifest.OPTIONS.get("resources", []))
     assert not bundled & {"archive", "data", "config", "backups"}
 
 
@@ -123,6 +123,9 @@ def test_declared_packages_are_all_importable(manifest):
     assert not unimportable, f"declared but not importable: {unimportable}"
 
 
-def test_templates_and_static_are_bundled(manifest):
-    assert "web/templates" in manifest.OPTIONS["resources"]
-    assert "web/static" in manifest.OPTIONS["resources"]
+def test_templates_and_static_ride_inside_the_web_package(manifest):
+    """py2app copies non-Python files under a declared package, so the
+    templates and static tree are bundled by 'web' itself; a separate
+    resources entry would only duplicate them."""
+    assert "web" in manifest.FIRST_PARTY_PACKAGES
+    assert "resources" not in manifest.OPTIONS

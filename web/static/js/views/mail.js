@@ -12,6 +12,7 @@ import { escapeHtml, escapeForOnclick, debounce } from '../utils.js';
 import { state } from '../state.js';
 import { renderEmailList, clearEmailFilter, clearArchivedEmailSelection } from '../components/email-list.js';
 import { bindActions } from '../delegate.js';
+import { isDesktop, openBlobExternally, printHtmlExternally } from '../desktop.js';
 
 // DOM element references
 let contextTitle = null;
@@ -33,6 +34,17 @@ function _updateStageThreadButton(context) {
     const showIt = context && context.type === 'account'
         && context.accountId && context.folder && context.uid;
     btn.style.display = showIt ? '' : 'none';
+}
+
+/**
+ * Download .eml is an archive operation. On an import preview the file
+ * is already on the user's disk, so the button is hidden there (until
+ * Session 88 it sat there and did nothing).
+ */
+function _updateArchiveOnlyButtons(context) {
+    const archived = context && (context.type === 'account' || context.type === 'folder');
+    document.querySelectorAll('[data-tpl-action="downloadEmail"]')
+        .forEach(btn => { btn.style.display = archived ? '' : 'none'; });
 }
 
 /**
@@ -192,12 +204,14 @@ export function initMailView(config) {
         });
     }
 
-    // #viewerBody is the email-viewer body container. Import-attachment
-    // buttons render inside it with data-action='downloadAtt' / 'viewAtt'.
-    // Same lifecycle reasoning -- element persists, content is replaced.
-    const viewerBody = document.getElementById('viewerBody');
-    if (viewerBody) {
-        bindActions(viewerBody, {
+    // Import-attachment buttons (data-action='downloadAtt' / 'viewAtt')
+    // render inside #viewerAttachments -- not #viewerBody, which is where
+    // this was bound until Session 88, leaving those buttons inert. Same
+    // lifecycle reasoning as above: the element persists, its content is
+    // replaced per email.
+    const viewerAttachments = document.getElementById('viewerAttachments');
+    if (viewerAttachments) {
+        bindActions(viewerAttachments, {
             downloadAtt: (el) => downloadImportAttachment(Number(el.dataset.attachmentIndex), false),
             viewAtt:     (el) => downloadImportAttachment(Number(el.dataset.attachmentIndex), true),
         });
@@ -916,6 +930,7 @@ async function openSearchResult(messageId, folderId) {
             folderId: folderId,
             messageId: messageId
         };
+        _updateArchiveOnlyButtons(currentViewerContext);
         
         // Render email in viewer
         renderEmailContent(data.email, currentViewerContext);
@@ -1348,6 +1363,7 @@ export async function openEmailViewer(emailId, options = {}) {
         // Store context for download/print functions
         currentViewerContext = context;
         _updateStageThreadButton(context);
+        _updateArchiveOnlyButtons(context);
         _updatePrevNextButtons(context);
         _updateStarButton(context);
         renderEmailContent(data.email, context);
@@ -1872,7 +1888,8 @@ async function downloadImportAttachment(index, viewInline = false) {
         const blob = await response.blob();
         
         if (viewInline) {
-            // Open in new tab
+            // Open in new tab — or, in the desktop shell, in the default app
+            if (await openBlobExternally(blob, filename)) return;
             const url = URL.createObjectURL(blob);
             window.open(url, '_blank');
         } else {
@@ -1895,16 +1912,13 @@ async function downloadImportAttachment(index, viewInline = false) {
 /**
  * Print the current email (browser print dialog).
  */
-export function printEmail() {
+export async function printEmail() {
     if (!currentViewerContext?.emailData) return;
     
     const email = currentViewerContext.emailData;
     const attachments = email.attachments || [];
     
     // Build a standalone print document
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-    
     let attachmentHtml = '';
     if (attachments.length > 0) {
         const items = attachments.map(att => {
@@ -1930,7 +1944,7 @@ export function printEmail() {
             .replace(/page:\s*\w+\s*;?/gi, '')
         : `<pre style="white-space: pre-wrap; font-family: inherit;">${escapeHtml(email.text_body || '')}</pre>`;
     
-    printWindow.document.write(`<!DOCTYPE html>
+    const doc = `<!DOCTYPE html>
 <html>
 <head>
     <title>Print: ${escapeHtml(email.subject || '(No subject)')}</title>
@@ -1960,7 +1974,20 @@ export function printEmail() {
     ${body}
     ${attachmentHtml}
 </body>
-</html>`);
+</html>`;
+
+    // Desktop shell: render to PDF and open it; the user prints from
+    // Preview's dialog, which is a real one (a webview has none).
+    if (isDesktop()) {
+        await printHtmlExternally(email.subject || 'Email', doc);
+        return;
+    }
+
+    // Browser: window.open must stay synchronous with the click, or the
+    // popup blocker eats it — hence the check above rather than an await.
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(doc);
     printWindow.document.close();
     
     // Wait for content to render, then print and close
@@ -2082,14 +2109,43 @@ export async function viewEmailSource() {
     if (!currentViewerContext) return;
     
     let sourceUrl = null;
+    let fetchOptions = undefined;
     
     if (currentViewerContext.type === 'account') {
         sourceUrl = `/api/accounts/${currentViewerContext.accountId}/emails/${currentViewerContext.uid}/source?folder=${encodeURIComponent(currentViewerContext.folder)}`;
     } else if (currentViewerContext.type === 'folder') {
         sourceUrl = `/api/folders/${currentViewerContext.folderId}/emails/${currentViewerContext.messageId}/source`;
+    } else if (currentViewerContext.type === 'import') {
+        // Mounted, not yet archived: same lookup the preview uses.
+        sourceUrl = '/api/import/source';
+        fetchOptions = {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sourcePath: currentViewerContext.sourcePath,
+                uid: currentViewerContext.uid,
+                importType: currentViewerContext.importType,
+                folderPath: currentViewerContext.folderPath,
+                emailSourcePath: currentViewerContext.emailSourcePath,
+            }),
+        };
     }
     
     if (!sourceUrl) return;
+
+    if (isDesktop()) {
+        try {
+            const response = await fetch(sourceUrl, fetchOptions);
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Failed to fetch source');
+            const subject = currentViewerContext.emailData?.subject || 'email';
+            await openBlobExternally(new Blob([data.source], { type: 'text/plain' }), `${subject}.eml.txt`);
+        } catch (error) {
+            const { showAlert } = await import('../modals.js');
+            showAlert('Error', error.message);
+        }
+        return;
+    }
     
     // Open window immediately (before async fetch) to avoid popup blocker
     const win = window.open('', '_blank');
@@ -2115,7 +2171,7 @@ export async function viewEmailSource() {
 </html>`);
     
     try {
-        const response = await fetch(sourceUrl);
+        const response = await fetch(sourceUrl, fetchOptions);
         if (!response.ok) {
             const data = await response.json();
             throw new Error(data.error || 'Failed to fetch source');

@@ -81,7 +81,7 @@ export async function openFilePicker(mode) {
     }
     
     confirmBtn.disabled = true;
-    selectedDiv.style.display = 'none';
+    selectedDiv.classList.add('is-empty');
     
     modal.classList.add('active');
     if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -237,7 +237,7 @@ function selectAppleMboxFolder(path, name, emailCount, tree) {
         <strong>${escapeHtml(name)}</strong>
         <span class="file-picker-info">(Apple Mail, ${emailCount} email${emailCount !== 1 ? 's' : ''})</span>
     `;
-    selectedDiv.style.display = 'flex';
+    selectedDiv.classList.remove('is-empty');
     confirmBtn.disabled = false;
     
     if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -342,7 +342,7 @@ function selectFile(path, name) {
     const confirmBtn = document.getElementById('filePickerConfirm');
     
     selectedName.innerHTML = `<i data-lucide="file"></i> <strong>${escapeHtml(name)}</strong>`;
-    selectedDiv.style.display = 'flex';
+    selectedDiv.classList.remove('is-empty');
     confirmBtn.disabled = false;
     
     if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -360,7 +360,7 @@ function selectFolder(path, name, emlCount) {
         <strong>${escapeHtml(name)}</strong>
         <span class="file-picker-info">(${emlCount} .eml file${emlCount !== 1 ? 's' : ''})</span>
     `;
-    selectedDiv.style.display = 'flex';
+    selectedDiv.classList.remove('is-empty');
     confirmBtn.disabled = false;
     
     if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -372,7 +372,7 @@ function clearSelection() {
     const selectedDiv = document.getElementById('filePickerSelected');
     const confirmBtn = document.getElementById('filePickerConfirm');
     
-    if (selectedDiv) selectedDiv.style.display = 'none';
+    if (selectedDiv) selectedDiv.classList.add('is-empty');
     if (confirmBtn) confirmBtn.disabled = true;
 }
 
