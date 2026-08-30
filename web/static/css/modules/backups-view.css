@@ -478,7 +478,9 @@
 .folder-list {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
-    max-height: 280px;
+    /* Fixed height for the same reason as .export-picker-list /
+       .file-picker-list (S88): elastic pickers jump under the cursor. */
+    height: 280px;
     overflow-y: auto;
     margin-bottom: var(--space-md);
     background: var(--color-background);

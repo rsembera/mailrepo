@@ -346,8 +346,11 @@
 }
 .export-picker-list {
     flex: 1;
-    min-height: 240px;
-    max-height: 360px;
+    /* Fixed, not min/max: an elastic list resizes the dialog on every
+       folder change and the second click of a double-click lands on the
+       wrong row (same bug as the import picker, fixed S88). The list
+       scrolls; the dialog holds still. */
+    height: 320px;
     overflow-y: auto;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
