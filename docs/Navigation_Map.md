@@ -77,8 +77,9 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | File | Lines | What It Does |
 |------|-------|--------------|
 | `main.py` | 305 | Command-line entry: `prepare_app()` runs the pre-flight checks (SQLCipher, pending restore, interrupted-state warnings) and builds the app; `main()` serves it with waitress and wires the checkpoint-and-backup shutdown |
-| `launcher.py` | 173 | Packaged-app entry (Session 88): pywebview window around the server; archive under Application Support / XDG data; free-port pick; second instance refused; shutdown on window close |
+| `launcher.py` | 244 | Packaged-app entry (Session 88): pywebview window around the server; archive under Application Support / XDG data; free-port pick; second instance refused; shutdown on window close |
 | `setup_app.py` | 140 | py2app manifest — first-party code declared as packages; `install_requires` cleared so py2app builds from the venv |
+| `packaging/bundle_dylibs.py` | 155 | Post-py2app pass: otool closure of WeasyPrint's and readpst's Homebrew libraries into Contents/Frameworks + Helpers, install-name rewrite, re-sign, leak check |
 | `assets/icon.icns`, `packaging/icons/` | — | App icons rendered from `web/static/assets/icon.svg` (macOS .icns, Linux hicolor set) |
 
 ### Core (`/core/`)

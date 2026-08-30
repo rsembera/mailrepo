@@ -6179,3 +6179,37 @@ against the built .app.
 Tests: 659 passing (+14). Ruff clean. No JS changes, so no ESLint run.
 
 Code commit: `15021a6`.
+
+### Second half: the native-library pass, done
+
+The "long pole" of the estimate fell in the same session.
+`packaging/bundle_dylibs.py` walks the otool closure of what WeasyPrint
+dlopens plus readpst — 18 dylibs, matching the runtime list exactly,
+libgsf the only addition — copies them into `Contents/Frameworks`
+(readpst into `Contents/Helpers`), rewrites references to
+`@loader_path`, re-signs, and refuses to finish if any Homebrew
+reference survives.
+
+Finding them at runtime was the real problem, and the first idea was
+wrong. Pre-loading the bundled copies with `ctypes.CDLL(RTLD_GLOBAL)`
+and then importing WeasyPrint still opened Homebrew's pango — dyld does
+not consult already-loaded images when resolving a leaf name — and
+glib complained about being loaded twice. Second idea, wrapping
+`cffi.FFI.dlopen` to map bare names to bundled paths, half-worked:
+WeasyPrint tries several spellings per library and the earlier ones
+still found Homebrew through this machine's patched `find_library`.
+The version that shipped raises for any bare name that is not bundled,
+so WeasyPrint moves to its next spelling and Homebrew is never asked.
+That is the property a shipped app needs anyway, and it is the only way
+to test on a Homebrew machine what a clean Mac will do.
+
+One signing lesson: ad-hoc signatures must not carry
+`--options runtime`. Hardened runtime enables library validation, which
+compares Team IDs, and ad-hoc has none — readpst refused its own
+libgsf. The script now reserves the hardened flag for a real identity.
+
+Verified on a fresh build (py2app → bundle_dylibs → launch): setup page
+served, PDF written, `readpst -V` answered, and `DYLD_PRINT_LIBRARIES`
+showed zero `/opt/homebrew` paths. 157 MB.
+
+Tests: 659 passing. Code commit: `1beee81`.

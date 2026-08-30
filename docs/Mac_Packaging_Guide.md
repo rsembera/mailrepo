@@ -1,8 +1,8 @@
 # MailRepo — macOS .dmg Packaging Guide
 
-> Status (Session 88): first py2app build succeeds and launches. Remaining
-> work is the WeasyPrint dylib pass, the desktop-shell frontend fixes, then
-> sign/notarize/DMG. See "Where things stand" at the bottom.
+> Status (Session 88): py2app build launches, and the native-library pass
+> is done and verified. Remaining: desktop-shell frontend fixes, DMG
+> background, sign/notarize/DMG. See "Where things stand" at the bottom.
 
 Adapted from EdgeCase's proven guide (`edgecase/docs/Mac_Packaging_Guide.md`).
 The signing/notarization/DMG pipeline transfers verbatim — Rick's Developer ID
@@ -35,16 +35,20 @@ xcrun notarytool store-credentials "MailRepo Notarization" \
    `libfreetype.6`, `libfribidi.0`, `libthai.0`, `libdatrie.1`,
    `libgraphite2.3`, `libpng16.16`, `libpcre2-8.0`, `libintl.8`
 
-   Plan: copy these into `Contents/Frameworks`, rewrite every `/opt/homebrew`
-   reference among them to `@loader_path/<name>` with `install_name_tool`,
-   sign each one, and have `launcher.py` pre-load them from that folder with
-   `ctypes.CDLL` (absolute path, RTLD_GLOBAL) *before* `weasyprint` is
-   imported — dyld then satisfies WeasyPrint's by-name `dlopen` from the
-   already-loaded images. No `DYLD_*` environment variables: the hardened
-   runtime strips them.
-2. **PST import.** `readpst` is bundled (decided Session 87). Same
-   pass as above: it needs libgsf, two glib libs and libintl, which
-   overlap the list above.
+   **Solved** by `packaging/bundle_dylibs.py` (run after py2app): it
+   computes the closure itself, copies into `Contents/Frameworks`,
+   rewrites references to `@loader_path`, re-signs, and fails on any
+   surviving Homebrew reference. Finding them at runtime turned out to
+   be the subtle part: dyld does **not** consult already-loaded images
+   for leaf-name `dlopen`, so pre-loading the copies did nothing (verified
+   — WeasyPrint opened Homebrew's pango and glib loaded twice). Instead
+   `launcher.py`, when frozen, wraps `cffi.FFI.dlopen`: a bare name
+   resolves to the bundled file or raises, so Homebrew is never consulted
+   even when present — which is what makes the result testable here.
+2. **PST import.** `readpst` is bundled into `Contents/Helpers` by the
+   same script (adds only libgsf to the closure); the launcher puts that
+   folder on `PATH`, so `shutil.which("readpst")` finds it. Verified
+   `readpst -V` from the bundle on zero Homebrew libraries.
 3. **sqlcipher3 — solved for free.** The venv's `sqlcipher3` wheel is
    statically linked (`otool -L` shows only libSystem). It bundled on the
    first build and reports cipher 4.12.0 from inside the .app.
@@ -90,8 +94,9 @@ xcrun notarytool store-credentials "MailRepo Notarization" \
 Follow EdgeCase's guide steps verbatim with names swapped:
 
 1. `./venv/bin/python setup_app.py py2app`
-2. Dylib pass (to be scripted): copy the 17 WeasyPrint dylibs + readpst's
-   into `Contents/Frameworks`, `install_name_tool` rewrite, then:
+2. `./venv/bin/python packaging/bundle_dylibs.py dist/MailRepo.app --sign "Developer ID Application: RICHARD L SEMBERA (2GKBD5N2AH)"`
+   (without `--sign` it ad-hoc signs, enough for local testing but not
+   for notarization; ad-hoc deliberately omits the hardened runtime)
 3. Sign every `.so`/`.dylib` individually first (CRITICAL — notarization
    fails otherwise), then the bundle with `--deep --options runtime`:
 
@@ -167,11 +172,11 @@ MAILREPO_DATA_DIR=/tmp/mr_smoke MAILREPO_STATE_DIR=/tmp/mr_smoke_state \
 
 ## Where things stand (end of Session 88)
 
-Done: icon.icns, setup_app.py + manifest test, launcher.py, first build
+Done: icon.icns, setup_app.py + manifest test, launcher.py, build
 launches and serves, sqlcipher3 and argon2 verified inside the bundle,
-WeasyPrint dylib list captured.
+WeasyPrint and readpst running on bundled libraries with zero
+`/opt/homebrew` lines (157 MB .app, ad-hoc signed).
 
-Next: (1) the dylib bundling script + launcher pre-load, verified with
-the zero-`/opt/homebrew` test above; (2) desktop-mode JS for print and
-inline attachment view; (3) dmg_background.png; (4) sign → notarize →
-DMG per the steps above; (5) clean-account acceptance test.
+Next: (1) desktop-mode JS for print and inline attachment view, tested
+against the built .app; (2) dmg_background.png; (3) sign → notarize →
+DMG per the steps above; (4) clean-account acceptance test.
