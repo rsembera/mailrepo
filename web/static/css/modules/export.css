@@ -321,8 +321,12 @@
    PICKER VIEW
    ============================================ */
 .export-picker-modal {
-    /* Slightly taller so the directory list has room */
-    max-height: min(80vh, 640px);
+    /* FIXED height, not max-height: the list below is flex:1, so any
+       height set on the list itself is ignored (flex-basis wins) and a
+       content-sized modal resizes on every folder change — the picker
+       jump again, S88 third instance. Pin the modal; the list fills a
+       constant area and scrolls. */
+    height: min(80vh, 640px);
     display: flex;
     flex-direction: column;
 }
@@ -345,12 +349,10 @@
     white-space: nowrap;
 }
 .export-picker-list {
+    /* flex:1 inside the pinned-height modal above; min-height:0 lets
+       the flex item actually shrink so overflow scrolling engages. */
     flex: 1;
-    /* Fixed, not min/max: an elastic list resizes the dialog on every
-       folder change and the second click of a double-click lands on the
-       wrong row (same bug as the import picker, fixed S88). The list
-       scrolls; the dialog holds still. */
-    height: 320px;
+    min-height: 0;
     overflow-y: auto;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);

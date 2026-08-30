@@ -15,6 +15,7 @@ let emailList = null;
 
 // State
 let folderPickerCurrentPath = '';
+let folderPickerSelectedPath = null;
 let folderPickerParentPath = null;
 let hasUnsavedChanges = false;
 let initialSettings = {};
@@ -928,6 +929,7 @@ async function loadFolderContents(path) {
         
         folderPickerCurrentPath = data.current_path;
         folderPickerParentPath = data.parent_path;
+        folderPickerSelectedPath = null;
         
         pathDisplay.textContent = data.current_path;
         upBtn.disabled = !data.parent_path;
@@ -951,9 +953,17 @@ async function loadFolderContents(path) {
                 `;
             }).join('');
             
-            // Add click handlers for accessible folders
+            // Finder convention, same as the import and export pickers
+            // (unified S88): single click selects, double click opens.
             listEl.querySelectorAll('.folder-item:not(.inaccessible)').forEach(item => {
                 item.addEventListener('click', () => {
+                    listEl.querySelectorAll('.folder-item.selected')
+                        .forEach(x => x.classList.remove('selected'));
+                    item.classList.add('selected');
+                    folderPickerSelectedPath = item.dataset.path;
+                });
+                item.addEventListener('dblclick', () => {
+                    folderPickerSelectedPath = null;
                     loadFolderContents(item.dataset.path);
                 });
             });
@@ -979,8 +989,11 @@ function navigateToParent() {
  * Select current folder.
  */
 function selectCurrentFolder() {
-    if (folderPickerCurrentPath) {
-        document.getElementById('custom-location-input').value = folderPickerCurrentPath;
+    // Explicit selection wins; otherwise the folder being viewed —
+    // mirrors the export picker's confirm.
+    const chosen = folderPickerSelectedPath || folderPickerCurrentPath;
+    if (chosen) {
+        document.getElementById('custom-location-input').value = chosen;
         
         const locSelect = document.getElementById('backup-location-select');
         if (locSelect._customSelect) locSelect._customSelect.setValue('custom');
