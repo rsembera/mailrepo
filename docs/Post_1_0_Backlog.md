@@ -24,6 +24,11 @@ account is in `Session_Log.md` under Session 72.
 
 ## Release & distribution
 
+- **Website: switch to the SVG logo/icon.** mailrepo.ca (the
+  `mailrepo-website` repo on Apollo, pushed to Sentinel) still serves
+  the raster logo. Replace with `web/static/assets/logo.svg` and
+  `icon.svg` (Session 87). Do this before the launch announcement.
+
 ### Packaging (.dmg for macOS, .deb for Linux)
 **Priority:** Next major milestone after dogfooding.
 
