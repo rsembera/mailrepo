@@ -942,3 +942,44 @@ a.btn:hover {
     background: var(--color-surface-alt, #F1F5F9);
     color: var(--color-text-muted, #64748B);
 }
+
+/* Show/hide password toggle (password-toggle.js wraps the input) */
+.password-toggle-wrapper {
+    position: relative;
+    display: block;
+}
+
+.password-toggle-wrapper input {
+    width: 100%;
+    box-sizing: border-box;
+    /* No padding-right here. The reserve that keeps text clear of the
+       eye is set INLINE by password-toggle.js, computed from the
+       button's measured band: any CSS version loses to page rules like
+       .form-group input[type="password"] { padding: ... } (higher
+       specificity, shorthand wipes the right side) and breaks silently.
+       Daybook shipped exactly that inert fix; see its PLAN.md item 9ab. */
+}
+
+.password-toggle-btn {
+    position: absolute;
+    right: 0.6rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    padding: 0.25rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    color: var(--color-text-muted);
+}
+
+.password-toggle-btn:hover {
+    color: var(--color-primary);
+    background: none;
+}
+
+.password-toggle-btn svg {
+    width: 20px;
+    height: 20px;
+}

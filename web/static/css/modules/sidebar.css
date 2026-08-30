@@ -408,7 +408,10 @@
     margin-left: auto;
 }
 
-.unmount-btn i {
+/* lucide swaps the <i> for an <svg> at render time, so the selector
+   must target svg — an `i` rule silently matches nothing and the icon
+   falls back to lucide's 24px default (the oversized X, fixed S88). */
+.unmount-btn svg {
     width: 14px;
     height: 14px;
 }
