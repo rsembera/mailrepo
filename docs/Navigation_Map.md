@@ -72,6 +72,15 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 ## Backend (Python — 13,929 lines)
 
+### Root & packaging (`/`)
+
+| File | Lines | What It Does |
+|------|-------|--------------|
+| `main.py` | 305 | Command-line entry: `prepare_app()` runs the pre-flight checks (SQLCipher, pending restore, interrupted-state warnings) and builds the app; `main()` serves it with waitress and wires the checkpoint-and-backup shutdown |
+| `launcher.py` | 173 | Packaged-app entry (Session 88): pywebview window around the server; archive under Application Support / XDG data; free-port pick; second instance refused; shutdown on window close |
+| `setup_app.py` | 140 | py2app manifest — first-party code declared as packages; `install_requires` cleared so py2app builds from the venv |
+| `assets/icon.icns`, `packaging/icons/` | — | App icons rendered from `web/static/assets/icon.svg` (macOS .icns, Linux hicolor set) |
+
 ### Core (`/core/`)
 
 | File | Lines | What It Does |
@@ -314,10 +323,11 @@ first run of this found a `ReferenceError` that had been shipping.
 
 ---
 
-## Test Suite (639 tests)
+## Test Suite (659 tests)
 
 | File | Coverage |
 |------|----------|
+| `tests/test_packaging_manifest.py` | Drift alarm for `setup_app.py`: imports the app for real and fails on any undeclared third-party package; user-data dirs never bundled; load-bearing native packages named; launcher is the entry point (13 tests, Session 88) |
 | `tests/test_kdf_cost.py` | The KDF work factor: production Argon2id numbers pinned as literals, the cheap path requiring both env vars (flag alone useless, sandbox alone useless), and a full-cost v3 round trip + a timing floor proving production derivation still works and is still expensive — the two things the fast suite can no longer speak to (8 tests, Session 81) |
 | `tests/test_unverified_restore.py` | The unverified-restore marker: set by complete_restore (with the credential note carried through), never inside any zip, survives a relaunch, recovery door open while it stands and closed on either side of it, both login paths clearing it (password, verified recovery key) and both failure paths not, the login banner surviving failed attempts, second restore from the unverified state taking its safety copy; isolation tripwire on the marker path; all guards proved mutation-capable (22 tests, Session 80) |
 | `tests/test_recovery_key_web.py` | Recovery-key web flow end to end: setup shows the key (and never puts it in the session), recovery login, post-recovery password reset (incl. gating to recovery-login sessions and CSRF), v3 upgrade flow (incl. stale-backup-with-no-changes and CSRF), post-upgrade redirect destination, rotation API + CSRF (31 tests, Sessions 68–70) |

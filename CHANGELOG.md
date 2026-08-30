@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Desktop app shell (Session 88).** MailRepo can now be built as a
+  macOS application: a native window around the same server the
+  command line runs, with the archive kept in the standard
+  application-data folder, one instance at a time, and the usual
+  backup-and-checkpoint on close. App icons for macOS and Linux are
+  generated from the vector mark. Not yet shipped — the PDF engine's
+  native libraries still have to be bundled and the build signed.
 - **Vector logo and icon (Session 87).** The MailRepo logo and mark
   now exist as SVG (`logo.svg`, `icon.svg`), recreated from the
   raster originals. App icons for the macOS and Linux packages will

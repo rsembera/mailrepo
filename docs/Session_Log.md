@@ -6112,3 +6112,70 @@ garbage on disk); shell heredoc used instead, worth remembering for
 future SVG work.
 
 Code commit: `609b3c5`.
+
+---
+
+## Session 88 — August 30, 2026 (MacBook)
+
+### Packaging begins: icons, manifest, launcher, first build
+
+The .dmg workstream opened on the MacBook rather than the .deb on
+Apollo, on the reasoning that the .dmg is the risk item and the first
+py2app build is what tells you how bad it is. Answer: not as bad as
+feared.
+
+**Icons.** `assets/icon.icns` rendered from `icon.svg` with Inkscape
+at ten sizes and assembled with `iconutil`; keyhole mask and alpha
+verified at 128 and 32. The Linux hicolor set (16–512 + scalable SVG)
+was cut at the same time into `packaging/icons/`, so the .deb session
+inherits it.
+
+**setup_app.py + manifest test.** EdgeCase's file, adapted: packages
+not modules, `install_requires` cleared (no pyproject rename), user-data
+dirs explicitly excluded. `tests/test_packaging_manifest.py` imports the
+app for real and fails on any undeclared third-party package. It found
+`_argon2_cffi_bindings` on its first run — the exact ImportError
+EdgeCase once shipped — and `Cryptodome` (pyzipper's AES backend) when
+the full suite ran. That is the test doing what it is for.
+
+**Two decisions, Rick's.** The archive lives at
+`~/Library/Application Support/MailRepo/` — the Mac-native location for
+app-managed data (Mail.app's own store is under `~/Library`), one level
+below `backup_locations.json`, so the state file sits beside the archive
+rather than inside it and the survival property holds. A visible
+`~/MailRepo` was considered and rejected: on a shared machine it is a
+confidentiality liability, and Time Machine plus MailRepo's own backups
+are the user's handle on the data. And the app is a **pywebview window**,
+not browser-plus-menu-bar-icon: Joe User expects something that looks
+like a native app. Same shape as EdgeCase's `desktop.py`.
+
+**Launcher and refactor.** `main.py`'s pre-flight sequence (SQLCipher
+check, pending restore, interrupted-password-change and missing-database
+warnings, `create_app`) extracted into `prepare_app()` so `launcher.py`
+runs exactly what the command line runs. The launcher sets
+`MAILREPO_DATA_DIR` before any import (explicit env wins), picks a free
+port, refuses a second instance with a native dialog, and runs
+`_cleanup` on window close. Smoke-tested from the venv against a `/tmp`
+data dir: served, laid out the four directories, refused the second
+launch.
+
+**First build.** `python setup_app.py py2app` — one minute, 147 MB,
+launches and serves. Exercising the bundled interpreter directly with
+`DYLD_PRINT_LIBRARIES=1`: sqlcipher3 is statically linked and works
+(cipher 4.12.0), argon2 works, and WeasyPrint works but reaches for
+exactly 17 Homebrew dylibs. That list is now in the Mac guide, along
+with the loading strategy: WeasyPrint `dlopen`s by bare name, so the
+launcher will pre-load the bundled copies from `Contents/Frameworks`
+via `ctypes.CDLL` before WeasyPrint imports — no `DYLD_*` env, which
+the hardened runtime strips.
+
+**Known frontend work.** pywebview handles `<a download>` and
+attachment responses natively (`ALLOW_DOWNLOADS`), which covers most of
+MailRepo's seven download sites. It cannot do `window.print()` or
+`window.open('', '_blank')`: the two print-email paths and inline
+attachment viewing need a desktop-mode route in JS. Next session,
+against the built .app.
+
+Tests: 659 passing (+14). Ruff clean. No JS changes, so no ESLint run.
+
+Code commit: `15021a6`.
