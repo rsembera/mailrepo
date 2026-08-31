@@ -62,6 +62,23 @@ def create_archive_folder_from_path(archive_path: str, parent_folder_id: int) ->
     return current_parent_id
 
 
+def _effective_message_id(message_id: str, raw_email: bytes) -> str:
+    """The Message-ID used for dedup and storage.
+
+    Emails without a Message-ID header (malformed, some exports) used to
+    bypass duplicate detection entirely — _check_duplicate treats an
+    empty id as "not a duplicate" — so an interrupted commit retried
+    after a connection drop filed them twice (found in the Session 88
+    .deb acceptance test). A deterministic content-derived id closes
+    that: identical raw bytes always map to the same synthetic id.
+    """
+    if message_id:
+        return message_id
+    import hashlib
+
+    return f"<{hashlib.sha256(raw_email).hexdigest()}@mailrepo.dedup>"
+
+
 def _check_duplicate(folder_id: int, message_id: str) -> bool:
     """Check if an email with this message_id already exists in the folder (excluding trashed)."""
     if not message_id:
@@ -89,6 +106,7 @@ def _save_email_to_archive(
         uid_prefix: Safe filename prefix (e.g. "import_mbox-3" or "2_145").
     """
     metadata = parse_email_metadata(raw_email)
+    metadata["message_id"] = _effective_message_id(metadata.get("message_id", ""), raw_email)
     body_text = extract_body_text(raw_email)
 
     archive_path = Config.get_archive_path() / str(folder_id)
@@ -149,13 +167,9 @@ def commit_import_email(item: dict, results: dict) -> dict:
         if not folder:
             raise ValueError(f"Folder {folder_id} not found")
 
-        # Check for duplicate
-        message_id = email_data.get("message_id", "")
-        if _check_duplicate(folder_id, message_id):
-            results["skipped"].append({"uid": uid, "reason": "duplicate", "subject": subject})
-            return {"status": "skipped", "subject": subject, "uid": uid}
-
-        # Get raw email from source file
+        # Get raw email from source file (before the duplicate check:
+        # a missing Message-ID is replaced by a content hash, which
+        # needs the bytes)
         source_path = email_data.get("sourcePath")
         if not source_path:
             raise ValueError("No source path for imported email")
@@ -163,6 +177,12 @@ def commit_import_email(item: dict, results: dict) -> dict:
         raw_email = get_raw_email_from_import(source_path, uid)
         if not raw_email:
             raise ValueError("Could not retrieve email content")
+
+        # Check for duplicate
+        message_id = _effective_message_id(email_data.get("message_id", ""), raw_email)
+        if _check_duplicate(folder_id, message_id):
+            results["skipped"].append({"uid": uid, "reason": "duplicate", "subject": subject})
+            return {"status": "skipped", "subject": subject, "uid": uid}
 
         safe_id = f"import_{uid.replace('/', '_').replace(':', '_')}"
         _save_email_to_archive(raw_email, folder_id, None, safe_id)
@@ -208,14 +228,20 @@ def commit_imap_email(
         if not folder:
             raise ValueError(f"Folder {folder_id} not found")
 
-        # Check for duplicate
+        # Check for duplicate. With a Message-ID this needs no fetch;
+        # without one, fetch first so the content-hash fallback applies.
         message_id = email_data.get("message_id", "")
+        raw_email = None
+        if not message_id:
+            raw_email = client.fetch_raw(uid)
+            message_id = _effective_message_id("", raw_email)
         if _check_duplicate(folder_id, message_id):
             results["skipped"].append({"uid": uid, "reason": "duplicate", "subject": subject})
             return {"status": "skipped", "subject": subject, "uid": uid}
 
         # Fetch and save email
-        raw_email = client.fetch_raw(uid)
+        if raw_email is None:
+            raw_email = client.fetch_raw(uid)
         safe_id = f"{account_id}_{uid}"
         _save_email_to_archive(raw_email, folder_id, account_id, safe_id)
 
@@ -364,7 +390,7 @@ def commit_imap_folder(
 
                 metadata = parse_email_metadata(raw_email)
                 subject = (metadata.get("subject", "") or "(no subject)")[:50]
-                message_id = metadata.get("message_id", "")
+                message_id = _effective_message_id(metadata.get("message_id", ""), raw_email)
 
                 if _check_duplicate(target_folder_id, message_id):
                     results["skipped"].append({"uid": uid})
@@ -455,7 +481,8 @@ def build_commit_summary(results: dict) -> str:
     msg_parts = []
 
     if results["success"]:
-        msg_parts.append(f"{len(results['success'])} emails filed")
+        count = len(results["success"])
+        msg_parts.append(f"{count} email{'s' if count != 1 else ''} filed")
     if results["folders_success"]:
         count = results["folders_success"]
         msg_parts.append(f"{count} folder{'s' if count != 1 else ''} archived")

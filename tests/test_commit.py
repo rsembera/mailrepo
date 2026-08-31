@@ -267,3 +267,65 @@ class TestCommitStream:
             "SELECT COUNT(*) AS c FROM pending_commit WHERE commit_id = ?", (commit_id,)
         )
         assert remaining["c"] == 0
+
+
+class TestHeaderlessDeduplication:
+    """Emails without a Message-ID must still deduplicate (Session 88:
+    a connection drop mid-commit plus a retry filed the header-less
+    test email twice — retries must be idempotent for every email)."""
+
+    def test_effective_id_passthrough(self):
+        from web.blueprints.api.commit import _effective_message_id
+
+        assert _effective_message_id("<real@id>", b"raw") == "<real@id>"
+
+    def test_effective_id_is_deterministic_for_headerless(self):
+        from web.blueprints.api.commit import _effective_message_id
+
+        a = _effective_message_id("", b"same raw bytes")
+        b = _effective_message_id("", b"same raw bytes")
+        c = _effective_message_id("", b"different bytes")
+        assert a == b
+        assert a != c
+        assert a.startswith("<") and a.endswith("@mailrepo.dedup>")
+
+    def test_headerless_email_commits_once(self, authenticated_client, initialized_app, tmp_path):
+        """Commit the same header-less .eml twice; the second is skipped."""
+        from core.database import Database
+
+        eml = tmp_path / "noheaders.eml"
+        eml.write_bytes(b"just a body, no headers at all\n")
+        folder = authenticated_client.post(
+            "/api/folders", json={"name": "DedupTest"}
+        ).get_json()
+        folder_id = folder.get("id") or folder.get("folder", {}).get("id")
+
+        def commit_once():
+            staged = [{
+                "sourceType": "import",
+                "destinationFolderId": folder_id,
+                "email": {
+                    "uid": "eml-0",
+                    "subject": "",
+                    "message_id": "",
+                    "sourcePath": str(eml),
+                },
+            }]
+            return authenticated_client.post("/api/commit/stream", json={"staged": staged})
+
+        first = commit_once()
+        assert first.status_code == 200
+        events1 = _parse_sse(first.get_data(as_text=True))
+        assert not [d for e, d in events1 if e == "error"], events1
+        second = commit_once()
+        assert second.status_code == 200
+        count = Database.fetchone(
+            "SELECT count(*) AS n FROM messages WHERE folder_id = ?", (folder_id,)
+        )["n"]
+        assert count == 1
+
+        # And the stored id is the deterministic content hash
+        row = Database.fetchone(
+            "SELECT message_id FROM messages WHERE folder_id = ?", (folder_id,)
+        )
+        assert row["message_id"].endswith("@mailrepo.dedup>")

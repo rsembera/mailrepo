@@ -14,6 +14,13 @@ import sys
 
 import pytest
 
+if sys.platform != "darwin":
+    # This module audits setup_app.py, the MACOS bundle manifest; it needs
+    # the Mac dev venv (setuptools, py2app, pywebview). The Linux package
+    # has its own manifest — packaging/build_deb.sh — audited by its own
+    # staged-tree smoke import at build time.
+    pytest.skip("macOS bundle manifest audit", allow_module_level=True)
+
 
 @pytest.fixture(scope="module")
 def imported_app_modules():
