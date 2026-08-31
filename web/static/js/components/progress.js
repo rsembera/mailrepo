@@ -184,6 +184,15 @@ export function createProgress(container) {
             const decoder = new TextDecoder();
             let buffer = '';
             let completeFired = false;
+            // Parser state, NOT per-read state: an "event:" line and its
+            // "data:" line can arrive in different network reads (WebKitGTK
+            // segments streams differently than WKWebView), and resetting
+            // the pending event name each read() dropped whichever event
+            // straddled the boundary — in practice the final "complete",
+            // whose payload is the largest. The commit then succeeded
+            // server-side while the UI reported the connection lost
+            // (Session 88, .deb acceptance on Apollo).
+            let currentEvent = null;
             
             while (true) {
                 const { done, value } = await reader.read();
@@ -196,7 +205,6 @@ export function createProgress(container) {
                 const lines = buffer.split('\n');
                 buffer = lines.pop() || ''; // Keep incomplete line in buffer
                 
-                let currentEvent = null;
                 for (const line of lines) {
                     if (line.startsWith('event: ')) {
                         currentEvent = line.slice(7);
