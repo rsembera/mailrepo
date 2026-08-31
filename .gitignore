@@ -44,3 +44,4 @@ backups/
 # JS toolchain and has no build step. The config is committed; anything
 # npx drags in is not.
 node_modules/
+packaging/deb
