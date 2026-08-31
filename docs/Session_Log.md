@@ -6395,3 +6395,51 @@ SHA-256 9c1e5529…de13, recorded in the guide for the website.
 Session 88 in total: from zero packaging artifacts to a shipped-grade
 macOS installer, with eight pre-existing bugs found and fixed along
 the way. Remaining: .deb on Apollo, tag/release, website, launch.
+
+---
+
+## Session 88 continued — August 30, 2026, evening (Apollo)
+
+### The .deb, built and installed the same day the .dmg shipped
+
+Apollo turns out to be Rick's ThinkPad with a desktop (memory said
+headless — corrected; Sentinel is the headless one), so the .deb is
+built AND GUI-tested here directly.
+
+packaging/build_deb.sh, adapted from EdgeCase: runtime-only venv
+(waitress rescued from requirements.txt's "Development" section;
+sqlcipher3-wheels so no compiler), PyGObject copied from system,
+hicolor icons from Session 88. Mid-build ruling from Rick: Linux gets
+the same pywebview window as the Mac — launcher.py ships in the .deb
+and /usr/bin/mailrepo execs it. The guide's browser-tab plan is
+superseded; cross-platform consistency won the argument, same "Joe
+User" logic as the Mac decision.
+
+Found and fixed live: the interim health check grepped an unfollowed
+/auth/login, which 302s to /auth/setup on a FRESH install — empty body,
+healthy server declared dead. First-run-only, exactly what a
+fresh-machine test exists to catch. The Depends line proved itself
+honestly too: apt pulled pst-utils onto a box that lacked it.
+
+Verified from the installed package: WeasyPrint on system pango, FTS5
+inside SQLCipher 4.12.0, readpst on PATH, single-instance refusal with
+a native dialog (it fired correctly against a stale server — which
+also taught a lesson: the old launcher started the server with a
+relative path, so pkill -f "/opt/mailrepo" matched nothing while
+reporting zero; kill by PID when it matters. The new in-process
+launcher doesn't orphan servers at all). Side mystery resolved: Rick
+recalled Libram on 5050; it defaults to 8090 and wasn't running — no
+port conflict on Apollo.
+
+Tooling comedy for the record: one heredoc-in-heredoc truncation
+(inner EOF ended the outer; unique delimiters now), and one pkill that
+matched its own command line and died at 0.07s.
+
+**Open at session end (~11 p.m., Rick bushed):** the desktop
+acceptance walk on Apollo — setup through backup in the native window,
+including the close-window-runs-backup check (frequency "Every
+Session" makes it observable). Resumes tomorrow. After that: tag
+reconciliation, GitHub Release with both artifacts + SHA-256s, website,
+repo public, staggered announcements.
+
+Code commit: `de7a8c0`.

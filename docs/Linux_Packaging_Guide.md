@@ -1,4 +1,13 @@
-# MailRepo — Linux .deb Packaging Guide (DRAFT)
+# MailRepo — Linux .deb Packaging Guide
+
+> Status (Session 88, Apollo): packaging/build_deb.sh builds a working
+> .deb; installed and running on Apollo (Debian Trixie, ThinkPad). The
+> steps below are superseded by the script — it IS the guide now. Key
+> rulings since the draft: Debian Trixie natively (S87; Ubuntu is not a
+> target, no container); Linux ships the SAME pywebview window as the
+> Mac via launcher.py (Rick, S88, superseding item 4 below); icons come
+> from packaging/icons/hicolor (S88). Acceptance walk on Apollo's
+> desktop still in progress — resumes next session.
 
 Adapted from EdgeCase's proven guide (`edgecase/docs/Linux_Packaging_Guide.md`).
 Steps marked **[VERIFY]** need confirmation during the first live packaging
