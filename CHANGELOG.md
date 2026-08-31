@@ -28,6 +28,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   most apps. The field always re-masks the moment you submit.
 
 ### Fixed
+- **Large commits no longer falsely report "connection lost" (Session
+  89).** The progress stream's parser could drop the final completion
+  event depending on how the platform delivered network reads; the
+  commit succeeded but the app reported failure. Found on Linux,
+  fixable everywhere.
+- **Retrying a commit can no longer duplicate emails that lack a
+  Message-ID (Session 89).** Such emails are now identified by a
+  fingerprint of their content, so a retry files nothing twice.
 - **Unmount button size (Session 88).** The × next to a mounted import
   now matches the sidebar's compact icons instead of towering over them.
 - **Folder picker no longer jumps (Session 88).** Selecting a folder

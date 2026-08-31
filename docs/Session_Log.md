@@ -6443,3 +6443,54 @@ reconciliation, GitHub Release with both artifacts + SHA-256s, website,
 repo public, staggered announcements.
 
 Code commit: `de7a8c0`.
+
+---
+
+## Session 89 — August 31, 2026, morning (Apollo)
+
+### The bug that needed three layers, and the .deb acceptance pass
+
+The morning's commit attempt reproduced last night's watcher: "Commit
+Failed — connection to server was lost," while the archive quietly
+ended up with six emails including a doubled "(no subject)". Not
+corruption — a compound of three separate defects, unwound in order:
+
+1. **Dedup hole.** _check_duplicate treats an empty Message-ID as "not
+   a duplicate," so exactly the emails that can't dedup by header were
+   the ones a retry doubles. Fixed with _effective_message_id(): no
+   Message-ID → deterministic <sha256-of-raw@mailrepo.dedup>, used for
+   both the check and storage across all three commit paths. Retries
+   are now idempotent per email. Tested (headerless email commits
+   once across two runs).
+
+2. **The "connection lost" itself.** Instrumenting the installed
+   copy's stream was blocked (root-owned, correctly), so the dev
+   launcher ran instead with a traced generator. Verdict: all eight
+   SSE chunks emitted, generator DONE normally, 0.63s, no
+   GeneratorExit — the server was innocent. The client's hand-rolled
+   SSE parser reset its pending event name on EVERY network read;
+   WebKitGTK delivered "event: complete" and its data line in
+   different reads (the complete payload is the stream's largest), so
+   the data line arrived with no pending event and was dropped.
+   WKWebView had coalesced reads differently — platform-dependent
+   symptom, cross-platform bug. Fix: currentEvent is parser state
+   beside the buffer. export-modal.js unaffected (native EventSource).
+
+3. **Cosmetic:** "1 emails filed" pluralized.
+
+Also: tests/test_packaging_manifest.py now skips off-macOS (it audits
+the Mac bundle manifest; Apollo's venv rightly lacks py2app/pywebview
+— the 13 errors it threw here were scope confusion, not failures).
+
+**Full .deb acceptance walk: PASSED.** Import, commit (clean), re-
+commit (5 skipped as duplicates — both fixes exercised), search,
+print, export, recovery-key check, and the finale: window closed
+without logout → incremental backup fired at close (10:39 zip),
+server exited, WAL checkpointed, zero processes. Backup state hashes
+show five archive files, no duplicates.
+
+Consequence accepted: the notarized .dmg predates both fixes and gets
+rebuilt on the MacBook — round four, and the round that makes both
+artifacts build from the same commit.
+
+Code commits: `76b42f5` (dedup + skip), `af8dda6` (SSE parser).
