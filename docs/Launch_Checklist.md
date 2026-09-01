@@ -1,9 +1,16 @@
 # Launch Checklist — MailRepo 1.0.0
 
-State as of Aug 31, 8:30 p.m. Everything below is mechanical; the
-recipes are proven (the .dmg chain has run four times, the .deb three).
-Any executor — Fable, Opus, or Rick with coffee — follows this top to
-bottom. Do not reorder the GO-LIVE section.
+State as of Aug 31, ~10:45 p.m.: SECTIONS A–D ARE DONE. Both release
+assets are current builds; README, release notes, and the website's
+.deb slot carry the new hashes; screenshots and attribution are in.
+Current hashes:
+  DMG_SHA 2cce5321474f9ac373dc9a8c2b3c762464df2a1318443baaff13cc5dac76d3dc
+  DEB_SHA 73c974df41511862d9b0fc862569162cc3c2f29cbd5d7c9ba027e136d8804d96
+Remaining: on Apollo — (0) rm -rf /tmp/mr_demo (holds staged server
+actions and possibly a real IMAP credential under a published demo
+password); (1) put DMG_SHA into the website's download.html (the old
+f90dca45... value is still there); commit; then Section E in order.
+Do not reorder the GO-LIVE section.
 
 ## A. On Apollo
 

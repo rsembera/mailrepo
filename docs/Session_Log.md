@@ -6494,3 +6494,30 @@ rebuilt on the MacBook — round four, and the round that makes both
 artifacts build from the same commit.
 
 Code commits: `76b42f5` (dedup + skip), `af8dda6` (SSE parser).
+
+### Session 89, evening: search hardened, artifacts final, launch staged
+
+Rick, taking real notes after a real consult, typed a hyphen into
+search and got a 500 — user input was flowing raw into FTS5 MATCH,
+where -, :, ^, parentheses and bare AND/OR/NOT are syntax. His actual
+search, a Google Meet link, is practically an FTS5 operator sampler.
+build_fts_match() now quotes every token (user-quoted phrases
+preserved; nothing-alphanumeric queries return empty rather than
+querying), across both search sites. Twelve tests including the
+motivating case; a quoted URL now matches as an adjacent-token phrase,
+so the Meet link is findable at all — which raw syntax never was.
+Dogfooding found it; nothing else would have.
+
+Then the launch train: fictional-practice screenshots (four, reviewed
+individually before commit), .deb and .dmg rebuilt with the About
+modal + search fix, both release assets replaced, hashes rippled
+through release notes, README (screenshots + Credits section wired in),
+and the website's .deb slot. docs/Launch_Checklist.md tracks exact
+remaining state with current hashes, executor-agnostic by design —
+written when Rick worried about session budgets and model switches;
+the honest answer was to make the remaining steps not depend on who
+runs them.
+
+Remaining: Section E from Apollo — delete /tmp/mr_demo, website DMG
+hash, repo public, anonymous verification, Sentinel push, funnel check.
+Announcements Tuesday morning, staggered, Rick present.
