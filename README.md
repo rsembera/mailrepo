@@ -6,7 +6,12 @@
 
 Therapists, lawyers, accountants, and journalists handle sensitive client correspondence every day. Most email is stored on servers where administrators can read it in plaintext. MailRepo lets you archive that correspondence locally, encrypted with a password only you know — no cloud, no third parties, no exposure.
 
-<!-- SCREENSHOTS: pending -->
+![Browsing a client folder](docs/screenshots/browse.png)
+
+<p align="center">
+  <img src="docs/screenshots/viewer.png" width="49%" alt="Reading an archived email with attachments">
+  <img src="docs/screenshots/search.png" width="49%" alt="Full-text search across the encrypted archive">
+</p>
 
 ---
 
@@ -16,8 +21,8 @@ Therapists, lawyers, accountants, and journalists handle sensitive client corres
 
 | Platform | File | SHA-256 |
 |---|---|---|
-| macOS 11+ (Apple Silicon) | [MailRepo-1.0.0.dmg](https://github.com/rsembera/mailrepo/releases/download/v1.0.0/MailRepo-1.0.0.dmg) | `f90dca459694fa8ff591299bb87e6bc15d574054600e6bd6d8a1407e00e6174a` |
-| Debian 13 (Trixie), amd64 | [mailrepo_1.0.0_amd64.deb](https://github.com/rsembera/mailrepo/releases/download/v1.0.0/mailrepo_1.0.0_amd64.deb) | `f2c82cb26747a419cec448f8c3f915f27a060304fd8480a69b1fdda5aafe3d82` |
+| macOS 11+ (Apple Silicon) | [MailRepo-1.0.0.dmg](https://github.com/rsembera/mailrepo/releases/download/v1.0.0/MailRepo-1.0.0.dmg) | `2cce5321474f9ac373dc9a8c2b3c762464df2a1318443baaff13cc5dac76d3dc` |
+| Debian 13 (Trixie), amd64 | [mailrepo_1.0.0_amd64.deb](https://github.com/rsembera/mailrepo/releases/download/v1.0.0/mailrepo_1.0.0_amd64.deb) | `73c974df41511862d9b0fc862569162cc3c2f29cbd5d7c9ba027e136d8804d96` |
 
 The macOS app is signed and notarized. Install the .deb with `sudo apt install ./mailrepo_1.0.0_amd64.deb` — dependencies resolve automatically.
 
@@ -73,6 +78,8 @@ It is a **single-user, local application**. It runs entirely on your machine. It
 
 **Commit** — Click Commit. MailRepo fetches each email, encrypts it, saves it to your archive, and updates the database. Progress is shown in real time. Any failures are reported, and retrying is safe — already-archived emails are recognized and skipped.
 
+![Reviewing staged emails before commit](docs/screenshots/staged.png)
+
 ---
 
 ## Security Model
@@ -127,6 +134,12 @@ The packaged apps keep your archive in the standard per-user data directory — 
 **SQLCipher fails to install (from source):** install the C library first — macOS `brew install sqlcipher`, Debian `sudo apt install libsqlcipher-dev` — then retry `pip install`.
 
 **Gmail connection refused:** Gmail requires an [App Password](https://support.google.com/accounts/answer/185833); your regular Google password will not work.
+
+---
+
+## Credits
+
+MailRepo was designed by Richard Sembera and coded with Anthropic's Claude — Opus 4.5–4.8 and Fable 5.
 
 ---
 
