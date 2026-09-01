@@ -41,6 +41,7 @@ from typing import Any
 from flask import Response, jsonify, request, send_file, stream_with_context
 
 from core import Config, Database, Encryption
+from core.database import build_fts_match
 
 from . import api_bp
 
@@ -203,7 +204,9 @@ def _message_ids_in_folders(folder_ids: list[int]) -> list[int]:
 
 def _search_message_ids(query: str, folder_id: int | None, include_subs: bool) -> list[int]:
     """FTS5 search returning message ids."""
-    fts_query = query.replace('"', '""')
+    fts_query = build_fts_match(query)
+    if fts_query is None:
+        return []
     if folder_id:
         folder_ids = _collect_folder_ids(int(folder_id), include_subs)
         placeholders = ",".join("?" * len(folder_ids))

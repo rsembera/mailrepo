@@ -12,6 +12,7 @@ import time
 from flask import Response, jsonify, request
 
 from core import Config, Database, Encryption
+from core.database import build_fts_match
 from utils.log import get_logger
 
 from . import api_bp
@@ -127,7 +128,10 @@ def search_emails():
     if not query:
         return jsonify({"error": "Search query is required"}), 400
 
-    fts_query = query.replace('"', '""')
+    fts_query = build_fts_match(query)
+    if fts_query is None:
+        # Nothing searchable in the input (e.g. "-", "..."): no matches.
+        return jsonify({"results": [], "count": 0, "query": query})
 
     if folder_id:
         # Either the folder alone, or the folder + all descendants

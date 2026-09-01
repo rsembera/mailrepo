@@ -463,3 +463,31 @@ def delete_setting(key: str) -> None:
     """Delete a setting."""
     Database.execute("DELETE FROM settings WHERE key = ?", (key,))
     Database.commit()
+
+def build_fts_match(user_text: str) -> str | None:
+    """Turn free text into a safe FTS5 MATCH expression, or None.
+
+    FTS5 gives syntax meaning to -, :, ^, *, parentheses, and bare
+    AND/OR/NOT — so raw user input like "-", "re: invoice", or a URL
+    ("meet.google.com/abc-defg-hij") raises OperationalError and
+    surfaced as a 500 (found by Rick searching for a Meet link,
+    Session 89). Every token is emitted as a quoted phrase-term, which
+    makes all punctuation literal; spans the user themselves put in
+    double quotes are kept together as phrases (and a quoted URL then
+    matches as its sequence of adjacent tokens, which raw syntax never
+    did). Tokens with nothing alphanumeric can't match anything and are
+    dropped; if nothing survives, None — callers return empty results
+    rather than querying.
+    """
+    parts: list[str] = []
+    # Split on the user's own quotes: even indexes are free text,
+    # odd indexes are their quoted phrases.
+    for i, segment in enumerate(user_text.split('"')):
+        if i % 2 == 1:
+            candidates = [segment.strip()]
+        else:
+            candidates = segment.split()
+        for token in candidates:
+            if any(ch.isalnum() for ch in token):
+                parts.append('"' + token.replace('"', '""') + '"')
+    return " ".join(parts) if parts else None
