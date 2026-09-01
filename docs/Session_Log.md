@@ -6521,3 +6521,36 @@ runs them.
 Remaining: Section E from Apollo — delete /tmp/mr_demo, website DMG
 hash, repo public, anonymous verification, Sentinel push, funnel check.
 Announcements Tuesday morning, staggered, Rick present.
+
+---
+
+## Session 89, night — LAUNCHED
+
+August 31, 2026, ~11:30 p.m., from Apollo. Pre-flight: demo archive
+deleted (it held staged-but-never-committed server actions against
+Rick's personal account and a credential under a published demo
+password — gone), website carrying both round-five hashes and Rick's
+credits wording (Opus 4.5–5 and Fable 5; About modal alignment
+backlogged to 1.0.1).
+
+Then, in the checklist's load-bearing order: repository public
+(Apollo's older gh lacks the consequences flag; bare --visibility
+worked) → anonymous verification: repo 200, release 200, both
+artifacts downloading at full size with no auth → website pushed to
+Sentinel → mailrepo.ca serving the new landing page, hashes, and
+favicon → funnel check as a stranger: the .dmg downloaded from the
+public release URL hashes to exactly 2cce5321…d3dc.
+
+**MailRepo 1.0.0 is public.** https://mailrepo.ca ·
+https://github.com/rsembera/mailrepo
+
+Announcements deliberately held for Tuesday morning, Rick rested and
+present: Show HN first, then r/selfhosted, r/privacy, FB, staggered.
+
+Sessions 87–89 arc, for the record: vector identity → a signed,
+notarized, acceptance-tested .dmg → a .deb built and GUI-tested
+native on Trixie → roughly a dozen real bugs found by packaging
+pressure and dogfooding, including a three-layer commit failure and an
+FTS5 injection-by-punctuation — every one fixed, tested, and shipped
+before a single stranger ever ran the code. The app was built across
+Claude models; the launch was too.
