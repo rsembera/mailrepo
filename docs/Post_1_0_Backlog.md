@@ -24,6 +24,11 @@ account is in `Session_Log.md` under Session 72.
 
 ## Release & distribution
 
+- **About modal credits: align to "Opus 4.5–5 and Fable 5" (1.0.1).** The
+  README and website carry Rick's fuller wording; the modal baked into
+  the 1.0.0 artifacts says 4.5–4.8. Not worth a sixth notarization
+  round on launch night.
+
 - **Website: switch to the SVG logo/icon.** mailrepo.ca (the
   `mailrepo-website` repo on Apollo, pushed to Sentinel) still serves
   the raster logo. Replace with `web/static/assets/logo.svg` and
