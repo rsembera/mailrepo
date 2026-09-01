@@ -139,7 +139,7 @@ The packaged apps keep your archive in the standard per-user data directory — 
 
 ## Credits
 
-MailRepo was designed by Richard Sembera and coded with Anthropic's Claude — Opus 4.5–4.8 and Fable 5.
+MailRepo was designed by Richard Sembera and coded with Anthropic's Claude — Opus 4.5–5 and Fable 5.
 
 ---
 
