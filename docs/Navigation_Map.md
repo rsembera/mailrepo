@@ -1,10 +1,10 @@
 # MailRepo — Navigation Map
 
-**Last Updated:** August 16, 2026
+**Last Updated:** September 1, 2026
 
 ---
 
-## Project Status: 1.0 / Dogfooding
+## Project Status: 1.0.0 — Public
 
 Feature-complete. Encryption refactor (v1 → v2) shipped May 29. v1
 cleanup + 1.0 declaration on May 30. Frontend dispatch model unified
@@ -21,8 +21,21 @@ Backup hardening followed: on-disk chain verification, restore-point
 credential labelling, and the fixes from the pre-tag adversarial review
 (Session 74), two of which were silent data loss in the restore path.
 
-Remaining before `git tag v1.0.0`: a week of ordinary use on the live
-archive (migrated Aug 9). Then the packaging milestone (.dmg / .deb).
+**August 31, 2026 — launched.** `v1.0.0` is public: signed and notarized
+`.dmg`, `.deb` built and GUI-tested native on Trixie, repository public
+at `github.com/rsembera/mailrepo`, site live at `mailrepo.ca`. Both
+artifacts verified anonymously from the public release URLs.
+
+**September 1, 2026 — website follow-up.** Mobile pass (cropped
+screenshots served via `<picture>`, collapsible docs table of contents,
+phone notice on the download page, three pre-existing overflow bugs
+fixed), Liwan analytics, `robots.txt`, `sitemap.xml`, canonical URLs,
+and Google Search Console verification. No app code changed. See
+`Session_Log.md` Session 90.
+
+Release artifact hashes are published in **two** places — `README.md`
+and the website's `download.html`. Any rebuild must update both or they
+disagree. Verified in sync on September 1, 2026.
 
 See `docs/Session_Log.md` (Sessions 36–38 for the road to 1.0, 67–74 for
 the recovery-key work and the pre-tag review) for details

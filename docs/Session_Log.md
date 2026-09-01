@@ -6554,3 +6554,127 @@ pressure and dogfooding, including a three-layer commit failure and an
 FTS5 injection-by-punctuation — every one fixed, tested, and shipped
 before a single stranger ever ran the code. The app was built across
 Claude models; the launch was too.
+
+---
+
+## Session 90 — September 1, 2026 (MacBook, then Apollo)
+
+First working day after launch. Website only — no application code was
+touched, so `CHANGELOG.md` gets no entry.
+
+### Repo hygiene, and a duplicate that wasn't the one to keep
+
+`/Users/rick/Websites` held two clones of the site, `mailrepo-site` and
+`mailrepo-website`, both pointed at the same bare repo on Sentinel. The
+names misled: the folder Rick expected to discard held the newer commit
+(`ff1e0a6`, the screenshots). Pulled the survivor up to date, confirmed
+the working trees identical, and moved the other to the Trash rather
+than deleting it. (Later reversed on Apollo — see "Naming" below.)
+
+### The landing page said search; the screenshot showed staging
+
+Rick caught the mismatch. `search.png` was the obvious swap, but it is a
+near-twin of the `browse.png` hero — same sidebar, same four messages —
+and side by side they read as the same image printed twice. `viewer.png`
+went in instead: visually distinct, and it lands on the paragraph's back
+half (open a message, attachments, export). Copy rewritten to match.
+`staged.png` and `search.png` later found homes in the docs.
+
+### Screenshots on a phone: crop, don't scale
+
+A 1463px window at `width: 100%` in a 342 CSS px slot renders 14px app
+text at roughly 3px. Downscaling only saves bytes; legibility needs a
+tighter crop. Four mobile variants cut and served via `<picture>` with
+`media="(max-width: 700px)"`, judged by previewing each at exactly the
+width a phone gives it. Payload roughly halved as a side effect.
+
+### Three pre-existing overflow bugs, and one false alarm of my own
+
+Headless Chrome floors its viewport at 500 CSS px whatever
+`--window-size` says. Screenshotting 390px of a 500px layout looks
+exactly like clipping, and on that basis I reported a nav overflow that
+did not exist. Correct method: an iframe pinned to the real width inside
+a larger window, with a diagnostic script reporting
+`scrollWidth` vs `clientWidth`. Under that method:
+
+1. **Docs page 618px wide at a 390px viewport.** Grid items default to
+   `min-width: auto`, so the column could not shrink below its content.
+   `minmax(0, 1fr)`. This is what pushed the body text off-screen in
+   Rick's screenshot.
+2. **Three tables** setting their own minimum width; now scroll in
+   their own box below 800px.
+3. **A bare URL** (`myaccount.google.com/apppasswords`) overflowing at
+   320px; `overflow-wrap: break-word` on docs and prose content.
+4. Nav overflow at 320px only — 6px, real but small. First fix stacked
+   the logo above the links on every phone, an overcorrection for a
+   320px-only problem; backed out for a wrapping link row.
+
+All four pages now report `scrollWidth == viewport` at 320 and 390.
+
+### Docs table of contents
+
+~25 links and 5 headings ahead of the content on a phone. Collapsed into
+a `<details>` disclosure, forced open at 801px+ with
+`details:not([open]) > *:not(summary) { display: block }` plus a
+`::details-content` override — verified in the actual renderer before
+committing. Desktop unchanged, and the docs page stays JS-free.
+
+### Analytics
+
+Liwan, mirroring EdgeCase: module tag on all four linked pages (entity
+`mailrepo.ca`), download and phone-notice events. No Google Analytics —
+a page selling local-only storage and zero telemetry is the wrong place
+for Google's tag.
+
+Entities are dashboard-managed; there is no CLI (`liwan` offers only
+`add-user`, `update-password`, `users`). Created the entity by writing
+`entities` and `project_entities` in `liwan-app.sqlite` directly, after
+a `.backup`, mirroring the EdgeCase rows.
+
+Two things worth remembering. **Liwan returns HTTP 200 for an unknown
+entity** — events are dropped silently, with nothing in devtools to
+suggest a problem; the probe sent before the entity existed is absent
+from the database, the one after it is present. And **Liwan drops
+headless-browser user agents**, so a scripted browser looks like a
+failure when the pipeline is fine. Only a real browser proves it.
+
+The "no data" report that followed turned out to be a stale dashboard:
+Liwan fetches on load and does not poll, so a tab left open while
+browsing the site keeps showing the old numbers.
+
+### SEO
+
+`robots.txt` (AI crawlers blocked, `Googlebot` allowed), `sitemap.xml`,
+canonical URLs, and Search Console verification.
+
+**Correction worth recording:** I claimed Google's HTML verification
+token is per-property and that EdgeCase's file could not be reused. It
+is per *account*. The file Google issued for `mailrepo.ca` is byte
+identical to EdgeCase's, same SHA-256. Any future site of Rick's can
+reuse the same file. It must never be deleted.
+
+### Checksums
+
+Verified rather than assumed: downloaded both v1.0.0 artifacts from the
+public release and hashed them. GitHub, `download.html`, `README.md` and
+local `dist/` all agree — dmg `2cce5321…76d3dc`, deb `73c974df…804d96`.
+The About modal rebuild had already been done and its hashes already
+propagated. Noted in the Navigation Map that the hashes live in two
+public places and a rebuild must update both.
+
+### Naming
+
+Rick consolidated on `mailrepo-website` on both machines rather than
+`mailrepo-site`, having found further inconsistencies between them. The
+bare repo on Sentinel remains `mailrepo-site.git`; only the working
+directories are named `mailrepo-website`.
+
+### Also
+
+`.gitignore` added to the site repo (macOS cruft, IDE files, and the
+`_*.html` harness pages generated during responsive testing).
+`index_splash.html` removed — pre-launch placeholder, unlinked,
+superseded, recoverable at `9095187`.
+
+Site commits: `97b25c8`, `b223add`, `be81086`, `8b730ec`, `8afeb9a`,
+`12f35c7`, `3a9c46e`.
