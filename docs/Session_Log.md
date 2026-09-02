@@ -6678,3 +6678,52 @@ superseded, recoverable at `9095187`.
 
 Site commits: `97b25c8`, `b223add`, `be81086`, `8b730ec`, `8afeb9a`,
 `12f35c7`, `3a9c46e`.
+
+
+---
+
+## Session 91 — September 2, 2026 (MacBook)
+
+### A hairline at the right edge of every screenshot
+
+Rick spotted that the four screenshots looked wrongly cropped on the
+right. The diagnosis inverted the symptom: nothing was cut off. Column
+sampling showed the content gutters are symmetric — 20px of pane
+background at x 423–442 on the left, 20px at x 1440–1459 on the right,
+with the card whole in between. The defect was the opposite of a tight
+crop. The capture region ran three pixels *wider* than the app window,
+so columns 1460–1462 of all four shots were a strip of the Apollo
+desktop showing past the window edge.
+
+The measurement that settled it, unique colours per column counting
+inward from the right: 252, 243, 248, then 5, 5, 5, 5, 5. Three columns
+of photographic noise against flat app chrome. Left, top and bottom
+edges were clean on all four.
+
+Cropped 1463×953 → 1460×953 with Pillow and re-ran the column check:
+every outermost column now reads ≤5 distinct colours.
+
+Recapture was the alternative — wake Apollo, rebuild the demo archive,
+re-shoot four views, re-derive four mobile crops, re-review. Not a
+proportionate response to three columns of wallpaper.
+
+### What did not need touching
+
+The mobile variants were cut from inside the frame during the Session 90
+responsive work and never contained the sliver; verified, unchanged. No
+markup or CSS changes either — the README sizes with `width="49%"` and
+the site uses bare `<img>` inside `.screenshot-frame`, with nothing
+pinning pixel dimensions and no `aspect-ratio`.
+
+The four desktop shots were byte-identical across the app repo and the
+website repo before this change, and are again after it. Worth keeping;
+SHA parity is the cheapest way to know the two copies have not drifted.
+
+Screenshot hashes are not the published package hashes, so `download.html`
+and the README checksum block were correctly left alone.
+
+### Also
+
+Added a note to the screenshot step in `Launch_Checklist.md` so a future
+recapture on Apollo does not reintroduce the bleed: capture the window
+region only, and check the outermost columns before committing.

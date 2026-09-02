@@ -33,6 +33,14 @@ fixed), Liwan analytics, `robots.txt`, `sitemap.xml`, canonical URLs,
 and Google Search Console verification. No app code changed. See
 `Session_Log.md` Session 90.
 
+**September 2, 2026 — screenshot crop.** The four desktop screenshots
+were captured 3px wider than the app window and carried a strip of the
+Apollo desktop at the right edge; cropped to 1460×953. They live in
+**two** places — `docs/screenshots/` here and `img/screenshots/` in the
+website repo — and are kept byte-identical, so any recapture must
+update both. The mobile variants are website-only. See `Session_Log.md`
+Session 91.
+
 Release artifact hashes are published in **two** places — `README.md`
 and the website's `download.html`. Any rebuild must update both or they
 disagree. Verified in sync on September 1, 2026.

@@ -21,6 +21,9 @@ Do not reorder the GO-LIVE section.
    `demo-archive-2026`). Shots: browse view w/ Clients sidebar; the
    Tremblay reply open; search for `lease`. Save as
    `docs/screenshots/{browse,viewer,search}.png`, commit, push.
+   Capture the window region only — the v1.0.0 shots caught 3px of the
+   desktop behind the right window edge and had to be cropped after the
+   fact. Check the outermost columns before committing.
 3. Rebuild .deb: `bash packaging/build_deb.sh 1.0.0`
 4. `sha256sum packaging/deb/mailrepo_1.0.0_amd64.deb` → record as DEB_SHA.
 5. Replace the release asset:

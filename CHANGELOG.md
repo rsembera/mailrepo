@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   most apps. The field always re-masks the moment you submit.
 
 ### Fixed
+- **Screenshots no longer show a sliver of desktop (Session 91).** The
+  four README and website screenshots were captured three pixels wider
+  than the app window, catching a strip of the desktop behind its right
+  edge. Cropped to the window. The app UI itself was never clipped.
 - **Large commits no longer falsely report "connection lost" (Session
   89).** The progress stream's parser could drop the final completion
   event depending on how the platform delivered network reads; the
