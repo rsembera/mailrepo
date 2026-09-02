@@ -6751,3 +6751,73 @@ place so neither of us guesses again.
 The app repo was left alone. Apollo reaches GitHub over SSH and the
 MacBook over HTTPS, but both call it `origin` — different transport, not
 an inconsistency.
+
+---
+
+## Session 92 — September 2, 2026, afternoon (Apollo)
+
+### A huge blank area under an HTML email
+
+Rick saw an email in the viewer with a large expanse of empty space
+below the content. Real correspondence, so no sample; the question was
+whether the code alone gave it away. It did.
+
+`renderHtmlBody` in `mail.js` sized its iframe from the max of
+`body.scrollHeight`, `body.offsetHeight`, `documentElement.scrollHeight`
+and `documentElement.offsetHeight`, and its ResizeObserver watched both
+`body` and `documentElement`. Two things wrong with that:
+
+- `documentElement` never reports less than the viewport, and the iframe
+  *is* the viewport. Once the frame was H px tall, every later measure
+  was at least H. The height could only ever ratchet upward.
+- `documentElement` resizes whenever the iframe does, so every height
+  write re-entered the sizer. If the email's own stylesheet set
+  `html, body { height: 100% }` (marketing and Outlook templates do this
+  constantly) alongside any fixed-height content, each write made the
+  content taller, which caused another write. A feedback loop with
+  nothing damping it.
+
+### Reproduced before fixing
+
+Standalone fixture: a 200px header plus a `<table height="100%">`, once
+with `html, body { height: 100% }` in the email's `<style>`, once with
+`min-height: 100vh` instead. Chrome on Apollo, driven over the DevTools
+protocol so animation frames actually tick (headless `--dump-dom` with a
+virtual time budget never delivers the later observer notifications and
+made both versions look fine).
+
+Old sizer, `height: 100%` case: 72,750px after three seconds, 96,350px
+after four, still climbing. Old sizer, `100vh` case: same shape,
+95,950px. Email content is about 225px.
+
+### The fix
+
+Email content now sits inside `<div id="mr-email-root">`, an auto-height
+`flow-root` wrapper; `html, body` are pinned to `height: auto !important`
+in the injected stylesheet; only the wrapper is measured (`scrollHeight`
+/ `offsetHeight` max, so overflowing descendants still count) and only
+the wrapper is observed. With body at auto, a percentage height on its
+children resolves to auto, so the chain from iframe height to content
+height is cut.
+
+Viewport units survive that, since `vh` resolves against the iframe box
+regardless of body. So observer-driven growth has a budget of five
+steps; an image landing or the window `load` event refills it. Real
+observer-driven growth (fonts, late CSS) takes one or two steps, a loop
+takes them forever, so the budget separates the two cleanly.
+
+New sizer on the same fixtures: `height: 100%` case settles at the 300px
+floor after two calls; `100vh` case stops at 1,350px after seven and
+holds. The event listeners now wrap `adjustHeight` in arrow functions —
+the observer passes `true` as its first argument, and a bare listener
+would have passed an `Event` object into the same slot.
+
+Print is untouched; it builds its own document. `node --check` and
+ESLint clean (the four pre-existing unused-var warnings only). Python
+suite run for sanity since nothing on that side changed.
+
+### Not shipped yet
+
+Committed to `main` and queued in the CHANGELOG under Unreleased. The
+published packages stay at 1.0.0; this goes out with the next release
+alongside whatever else lands.

@@ -190,7 +190,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `mail.js` | 2,319 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
+| `mail.js` | 2,427 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
 | `settings.js` | 1,468 | Settings: appearance, accounts, security, recovery-key status + check + rotation, backup, reset |
 | `review.js` | 1,035 | Review staged items, destination editing, commit |
 | `backups.js` | 1,004 | Backup/restore UI, restore points, settings |

@@ -28,6 +28,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   most apps. The field always re-masks the moment you submit.
 
 ### Fixed
+- **HTML emails no longer grow a huge blank area below the content
+  (Session 92).** The viewer sized its frame in a way that could only
+  ever grow, and re-measured every time it grew. Emails whose own styles
+  stretch the body to full height — most marketing and Outlook templates
+  — fed that back on itself, and the frame ran away to tens of thousands
+  of pixels of empty space. The content is now measured on its own
+  terms, and the one case that can still push back (viewport units) is
+  given a short leash.
 - **Screenshots no longer show a sliver of desktop (Session 91).** The
   four README and website screenshots were captured three pixels wider
   than the app window, catching a strip of the desktop behind its right
