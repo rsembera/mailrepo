@@ -279,8 +279,6 @@ def main():
             print(f"Invalid MAILREPO_PORT: {env_port}")
             sys.exit(1)
 
-    host = "127.0.0.1"
-
     print(f"\n{'=' * 50}")
     print(f"  MailRepo v{app.config.get('app_version', '0.1.0')}")
     print(f"{'=' * 50}")
@@ -290,7 +288,7 @@ def main():
         print("\nStarting in DEVELOPMENT mode (auto-reload enabled)...")
         print(f"Open your browser to: http://localhost:{port}")
         print("\nPress Ctrl+C to stop the server\n")
-        app.run(host=host, port=port, debug=True)
+        app.run(host="127.0.0.1", port=port, debug=True)
     else:
         # Production mode with Waitress
         from waitress import serve
@@ -298,7 +296,7 @@ def main():
         print("\nStarting web server...")
         print(f"Open your browser to: http://localhost:{port}")
         print("\nPress Ctrl+C to stop the server\n")
-        serve(app, host=host, port=port)
+        serve(app, host="127.0.0.1", port=port)
 
 
 if __name__ == "__main__":
