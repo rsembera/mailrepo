@@ -1690,7 +1690,23 @@ function renderHtmlBody(container, html, allowRemote = false) {
                     overflow: hidden;
                     word-wrap: break-word;
                     overflow-wrap: break-word;
+                    /* Pin html/body to content height. Email templates
+                       often set body { height: 100% } or wrap everything
+                       in <table height="100%">. Inside a sized iframe those
+                       percentages resolve against the iframe itself, so
+                       content height would track iframe height and the
+                       sizer below could never converge. With html/body at
+                       auto, a percentage height on their children resolves
+                       to auto, which breaks that chain. */
+                    height: auto !important;
+                    min-height: 0 !important;
+                    max-height: none !important;
                 }
+                /* The measured element. Height auto, so it reports only
+                   what the email actually lays out. */
+                /* flow-root: contains child margins so they count toward
+                   the measured height instead of collapsing through. */
+                #mr-email-root { display: flow-root; width: 100%; height: auto; }
                 /* Constrain common wide elements so they fit the iframe width.
                    Email HTML often contains 600-700px fixed-width tables, long
                    unbroken URLs, or wide images. Without these rules, that
@@ -1712,7 +1728,7 @@ function renderHtmlBody(container, html, allowRemote = false) {
                 }
             </style>
         </head>
-        <body>${html}</body>
+        <body><div id="mr-email-root">${html}</div></body>
         </html>
     `);
     doc.close();
@@ -1726,20 +1742,54 @@ function renderHtmlBody(container, html, allowRemote = false) {
     //
     // ResizeObserver is the right primitive here: we resize on every
     // genuine layout change rather than guessing when content is "done".
-    const adjustHeight = () => {
+    //
+    // What we measure matters as much as when. The first version of this
+    // took the max of body and documentElement scrollHeight/offsetHeight.
+    // That can only ever grow: documentElement never reports less than
+    // the viewport, and the iframe *is* the viewport, so once the iframe
+    // was H px tall every later measurement was at least H. Worse, the
+    // observer watched documentElement, which resizes whenever the iframe
+    // does, so any email with a percentage-height wrapper plus some
+    // fixed-height content grew by that fixed amount on every cycle:
+    // a runaway loop that showed up as a huge blank area below the email.
+    //
+    // Now: measure only #mr-email-root, an auto-height wrapper around the
+    // email content, and observe only that element. Its height depends
+    // on the content alone, not on the iframe, so the loop cannot close.
+    //
+    // One thing the wrapper cannot neutralise: viewport units. A
+    // `min-height: 100vh` in the email resolves against the iframe box
+    // regardless of body's height, so that content still grows when the
+    // iframe does. The observer therefore gets a growth budget. Legitimate
+    // observer-driven growth (web fonts, late CSS) takes a step or two;
+    // a feedback loop takes them forever. Once the budget is spent the
+    // observer can no longer grow the frame, and only an external event
+    // (an image landing, the load event) refills it.
+    const contentRoot = doc.getElementById('mr-email-root');
+    const OBSERVER_GROWTH_BUDGET = 5;
+    let observerGrowths = 0;
+    const adjustHeight = (fromObserver = false) => {
         try {
-            const body = doc.body;
-            const root = doc.documentElement;
-            const height = Math.max(
-                body.scrollHeight || 0,
-                body.offsetHeight || 0,
-                root.scrollHeight || 0,
-                root.offsetHeight || 0,
-                300  // minimum height for very short emails
-            );
+            // scrollHeight picks up descendants that overflow the wrapper
+            // (absolutely positioned bits, oversized tables) that a plain
+            // bounding-rect would miss.
+            const measured = contentRoot
+                ? Math.max(contentRoot.scrollHeight || 0, contentRoot.offsetHeight || 0)
+                : doc.body.scrollHeight;
+            const height = Math.max(measured || 0, 300);  // floor for very short emails
+            const current = parseInt(iframe.style.height, 10) || 0;
+            if (height === current) return;
+            if (fromObserver) {
+                if (height > current) {
+                    observerGrowths++;
+                    if (observerGrowths > OBSERVER_GROWTH_BUDGET) return;
+                }
+            } else {
+                observerGrowths = 0;
+            }
             iframe.style.height = height + 'px';
         } catch (e) {
-            // Cross-origin or torn-down iframe \u2014 fall back to a sane default
+            // Cross-origin or torn-down iframe: fall back to a sane default
             iframe.style.height = '500px';
         }
     };
@@ -1752,28 +1802,30 @@ function renderHtmlBody(container, html, allowRemote = false) {
     // image-load listener as a belt-and-braces measure.
     try {
         if (typeof iframe.contentWindow?.ResizeObserver === 'function') {
-            const ro = new iframe.contentWindow.ResizeObserver(() => adjustHeight());
-            ro.observe(doc.body);
-            ro.observe(doc.documentElement);
+            const ro = new iframe.contentWindow.ResizeObserver(() => adjustHeight(true));
+            // Observe the content wrapper only. Never documentElement: it
+            // resizes whenever the iframe does, which re-enters adjustHeight
+            // and is what closed the runaway loop.
+            ro.observe(contentRoot || doc.body);
         }
         // Image-load fallback: re-measure as each image lands
         const imgs = doc.querySelectorAll('img');
         imgs.forEach(img => {
             if (!img.complete) {
-                img.addEventListener('load', adjustHeight, { once: true });
-                img.addEventListener('error', adjustHeight, { once: true });
+                img.addEventListener('load', () => adjustHeight(), { once: true });
+                img.addEventListener('error', () => adjustHeight(), { once: true });
             }
         });
         // One more measurement after the load event in case anything else
         // shifted layout (web fonts, late-running CSS)
         if (iframe.contentWindow) {
-            iframe.contentWindow.addEventListener('load', adjustHeight, { once: true });
+            iframe.contentWindow.addEventListener('load', () => adjustHeight(), { once: true });
         }
     } catch (e) {
         // If observer setup throws, fall back to the original timed snapshots
-        setTimeout(adjustHeight, 100);
-        setTimeout(adjustHeight, 500);
-        setTimeout(adjustHeight, 1000);
+        setTimeout(() => adjustHeight(), 100);
+        setTimeout(() => adjustHeight(), 500);
+        setTimeout(() => adjustHeight(), 1000);
     }
 }
 
