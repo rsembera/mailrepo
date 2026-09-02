@@ -71,8 +71,8 @@ Replace OLD hashes everywhere with the new DMG_SHA / DEB_SHA:
 15. `gh repo edit rsembera/mailrepo --visibility public --accept-visibility-change-consequences`
 16. Verify anonymously (curl, no auth): release page 200, both
     download URLs 200.
-17. Website: on Apollo, `git push sentinel main` (or the repo's
-    documented deploy remote) → verify https://mailrepo.ca serves the
+17. Website: `git push origin main` from `~/Websites/mailrepo-website`
+    on either machine → verify https://mailrepo.ca serves the
     new landing page, download links resolve, favicon updated.
 18. Smoke the funnel once as a stranger: mailrepo.ca → download .dmg →
     hash matches DMG_SHA.

@@ -6727,3 +6727,27 @@ and the README checksum block were correctly left alone.
 Added a note to the screenshot step in `Launch_Checklist.md` so a future
 recapture on Apollo does not reintroduce the bleed: capture the window
 region only, and check the outermost columns before committing.
+
+### Remote naming made uniform
+
+Pushing the screenshot fix, I ran `git push sentinel main` on the
+MacBook, where the website remote is `origin`. Wrong name, right idea:
+`sentinel` is what *Apollo* called it. One outlier across four working
+copies — MacBook app, MacBook website, Apollo app all used `origin`;
+only Apollo's website repo differed. `origin` is git's default, so every
+command copied from a doc or from the other machine assumed it.
+
+Renamed on Apollo: `git remote rename sentinel origin`. Verified the URL
+survived, `branch.main.remote` followed to `origin`, no stale
+`refs/remotes/sentinel/*` left, and a fetch still reaches the bare repo
+with local and remote SHAs matching.
+
+Two docs corrected in the same change, since the rename would otherwise
+have made them wrong: `Launch_Checklist.md` step 17 said `git push
+sentinel main` on Apollo, now `git push origin main` from either
+machine; and the Navigation Map now records the deploy remote in one
+place so neither of us guesses again.
+
+The app repo was left alone. Apollo reaches GitHub over SSH and the
+MacBook over HTTPS, but both call it `origin` — different transport, not
+an inconsistency.

@@ -41,6 +41,13 @@ website repo — and are kept byte-identical, so any recapture must
 update both. The mobile variants are website-only. See `Session_Log.md`
 Session 91.
 
+The website repo's deploy remote is now named **`origin`** on both the
+MacBook and Apollo, pointing at the bare repo on Sentinel
+(`sentinel:~/git/mailrepo-site.git`). Apollo previously called it
+`sentinel`, which made copied commands fail on one machine. `git push
+origin main` from `~/Websites/mailrepo-website` deploys, from either
+machine.
+
 Release artifact hashes are published in **two** places — `README.md`
 and the website's `download.html`. Any rebuild must update both or they
 disagree. Verified in sync on September 1, 2026.
