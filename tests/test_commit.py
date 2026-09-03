@@ -295,22 +295,22 @@ class TestHeaderlessDeduplication:
 
         eml = tmp_path / "noheaders.eml"
         eml.write_bytes(b"just a body, no headers at all\n")
-        folder = authenticated_client.post(
-            "/api/folders", json={"name": "DedupTest"}
-        ).get_json()
+        folder = authenticated_client.post("/api/folders", json={"name": "DedupTest"}).get_json()
         folder_id = folder.get("id") or folder.get("folder", {}).get("id")
 
         def commit_once():
-            staged = [{
-                "sourceType": "import",
-                "destinationFolderId": folder_id,
-                "email": {
-                    "uid": "eml-0",
-                    "subject": "",
-                    "message_id": "",
-                    "sourcePath": str(eml),
-                },
-            }]
+            staged = [
+                {
+                    "sourceType": "import",
+                    "destinationFolderId": folder_id,
+                    "email": {
+                        "uid": "eml-0",
+                        "subject": "",
+                        "message_id": "",
+                        "sourcePath": str(eml),
+                    },
+                }
+            ]
             return authenticated_client.post("/api/commit/stream", json={"staged": staged})
 
         first = commit_once()
@@ -325,7 +325,95 @@ class TestHeaderlessDeduplication:
         assert count == 1
 
         # And the stored id is the deterministic content hash
-        row = Database.fetchone(
-            "SELECT message_id FROM messages WHERE folder_id = ?", (folder_id,)
-        )
+        row = Database.fetchone("SELECT message_id FROM messages WHERE folder_id = ?", (folder_id,))
         assert row["message_id"].endswith("@mailrepo.dedup>")
+
+
+# ---------------------------------------------------------------------------
+# Folder post-action scope (security review 2026-09, finding 7)
+# ---------------------------------------------------------------------------
+
+
+class _FakeImap:
+    """Records what the post-action would do to the server."""
+
+    host = "imap.example.com"
+
+    def __init__(self):
+        self.acted_on = []
+        self.searched = False
+        self.selected = None
+
+    def select_folder(self, name):
+        self.selected = name
+
+    def search(self, criteria="ALL", limit=0):
+        self.searched = True
+        return ["1", "2", "3", "99"]  # "99" arrived after the commit
+
+    def archive_email(self, uid):
+        self.acted_on.append(("archive", uid))
+
+    def trash_email(self, uid):
+        self.acted_on.append(("trash", uid))
+
+    def delete_email(self, uid):
+        self.acted_on.append(("delete", uid))
+
+    def delete_email_via_trash(self, uid, folder):
+        self.acted_on.append(("delete", uid))
+
+    def disconnect(self):
+        pass
+
+
+@pytest.fixture
+def imap_account(initialized_app):
+    Database.execute(
+        "INSERT INTO accounts (name, email, provider, credentials_encrypted) VALUES (?, ?, ?, ?)",
+        ("Acct", "a@example.com", "imap", "not-real"),
+    )
+    Database.commit()
+    return Database.fetchone("SELECT id FROM accounts WHERE email = 'a@example.com'")["id"]
+
+
+def _run_post_action(monkeypatch, account_id, action, archived, failed):
+    from web.blueprints.api import progress_commit as pc
+
+    fake = _FakeImap()
+    monkeypatch.setattr(pc.IMAP, "connect_with_credentials", classmethod(lambda cls, creds: fake))
+    monkeypatch.setattr(pc, "clear_folder_cache", lambda *a, **k: None)
+    results = _empty_results()
+    events = list(
+        pc._apply_folder_post_action(
+            {"accountId": account_id, "folder": "INBOX/Clients"}, action, results, archived, failed
+        )
+    )
+    return fake, results, events
+
+
+class TestFolderPostActionScope:
+    def test_acts_only_on_archived_uids(self, imap_account, monkeypatch):
+        fake, results, _ = _run_post_action(monkeypatch, imap_account, "delete", ["1", "2"], [])
+        assert fake.acted_on == [("delete", "1"), ("delete", "2")]
+        assert fake.searched is False, "must not SEARCH ALL — that catches unarchived mail"
+        assert results["post_actions"]["success"] == 2
+
+    def test_skips_whole_folder_when_anything_failed(self, imap_account, monkeypatch):
+        fake, results, events = _run_post_action(
+            monkeypatch, imap_account, "delete", ["1", "2"], ["3"]
+        )
+        assert fake.acted_on == []
+        assert results["post_actions"]["skipped_folders"] == 1
+        assert results["post_actions"]["success"] == 0
+        assert any("untouched" in e for e in events)
+
+    def test_nothing_archived_does_nothing(self, imap_account, monkeypatch):
+        fake, results, _ = _run_post_action(monkeypatch, imap_account, "archive", [], [])
+        assert fake.acted_on == []
+        assert fake.selected is None
+
+    def test_summary_mentions_skipped_folder(self):
+        r = _empty_results()
+        r["post_actions"]["skipped_folders"] = 1
+        assert "left untouched on the server" in build_commit_summary(r)

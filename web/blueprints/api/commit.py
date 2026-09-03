@@ -511,5 +511,10 @@ def build_commit_summary(results: dict) -> str:
         msg_parts.append(
             f"{count} server update{'s' if count != 1 else ''} failed — your emails are archived safely, but you may need to remove them from the server manually"
         )
+    if results["post_actions"].get("skipped_folders"):
+        count = results["post_actions"]["skipped_folders"]
+        msg_parts.append(
+            f"{count} folder{'s' if count != 1 else ''} left untouched on the server because some emails could not be archived — nothing was removed"
+        )
 
     return ". ".join(msg_parts) + "." if msg_parts else "Nothing committed."

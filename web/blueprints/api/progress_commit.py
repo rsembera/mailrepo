@@ -365,6 +365,14 @@ def stream_commit():
                             event["type"], {k: v for k, v in event.items() if k != "type"}
                         )
                 else:
+                    # Snapshot the cumulative outcome lists so this folder's
+                    # own results can be sliced out afterwards: the post-
+                    # action must touch only messages that are now in the
+                    # archive, never a fresh SEARCH ALL of the server folder.
+                    n_success = len(results["success"])
+                    n_skipped = len(results["skipped"])
+                    n_failed = len(results["failed"])
+
                     for event in commit_imap_folder(
                         folder_item, target_folder_id, folder_idx, folder_count, results
                     ):
@@ -375,7 +383,15 @@ def stream_commit():
                     # Apply post-action for IMAP folder if set
                     folder_action = pending_item.get("source_action", "leave")
                     if folder_action and folder_action != "leave":
-                        yield from _apply_folder_post_action(folder_item, folder_action, results)
+                        # Duplicates count as archived: the message is in
+                        # the archive, which is the condition that matters.
+                        archived_uids = list(results["success"][n_success:]) + [
+                            r["uid"] for r in results["skipped"][n_skipped:] if r.get("uid")
+                        ]
+                        failed_uids = [r.get("uid") for r in results["failed"][n_failed:]]
+                        yield from _apply_folder_post_action(
+                            folder_item, folder_action, results, archived_uids, failed_uids
+                        )
 
                 results["folders_success"] += 1
                 mark_item_done(pending_item["id"])
@@ -619,19 +635,57 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
                     pass
 
 
-def _apply_folder_post_action(folder_item: dict, action: str, results: dict):
-    """Apply post-commit action to all emails in a committed IMAP folder.
+def _apply_folder_post_action(
+    folder_item: dict, action: str, results: dict, archived_uids: list, failed_uids: list
+):
+    """Apply post-commit action to the emails this commit actually archived.
+
+    Only ``archived_uids`` are touched. A fresh SEARCH ALL would also catch
+    messages that failed to archive and messages that arrived during the
+    commit — and with "delete" on Gmail that is permanent. For a
+    compliance archive, "we deleted the original and it is not in the
+    archive" is the worst outcome the product can produce, so if anything
+    in this folder failed the action is skipped outright and the user is
+    told (security review 2026-09, #7).
 
     Args:
         folder_item: The folder item data (accountId, folder name, etc.)
         action: The action to apply ('archive', 'trash', 'delete')
         results: Results dict with post_actions counters
+        archived_uids: UIDs now present in the archive (new plus duplicates)
+        failed_uids: UIDs whose archiving failed in this commit
 
     Yields SSE status messages.
     """
     account_id = folder_item.get("accountId")
     imap_folder = folder_item.get("folder")
     folder_name = imap_folder.split("/")[-1] if imap_folder else "folder"
+
+    if failed_uids:
+        results["post_actions"]["skipped_folders"] = (
+            results["post_actions"].get("skipped_folders", 0) + 1
+        )
+        logger.warning(
+            "Post-commit %s skipped for %s: %d message(s) failed to archive; "
+            "nothing on the server was changed",
+            action,
+            imap_folder,
+            len(failed_uids),
+        )
+        yield sse_message(
+            "status",
+            {
+                "phase": "post_actions",
+                "message": (
+                    f"Left {folder_name} untouched on the server: "
+                    f"{len(failed_uids)} email(s) could not be archived."
+                ),
+            },
+        )
+        return
+
+    if not archived_uids:
+        return
 
     account = Database.fetchone(
         "SELECT credentials_encrypted FROM accounts WHERE id = ?", (account_id,)
@@ -663,9 +717,8 @@ def _apply_folder_post_action(folder_item: dict, action: str, results: dict):
         # a label, not the message); detected from the connected host.
         is_gmail = is_gmail_host(client.host)
         client.select_folder(imap_folder)
-        uids = client.search(criteria="ALL", limit=0)
 
-        for uid in uids:
+        for uid in archived_uids:
             try:
                 apply_email_action(client, action, uid, imap_folder, is_gmail)
                 results["post_actions"]["success"] += 1
