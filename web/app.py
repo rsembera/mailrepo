@@ -98,6 +98,7 @@ def create_app(test_config: dict = None) -> Flask:
             "auth.recover_search",
             "auth.recover_browse",
             "static",
+            "main.launch_check",
         }
 
         if request.endpoint in public_endpoints:

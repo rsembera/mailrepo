@@ -140,35 +140,44 @@ def _is_mailrepo(port: int, timeout: float = 2.0) -> bool:
         return False
 
 
-def _pick_port(preferred: int = PREFERRED_PORT) -> int:
-    """Preferred port if free; refuse if MailRepo owns it; otherwise ephemeral."""
+def _bind_listen_socket(preferred: int = PREFERRED_PORT) -> socket.socket:
+    """Bind the server socket here and keep it.
+
+    The socket is handed to waitress, so there is no window between
+    "checked the port was free" and "started listening" in which another
+    local process could take the port and put its own login page in the
+    MailRepo window (security review 2026-09, #10). Preferred port if
+    free; refuse if MailRepo owns it; otherwise ephemeral.
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind(("127.0.0.1", preferred))
-        return preferred
+        sock.bind(("127.0.0.1", preferred))
     except OSError:
-        pass
-
-    if _is_mailrepo(preferred):
-        _fatal(
-            "MailRepo is already running.\n\n"
-            "Close the existing MailRepo window before opening it again."
-        )
-
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
+        if _is_mailrepo(preferred):
+            sock.close()
+            _fatal(
+                "MailRepo is already running.\n\n"
+                "Close the existing MailRepo window before opening it again."
+            )
+        sock.bind(("127.0.0.1", 0))
+    sock.listen(128)
+    return sock
 
 
-def _wait_for_server(port: int, timeout: float = 20.0) -> bool:
-    """Poll until the server answers, or give up."""
+def _wait_for_server(port: int, launch_nonce: str, timeout: float = 20.0) -> bool:
+    """Poll until OUR server answers, or give up.
+
+    The check is the launch nonce, not a substring: only the app this
+    process built knows it, so a squatter cannot pass as MailRepo.
+    """
     import urllib.request
 
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/auth/login", timeout=1):
-                return True
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/launch-check", timeout=1) as r:
+                return r.status == 200 and r.read(256).decode("ascii", "replace") == launch_nonce
         except Exception:
             time.sleep(0.2)
     return False
@@ -189,14 +198,14 @@ def _fatal(message: str) -> None:
     sys.exit(1)
 
 
-def _serve(app, port: int) -> None:
+def _serve(app, sock: socket.socket) -> None:
     import logging
 
     from waitress import serve
 
     logging.getLogger("waitress").setLevel(logging.ERROR)
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
-    serve(app, host="127.0.0.1", port=port, _quiet=True)
+    serve(app, sockets=[sock], _quiet=True)
 
 
 class DesktopApi:
@@ -274,7 +283,8 @@ def run_desktop() -> None:
 
     import main as cli
 
-    port = _pick_port()
+    sock = _bind_listen_socket()
+    port = sock.getsockname()[1]
 
     try:
         app = cli.prepare_app()
@@ -283,9 +293,14 @@ def run_desktop() -> None:
         _fatal("MailRepo cannot start: its encryption library is missing from this build.")
         return
 
-    threading.Thread(target=_serve, args=(app, port), daemon=True).start()
+    import secrets
 
-    if not _wait_for_server(port):
+    launch_nonce = secrets.token_urlsafe(32)
+    app.config["LAUNCH_NONCE"] = launch_nonce
+
+    threading.Thread(target=_serve, args=(app, sock), daemon=True).start()
+
+    if not _wait_for_server(port, launch_nonce):
         _fatal(f"MailRepo failed to start: the local server on port {port} did not respond.")
         return
 

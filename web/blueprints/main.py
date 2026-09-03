@@ -21,6 +21,20 @@ from core import Database
 main_bp = Blueprint("main", __name__)
 
 
+@main_bp.route("/launch-check")
+def launch_check():
+    """Echo the per-launch nonce so the desktop launcher can confirm the
+    port is answered by the server it started, not a squatter. Public;
+    the nonce is a liveness proof, not a secret worth anything else.
+    """
+    from flask import current_app
+
+    nonce = current_app.config.get("LAUNCH_NONCE")
+    if not nonce:
+        return ("", 404)
+    return (nonce, 200, {"Content-Type": "text/plain; charset=ascii"})
+
+
 @main_bp.route("/")
 def index():
     """
