@@ -20,6 +20,15 @@ from .encryption import Encryption
 log = get_logger()
 
 
+def is_loopback_host(host: str) -> bool:
+    """True for localhost / 127.x / ::1 — where cleartext IMAP is acceptable."""
+    h = (host or "").strip().lower().strip("[]")
+    if h in ("localhost", "::1", "0:0:0:0:0:0:0:1"):
+        return True
+    parts = h.split(".")
+    return len(parts) == 4 and parts[0] == "127" and all(p.isdigit() for p in parts)
+
+
 def _imap_escape(value: str) -> str:
     """Escape a value for use inside an IMAP SEARCH string literal.
 
@@ -123,11 +132,32 @@ class IMAP:
                     timeout=60,
                 )
             else:
+                # "Use SSL/TLS" off means the usual port-143 arrangement:
+                # plain connect, then STARTTLS with the same verified
+                # context. Cleartext for the whole session is allowed only
+                # to loopback, which is the ProtonMail Bridge case — the
+                # one legitimate reason to untick the box. Anything else
+                # that cannot upgrade is refused before a password is sent.
                 self.connection = imaplib.IMAP4(self.host, self.port, timeout=60)
+                if not is_loopback_host(self.host):
+                    if not self._supports_starttls():
+                        raise IMAPError(
+                            f"{self.host}:{self.port} does not offer STARTTLS; refusing to "
+                            "send your password unencrypted. Turn on SSL/TLS (port 993) or "
+                            "use a server that supports STARTTLS."
+                        )
+                    self.connection.starttls(ssl.create_default_context())
+        except IMAPError:
+            raise
         except Exception as e:
             # Chain the cause so callers can detect socket-level failures
             # (e.g. progress_commit checks __cause__ for socket.timeout).
             raise IMAPError(f"Failed to connect to {self.host}:{self.port}: {e}") from e
+
+    def _supports_starttls(self) -> bool:
+        """Whether the server advertised STARTTLS in its capabilities."""
+        caps = getattr(self.connection, "capabilities", ()) or ()
+        return any(str(c).upper() == "STARTTLS" for c in caps)
 
     def login(self, email_address: str, password: str) -> None:
         """

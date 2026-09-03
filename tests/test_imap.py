@@ -262,7 +262,8 @@ class TestBatchedGmailDelete:
     def _gmail(self, monkeypatch, caps=("IMAP4REV1", "MOVE", "UIDPLUS")):
         client, conn = make_client(caps)
         monkeypatch.setattr(
-            client, "get_special_folder",
+            client,
+            "get_special_folder",
             lambda t: "[Gmail]/Trash" if t == "trash" else None,
         )
         monkeypatch.setattr(client, "select_folder", lambda f=None: {})
@@ -304,8 +305,8 @@ class TestBatchedGmailDelete:
 
         assert result == {"100": True, "101": True, "102": True}
         verbs = [c.args[0] for c in conn.uid.call_args_list]
-        assert verbs.count("MOVE") == 1          # one MOVE for all three
-        assert verbs.count("EXPUNGE") == 1       # one scoped EXPUNGE
+        assert verbs.count("MOVE") == 1  # one MOVE for all three
+        assert verbs.count("EXPUNGE") == 1  # one scoped EXPUNGE
         # EXPUNGE targets the destination UID set from COPYUID
         exp = [c for c in conn.uid.call_args_list if c.args[0] == "EXPUNGE"][0]
         assert exp.args[1] == "500,501,502"
@@ -322,7 +323,7 @@ class TestBatchedGmailDelete:
         assert result == {"100": True, "101": True}
         verbs = [c.args[0] for c in conn.uid.call_args_list]
         assert verbs.count("MOVE") == 1
-        assert "EXPUNGE" not in verbs            # no dst uids -> no scoped expunge
+        assert "EXPUNGE" not in verbs  # no dst uids -> no scoped expunge
 
     def test_move_failure_raises(self, monkeypatch):
         client, conn = self._gmail(monkeypatch)
@@ -335,20 +336,79 @@ class TestBatchedGmailDelete:
         client, _ = self._gmail(monkeypatch)
         seen = []
         monkeypatch.setattr(
-            client, "delete_email_via_trash",
+            client,
+            "delete_email_via_trash",
             lambda uid, src: (seen.append(uid) or True),
         )
         result = client.delete_emails_via_trash(["100"], "INBOX")
         assert result == {"100": True}
-        assert seen == ["100"]                   # one message -> proven path
+        assert seen == ["100"]  # one message -> proven path
 
     def test_in_place_delegates_to_per_message(self, monkeypatch):
         client, _ = self._gmail(monkeypatch)
         seen = []
         monkeypatch.setattr(
-            client, "delete_email_via_trash",
+            client,
+            "delete_email_via_trash",
             lambda uid, src: (seen.append(uid) or True),
         )
         result = client.delete_emails_via_trash(["100", "101"], "[Gmail]/Trash")
         assert result == {"100": True, "101": True}
-        assert seen == ["100", "101"]            # source is Trash -> in-place
+        assert seen == ["100", "101"]  # source is Trash -> in-place
+
+
+# ---------------------------------------------------------------------------
+# STARTTLS (security review 2026-09, finding 9)
+# ---------------------------------------------------------------------------
+
+
+class TestStartTLS:
+    """Unticking "Use SSL/TLS" must not send the password in the clear to
+    anything but loopback."""
+
+    def _plain(self, monkeypatch, capabilities):
+        fake = MagicMock()
+        fake.capabilities = capabilities
+        monkeypatch.setattr("core.imap.imaplib.IMAP4", lambda host, port, timeout: fake)
+        return fake
+
+    def test_starttls_is_used_when_advertised(self, monkeypatch):
+        fake = self._plain(monkeypatch, ("IMAP4REV1", "STARTTLS"))
+        client = IMAP("mail.example.com", 143, use_ssl=False)
+        client.connect()
+        fake.starttls.assert_called_once()
+        ctx = fake.starttls.call_args[0][0]
+        assert ctx.verify_mode.name == "CERT_REQUIRED"
+        assert ctx.check_hostname is True
+
+    def test_refused_when_not_advertised(self, monkeypatch):
+        fake = self._plain(monkeypatch, ("IMAP4REV1",))
+        client = IMAP("mail.example.com", 143, use_ssl=False)
+        with pytest.raises(IMAPError, match="STARTTLS"):
+            client.connect()
+        fake.starttls.assert_not_called()
+
+    @pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "::1", "127.9.8.7"])
+    def test_loopback_may_stay_plain(self, monkeypatch, host):
+        fake = self._plain(monkeypatch, ("IMAP4REV1",))
+        client = IMAP(host, 1143, use_ssl=False)
+        client.connect()
+        fake.starttls.assert_not_called()
+
+    def test_ssl_path_unchanged(self, monkeypatch):
+        fake = MagicMock()
+        monkeypatch.setattr("core.imap.imaplib.IMAP4_SSL", lambda *a, **k: fake)
+        client = IMAP("mail.example.com", 993, use_ssl=True)
+        client.connect()
+        assert client.connection is fake
+
+    def test_is_loopback_host(self):
+        from core.imap import is_loopback_host
+
+        assert is_loopback_host("localhost")
+        assert is_loopback_host("127.0.0.1")
+        assert is_loopback_host("[::1]")
+        assert not is_loopback_host("127.0.0.1.evil.com")
+        assert not is_loopback_host("1270.0.1")
+        assert not is_loopback_host("imap.gmail.com")
+        assert not is_loopback_host("")
