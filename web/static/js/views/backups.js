@@ -6,6 +6,7 @@
  */
 
 import { initCustomSelects } from '../components/custom-select.js';
+import { escapeHtml } from '../utils.js';
 import { state, setBackupsUnsavedChecker, setBackupsUnsavedClearer } from '../state.js';
 
 let contextTitle = null;
@@ -1009,8 +1010,3 @@ function selectCurrentFolder() {
 /**
  * Escape HTML.
  */
-function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}

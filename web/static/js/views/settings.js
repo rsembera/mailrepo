@@ -6,6 +6,7 @@
  */
 
 import { initCustomSelects, CustomSelect } from '../components/custom-select.js';
+import { escapeHtml } from '../utils.js';
 import { state } from '../state.js';
 import { bindActions } from '../delegate.js';
 import { closeModal, registerModalCloseHandler } from '../modals.js';
@@ -1146,12 +1147,6 @@ async function loadAccounts() {
     }
 }
 
-function escapeHtml(str) {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
 
 // ============================================
 // GLOBAL FUNCTIONS FOR SETTINGS MODALS

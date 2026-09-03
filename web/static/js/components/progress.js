@@ -5,6 +5,8 @@
  * Uses Server-Sent Events for real-time updates.
  */
 
+import { escapeHtml } from '../utils.js';
+
 /**
  * Create and manage a progress display.
  * @param {HTMLElement} container - Container element to render into
@@ -352,9 +354,3 @@ function getPhaseIcon(phase) {
     }
 }
 
-function escapeHtml(str) {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}

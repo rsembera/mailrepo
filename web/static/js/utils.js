@@ -8,10 +8,17 @@
  * @returns {string} Escaped string
  */
 export function escapeHtml(str) {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+    if (str === null || str === undefined || str === '') return '';
+    // Quotes too: this is used inside attr="${...}" as well as in text,
+    // and an IMAP folder or mbox label named `x" onmouseover="..."` must
+    // not be able to close the attribute. textContent/innerHTML only
+    // escapes & < >, so do it by hand.
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 /**
