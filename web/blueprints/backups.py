@@ -52,10 +52,39 @@ def backup_status():
     return jsonify(status)
 
 
+def _password_ok(data: dict) -> bool:
+    """True if the payload carries the correct master password.
+
+    Unlocking is the check: a wrong password raises. The archive is
+    already unlocked when these routes are reachable, so the re-adopted
+    class state is identical.
+    """
+    from core import Encryption
+
+    password = (data or {}).get("password", "")
+    if not password:
+        return False
+    try:
+        Encryption.unlock(password)
+        return True
+    except Exception:
+        return False
+
+
+_PASSWORD_REQUIRED = "Master password required to change the backup command or location"
+
+
 @backups_bp.route("/api/backup/settings", methods=["POST"])
 def save_backup_settings():
-    """Save backup settings."""
-    data = request.get_json()
+    """Save backup settings.
+
+    Frequency and retention need only the CSRF token. The post-backup
+    command is arbitrary shell, and the location is where the key file
+    gets copied, so changing either requires the master password —
+    otherwise any script in the app origin could escalate from reading
+    the archive to running code as the user (security review 2026-09, #6).
+    """
+    data = request.get_json() or {}
 
     if "frequency" in data:
         set_setting("backup_frequency", data["frequency"])
@@ -63,11 +92,20 @@ def save_backup_settings():
     if "retention" in data:
         set_setting("backup_retention", data["retention"])
 
-    if "post_backup_command" in data:
+    wants_command = "post_backup_command" in data and (
+        (data["post_backup_command"] or "") != get_setting("post_backup_command", "")
+    )
+    wants_location = "location" in data and (
+        (data["location"] or "") != get_setting("backup_location", "")
+    )
+    if (wants_command or wants_location) and not _password_ok(data):
+        return jsonify({"success": False, "error": _PASSWORD_REQUIRED}), 401
+
+    if wants_command:
         set_setting("post_backup_command", data["post_backup_command"])
 
     # Handle location
-    if "location" in data:
+    if wants_location:
         location_value = data["location"]
         if location_value:  # Non-empty string = custom location
             # Validate location exists or can be created
@@ -166,11 +204,16 @@ def prepare_restore():
     """Prepare restore from a specific point."""
     from utils import backup
 
-    data = request.get_json()
+    data = request.get_json() or {}
     restore_point = data.get("restore_point") or data.get("restore_point_id")
 
     if not restore_point:
         return jsonify({"success": False, "error": "No restore point specified"}), 400
+
+    # Staging a restore rolls the archive back at next launch. Master
+    # password required, as for Reset Database.
+    if not _password_ok(data):
+        return jsonify({"success": False, "error": "Master password required to restore"}), 401
 
     try:
         staging_path = backup.prepare_restore(restore_point)

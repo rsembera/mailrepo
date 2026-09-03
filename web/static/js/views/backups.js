@@ -712,20 +712,36 @@ async function saveSettings() {
         }
     }
     
+    // The post-backup command is arbitrary shell and the location is
+    // where the key file gets copied, so changing either needs the
+    // master password — a CSRF token alone would let any script in the
+    // app origin turn "read the archive" into "run code as the user".
+    const newLocation = location === 'default' ? '' : location;
+    const sensitiveChange = (initialSettings.post_backup_command || '') !== (postBackupCommand || '')
+        || (initialSettings.location || '') !== newLocation;
+    let password = null;
+    if (sensitiveChange) {
+        const { showPrompt } = await import('../modals.js');
+        password = await showPrompt('Enter your master password to change the backup command or location', '', { type: 'password' });
+        if (password === null) return;
+    }
+    
     const saveBtn = document.getElementById('save-settings-btn');
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving...';
     
     try {
+        const body = {
+            frequency: frequency,
+            retention: retention,
+            location: newLocation,
+            post_backup_command: postBackupCommand
+        };
+        if (password !== null) body.password = password;
         const response = await fetch('/api/backup/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                frequency: frequency,
-                retention: retention,
-                location: location === 'default' ? '' : location,
-                post_backup_command: postBackupCommand
-            })
+            body: JSON.stringify(body)
         });
         
         const data = await response.json();
@@ -813,11 +829,17 @@ async function confirmRestore() {
     
     hideRestoreModal();
     
+    // Staging a restore rolls the archive back at next launch; require
+    // the master password, as Reset Database does.
+    const { showPrompt } = await import('../modals.js');
+    const password = await showPrompt('Enter your master password to restore', '', { type: 'password' });
+    if (password === null) return;
+    
     try {
         const response = await fetch('/api/backup/prepare-restore', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ restore_point: restorePointId })
+            body: JSON.stringify({ restore_point: restorePointId, password })
         });
         
         const data = await response.json();

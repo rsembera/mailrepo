@@ -38,6 +38,7 @@ export function closeModal(modalId) {
  * @param {string} defaultValue - Default input value
  * @param {Object} options - Optional settings
  * @param {string} options.placeholder - Placeholder text for input
+ * @param {string} options.type - Input type ('password' for a masked field)
  * @returns {Promise<string|null>} User input or null if cancelled
  */
 export function showPrompt(title, defaultValue = '', options = {}) {
@@ -45,6 +46,8 @@ export function showPrompt(title, defaultValue = '', options = {}) {
         promptResolver = resolve;
         const input = document.getElementById('promptInput');
         document.getElementById('promptTitle').textContent = title;
+        input.type = options.type === 'password' ? 'password' : 'text';
+        input.autocomplete = options.type === 'password' ? 'current-password' : 'off';
         input.value = defaultValue;
         input.placeholder = options.placeholder || '';
         document.getElementById('promptModal').classList.add('active');
@@ -59,6 +62,12 @@ export function showPrompt(title, defaultValue = '', options = {}) {
  */
 export function resolvePrompt(value) {
     closeModal('promptModal');
+    const input = document.getElementById('promptInput');
+    if (input && input.type === 'password') {
+        input.value = '';
+        input.type = 'text';
+        input.autocomplete = 'off';
+    }
     if (promptResolver) {
         promptResolver(value);
         promptResolver = null;
