@@ -400,7 +400,24 @@ def _vouch_for_restored_data():
     """
     from flask import current_app
 
+    from core.database import set_setting
     from utils import backup
+
+    if backup.restore_unverified():
+        # A post-backup command read out of a just-restored database is a
+        # shell command chosen by whoever wrote that backup. Do not run it
+        # on the strength of the restore; make the owner re-enter it
+        # (security review 2026-09, #18).
+        try:
+            if get_setting("post_backup_command", ""):
+                set_setting("post_backup_command", "")
+                flash(
+                    "The post-backup command stored in the restored backup was cleared "
+                    "as a precaution. Re-enter it under Backups if you use one.",
+                    "info",
+                )
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"Could not clear restored post-backup command: {e}")
 
     backup.clear_restore_unverified()
     current_app.config.pop("RESTORE_COMPLETED", None)

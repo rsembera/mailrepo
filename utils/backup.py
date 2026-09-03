@@ -569,9 +569,7 @@ def generate_backup_filename(backup_type, backup_dir=None):
         if not (directory / name).exists():
             return name
 
-    raise RuntimeError(
-        f"Could not generate a unique backup filename in {directory}"
-    )
+    raise RuntimeError(f"Could not generate a unique backup filename in {directory}")
 
 
 def validate_backup_location(backup_dir):
@@ -726,6 +724,7 @@ def create_full_backup(backup_dir=None):
 
     # Verify backup
     verify_backup(backup_path)
+    mac = write_backup_mac(backup_path)
 
     # Update manifest
     manifest = load_manifest()
@@ -734,6 +733,7 @@ def create_full_backup(backup_dir=None):
     backup_info = {
         "filename": filename,
         "type": "full",
+        "mac": mac,
         "chain_id": chain_id,
         "created_at": datetime.now().isoformat(),
         "file_count": len(files),
@@ -829,11 +829,13 @@ def create_incremental_backup(backup_dir=None):
 
     # Verify backup
     verify_backup(backup_path)
+    mac = write_backup_mac(backup_path)
 
     # Update manifest
     backup_info = {
         "filename": filename,
         "type": "incremental",
+        "mac": mac,
         "chain_id": manifest["current_chain_id"],
         "created_at": datetime.now().isoformat(),
         "file_count": len(changed_files),
@@ -850,6 +852,76 @@ def create_incremental_backup(backup_dir=None):
     _save_baseline_hashes(current_hashes, current_file_info)
 
     return backup_info
+
+
+# ---------------------------------------------------------------------------
+# Backup authentication (security review 2026-09, #18)
+#
+# The encrypted payloads inside a zip self-authenticate, but the metadata
+# that drives a restore (tombstones, the manifest sidecar) did not, and a
+# plain ZIP is trivially editable by anyone who can write to the backup
+# folder. Every zip now gets an HMAC-SHA256 over its bytes, keyed from the
+# master via HKDF, written to <zip>.mac beside it and recorded in the
+# manifest entry. Restore verifies it whenever the archive is unlocked.
+# ---------------------------------------------------------------------------
+
+
+def mac_sidecar_path(zip_path) -> Path:
+    return Path(str(zip_path) + ".mac")
+
+
+def compute_backup_mac(zip_path, key: bytes) -> str:
+    """Hex HMAC-SHA256 of the file's bytes under ``key``."""
+    import hmac
+
+    h = hmac.new(key, digestmod=hashlib.sha256)
+    with open(zip_path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _current_mac_key():
+    from core.encryption import Encryption
+
+    return Encryption.backup_mac_key()
+
+
+def write_backup_mac(zip_path) -> str | None:
+    """Tag a freshly written zip. Returns the hex tag, or None if locked."""
+    key = _current_mac_key()
+    if key is None:
+        return None
+    tag = compute_backup_mac(zip_path, key)
+    mac_sidecar_path(zip_path).write_text(tag)
+    return tag
+
+
+def check_backup_mac(zip_path, expected: str | None = None) -> str | None:
+    """Verify a zip's tag. Returns a problem string, or None if fine.
+
+    Compares against ``expected`` (the manifest's record) when given and
+    otherwise against the .mac sidecar. Cannot verify while locked; the
+    caller decides what "unverifiable" means for its path. A backup with
+    no tag at all (written before 1.1) is reported so the caller can warn.
+    """
+    import hmac
+
+    key = _current_mac_key()
+    if key is None:
+        return None
+    zip_path = Path(zip_path)
+    if expected is None:
+        sidecar = mac_sidecar_path(zip_path)
+        if not sidecar.exists():
+            return (
+                f"{zip_path.name}: no integrity tag (backup predates 1.1, or the tag was removed)"
+            )
+        expected = sidecar.read_text().strip()
+    actual = compute_backup_mac(zip_path, key)
+    if not hmac.compare_digest(actual, expected):
+        return f"{zip_path.name}: integrity check FAILED — the backup was modified after it was written"
+    return None
 
 
 def verify_backup(backup_path):
@@ -944,9 +1016,7 @@ def build_restore_points(backups, override_dir=None):
         # answer instead of a crash.
         chain_id = backup.get("chain_id")
         if not chain_id:
-            log.warning(
-                f"Skipping manifest entry without chain_id: {backup.get('filename', '?')}"
-            )
+            log.warning(f"Skipping manifest entry without chain_id: {backup.get('filename', '?')}")
             continue
         if chain_id not in chains:
             chains[chain_id] = {"full": None, "incrementals": [], "pre_restore": None}
@@ -994,6 +1064,7 @@ def build_restore_points(backups, override_dir=None):
                 "chain_id": backup.get("chain_id", "pre_restore"),
                 "dependent_count": 0,
                 "files_needed": [str(backup_path)],
+                "macs": {str(backup_path): backup.get("mac")},
             }
         )
 
@@ -1031,6 +1102,7 @@ def build_restore_points(backups, override_dir=None):
                     "chain_id": chain_id,
                     "dependent_count": dependent_count,
                     "files_needed": [str(backup_path)],
+                    "macs": {str(backup_path): full_backup.get("mac")},
                 }
             )
 
@@ -1050,9 +1122,11 @@ def build_restore_points(backups, override_dir=None):
         # files_needed and is reported through the existing path rather
         # than being quietly dropped here.
         files_needed = [str(backup_path)]
+        macs = {str(backup_path): full_backup.get("mac")}
         for i, incr in enumerate(chain["incrementals"]):
             incr_path = resolve(incr)
             files_needed = files_needed + [str(incr_path)]
+            macs = {**macs, str(incr_path): incr.get("mac")}
 
             # Format date with time
             created = datetime.fromisoformat(incr["created_at"])
@@ -1069,6 +1143,7 @@ def build_restore_points(backups, override_dir=None):
                     "chain_id": chain_id,
                     "dependent_count": 0,
                     "files_needed": files_needed.copy(),
+                    "macs": dict(macs),
                 }
             )
 
@@ -1084,9 +1159,7 @@ def build_restore_points(backups, override_dir=None):
         current_blob = None
 
     for point in restore_points:
-        creds = describe_restore_point_credentials(
-            point.get("files_needed", []), current_blob
-        )
+        creds = describe_restore_point_credentials(point.get("files_needed", []), current_blob)
         point["credential_status"] = creds["status"]
         point["credential_note"] = creds["note"]
 
@@ -1219,8 +1292,7 @@ def discover_restore_points_in(folder):
     if not folder_holds_mailrepo_backups(folder):
         if _looks_like_backup_folder({p.name for p in folder.iterdir() if p.is_file()}):
             raise ValueError(
-                "That folder holds backups from a different application, "
-                "not MailRepo."
+                "That folder holds backups from a different application, not MailRepo."
             )
         return [], "empty"
 
@@ -1273,6 +1345,13 @@ def prepare_restore_from_point(point):
     id because the local manifest that ids refer to is exactly what is
     missing.
     """
+    # Authenticity gate. A restore replays tombstones and replaces the
+    # key file and database; a tampered zip must not get that far.
+    for path_str in point.get("files_needed", []):
+        problem = check_backup_mac(path_str, (point.get("macs") or {}).get(path_str))
+        if problem and "no integrity tag" not in problem:
+            raise ValueError(problem)
+
     # Create pre-restore backup first (safety net)
     create_pre_restore_backup()
 
@@ -1365,6 +1444,7 @@ def create_pre_restore_backup():
             zf.write(abs_path, rel_path)
 
     verify_backup(backup_path)
+    mac = write_backup_mac(backup_path)
 
     # Add to manifest
     manifest = load_manifest()
@@ -1372,6 +1452,7 @@ def create_pre_restore_backup():
         {
             "filename": filename,
             "type": "pre_restore",
+            "mac": mac,
             "chain_id": f"pre_restore_{filename}",
             "created_at": datetime.now().isoformat(),
             "file_count": len(files),
@@ -1591,9 +1672,7 @@ def cleanup_old_backups(retention, custom_location=None):
         if p.get("chain_id") == newest_chain_id and p["type"] != "pre_restore"
     ]
     if not newest_points:
-        log.warning(
-            "Retention cleanup skipped: newest chain has no usable restore point."
-        )
+        log.warning("Retention cleanup skipped: newest chain has no usable restore point.")
         return
 
     newest_problems = verify_restore_point_files(newest_points[0])
@@ -1631,6 +1710,7 @@ def cleanup_old_backups(retention, custom_location=None):
             incr_path = get_backup_path_for_entry(incr)
             if incr_path.exists():
                 incr_path.unlink()
+                mac_sidecar_path(incr_path).unlink(missing_ok=True)
             if incr in manifest["backups"]:
                 manifest["backups"].remove(incr)
 
@@ -1638,6 +1718,7 @@ def cleanup_old_backups(retention, custom_location=None):
             full_path = get_backup_path_for_entry(chain["full"])
             if full_path.exists():
                 full_path.unlink()
+                mac_sidecar_path(full_path).unlink(missing_ok=True)
             if chain["full"] in manifest["backups"]:
                 manifest["backups"].remove(chain["full"])
 
@@ -1663,6 +1744,7 @@ def cleanup_old_backups(retention, custom_location=None):
             incr_path = get_backup_path_for_entry(incr)
             if incr_path.exists():
                 incr_path.unlink()
+                mac_sidecar_path(incr_path).unlink(missing_ok=True)
             if incr in manifest["backups"]:
                 manifest["backups"].remove(incr)
             orphans_deleted += 1
@@ -1681,6 +1763,7 @@ def cleanup_old_backups(retention, custom_location=None):
             backup_path = get_backup_path_for_entry(backup)
             if backup_path.exists():
                 backup_path.unlink()
+                mac_sidecar_path(backup_path).unlink(missing_ok=True)
             if backup in manifest["backups"]:
                 manifest["backups"].remove(backup)
             safety_deleted += 1
@@ -1739,6 +1822,20 @@ def verify_restore_point_files(restore_point) -> list:
 
         if bad_file:
             problems.append(f"{name}: corrupt entry ({bad_file})")
+            continue
+
+        # Authenticity, when a key is in hand. The manifest's record of
+        # the tag is preferred (the local manifest is not in the backup
+        # folder); a backup folder found by disaster recovery carries
+        # only the sidecar, which an attacker without the key still
+        # cannot forge. A legacy backup with no tag is a warning, not a
+        # refusal — otherwise every pre-1.1 backup becomes unrestorable.
+        expected = (restore_point.get("macs") or {}).get(path_str)
+        problem = check_backup_mac(path, expected)
+        if problem and "no integrity tag" in problem:
+            log.warning(problem)
+        elif problem:
+            problems.append(problem)
 
     return problems
 

@@ -697,6 +697,17 @@ def _rewrite_metadata(zip_path: Path, deleted_files):
             else:
                 dst.writestr(item, src.read(item.filename))
     tmp.replace(zip_path)
+    # Re-sign so the authenticity gate (finding 18) passes: these tests are
+    # about the path validator holding even against a writer who has the
+    # key — e.g. a legacy untagged backup, or the owner's own machine.
+    from utils.backup import load_manifest, save_manifest, write_backup_mac
+
+    tag = write_backup_mac(zip_path)
+    manifest = load_manifest()
+    for entry in manifest["backups"]:
+        if entry["filename"] == zip_path.name:
+            entry["mac"] = tag
+    save_manifest(manifest)
 
 
 class TestTombstoneTraversal:
@@ -769,3 +780,83 @@ class TestSafePaths:
         from utils.backup import safe_backup_filename
 
         assert safe_backup_filename("mailrepo_full_20260903.zip") == "mailrepo_full_20260903.zip"
+
+
+# ============================================================
+# Security review 2026-09, finding 18: backups are authenticated.
+# ============================================================
+
+
+class TestBackupAuthenticity:
+    def test_new_backups_carry_a_tag(self, archive_with_backup):
+        from utils.backup import compute_backup_mac, get_backup_path_for_entry, mac_sidecar_path
+
+        info = archive_with_backup["backup_info"]
+        path = get_backup_path_for_entry(info)
+        assert info["mac"]
+        assert mac_sidecar_path(path).read_text() == info["mac"]
+        assert compute_backup_mac(path, Encryption.backup_mac_key()) == info["mac"]
+
+    def test_tampered_zip_is_refused(self, archive_with_backup):
+        from utils.backup import get_backup_path_for_entry, verify_restore_point_files
+
+        path = get_backup_path_for_entry(archive_with_backup["backup_info"])
+        # Append a byte: still a valid zip (trailing garbage is tolerated
+        # by testzip), so only the tag can catch it.
+        with open(path, "ab") as f:
+            f.write(b"\x00")
+        points = get_restore_points()
+        problems = verify_restore_point_files(points[0])
+        assert any("integrity check FAILED" in p for p in problems), problems
+        with pytest.raises(ValueError, match="integrity"):
+            prepare_restore(points[0]["id"])
+
+    def test_forged_tombstone_now_fails_the_tag_first(self, archive_with_backup):
+        from utils.backup import get_backup_path_for_entry
+
+        (Config.get_archive_path() / "1/002.eml.enc").unlink()
+        info = create_incremental_backup()
+        path = get_backup_path_for_entry(info)
+        # An attacker without the key edits metadata: the tag no longer matches.
+        with zipfile.ZipFile(path, "a") as zf:
+            zf.writestr(
+                "_backup_metadata.json", json.dumps({"deleted_files": ["archive/1/000.eml.enc"]})
+            )
+        points = get_restore_points()
+        with pytest.raises(ValueError, match="integrity"):
+            prepare_restore(points[0]["id"])
+
+    def test_legacy_backup_without_tag_still_restores(self, archive_with_backup):
+        from utils.backup import (
+            get_backup_path_for_entry,
+            load_manifest,
+            mac_sidecar_path,
+            save_manifest,
+        )
+
+        path = get_backup_path_for_entry(archive_with_backup["backup_info"])
+        mac_sidecar_path(path).unlink()
+        manifest = load_manifest()
+        for entry in manifest["backups"]:
+            entry.pop("mac", None)
+        save_manifest(manifest)
+        points = get_restore_points()
+        assert verify_restore_point_files(points[0]) == []
+        staging = Path(prepare_restore(points[0]["id"]))
+        assert (staging / "archive/1/000.eml.enc").exists()
+
+    def test_mac_key_is_domain_separated(self, archive_with_backup):
+        assert Encryption.backup_mac_key() != Encryption._file_key_v2
+        assert len(Encryption.backup_mac_key()) == 32
+
+    def test_no_key_while_locked(self, archive_with_backup):
+        from utils.backup import check_backup_mac, get_backup_path_for_entry
+
+        path = get_backup_path_for_entry(archive_with_backup["backup_info"])
+        master = Encryption._master
+        try:
+            Encryption.lock()
+            assert Encryption.backup_mac_key() is None
+            assert check_backup_mac(path) is None  # unverifiable, not a failure
+        finally:
+            Encryption._adopt_master(master, 3)

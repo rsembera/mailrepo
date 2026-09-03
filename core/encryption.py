@@ -166,6 +166,10 @@ GCM_TAG_LENGTH = 16
 
 SALT_MAGIC_V3 = b"MRC3"
 HKDF_INFO_RECOVERY_V3 = b"mailrepo.recovery.v3"
+# Backup authentication (security review 2026-09, #18): HMAC-SHA256 over
+# each backup zip, keyed from the master so only the archive owner can
+# produce a valid tag. Domain-separated like the other subkeys.
+HKDF_INFO_BACKUP_MAC_V1 = b"mailrepo.backup-mac.v1"
 
 MASTER_KEY_LENGTH = 32
 RECOVERY_KEY_BYTES = 20  # 160 bits -> exactly 32 base32 chars, no padding
@@ -254,6 +258,13 @@ class Encryption:
                 hook()
             except Exception:  # noqa: BLE001 - a hook must never block a lock
                 pass
+
+    @classmethod
+    def backup_mac_key(cls) -> Optional[bytes]:
+        """Key for authenticating backup zips; None while locked."""
+        if cls._master is None:
+            return None
+        return cls._derive_subkey_v2(cls._master, HKDF_INFO_BACKUP_MAC_V1)
 
     @classmethod
     def read_salt_blob(cls) -> bytes:
