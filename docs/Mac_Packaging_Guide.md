@@ -96,6 +96,7 @@ xcrun notarytool store-credentials "MailRepo Notarization" \
 
 Follow EdgeCase's guide steps verbatim with names swapped:
 
+0. Sync the venv to the lock first: `./venv/bin/pip install -r requirements.lock`. py2app bundles whatever the venv holds, and the lock is what the release was tested against (review 2026-09, #19).
 1. `./venv/bin/python setup_app.py py2app`
 2. `./venv/bin/python packaging/bundle_dylibs.py dist/MailRepo.app --sign "Developer ID Application: RICHARD L SEMBERA (2GKBD5N2AH)"`
    (without `--sign` it ad-hoc signs, enough for local testing but not
