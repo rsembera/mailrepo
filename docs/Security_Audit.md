@@ -11,10 +11,14 @@
 
 > **Addendum (August 9, 2026 — Session 68):** The key file moved to the v3 envelope. The master key is now 32 random bytes, wrapped twice: once under Argon2id(password) and once under HKDF(recovery key). `file_key` and `db_key` still derive from the master by HKDF-Expand exactly as before, and archive ciphertext is unchanged — only the key file format moved (MRC2 → MRC3). Two consequences for this document:
 >
-> - **Password change no longer re-encrypts anything on v3 archives.** It replaces the 61-byte password wrapper. The old password is genuinely revoked because the master is random and independent of it — this is why the migration mints a fresh master and re-encrypts once rather than reusing the password-derived value.
+> - **Password change no longer re-encrypts anything on v3 archives.** It replaces the 61-byte password wrapper. The old password is revoked *against the live key file* because the master is random and independent of it — this is why the migration mints a fresh master and re-encrypts once rather than reusing the password-derived value. It is not revoked against anyone holding an earlier copy of the key file (a backup): the master never changes, so an old `.salt` plus the old password still derives it. See "Rotation does not reach existing backups" below and the September 2026 review, finding 8.
 > - **The recovery key is a second full-access credential.** See the new threat-model section below.
 >
 > The CSRF row under Authentication is unchanged and remains correct.
+
+> **Addendum (September 3, 2026 — Session 93):** A second full review, `docs/Security_Review_2026-09.md`, found six issues worth fixing before the next release and corrected three rows in this document (Argon2id `p`, key-file permissions, session timeout — marked inline). Findings 1–7 and 9–11 are fixed on `main`; finding 8 (binding the two key-file wrappers to each other and to the archive, and offering master-key rotation) is scheduled as its own session with the design note below. Start from the September review, not this page, for the current map.
+
+> **Design note for finding 8 (not yet implemented).** (a) New key-file format `MRC4` = `MRC3` layout plus a 16-byte random `archive_id`; every wrapper's GCM AAD becomes `version ‖ magic ‖ salt_pw ‖ salt_rk ‖ archive_id` so a spliced half or a rolled-back file fails to open; the same `archive_id` is stored in the encrypted `settings` table and compared at login (mismatch = "this key file was not written for this archive", refuse). Detects splicing and rollback; cannot prevent offline use of an old file plus old password. (b) "Rotate master key" as an explicit option on password change and post-recovery reset: mint a fresh master, re-encrypt every archive file and rekey SQLCipher — `migrate_to_v3` already implements the full walk with backup gating and an interruption marker, and generalises. (c) Migration MRC3 → MRC4 at first login after upgrade, atomic, no re-encryption. Tests: splice old recovery half into live file → refuse; restore old `.salt` over live → refuse at login with a clear message; rotation → old file plus old password derives a master that opens nothing.
 
 ---
 
@@ -86,7 +90,7 @@ Comprehensive review of all security-critical code paths: encryption, authentica
 
 | Check | Status | Detail |
 |-------|--------|--------|
-| Key derivation | ✅ | Argon2id, m=256 MiB, t=6, p=4 (`core/encryption.py`) |
+| Key derivation | ✅ | Argon2id, m=256 MiB, t=6, p=1 (`core/encryption.py`; pinned by `tests/test_kdf_cost.py`) |
 | Subkey derivation | ✅ | HKDF-Expand from the master, domain-separated info strings for file vs DB |
 | Salt generation | ✅ | 32-byte, `secrets.token_bytes()`; fresh salt on every rewrap |
 | Cipher | ✅ | AES-256-GCM, random 96-bit nonce per encryption |
@@ -131,7 +135,7 @@ Comprehensive review of all security-critical code paths: encryption, authentica
 |-------|--------|--------|
 | Auth enforcement | ✅ | before_request check on all routes |
 | CSRF validation | ✅ | Middleware covers every state-changing request on a path containing `/api/`. Forms outside that (`/auth/upgrade`, `/auth/setup/recovery-key-saved`, `/archive/create`) carry and verify a token explicitly. `/archive/create` was missed until August 2026 — it is the pattern a maintainer copies, so new non-`/api/` forms must do the same |
-| Session timeout | ✅ | Enforced (except SSE streaming endpoints) |
+| Session timeout | ✅ | Enforced server-side since Session 93 (idle watchdog + status poll exempt from activity); before that the poll refreshed activity and the timeout never fired — see the September 2026 review, finding 1 |
 | Error responses | ✅ | 401 for auth, 403 for CSRF |
 | Public endpoints | ✅ | Whitelist only: `auth.login`, `auth.login_with_recovery_key`, `auth.set_password_post_recovery`, `auth.setup`, `static`. The two recovery routes are public by necessity — a user locked out of their archive has no session, so gating them would make them unreachable by exactly the person they exist for. The reset step's gate is a server-side handoff token minted only after a recovery key verifies |
 
@@ -151,7 +155,7 @@ Comprehensive review of all security-critical code paths: encryption, authentica
 
 | Check | Status | Detail |
 |-------|--------|--------|
-| Path traversal | ✅ | os.path.realpath() protection |
+| Path traversal | ⚠️ | `/api/filesystem/*` uses realpath() to canonicalise, not to confine: it is an authenticated read-anywhere by design (import file picker). Backup/restore paths are validated since Session 93 |
 | File size limits | ✅ | 50MB cap for read operations |
 | Permission errors | ✅ | Handled gracefully |
 | Hidden file filtering | ✅ | Optional, defaults to filtered |
@@ -198,7 +202,7 @@ Comprehensive review of all security-critical code paths: encryption, authentica
 | Check | Status | Detail |
 |-------|--------|--------|
 | Flask secret key | ✅ | secrets.token_hex(32) |
-| Key file permissions | ✅ | 0o600 |
+| Key file permissions | ⚠️ | 0o600 applied only to the former `.secret_key` (removed Session 93). `.salt`, the database and archive files take the umask — see review finding 14 |
 | Session cookies | ✅ | HttpOnly, SameSite=Lax |
 | Environment vars | ✅ | MAILREPO_DATA_DIR supported |
 
