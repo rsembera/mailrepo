@@ -12,7 +12,7 @@ import { escapeHtml, escapeForOnclick, debounce } from '../utils.js';
 import { state } from '../state.js';
 import { renderEmailList, clearEmailFilter, clearArchivedEmailSelection } from '../components/email-list.js';
 import { bindActions } from '../delegate.js';
-import { isDesktop, openBlobExternally, printHtmlExternally } from '../desktop.js';
+import { filenameFromDisposition, isDesktop, openBlobExternally, printHtmlExternally } from '../desktop.js';
 
 // DOM element references
 let contextTitle = null;
@@ -1836,29 +1836,28 @@ function renderHtmlBody(container, html, allowRemote = false) {
  * @returns {boolean}
  */
 function isViewableInBrowser(contentType, filename) {
-    // Types browsers can display inline
+    // Types the server will serve inline. Must match INLINE_TYPES in
+    // web/responses.py. HTML, SVG, JS, CSS and JSON are deliberately
+    // absent: opened as a top-level document from the app's own origin
+    // they would run with the session, so the server always sends them
+    // as downloads and this list only decides which button to show.
     const viewableTypes = [
         'application/pdf',
         'text/plain',
-        'text/html',
-        'text/css',
-        'text/javascript',
-        'application/json',
         'image/jpeg',
         'image/png',
         'image/gif',
         'image/webp',
-        'image/svg+xml',
     ];
     
-    if (contentType && viewableTypes.includes(contentType.toLowerCase())) {
+    if (contentType && viewableTypes.includes(contentType.split(';')[0].trim().toLowerCase())) {
         return true;
     }
     
     // Fallback: check extension
     if (filename) {
         const ext = filename.split('.').pop()?.toLowerCase();
-        const viewableExts = ['pdf', 'txt', 'html', 'htm', 'css', 'js', 'json', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
+        const viewableExts = ['pdf', 'txt', 'jpg', 'jpeg', 'png', 'gif', 'webp'];
         return viewableExts.includes(ext);
     }
     
@@ -1933,9 +1932,7 @@ async function downloadImportAttachment(index, viewInline = false) {
         }
         
         // Get filename from Content-Disposition header
-        const contentDisposition = response.headers.get('Content-Disposition') || '';
-        const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
-        const filename = filenameMatch ? filenameMatch[1] : 'attachment';
+        const filename = filenameFromDisposition(response.headers.get('Content-Disposition')) || 'attachment';
         
         const blob = await response.blob();
         

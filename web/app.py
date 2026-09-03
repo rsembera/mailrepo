@@ -183,6 +183,18 @@ def create_app(test_config: dict = None) -> Flask:
             session["last_activity"] = now
             idle.touch(now)
 
+    # Defensive headers on every response. nosniff stops a browser from
+    # deciding that some response is really HTML; DENY keeps app pages
+    # out of frames on any other origin. The email-body iframe is a
+    # same-origin about:blank document written by script, so DENY does
+    # not touch it.
+    @app.after_request
+    def set_security_headers(response):
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        return response
+
     # Context processor: make common variables available to all templates
     @app.context_processor
     def inject_globals():

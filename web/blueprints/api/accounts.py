@@ -9,10 +9,11 @@ import json
 import time
 from email.header import decode_header
 
-from flask import Response, jsonify, request
+from flask import jsonify, request
 
 from core import IMAP, Database, IMAPError
 from core.account_utils import is_gmail_host
+from web.responses import attachment_response, eml_download
 
 from . import api_bp
 
@@ -385,11 +386,7 @@ def download_imap_email(account_id, uid):
         )
         filename = f"{safe_filename}.eml"
 
-        return Response(
-            raw_bytes,
-            mimetype="message/rfc822",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-        )
+        return eml_download(raw_bytes, filename)
     except IMAPError as e:
         return jsonify({"error": str(e)}), 500
     finally:
@@ -446,14 +443,10 @@ def download_imap_attachment(account_id, uid, index):
 
         att = attachments[index]
 
-        # Check if user wants to view inline (for PDFs, images, etc.)
+        # Inline only for a short list of inert types; see web/responses.py.
         view_inline = request.args.get("view") == "1"
-        disposition = "inline" if view_inline else "attachment"
-
-        return Response(
-            att["payload"],
-            mimetype=att["content_type"],
-            headers={"Content-Disposition": f'{disposition}; filename="{att["filename"]}"'},
+        return attachment_response(
+            att["payload"], att["content_type"], att["filename"], inline=view_inline
         )
     except IMAPError as e:
         return jsonify({"error": str(e)}), 500

@@ -13,6 +13,7 @@ from flask import jsonify, request, send_file
 
 from core import Config, Database, Encryption, import_eml_file, import_mbox_file, scan_mbox_file
 from utils.log import get_logger
+from web.responses import attachment_response
 
 from . import api_bp
 
@@ -506,8 +507,6 @@ def download_import_attachment():
     import email as email_lib
     from email.header import decode_header
 
-    from flask import Response
-
     from utils.log import get_logger
 
     from .email_parser import _parse_eml_directory, get_raw_email_from_import
@@ -663,13 +662,9 @@ def download_import_attachment():
             return jsonify({"error": "Attachment not found"}), 404
 
         att = attachments[index]
-        content_type = att["content_type"] or "application/octet-stream"
-        disposition = "inline" if view_inline else "attachment"
-
-        return Response(
-            att["data"],
-            mimetype=content_type,
-            headers={"Content-Disposition": f'{disposition}; filename="{att["filename"]}"'},
+        # Inline only for a short list of inert types; see web/responses.py.
+        return attachment_response(
+            att["data"], att["content_type"], att["filename"], inline=view_inline
         )
 
     except Exception as e:

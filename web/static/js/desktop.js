@@ -43,13 +43,29 @@ export async function openBlobExternally(blob, filename) {
  * Fetch a same-origin URL (with the session cookie) and open the result
  * externally. Filename comes from Content-Disposition when present.
  */
+/**
+ * Pull the filename out of a Content-Disposition header. The server
+ * emits werkzeug's form: `filename*=UTF-8''...` (percent-encoded) for
+ * non-ASCII names, plain or quoted `filename=` otherwise.
+ */
+export function filenameFromDisposition(header) {
+    const cd = header || '';
+    const star = cd.match(/filename\*=UTF-8''([^;]+)/i);
+    if (star) {
+        try { return decodeURIComponent(star[1]); } catch (e) { /* fall through */ }
+    }
+    const quoted = cd.match(/filename="([^"]*)"/i);
+    if (quoted) return quoted[1];
+    const bare = cd.match(/filename=([^;]+)/i);
+    return bare ? bare[1].trim() : '';
+}
+
 export async function openUrlExternally(url, fallbackName) {
     if (!isDesktop()) return false;
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Server error (${response.status})`);
-    const cd = response.headers.get('Content-Disposition') || '';
-    const match = cd.match(/filename="([^"]+)"/);
-    const filename = match ? match[1] : (fallbackName || 'attachment');
+    const filename = filenameFromDisposition(response.headers.get('Content-Disposition'))
+        || fallbackName || 'attachment';
     return openBlobExternally(await response.blob(), filename);
 }
 

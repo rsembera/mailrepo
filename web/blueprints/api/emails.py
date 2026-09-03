@@ -9,11 +9,12 @@ import email as email_lib
 import re
 import time
 
-from flask import Response, jsonify, request
+from flask import jsonify, request
 
 from core import Config, Database, Encryption
 from core.database import build_fts_match
 from utils.log import get_logger
+from web.responses import attachment_response, eml_download
 
 from . import api_bp
 from .email_parser import decode_email_header, extract_body_text
@@ -687,11 +688,7 @@ def download_archived_email(folder_id, message_id):
         )
         filename = f"{safe_filename}.eml"
 
-        return Response(
-            raw_bytes,
-            mimetype="message/rfc822",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-        )
+        return eml_download(raw_bytes, filename)
     except Exception as e:
         return jsonify({"error": f"Failed to read email: {e}"}), 500
 
@@ -756,14 +753,10 @@ def download_archived_attachment(folder_id, message_id, index):
 
         att = attachments[index]
 
-        # Check if user wants to view inline (for PDFs, images, etc.)
+        # Inline only for a short list of inert types; see web/responses.py.
         view_inline = request.args.get("view") == "1"
-        disposition = "inline" if view_inline else "attachment"
-
-        return Response(
-            att["payload"],
-            mimetype=att["content_type"],
-            headers={"Content-Disposition": f'{disposition}; filename="{att["filename"]}"'},
+        return attachment_response(
+            att["payload"], att["content_type"], att["filename"], inline=view_inline
         )
     except Exception as e:
         return jsonify({"error": f"Failed to read attachment: {e}"}), 500
