@@ -64,6 +64,52 @@ def get_backups_dir():
     return Config.get_backup_path()
 
 
+class UnsafeBackupPathError(ValueError):
+    """A path read from a backup or manifest points outside where it may."""
+
+
+# Top-level folders a backup may contain, and therefore the only ones a
+# restore may delete under. Matches what get_all_backup_files() produces.
+_BACKUP_ROOTS = ("data", "archive")
+
+
+def safe_backup_relpath(rel_path) -> str:
+    """Validate a relative path read from backup metadata.
+
+    Backups carry no integrity protection, so anything in
+    ``_backup_metadata.json`` is attacker-controlled once someone can
+    write to the backup folder. This accepts only a plain relative path
+    under ``data/`` or ``archive/`` — no absolute paths, no ``..``, no
+    backslashes, no empty components — and returns it normalised with
+    forward slashes. Raises UnsafeBackupPathError otherwise.
+    """
+    if not isinstance(rel_path, str) or not rel_path:
+        raise UnsafeBackupPathError("empty path in backup metadata")
+    if "\\" in rel_path or "\x00" in rel_path:
+        raise UnsafeBackupPathError(f"unsafe characters in backup path: {rel_path!r}")
+    if rel_path.startswith("/"):
+        raise UnsafeBackupPathError(f"absolute path in backup metadata: {rel_path!r}")
+    parts = rel_path.split("/")
+    if any(p in ("", ".", "..") for p in parts):
+        raise UnsafeBackupPathError(f"path traversal in backup metadata: {rel_path!r}")
+    if parts[0] not in _BACKUP_ROOTS or len(parts) < 2:
+        raise UnsafeBackupPathError(f"path outside backup roots: {rel_path!r}")
+    return "/".join(parts)
+
+
+def safe_backup_filename(filename) -> str:
+    """Validate a zip filename read from a manifest.
+
+    Manifest entries are joined onto a directory; a bare filename is all
+    that is ever legitimate there. Raises UnsafeBackupPathError otherwise.
+    """
+    if not isinstance(filename, str) or not filename:
+        raise UnsafeBackupPathError("empty filename in manifest")
+    if filename in (".", "..") or "/" in filename or "\\" in filename or "\x00" in filename:
+        raise UnsafeBackupPathError(f"unsafe filename in manifest: {filename!r}")
+    return filename
+
+
 def get_backup_path_for_entry(backup_entry: dict) -> Path:
     """Get the path where a backup file should be located based on its manifest entry."""
     backup_dir = (
@@ -71,7 +117,7 @@ def get_backup_path_for_entry(backup_entry: dict) -> Path:
         if backup_entry.get("backup_dir")
         else get_backups_dir()
     )
-    return backup_dir / backup_entry["filename"]
+    return backup_dir / safe_backup_filename(backup_entry["filename"])
 
 
 def get_restore_staging_dir():
@@ -889,7 +935,7 @@ def build_restore_points(backups, override_dir=None):
 
     def resolve(entry):
         if override_dir is not None:
-            return Path(override_dir) / entry["filename"]
+            return Path(override_dir) / safe_backup_filename(entry["filename"])
         return get_backup_path_for_entry(entry)
 
     # Group by chain
@@ -1266,9 +1312,15 @@ def prepare_restore_from_point(point):
 
             if "_backup_metadata.json" in names:
                 metadata = json.loads(zf.read("_backup_metadata.json"))
+                # deleted_files is attacker-controlled once anyone can
+                # write to the backup folder: validate before joining,
+                # then confirm the result is still inside staging.
+                staging_root = staging_dir.resolve()
                 for rel_path in metadata.get("deleted_files", []):
-                    staged_path = staging_dir / rel_path
-                    if staged_path.exists():
+                    staged_path = staging_dir / safe_backup_relpath(rel_path)
+                    if not staged_path.resolve().is_relative_to(staging_root):
+                        raise UnsafeBackupPathError(f"tombstone escapes staging: {rel_path!r}")
+                    if staged_path.is_file():
                         staged_path.unlink()
 
     # Write restore marker

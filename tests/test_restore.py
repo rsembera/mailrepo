@@ -172,9 +172,7 @@ class TestIncrementalChain:
         for rel in ("1/000.eml.enc", "1/001.eml.enc"):
             assert _decrypts_to(staging, rel, archive_with_backup["plaintexts"][rel])
 
-    def test_restoring_an_older_point_does_not_include_newer_files(
-        self, archive_with_backup
-    ):
+    def test_restoring_an_older_point_does_not_include_newer_files(self, archive_with_backup):
         new_rel = "1/003.eml.enc"
         (Config.get_archive_path() / new_rel).write_bytes(Encryption.encrypt(b"later"))
         create_incremental_backup()
@@ -225,8 +223,9 @@ class TestRestoreSafety:
         cancel_restore()
 
         assert live.read_bytes() == before
-        assert Encryption.decrypt(live.read_bytes()) == (
-            archive_with_backup["plaintexts"]["1/000.eml.enc"]
+        assert (
+            Encryption.decrypt(live.read_bytes())
+            == (archive_with_backup["plaintexts"]["1/000.eml.enc"])
         )
 
 
@@ -339,20 +338,14 @@ class TestRestorePointCredentials:
         assert point["credential_status"] == "current"
         assert point["credential_note"] == ""
 
-    def test_v2_backup_flagged_once_the_archive_has_a_recovery_key(
-        self, archive_with_backup
-    ):
+    def test_v2_backup_flagged_once_the_archive_has_a_recovery_key(self, archive_with_backup):
         """The pre-migration case: restoring it drops the recovery key."""
         from core.crypto_migration_v3 import migrate_to_v3
 
         migrate_to_v3(PASSWORD)
 
         points = get_restore_points()
-        v2_point = next(
-            p
-            for p in points
-            if p["credential_status"] == "predates_recovery_key"
-        )
+        v2_point = next(p for p in points if p["credential_status"] == "predates_recovery_key")
         assert "recovery key" in v2_point["credential_note"]
 
     def test_password_change_flags_older_backups(self, archive_with_backup):
@@ -367,9 +360,7 @@ class TestRestorePointCredentials:
         assert "password_changed" in statuses
 
         flagged = next(
-            p
-            for p in get_restore_points()
-            if p["credential_status"] == "password_changed"
+            p for p in get_restore_points() if p["credential_status"] == "password_changed"
         )
         assert "password you used then" in flagged["credential_note"]
         # The recovery key is untouched by a password change, and the note
@@ -387,9 +378,7 @@ class TestRestorePointCredentials:
         statuses = {p["credential_status"] for p in get_restore_points()}
         assert "recovery_key_rotated" in statuses
 
-    def test_rotating_recovery_key_does_not_flag_the_password(
-        self, archive_with_backup
-    ):
+    def test_rotating_recovery_key_does_not_flag_the_password(self, archive_with_backup):
         """Each half is independent; a rotation must not imply the password
         moved, or the warning becomes noise."""
         from core.crypto_migration_v3 import migrate_to_v3
@@ -427,9 +416,7 @@ class TestRestorePointCredentials:
         result = describe_restore_point_credentials([], current_blob=None)
         assert result["status"] in ("unknown", "obsolete_crypto")
 
-    def test_effective_key_file_is_the_last_one_in_the_chain(
-        self, archive_with_backup
-    ):
+    def test_effective_key_file_is_the_last_one_in_the_chain(self, archive_with_backup):
         """Incrementals only carry changed files.
 
         Most do not contain the key file at all, so the one that lands on
@@ -446,9 +433,7 @@ class TestRestorePointCredentials:
         newest = get_restore_points()[0]
         assert len(newest["files_needed"]) >= 2
         blob = read_key_file_from_chain(newest["files_needed"])
-        assert blob[:4] == b"MRC3", (
-            "chain reported the older key file instead of the effective one"
-        )
+        assert blob[:4] == b"MRC3", "chain reported the older key file instead of the effective one"
         assert newest["credential_status"] == "current"
 
 
@@ -490,9 +475,7 @@ class TestChainReplayCorrectness:
         staging = Path(prepare_restore(get_restore_points()[0]["id"]))
         staged = staging / "archive" / "1/000.eml.enc"
 
-        assert staged.exists(), (
-            "file deleted then recreated was lost on restore"
-        )
+        assert staged.exists(), "file deleted then recreated was lost on restore"
         assert Encryption.decrypt(staged.read_bytes()) == recreated
 
     def test_deletion_still_applies_when_not_recreated(self, archive_with_backup):
@@ -517,16 +500,12 @@ class TestMissingChainMemberIsReported:
         problems, because it checks that listed files open — not that the
         list is complete.
         """
-        (Config.get_archive_path() / "1/003.eml.enc").write_bytes(
-            Encryption.encrypt(b"second")
-        )
+        (Config.get_archive_path() / "1/003.eml.enc").write_bytes(Encryption.encrypt(b"second"))
         assert create_incremental_backup() is not None
         middle = get_restore_points()[0]
 
         time.sleep(1.05)
-        (Config.get_archive_path() / "1/004.eml.enc").write_bytes(
-            Encryption.encrypt(b"third")
-        )
+        (Config.get_archive_path() / "1/004.eml.enc").write_bytes(Encryption.encrypt(b"third"))
         assert create_incremental_backup() is not None
 
         # Lose the middle incremental, as cloud eviction or partial sync would.
@@ -543,16 +522,12 @@ class TestMissingChainMemberIsReported:
 
     def test_gate_refuses_a_chain_with_a_hole(self, archive_with_backup):
         """The consequence: the non-resumable windows must not open."""
-        (Config.get_archive_path() / "1/003.eml.enc").write_bytes(
-            Encryption.encrypt(b"second")
-        )
+        (Config.get_archive_path() / "1/003.eml.enc").write_bytes(Encryption.encrypt(b"second"))
         create_incremental_backup()
         middle = get_restore_points()[0]
 
         time.sleep(1.05)
-        (Config.get_archive_path() / "1/004.eml.enc").write_bytes(
-            Encryption.encrypt(b"third")
-        )
+        (Config.get_archive_path() / "1/004.eml.enc").write_bytes(Encryption.encrypt(b"third"))
         create_incremental_backup()
 
         Path(middle["files_needed"][-1]).unlink()
@@ -575,26 +550,18 @@ class TestBackupFilenameCollisions:
         (backups_dir / first).write_bytes(b"placeholder")
         second = generate_backup_filename("full", backups_dir)
 
-        assert first != second, (
-            "second backup in the same second would overwrite the first"
-        )
+        assert first != second, "second backup in the same second would overwrite the first"
 
     def test_back_to_back_backups_do_not_clobber(self, archive_with_backup):
         """End to end: no sleep, so both land in the same second."""
-        (Config.get_archive_path() / "1/003.eml.enc").write_bytes(
-            Encryption.encrypt(b"a")
-        )
+        (Config.get_archive_path() / "1/003.eml.enc").write_bytes(Encryption.encrypt(b"a"))
         first = create_incremental_backup()
-        (Config.get_archive_path() / "1/004.eml.enc").write_bytes(
-            Encryption.encrypt(b"b")
-        )
+        (Config.get_archive_path() / "1/004.eml.enc").write_bytes(Encryption.encrypt(b"b"))
         second = create_incremental_backup()
 
         assert first["filename"] != second["filename"]
         for info in (first, second):
-            assert (
-                Path(info.get("backup_dir", "")) / info["filename"]
-            ).exists() or (
+            assert (Path(info.get("backup_dir", "")) / info["filename"]).exists() or (
                 Config.get_data_path().parent / "backups" / info["filename"]
             ).exists()
 
@@ -631,8 +598,7 @@ class TestSafetyBackupLocation:
         create_pre_restore_backup()
 
         assert list(custom.glob("pre_restore_*.zip")), (
-            "safety backup went to the repo-local dir, which never syncs "
-            "off-machine"
+            "safety backup went to the repo-local dir, which never syncs off-machine"
         )
 
 
@@ -651,9 +617,7 @@ class TestRetentionKeepsSomethingUsable:
             entry["created_at"] = old
         manifest_path.write_text(json.dumps(manifest))
 
-    def test_refuses_to_prune_when_the_kept_chain_is_broken(
-        self, archive_with_backup
-    ):
+    def test_refuses_to_prune_when_the_kept_chain_is_broken(self, archive_with_backup):
         """The case that loses everything.
 
         If the newest chain is corrupt and the older ones have aged past
@@ -670,9 +634,7 @@ class TestRetentionKeepsSomethingUsable:
         newest = create_full_backup()
         newest_chain = json.loads((backups_dir / "manifest.json").read_text())
         newest_chain_id = next(
-            b["chain_id"]
-            for b in newest_chain["backups"]
-            if b["filename"] == newest["filename"]
+            b["chain_id"] for b in newest_chain["backups"] if b["filename"] == newest["filename"]
         )
 
         self._age_manifest(backups_dir, hours=24 * 400, keep_newest_chain=newest_chain_id)
@@ -699,9 +661,7 @@ class TestRetentionKeepsSomethingUsable:
         newest = create_full_backup()
         manifest = json.loads((backups_dir / "manifest.json").read_text())
         newest_chain_id = next(
-            b["chain_id"]
-            for b in manifest["backups"]
-            if b["filename"] == newest["filename"]
+            b["chain_id"] for b in manifest["backups"] if b["filename"] == newest["filename"]
         )
 
         self._age_manifest(backups_dir, hours=24 * 400, keep_newest_chain=newest_chain_id)
@@ -712,3 +672,100 @@ class TestRetentionKeepsSomethingUsable:
 
         assert after < before, "retention did not prune a healthy, aged-out chain"
         assert any(p["filename"] == newest["filename"] for p in get_restore_points())
+
+
+# ============================================================
+# Security review 2026-09, finding 4: a backup must not be able to name
+# files outside the staging directory for deletion, and a manifest must
+# not be able to point at zips outside its folder.
+# ============================================================
+
+
+def _rewrite_metadata(zip_path: Path, deleted_files):
+    """Replace _backup_metadata.json inside a zip, as an attacker with
+    write access to the backup folder would."""
+    tmp = zip_path.with_suffix(".tmp")
+    with (
+        zipfile.ZipFile(zip_path, "r") as src,
+        zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as dst,
+    ):
+        for item in src.infolist():
+            if item.filename == "_backup_metadata.json":
+                meta = json.loads(src.read(item.filename))
+                meta["deleted_files"] = deleted_files
+                dst.writestr(item.filename, json.dumps(meta))
+            else:
+                dst.writestr(item, src.read(item.filename))
+    tmp.replace(zip_path)
+
+
+class TestTombstoneTraversal:
+    @pytest.fixture
+    def incremental(self, archive_with_backup):
+        (Config.get_archive_path() / "1/002.eml.enc").unlink()
+        info = create_incremental_backup()
+        assert info is not None
+        from utils.backup import get_backup_path_for_entry
+
+        return get_backup_path_for_entry(info)
+
+    @pytest.mark.parametrize(
+        "evil",
+        [
+            "../../victim.txt",
+            "archive/../../victim.txt",
+            "/tmp/victim.txt",
+            "data/../../../victim.txt",
+            "victim.txt",  # outside data/ and archive/
+            "",
+        ],
+    )
+    def test_forged_tombstone_is_rejected(self, incremental, evil, tmp_path):
+        from utils.backup import UnsafeBackupPathError
+
+        victim = Config.get_base_path().parent / "victim.txt"
+        victim.write_text("do not delete")
+        try:
+            _rewrite_metadata(incremental, [evil])
+            points = get_restore_points()
+            with pytest.raises(UnsafeBackupPathError):
+                prepare_restore(points[0]["id"])
+            assert victim.exists()
+        finally:
+            victim.unlink(missing_ok=True)
+
+    def test_legitimate_tombstone_still_works(self, incremental):
+        _rewrite_metadata(incremental, ["archive/1/001.eml.enc"])
+        points = get_restore_points()
+        staging = Path(prepare_restore(points[0]["id"]))
+        assert not (staging / "archive/1/001.eml.enc").exists()
+        assert (staging / "archive/1/000.eml.enc").exists()
+
+
+class TestSafePaths:
+    def test_relpath_accepts_backup_shapes(self):
+        from utils.backup import safe_backup_relpath
+
+        assert safe_backup_relpath("data/mailrepo.db") == "data/mailrepo.db"
+        assert safe_backup_relpath("archive/1/000.eml.enc") == "archive/1/000.eml.enc"
+
+    @pytest.mark.parametrize(
+        "bad", ["data", "archive/", "data/./x", "a\\b", "data/x\x00y", None, 5]
+    )
+    def test_relpath_rejects(self, bad):
+        from utils.backup import UnsafeBackupPathError, safe_backup_relpath
+
+        with pytest.raises(UnsafeBackupPathError):
+            safe_backup_relpath(bad)
+
+    @pytest.mark.parametrize("bad", ["../x.zip", "/tmp/x.zip", "a/b.zip", "..", "", "a\\b.zip"])
+    def test_manifest_filename_rejects(self, bad):
+        from utils.backup import UnsafeBackupPathError, safe_backup_filename
+
+        with pytest.raises(UnsafeBackupPathError):
+            safe_backup_filename(bad)
+
+    def test_manifest_filename_accepts_bare(self):
+        from utils.backup import safe_backup_filename
+
+        assert safe_backup_filename("mailrepo_full_20260903.zip") == "mailrepo_full_20260903.zip"
