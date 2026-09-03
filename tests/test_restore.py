@@ -818,10 +818,14 @@ class TestBackupAuthenticity:
         info = create_incremental_backup()
         path = get_backup_path_for_entry(info)
         # An attacker without the key edits metadata: the tag no longer matches.
-        with zipfile.ZipFile(path, "a") as zf:
-            zf.writestr(
-                "_backup_metadata.json", json.dumps({"deleted_files": ["archive/1/000.eml.enc"]})
-            )
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)  # duplicate entry is the point
+            with zipfile.ZipFile(path, "a") as zf:
+                zf.writestr(
+                    "_backup_metadata.json", json.dumps({"deleted_files": ["archive/1/000.eml.enc"]})
+                )
         points = get_restore_points()
         with pytest.raises(ValueError, match="integrity"):
             prepare_restore(points[0]["id"])
