@@ -255,6 +255,7 @@ def setup():
             session["authenticated"] = True
             session["last_activity"] = time.time()
             session["csrf_token"] = secrets.token_hex(32)
+            session["login_id"] = idle.new_login_id()
             session.permanent = True
 
             # Render the recovery key directly in this response rather than
@@ -729,6 +730,7 @@ def login():
             session["authenticated"] = True
             session["last_activity"] = time.time()
             session["csrf_token"] = secrets.token_hex(32)
+            session["login_id"] = idle.new_login_id()
             session.permanent = True
             idle.touch()
 

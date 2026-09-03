@@ -9,7 +9,7 @@ import time
 
 from flask import Flask, jsonify, redirect, request, session, url_for
 
-from core import Config, Database, Encryption, FlaskConfig, generate_flask_secret_key
+from core import Config, Database, Encryption, FlaskConfig
 from core.database import get_setting
 
 from . import idle
@@ -34,7 +34,11 @@ def create_app(test_config: dict = None) -> Flask:
     # Load configuration
     if test_config is None:
         app.config.from_object(FlaskConfig)
-        app.config["SECRET_KEY"] = generate_flask_secret_key()
+        # Per process, never on disk. Sessions cannot outlive the process
+        # anyway (the keys live in memory), so a persistent signing key
+        # only ever helped someone else mint a cookie — and it rode along
+        # in every backup (security review 2026-09, #11).
+        app.config["SECRET_KEY"] = secrets.token_bytes(32)
         app.config["app_version"] = Config.VERSION
     else:
         app.config.update(test_config)
@@ -116,6 +120,16 @@ def create_app(test_config: dict = None) -> Flask:
 
         # Verify encryption is unlocked (session might be stale)
         if not Encryption.is_unlocked():
+            session.clear()
+            if is_api_request():
+                return jsonify({"error": "Session expired", "code": "session_expired"}), 401
+            return redirect(url_for("auth.login"))
+
+        # The cookie must belong to THIS login. A cookie captured earlier
+        # and replayed after a logout and fresh login is otherwise still
+        # a valid signed cookie against a once-again-unlocked archive.
+        login_id = session.get("login_id", "")
+        if not login_id or not secrets.compare_digest(login_id, idle.current_login_id()):
             session.clear()
             if is_api_request():
                 return jsonify({"error": "Session expired", "code": "session_expired"}), 401

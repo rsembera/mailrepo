@@ -877,36 +877,3 @@ class Encryption:
             os.fsync(dir_fd)
         finally:
             os.close(dir_fd)
-
-
-# ============================================================
-# FLASK SECRET KEY (independent of master password)
-# ============================================================
-
-
-def generate_flask_secret_key() -> str:
-    """
-    Generate or load the Flask secret key.
-
-    Independent of the user's master password. Lives in data/.secret_key
-    with 0600 permissions.
-    """
-    secret_key_path = Config.get_secret_key_path()
-    if secret_key_path.exists():
-        return secret_key_path.read_text().strip()
-
-    secret_key = secrets.token_hex(32)
-    secret_key_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Create with 0600 rather than writing then chmod'ing. The old order
-    # left the key world-readable for the moment between the two calls.
-    fd = os.open(secret_key_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    try:
-        os.write(fd, secret_key.encode("ascii"))
-    finally:
-        os.close(fd)
-
-    # Belt and braces: O_CREAT honours the mode only when the file did
-    # not already exist, and umask can clear bits.
-    os.chmod(secret_key_path, 0o600)
-    return secret_key

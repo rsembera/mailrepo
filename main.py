@@ -222,6 +222,18 @@ def prepare_app():
 
     app = create_app()
 
+    # Pre-1.1 builds kept the Flask session key in data/.secret_key and
+    # backed it up. The key is per-process now; remove the leftover so it
+    # stops riding along in backups and directory listings.
+    try:
+        from core.config import Config as _Cfg
+
+        stale = _Cfg.get_secret_key_path()
+        if stale.exists():
+            stale.unlink()
+    except OSError as e:
+        log.warning(f"Could not remove stale .secret_key: {e}")
+
     # Server-side idle lock, independent of any request arriving. The
     # per-request check in web/app.py handles the open-tab case; this
     # handles the closed tab, the crashed webview, and the laptop lid.

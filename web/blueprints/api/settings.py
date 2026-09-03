@@ -223,7 +223,7 @@ def reset_database():
         if salt_path.exists():
             salt_path.unlink()
 
-        # Delete secret key file (Flask session key)
+        # Delete a stale secret key file from before 1.1 (no longer used)
         secret_key_path = Config.get_secret_key_path()
         if secret_key_path.exists():
             secret_key_path.unlink()

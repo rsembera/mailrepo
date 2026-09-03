@@ -13,6 +13,7 @@ cleared around every test.
 import pytest
 
 from core.encryption import Encryption, InvalidPasswordError
+from web import idle
 from web.blueprints import auth
 
 
@@ -107,6 +108,7 @@ class TestLogin:
         client = app.test_client()
         with client.session_transaction() as sess:
             sess["authenticated"] = True
+            sess["login_id"] = idle.new_login_id()
         resp = client.get("/auth/login")  # Encryption is unlocked via fixture
         assert resp.status_code == 302
 
@@ -134,7 +136,6 @@ class TestLogout:
         assert resp.status_code == 405
         assert Encryption.is_unlocked() is True
 
-
     def test_logout_requires_csrf_token(self, initialized_app, monkeypatch):
         """A cross-site auto-submitting form must not be able to force a
         logout (which can also fire the post-backup command)."""
@@ -143,6 +144,7 @@ class TestLogout:
         client = app.test_client()
         with client.session_transaction() as sess:
             sess["authenticated"] = True
+            sess["login_id"] = idle.new_login_id()
             sess["csrf_token"] = "expected"
         resp = client.post("/auth/logout")
         assert resp.status_code == 302
@@ -157,6 +159,7 @@ class TestLogout:
         client = app.test_client()
         with client.session_transaction() as sess:
             sess["authenticated"] = True
+            sess["login_id"] = idle.new_login_id()
             sess["csrf_token"] = "expected"
         resp = client.post("/auth/logout", data={"csrf_token": "expected", "reason": "timeout"})
         assert resp.status_code == 302
@@ -172,9 +175,9 @@ class TestIdleLock:
     """
 
     def test_session_status_poll_does_not_refresh_activity(self, authenticated_client):
-        from core.database import set_setting
-
         import time as _t
+
+        from core.database import set_setting
 
         set_setting("session_timeout", "15")
         recent = _t.time() - 60  # within the timeout, but distinguishable
@@ -263,6 +266,7 @@ class TestCSRF:
         client = app.test_client()
         with client.session_transaction() as sess:
             sess["authenticated"] = True
+            sess["login_id"] = idle.new_login_id()
             sess["csrf_token"] = "tok-123"
         resp = client.post("/auth/api/verify-password", json={"current_password": password})
         assert resp.status_code == 403
@@ -272,6 +276,7 @@ class TestCSRF:
         client = app.test_client()
         with client.session_transaction() as sess:
             sess["authenticated"] = True
+            sess["login_id"] = idle.new_login_id()
             sess["csrf_token"] = "tok-123"
         resp = client.post(
             "/auth/api/verify-password",
@@ -345,3 +350,39 @@ class TestPasswordChangeHandoff:
         Encryption.unlock("BrandNewPass789!")  # must not raise
         with pytest.raises(InvalidPasswordError):
             Encryption.unlock(INIT_PW)
+
+
+class TestLoginId:
+    """Security review 2026-09, #11: a cookie from an earlier login must not
+    work after a logout and fresh login, even though the archive is
+    unlocked again and the cookie is still validly signed."""
+
+    def test_stale_cookie_is_rejected_after_new_login(self, initialized_app):
+        app, _ = initialized_app
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["authenticated"] = True
+            sess["csrf_token"] = "t"
+            sess["login_id"] = idle.new_login_id()
+        assert client.get("/api/session-status").status_code == 200
+
+        idle.new_login_id()  # someone logged in again
+        resp = client.get("/api/session-status")
+        assert resp.status_code == 401
+        with client.session_transaction() as sess:
+            assert "authenticated" not in sess
+
+    def test_cookie_without_login_id_is_rejected(self, initialized_app):
+        app, _ = initialized_app
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["authenticated"] = True
+            sess["csrf_token"] = "t"
+        assert client.get("/api/session-status").status_code == 401
+
+    def test_secret_key_is_not_on_disk_or_in_backups(self, initialized_app):
+        from core.config import Config
+        from utils.backup import get_all_backup_files
+
+        assert not Config.get_secret_key_path().exists()
+        assert "data/.secret_key" not in get_all_backup_files()

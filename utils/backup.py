@@ -168,10 +168,6 @@ def get_all_backup_files():
     if salt_path.exists():
         files["data/.salt"] = salt_path
 
-    secret_key_path = data_dir / ".secret_key"
-    if secret_key_path.exists():
-        files["data/.secret_key"] = secret_key_path
-
     # Archive folder (all email files - encrypted and unencrypted)
     if archive_dir.exists():
         for filepath in archive_dir.rglob("*"):
@@ -1421,8 +1417,9 @@ def complete_restore():
             target_db.unlink()
         shutil.copy2(staged_db, target_db)
 
-    # Replace security files
-    for security_file in [".salt", ".secret_key"]:
+    # Replace security files. (.secret_key is no longer used or backed
+    # up; one found in an old backup is simply not restored.)
+    for security_file in [".salt"]:
         staged_file = staging_dir / "data" / security_file
         if staged_file.exists():
             target_file = data_dir / security_file

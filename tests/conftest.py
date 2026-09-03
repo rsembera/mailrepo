@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from web import idle
+
 
 @pytest.fixture(scope="session")
 def test_data_dir():
@@ -148,6 +150,7 @@ def authenticated_client(initialized_app):
     # Set up session with authentication and CSRF token
     with client.session_transaction() as sess:
         sess["authenticated"] = True
+        sess["login_id"] = idle.new_login_id()
         sess["csrf_token"] = csrf_token
 
     # Create a wrapper that automatically adds CSRF header

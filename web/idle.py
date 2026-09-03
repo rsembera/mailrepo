@@ -25,6 +25,23 @@ log = get_logger(__name__)
 _lock = threading.Lock()
 _last_activity: float = time.time()
 _watchdog_started = False
+_login_id: str = ""
+
+
+def new_login_id() -> str:
+    """Mint the id for a fresh login; every earlier cookie is now stale."""
+    global _login_id
+    import secrets
+
+    with _lock:
+        _login_id = secrets.token_hex(16)
+        return _login_id
+
+
+def current_login_id() -> str:
+    with _lock:
+        return _login_id
+
 
 # How often the watchdog wakes up. Granularity of the idle lock, not its
 # length: a 15-minute timeout locks between 15:00 and 15:15 after the
