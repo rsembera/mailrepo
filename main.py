@@ -222,6 +222,13 @@ def prepare_app():
 
     app = create_app()
 
+    # Server-side idle lock, independent of any request arriving. The
+    # per-request check in web/app.py handles the open-tab case; this
+    # handles the closed tab, the crashed webview, and the laptop lid.
+    from web import idle
+
+    idle.start_watchdog()
+
     # Carry the restore result to the web layer: the login screen is the
     # one place that can say which credentials the restored archive
     # wants, and it cannot say so without this.

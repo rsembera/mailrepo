@@ -36,6 +36,7 @@ from core.password_change import (
 )
 from utils.backup import create_full_backup, get_verified_latest_restore_point
 from utils.log import get_logger
+from web import idle
 
 log = get_logger(__name__)
 
@@ -729,6 +730,7 @@ def login():
             session["last_activity"] = time.time()
             session["csrf_token"] = secrets.token_hex(32)
             session.permanent = True
+            idle.touch()
 
             # Offer the recovery-key upgrade on the way in. A one-time
             # nudge per login rather than a permanent nag: the archive
@@ -997,14 +999,31 @@ def logout():
     otherwise force it. Nuisance-tier at this threat model rather than
     dangerous, but a state-changing GET is the kind of thing a maintainer
     copies. Callers go through window.mailrepoLogout() in base.html.
+
+    Also carries a CSRF token, like the other non-/api/ forms: a
+    cross-site auto-submitting form could otherwise force a logout
+    and, if a backup is due, run the post-backup command.
     """
+    if session.get("authenticated"):
+        # Form field from window.mailrepoLogout(); header from the two
+        # fetch()-based callers (the fetch wrapper in base.html adds it).
+        token = request.form.get("csrf_token", "") or request.headers.get("X-CSRF-Token", "")
+        expected = session.get("csrf_token", "")
+        if not expected or not secrets.compare_digest(token, expected):
+            return redirect(url_for("main.index"))
+
+    timed_out = request.form.get("reason") == "timeout"
+
     # Run automatic backup check before closing database
     _run_auto_backup_check()
 
     Database.close()
     Encryption.lock()
     session.clear()
-    flash("You have been logged out.", "info")
+    if timed_out:
+        flash("Your session timed out due to inactivity. Please log in again.", "info")
+    else:
+        flash("You have been logged out.", "info")
     return redirect(url_for("auth.login"))
 
 

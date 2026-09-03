@@ -9,8 +9,10 @@ import time
 
 from flask import Flask, jsonify, redirect, request, session, url_for
 
-from core import Config, Encryption, FlaskConfig, generate_flask_secret_key
+from core import Config, Database, Encryption, FlaskConfig, generate_flask_secret_key
 from core.database import get_setting
+
+from . import idle
 
 
 def create_app(test_config: dict = None) -> Flask:
@@ -139,12 +141,24 @@ def create_app(test_config: dict = None) -> Flask:
         if request.endpoint in streaming_endpoints:
             # Extend session for streaming - these can take a long time
             session["last_activity"] = time.time()
+            idle.touch()
             return
+
+        # Housekeeping requests the page makes on its own must not count
+        # as activity. The status poll fires every 30 seconds while a tab
+        # is open; if it refreshed last_activity the timeout could never
+        # be reached and the idle lock would be a promise on the front
+        # page with nothing behind it. It is still subject to the check
+        # below, so it is the request that reports "timed out" to the page.
+        passive_endpoints = {"api.session_status"}
+        is_passive = request.endpoint in passive_endpoints
 
         try:
             timeout_minutes = int(get_setting("session_timeout", "30"))
             if timeout_minutes == 0:  # "Never" option
-                session["last_activity"] = time.time()
+                if not is_passive:
+                    session["last_activity"] = time.time()
+                    idle.touch()
                 return
             session_timeout = timeout_minutes * 60
         except (ValueError, TypeError):
@@ -158,13 +172,16 @@ def create_app(test_config: dict = None) -> Flask:
             if elapsed > session_timeout:
                 # Session expired - clear everything
                 session.clear()
+                Database.close()
                 Encryption.lock()
                 if is_api_request():
                     return jsonify({"error": "Session timed out", "code": "session_timeout"}), 401
                 return redirect(url_for("auth.login", timeout=1))
 
         # Update last activity timestamp
-        session["last_activity"] = now
+        if not is_passive:
+            session["last_activity"] = now
+            idle.touch(now)
 
     # Context processor: make common variables available to all templates
     @app.context_processor

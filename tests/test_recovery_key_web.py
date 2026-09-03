@@ -147,7 +147,9 @@ class TestRecoveryLogin:
             "/auth/setup", data={"password": PASSWORD, "confirm": PASSWORD}
         )
         key = extract_recovery_key(response.get_data(as_text=True))
-        fresh_client.post("/auth/logout")
+        with fresh_client.session_transaction() as sess:
+            token = sess.get("csrf_token", "")
+        fresh_client.post("/auth/logout", data={"csrf_token": token})
         return {"client": fresh_client, "key": key}
 
     def test_login_page_offers_the_recovery_link(self, archive):

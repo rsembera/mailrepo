@@ -244,6 +244,10 @@
             
             fetch('/api/session-status')
                 .then(r => {
+                    // 401 here means the server-side timeout fired (or the
+                    // watchdog locked the archive): treat it as logged out
+                    // rather than as a transient error.
+                    if (r.status === 401) return { logged_in: false };
                     if (!r.ok) throw new Error('HTTP ' + r.status);
                     return r.json();
                 })
@@ -405,6 +409,11 @@
                 clearInterval(warningInterval);
             }
             
+            // Blank the page first so nothing sensitive stays visible if
+            // the logout request is slow, then actually log out: the
+            // server locks the archive and clears the session. A
+            // cosmetic "timed out" screen over a still-unlocked archive
+            // is worse than no screen at all.
             document.body.innerHTML = '';
             document.body.style.background = 'var(--color-background, #f9fafb)';
             
@@ -414,9 +423,9 @@
             container.innerHTML = `
                 <h2>Session Timed Out</h2>
                 <p>Your session has expired due to inactivity.</p>
-                <button onclick="window.location.href='/auth/login'" class="btn btn-primary" style="width: 100%;">Log In</button>
             `;
             document.body.appendChild(container);
+            window.mailrepoLogout('timeout');
         }
     })();
     </script>
@@ -425,10 +434,23 @@
     // Logout is state-changing (clears the session, locks the archive,
     // triggers a backup check), so it is POST-only. Any navigation that
     // used to be a plain link goes through here.
-    window.mailrepoLogout = function () {
+    window.mailrepoLogout = function (reason) {
         var f = document.createElement('form');
         f.method = 'POST';
         f.action = '/auth/logout';
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        var token = document.createElement('input');
+        token.type = 'hidden';
+        token.name = 'csrf_token';
+        token.value = meta ? meta.content : '';
+        f.appendChild(token);
+        if (reason) {
+            var r = document.createElement('input');
+            r.type = 'hidden';
+            r.name = 'reason';
+            r.value = reason;
+            f.appendChild(r);
+        }
         document.body.appendChild(f);
         f.submit();
     };

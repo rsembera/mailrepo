@@ -135,6 +135,97 @@ class TestLogout:
         assert Encryption.is_unlocked() is True
 
 
+    def test_logout_requires_csrf_token(self, initialized_app, monkeypatch):
+        """A cross-site auto-submitting form must not be able to force a
+        logout (which can also fire the post-backup command)."""
+        monkeypatch.setattr(auth, "_run_auto_backup_check", lambda: None)
+        app, _ = initialized_app
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["authenticated"] = True
+            sess["csrf_token"] = "expected"
+        resp = client.post("/auth/logout")
+        assert resp.status_code == 302
+        assert "/auth/login" not in resp.headers["Location"]
+        assert Encryption.is_unlocked() is True
+        with client.session_transaction() as sess:
+            assert sess.get("authenticated") is True
+
+    def test_logout_accepts_form_token(self, initialized_app, monkeypatch):
+        monkeypatch.setattr(auth, "_run_auto_backup_check", lambda: None)
+        app, _ = initialized_app
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["authenticated"] = True
+            sess["csrf_token"] = "expected"
+        resp = client.post("/auth/logout", data={"csrf_token": "expected", "reason": "timeout"})
+        assert resp.status_code == 302
+        assert "/auth/login" in resp.headers["Location"]
+        assert Encryption.is_unlocked() is False
+
+
+class TestIdleLock:
+    """Security review 2026-09, finding 1: the idle lock must actually lock.
+
+    The client polls /api/session-status every 30 s. If that poll counted
+    as activity the server timeout could never be reached.
+    """
+
+    def test_session_status_poll_does_not_refresh_activity(self, authenticated_client):
+        from core.database import set_setting
+
+        import time as _t
+
+        set_setting("session_timeout", "15")
+        recent = _t.time() - 60  # within the timeout, but distinguishable
+        with authenticated_client.session_transaction() as sess:
+            sess["last_activity"] = recent
+        resp = authenticated_client.get("/api/session-status")
+        assert resp.status_code == 200
+        with authenticated_client.session_transaction() as sess:
+            assert sess["last_activity"] == recent
+        # A real request does refresh it.
+        authenticated_client.get("/api/settings/session_timeout")
+        with authenticated_client.session_transaction() as sess:
+            assert sess["last_activity"] > recent
+
+    def test_session_status_reports_timeout_and_locks(self, authenticated_client):
+        from core.database import set_setting
+
+        set_setting("session_timeout", "15")
+        with authenticated_client.session_transaction() as sess:
+            sess["last_activity"] = 1_000_000.0  # long ago
+        resp = authenticated_client.get("/api/session-status")
+        assert resp.status_code == 401
+        assert resp.get_json()["code"] == "session_timeout"
+        assert Encryption.is_unlocked() is False
+        with authenticated_client.session_transaction() as sess:
+            assert "authenticated" not in sess
+
+    def test_watchdog_locks_when_idle(self, initialized_app):
+        from core.database import set_setting
+        from web import idle
+
+        set_setting("session_timeout", "15")
+        idle.touch(now=1_000_000.0)
+        assert Encryption.is_unlocked() is True
+        assert idle.check_and_lock(now=1_000_000.0 + 14 * 60) is False
+        assert Encryption.is_unlocked() is True
+        assert idle.check_and_lock(now=1_000_000.0 + 16 * 60) is True
+        assert Encryption.is_unlocked() is False
+        # Idempotent once locked.
+        assert idle.check_and_lock(now=1_000_000.0 + 20 * 60) is False
+
+    def test_watchdog_respects_never(self, initialized_app):
+        from core.database import set_setting
+        from web import idle
+
+        set_setting("session_timeout", "0")
+        idle.touch(now=1_000_000.0)
+        assert idle.check_and_lock(now=1_000_000.0 + 365 * 86400) is False
+        assert Encryption.is_unlocked() is True
+
+
 class TestRateLimit:
     def test_helper_allows_under_max(self):
         for _ in range(auth._MAX_ATTEMPTS - 1):
