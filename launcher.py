@@ -257,14 +257,11 @@ class DesktopApi:
         tracking pixel must not phone home because someone pressed Print.
         """
         try:
-            from weasyprint import HTML, default_url_fetcher
+            from weasyprint import HTML
 
-            def fetcher(url):
-                if url.startswith("data:"):
-                    return default_url_fetcher(url)
-                return {"mime_type": "image/png", "string": b""}
+            from core.pdf_fetcher import make_url_fetcher
 
-            pdf = HTML(string=html, url_fetcher=fetcher).write_pdf()
+            pdf = HTML(string=html, url_fetcher=make_url_fetcher(load_remote=False)).write_pdf()
             self._open(self._place(f"{title or 'Email'}.pdf", pdf))
             return True
         except Exception as e:  # noqa: BLE001

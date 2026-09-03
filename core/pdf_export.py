@@ -431,6 +431,11 @@ def _sanitize_email_html(html: str, *, scope: str) -> str:
 
     # Drop script blocks
     html = re.sub(r"<script\b[^>]*>.*?</script>", "", html, flags=re.IGNORECASE | re.DOTALL)
+    # Drop <link> elements. WeasyPrint turns <link rel="attachment"> into
+    # an embedded PDF attachment fetched from the href, and stylesheet
+    # links are remote resources we never want an email to pull in.
+    # An email has no legitimate use for <link>; inline <style> survives.
+    html = re.sub(r"<link\b[^>]*/?>", "", html, flags=re.IGNORECASE)
     # Drop <o:p>...</o:p> blocks (Office namespace pollution) including content
     html = re.sub(r"<o:p\b[^>]*>.*?</o:p>", "", html, flags=re.IGNORECASE | re.DOTALL)
     # Drop any remaining standalone XML namespace tags (e.g. self-closing)
@@ -929,38 +934,28 @@ def build_combined_pdf(
         },
     }
     try:
-        if load_remote:
-            pdf_bytes = HTML(string=full_html).write_pdf(stylesheets=[CSS(string=_BASE_CSS)])
-        else:
-            from weasyprint import default_url_fetcher
+        # Never WeasyPrint's default fetcher: it resolves file:// URLs, and
+        # an email's <link rel="attachment" href="file:///..."> would embed
+        # a local file in the PDF. core.pdf_fetcher confines every render
+        # to data: (always) and http(s): (only when "Load remote" is on).
+        from core.pdf_fetcher import make_url_fetcher
 
-            def _fetcher(url):
-                # Only allow data: URLs (inline images already resolved upstream).
-                # Block http/https/file/anything else — this both speeds up exports
-                # and prevents leaking the user's IP/User-Agent to remote servers
-                # (tracking pixels, etc.).
-                if url.startswith("data:"):
-                    return default_url_fetcher(url)
-                # Returning a benign empty PNG is friendlier than raising —
-                # WeasyPrint will silently render a missing image.
-                return {"mime_type": "image/png", "string": b""}
+        _fetcher = make_url_fetcher(load_remote)
 
-            # When blocking remote content, WeasyPrint logs an ERROR for every
-            # blocked image. That's not actually an error from our perspective —
-            # we deliberately blocked them — and on a real folder export it floods
-            # the terminal with hundreds of lines. Temporarily raise the WeasyPrint
-            # logger threshold so only CRITICAL gets through during this render,
-            # then restore it. Real WeasyPrint problems still surface via the
-            # outer try/except.
-            wp_logger = logging.getLogger("weasyprint")
-            prev_level = wp_logger.level
-            wp_logger.setLevel(logging.CRITICAL)
-            try:
-                pdf_bytes = HTML(string=full_html, url_fetcher=_fetcher).write_pdf(
-                    stylesheets=[CSS(string=_BASE_CSS)]
-                )
-            finally:
-                wp_logger.setLevel(prev_level)
+        # Blocked resources come back as empty images. WeasyPrint still
+        # logs oddities for some of them, and on a real folder export
+        # that floods the terminal. Temporarily raise its logger threshold
+        # so only CRITICAL gets through; real problems still surface via
+        # the outer try/except.
+        wp_logger = logging.getLogger("weasyprint")
+        prev_level = wp_logger.level
+        wp_logger.setLevel(logging.CRITICAL)
+        try:
+            pdf_bytes = HTML(string=full_html, url_fetcher=_fetcher).write_pdf(
+                stylesheets=[CSS(string=_BASE_CSS)]
+            )
+        finally:
+            wp_logger.setLevel(prev_level)
     except Exception as e:
         logger.exception("WeasyPrint render failed")
         yield {"event": "error", "data": {"error": f"PDF rendering failed: {e}"}}

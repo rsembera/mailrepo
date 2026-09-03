@@ -238,7 +238,7 @@ function _renderFormView() {
                 <label class="export-checkbox-row">
                     <input type="checkbox" id="export-load-remote" ${prefs.load_remote_content ? 'checked' : ''}>
                     <span>Load remote images</span>
-                    <span class="export-hint">Slower; may load tracking pixels</span>
+                    <span class="export-hint">Fetches images over the internet; slower, and senders can see you exported</span>
                 </label>
                 <div class="export-radio-group">
                     <div class="export-radio-label">Order</div>
