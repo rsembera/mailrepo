@@ -1,9 +1,17 @@
 # MailRepo - Core dependencies
-flask>=3.0.0
-cryptography>=42.0.0
-argon2-cffi>=23.0.0
+#
+# These are floors for development. Packaged builds (build_deb.sh, the
+# macOS bundle) install from requirements.lock, which pins the exact
+# versions the release was tested against — floors alone let a build pick
+# up a dependency release with a known advisory (security review
+# 2026-09, #19). Regenerate the lock with:
+#   ./venv/bin/pip freeze | grep -i -E "^(flask|werkzeug|jinja2|...)" > requirements.lock
+# or just run scripts/refresh_lock.sh after upgrading and re-testing.
+flask>=3.1.3
+cryptography>=46.0.0
+argon2-cffi>=25.1.0
 sqlcipher3>=0.5.0
-Pillow>=10.0.0
+Pillow>=12.1.0
 
 # System dependencies (install via package manager, not pip):
 # - libpst-utils (for PST import): apt install pst-utils
@@ -11,9 +19,9 @@ Pillow>=10.0.0
 # Development
 pytest>=8.0.0
 ruff>=0.4.0
-waitress>=2.1.0
+waitress>=3.0.0
 
 # PDF export
-weasyprint>=60.0
-pypdf>=4.0
+weasyprint>=66.0
+pypdf>=6.10.0
 pyzipper>=0.3

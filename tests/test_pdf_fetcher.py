@@ -94,3 +94,38 @@ class TestSanitizer:
     def test_style_survives(self):
         out = _sanitize_email_html("<style>p{color:red}</style><p>x</p>", scope="e1")
         assert "<style>" in out
+
+
+class TestPdfAttachmentParseTimeout:
+    """Security review 2026-09, #19: a crafted PDF attachment must not pin
+    the export thread forever."""
+
+    def test_overrunning_parse_is_skipped(self):
+        import time
+
+        from core.pdf_export import _read_pdf_pages_with_timeout
+
+        class Hangs:
+            def __init__(self, _f):
+                time.sleep(5)
+
+        t0 = time.monotonic()
+        assert _read_pdf_pages_with_timeout(Hangs, b"%PDF", "x.pdf", timeout=0.2) is None
+        assert time.monotonic() - t0 < 2
+
+    def test_good_pdf_returns_pages(self):
+        from pypdf import PdfReader
+        from weasyprint import HTML
+
+        from core.pdf_export import _read_pdf_pages_with_timeout
+
+        pdf = HTML(string="<p>one</p>").write_pdf()
+        pages = _read_pdf_pages_with_timeout(PdfReader, pdf, "ok.pdf")
+        assert pages is not None and len(pages) == 1
+
+    def test_garbage_is_skipped(self):
+        from pypdf import PdfReader
+
+        from core.pdf_export import _read_pdf_pages_with_timeout
+
+        assert _read_pdf_pages_with_timeout(PdfReader, b"not a pdf", "bad.pdf") is None

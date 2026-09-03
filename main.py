@@ -81,7 +81,7 @@ def _cleanup(app):
                         # Run post-backup command if configured
                         post_cmd = get_setting("post_backup_command", "")
                         if post_cmd:
-                            log.info(f"Running post-backup command: {post_cmd}")
+                            log.info("Running post-backup command")
                             try:
                                 proc_result = subprocess.run(
                                     post_cmd,

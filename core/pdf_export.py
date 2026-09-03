@@ -1000,6 +1000,41 @@ def build_combined_pdf(
     }
 
 
+PDF_ATTACHMENT_PARSE_TIMEOUT_SECONDS = 30
+
+
+def _read_pdf_pages_with_timeout(PdfReader, data: bytes, filename: str, timeout=None):
+    """Parse ``data`` with pypdf on a worker thread; None if it fails or overruns."""
+    import threading
+
+    timeout = PDF_ATTACHMENT_PARSE_TIMEOUT_SECONDS if timeout is None else timeout
+    result: dict = {}
+
+    def work():
+        try:
+            reader = PdfReader(io.BytesIO(data))
+            if reader.is_encrypted:
+                result["skip"] = "encrypted"
+                return
+            result["pages"] = list(reader.pages)
+        except Exception as e:  # noqa: BLE001
+            result["error"] = e
+
+    t = threading.Thread(target=work, name="pdf-attachment-parse", daemon=True)
+    t.start()
+    t.join(timeout)
+    if t.is_alive():
+        logger.warning("Skipping PDF attachment %s: parse exceeded %ss", filename, timeout)
+        return None
+    if "skip" in result:
+        logger.info("Skipping encrypted PDF attachment: %s", filename)
+        return None
+    if "error" in result:
+        logger.warning("Skipping unreadable PDF attachment %s: %s", filename, result["error"])
+        return None
+    return result.get("pages")
+
+
 def _append_pdf_attachments(main_pdf: bytes, refs: list[dict]) -> bytes:
     """Append each PDF attachment onto the back of ``main_pdf`` using pypdf.
 
@@ -1029,16 +1064,17 @@ def _append_pdf_attachments(main_pdf: bytes, refs: list[dict]) -> bytes:
             return main_pdf
 
         for ref in refs:
-            try:
-                reader = PdfReader(io.BytesIO(ref["data"]))
-                if reader.is_encrypted:
-                    logger.info("Skipping encrypted PDF attachment: %s", ref["filename"])
-                    continue
-                for page in reader.pages:
-                    writer.add_page(page)
-            except Exception as e:
-                logger.warning("Skipping unreadable PDF attachment %s: %s", ref["filename"], e)
+            # Each attachment is parsed on a worker thread with a wall-clock
+            # limit. pypdf has had a run of infinite-loop advisories on
+            # crafted input, and the export runs in a daemon thread with no
+            # other timeout, so one bad attachment would otherwise pin the
+            # export forever (security review 2026-09, #19). A parse that
+            # overruns is skipped; its (daemon) thread is abandoned.
+            pages = _read_pdf_pages_with_timeout(PdfReader, ref["data"], ref["filename"])
+            if pages is None:
                 continue
+            for page in pages:
+                writer.add_page(page)
 
         out = io.BytesIO()
         writer.write(out)

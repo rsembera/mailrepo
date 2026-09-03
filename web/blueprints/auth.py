@@ -47,7 +47,17 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 # In-memory rate limiting — intentionally resets on restart.
 # Acceptable for single-user localhost app; an attacker would need
 # local access already, making persistent tracking unnecessary.
-_login_attempts = {}  # IP -> list of attempt timestamps
+_login_attempts = {}  # bucket -> list of attempt timestamps
+
+# One bucket for the whole process. The server only listens on loopback,
+# so every caller shares one address on macOS and, on Linux, could pick
+# a fresh 127.x.y.z per guess to dodge a per-address limit. A single
+# user's app needs a single counter (security review 2026-09, #20).
+_RATE_BUCKET = "local"
+
+
+def _rate_key(_ip: str) -> str:
+    return _RATE_BUCKET
 _MAX_ATTEMPTS = 5
 _LOCKOUT_SECONDS = 60
 
@@ -118,11 +128,12 @@ def _gc_pw_change_jobs():
 
 def _check_rate_limit(ip: str) -> tuple[bool, int]:
     """
-    Check if IP is rate limited.
+    Check whether login attempts are currently rate limited.
 
     Returns:
         (allowed: bool, seconds_remaining: int)
     """
+    ip = _rate_key(ip)
     now = time.time()
 
     if ip not in _login_attempts:
@@ -141,6 +152,7 @@ def _check_rate_limit(ip: str) -> tuple[bool, int]:
 
 def _record_failed_attempt(ip: str):
     """Record a failed login attempt."""
+    ip = _rate_key(ip)
     if ip not in _login_attempts:
         _login_attempts[ip] = []
     _login_attempts[ip].append(time.time())
@@ -148,6 +160,7 @@ def _record_failed_attempt(ip: str):
 
 def _clear_attempts(ip: str):
     """Clear login attempts after successful login."""
+    ip = _rate_key(ip)
     if ip in _login_attempts:
         del _login_attempts[ip]
 
@@ -1066,7 +1079,7 @@ def _run_auto_backup_check():
                 # orphaned rsync finishing after a reported "timeout").
                 post_cmd = get_setting("post_backup_command", "")
                 if post_cmd:
-                    log.info(f"Running post-backup command: {post_cmd}")
+                    log.info("Running post-backup command")
                     from utils import run_shell_command
 
                     success, msg, cmd_stdout = run_shell_command(post_cmd, timeout=300)

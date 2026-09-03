@@ -37,27 +37,14 @@ cd "$REPO"
 cp -r core web utils main.py launcher.py LICENSE README.md "$APP/"
 find "$APP" -name __pycache__ -type d -prune -exec rm -rf {} +
 
-echo "== Building venv (runtime deps only)"
-# The runtime set is assembled here rather than trusting requirements.txt
-# sections (waitress sits under "Development" there but is the server).
-# sqlcipher3 -> sqlcipher3-wheels on Linux: same module, prebuilt wheel
-# bundling libsqlcipher, so the build needs no compiler (EdgeCase trick).
-cat > /tmp/mailrepo-requirements-runtime.txt << 'REQS'
-flask>=3.0.0
-cryptography>=42.0.0
-argon2-cffi>=23.0.0
-sqlcipher3-wheels
-Pillow>=10.0.0
-waitress>=2.1.0
-weasyprint>=60.0
-pypdf>=4.0
-pyzipper>=0.3
-pywebview
-REQS
+echo "== Building venv (pinned runtime deps from requirements.lock)"
+# requirements.lock pins the exact versions the release was tested
+# against (security review 2026-09, #19). sqlcipher3 -> sqlcipher3-wheels
+# on Linux: same module, prebuilt wheel bundling libsqlcipher, so the
+# build needs no compiler (EdgeCase trick).
 python3 -m venv "$APP/venv"
 "$APP/venv/bin/pip" install -q --upgrade pip
-"$APP/venv/bin/pip" install -q -r /tmp/mailrepo-requirements-runtime.txt
-rm /tmp/mailrepo-requirements-runtime.txt
+"$APP/venv/bin/pip" install -q -r "$REPO/requirements.lock" sqlcipher3-wheels
 
 echo "== Copying PyGObject from system (pywebview's GTK bridge; EdgeCase step)"
 PYVER="$(python3 -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")')"
