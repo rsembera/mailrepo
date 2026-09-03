@@ -30,6 +30,7 @@ naming the specific file. We do not silently skip.
 import base64
 import json
 import os
+import secrets
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Iterator, Optional
@@ -148,7 +149,7 @@ def change_master_password(
     except Exception as e:
         raise PasswordChangeError(f"Failed to derive old keys: {e}")
 
-    if old_file_key != Encryption._file_key_v2:
+    if not secrets.compare_digest(old_file_key, Encryption._file_key_v2):
         raise InvalidPasswordError("Current password is incorrect.")
 
     # 4. Derive new keys.

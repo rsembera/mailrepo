@@ -5,12 +5,16 @@ Handles application settings like trash retention and session timeout.
 """
 
 import time
+from pathlib import Path
 
 from flask import jsonify, request, session
 
 from core.database import Database, get_setting, set_setting
+from utils.log import get_logger
 
 from . import api_bp
+
+log = get_logger()
 
 
 @api_bp.route("/settings/trash-retention", methods=["GET"])
@@ -205,6 +209,18 @@ def reset_database():
             wal_path = db_path.parent / f"{db_path.name}{ext}"
             if wal_path.exists():
                 wal_path.unlink()
+
+        # The sync cache holds account ids, IMAP folder names and sync
+        # timestamps in plaintext; a reset must not leave it behind.
+        try:
+            from core.sync_cache import _get_db_path as _sync_cache_path
+
+            for ext in ("", "-wal", "-shm"):
+                p = Path(str(_sync_cache_path()) + ext)
+                if p.exists():
+                    p.unlink()
+        except Exception as e:
+            log.warning(f"Could not remove sync cache during reset: {e}")
 
         # Delete archive directory contents
         archive_path = Config.get_archive_path()

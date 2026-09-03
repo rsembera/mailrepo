@@ -5,6 +5,8 @@ Handles committing staged emails and folders to the archive.
 Supports post-commit actions (archive, trash, delete) for IMAP emails.
 """
 
+import os
+
 from core import IMAP, Config, Database, Encryption
 
 from .email_parser import (
@@ -90,6 +92,16 @@ def _check_duplicate(folder_id: int, message_id: str) -> bool:
     return existing is not None
 
 
+def _safe_uid(uid) -> str:
+    """An IMAP UID is a decimal integer; anything else is not used as a
+    filename component. The fixed account prefix already prevented
+    traversal; this makes the shape explicit."""
+    s = str(uid).strip()
+    if not s.isdigit():
+        raise ValueError(f"Malformed IMAP UID: {uid!r}")
+    return s
+
+
 def _save_email_to_archive(
     raw_email: bytes, folder_id: int, account_id: int | None, uid_prefix: str
 ) -> None:
@@ -113,10 +125,29 @@ def _save_email_to_archive(
     archive_path.mkdir(parents=True, exist_ok=True)
 
     encrypted_data = Encryption.encrypt(raw_email)
-    filepath = archive_path / f"{uid_prefix}.eml.enc"
 
-    # Write file first
-    filepath.write_bytes(encrypted_data)
+    # Never overwrite. IMAP UIDs are unique only per UIDVALIDITY, so a
+    # rebuilt mailbox (or a server that re-issues UIDs) can hand back a
+    # UID whose file already exists — and a database row still points at
+    # it. O_EXCL makes the collision explicit; disambiguate with a
+    # suffix, as core/importer.py does (security review 2026-09, #16).
+    filepath = None
+    for attempt in range(1000):
+        candidate = archive_path / (
+            f"{uid_prefix}.eml.enc" if attempt == 0 else f"{uid_prefix}_{attempt}.eml.enc"
+        )
+        try:
+            fd = os.open(candidate, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            continue
+        try:
+            os.write(fd, encrypted_data)
+        finally:
+            os.close(fd)
+        filepath = candidate
+        break
+    if filepath is None:
+        raise OSError(f"Could not find a free archive filename for {uid_prefix}")
 
     # Insert DB record - if this fails, clean up the file
     try:
@@ -242,7 +273,7 @@ def commit_imap_email(
         # Fetch and save email
         if raw_email is None:
             raw_email = client.fetch_raw(uid)
-        safe_id = f"{account_id}_{uid}"
+        safe_id = f"{account_id}_{_safe_uid(uid)}"
         _save_email_to_archive(raw_email, folder_id, account_id, safe_id)
 
         results["success"].append(uid)
@@ -408,7 +439,7 @@ def commit_imap_folder(
                     }
                     continue
 
-                safe_id = f"{account_id}_{uid}"
+                safe_id = f"{account_id}_{_safe_uid(uid)}"
                 _save_email_to_archive(raw_email, target_folder_id, account_id, safe_id)
                 results["success"].append(uid)
 

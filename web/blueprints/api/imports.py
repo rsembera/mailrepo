@@ -11,7 +11,7 @@ from pathlib import Path
 
 from flask import jsonify, request, send_file
 
-from core import Config, Database, Encryption, import_eml_file, import_mbox_file, scan_mbox_file
+from core import Config, Database, Encryption, scan_mbox_file
 from utils.log import get_logger
 from web.responses import attachment_response
 
@@ -76,70 +76,6 @@ def scan_mbox():
         return jsonify(result)
     except ImportError as e:
         return jsonify({"error": str(e)}), 500
-
-
-@api_bp.route("/import/mbox", methods=["POST"])
-def import_mbox():
-    """Import an mbox file into a folder."""
-    data = request.get_json()
-    mbox_path = data.get("path", "").strip()
-    folder_id = data.get("folder_id")
-
-    if not mbox_path:
-        return jsonify({"error": "Path is required"}), 400
-    if not folder_id:
-        return jsonify({"error": "Folder ID is required"}), 400
-
-    path = Path(mbox_path).expanduser()
-    if not path.exists():
-        return jsonify({"error": "File not found"}), 404
-
-    folder = Database.fetchone("SELECT id FROM folders WHERE id = ?", (folder_id,))
-    if not folder:
-        return jsonify({"error": "Folder not found"}), 404
-
-    try:
-        result = import_mbox_file(path, folder_id)
-        return jsonify(
-            {
-                "success": True,
-                "total": result["total"],
-                "imported": result["success_count"],
-                "failed": result["failed_count"],
-                "errors": result["errors"][:10],
-            }
-        )
-    except ImportError as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@api_bp.route("/import/eml", methods=["POST"])
-def import_eml():
-    """Import a single .eml file into a folder."""
-    data = request.get_json()
-    eml_path = data.get("path", "").strip()
-    folder_id = data.get("folder_id")
-
-    if not eml_path:
-        return jsonify({"error": "Path is required"}), 400
-    if not folder_id:
-        return jsonify({"error": "Folder ID is required"}), 400
-
-    path = Path(eml_path).expanduser()
-    if not path.exists():
-        return jsonify({"error": "File not found"}), 404
-
-    folder = Database.fetchone("SELECT id FROM folders WHERE id = ?", (folder_id,))
-    if not folder:
-        return jsonify({"error": "Folder not found"}), 404
-
-    result = import_eml_file(path, folder_id)
-
-    if result["success"]:
-        Database.commit()
-        return jsonify({"success": True, "subject": result["subject"]})
-    else:
-        return jsonify({"success": False, "error": result["error"]}), 500
 
 
 def _locate_import_raw_email(
@@ -246,6 +182,7 @@ def _locate_import_raw_email(
             # Standard mbox
             raw_email = get_raw_email_from_import(str(source_path), uid)
     return raw_email
+
 
 @api_bp.route("/import/email", methods=["POST"])
 def get_import_email():

@@ -143,6 +143,19 @@ Environment variables:
     sys.exit(0)
 
 
+def _sweep_pst_temp_dirs() -> None:
+    """Remove mailrepo_pst_* directories left in the temp folder."""
+    import glob
+    import shutil
+    import tempfile
+
+    for d in glob.glob(os.path.join(tempfile.gettempdir(), "mailrepo_pst_*")):
+        try:
+            shutil.rmtree(d, ignore_errors=True)
+        except OSError:
+            pass
+
+
 def prepare_app():
     """Run the pre-flight checks and build the Flask app.
 
@@ -169,9 +182,7 @@ def prepare_app():
 
         restore_result = backup.complete_restore()
         if restore_result:
-            log.info(
-                f"Restore completed from: {restore_result.get('restore_point', 'unknown')}"
-            )
+            log.info(f"Restore completed from: {restore_result.get('restore_point', 'unknown')}")
     except Exception as e:
         log.error(f"Restore failed: {e}")
 
@@ -221,6 +232,34 @@ def prepare_app():
         log.error(f"Missing-database check failed: {e}")
 
     app = create_app()
+
+    # Nothing MailRepo writes is for other users on the machine: the key
+    # file, the database, the ciphertext corpus and the sync cache all
+    # inherited the umask (typically 0644). Owner-only from here on, and
+    # the two data folders themselves 0700 (security review 2026-09, #14).
+    os.umask(0o077)
+    from core.config import Config as _Cfg
+
+    for d in (_Cfg.get_data_path(), _Cfg.get_archive_path()):
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+            d.chmod(0o700)
+        except OSError as e:
+            log.warning(f"Could not tighten permissions on {d}: {e}")
+
+    # A crash between writing the key file's temp copy and the rename
+    # leaves the temp behind. Harmless, but not something to keep.
+    try:
+        stale_tmp = _Cfg.get_salt_path().with_suffix(_Cfg.get_salt_path().suffix + ".v2tmp")
+        if stale_tmp.exists():
+            stale_tmp.unlink()
+    except OSError as e:
+        log.warning(f"Could not remove stale key-file temp: {e}")
+
+    # PST imports decrypt to a plaintext mbox in $TMPDIR and rely on the
+    # browser to ask for cleanup; a crash or force-quit leaves it there.
+    # Sweep leftovers from earlier runs (#13).
+    _sweep_pst_temp_dirs()
 
     # Pre-1.1 builds kept the Flask session key in data/.secret_key and
     # backed it up. The key is per-process now; remove the leftover so it

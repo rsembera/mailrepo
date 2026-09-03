@@ -853,7 +853,9 @@ def set_password_post_recovery():
     or pasted into a notes app — the break-glass credential migrating
     into everyday storage.
     """
-    token = request.args.get("token") or request.form.get("token", "")
+    # Form only. Accepting it from the query string would let a pasted
+    # URL land the handoff token in browser history.
+    token = request.form.get("token", "")
     recovery_key = _peek_recovery_handoff(token)
     if not recovery_key:
         return redirect(url_for("auth.login_with_recovery_key"))

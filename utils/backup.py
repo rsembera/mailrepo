@@ -1415,6 +1415,12 @@ def complete_restore():
         target_db = data_dir / "mailrepo.db"
         if target_db.exists():
             target_db.unlink()
+        # A -wal left from an unclean exit would be replayed into the
+        # restored database on next open. Remove both sidecars first.
+        for ext in ("-wal", "-shm"):
+            sidecar = data_dir / f"mailrepo.db{ext}"
+            if sidecar.exists():
+                sidecar.unlink()
         shutil.copy2(staged_db, target_db)
 
     # Replace security files. (.secret_key is no longer used or backed

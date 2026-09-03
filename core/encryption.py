@@ -229,6 +229,18 @@ class Encryption:
         """True if keys are loaded in memory."""
         return cls._file_key_v2 is not None
 
+    _lock_hooks: list = []
+
+    @classmethod
+    def on_lock(cls, hook) -> None:
+        """Register a callable run every time the archive locks.
+
+        Used by the desktop shell to wipe decrypted viewer files: plaintext
+        that outlives the keys is plaintext an attacker can read.
+        """
+        if hook not in cls._lock_hooks:
+            cls._lock_hooks.append(hook)
+
     @classmethod
     def lock(cls) -> None:
         """Clear all in-memory keys."""
@@ -237,6 +249,11 @@ class Encryption:
         cls._db_key_v2 = None
         cls._master = None
         cls._salt_version = None
+        for hook in list(cls._lock_hooks):
+            try:
+                hook()
+            except Exception:  # noqa: BLE001 - a hook must never block a lock
+                pass
 
     @classmethod
     def read_salt_blob(cls) -> bytes:
@@ -703,8 +720,7 @@ class Encryption:
             ) from e
         if not secrets.compare_digest(reopened, master):
             raise EncryptionError(
-                "Refusing to write the key file: the new password wrapper "
-                "opens to the wrong key."
+                "Refusing to write the key file: the new password wrapper opens to the wrong key."
             )
 
     @classmethod
@@ -730,8 +746,7 @@ class Encryption:
             ) from e
         if not secrets.compare_digest(reopened, master):
             raise EncryptionError(
-                "Refusing to write the key file: the new recovery key "
-                "opens to the wrong key."
+                "Refusing to write the key file: the new recovery key opens to the wrong key."
             )
 
     @classmethod

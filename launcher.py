@@ -235,6 +235,17 @@ class DesktopApi:
             self._dir = Path(tempfile.mkdtemp(prefix="run-", dir=parent))
         return self._dir
 
+    def wipe_viewer_files(self) -> None:
+        """Remove every decrypted file handed to an external app this run.
+
+        Called on lock/logout (review #15): the keys are gone from memory,
+        so the plaintext should be gone from disk too. Next open starts a
+        fresh run directory.
+        """
+        if self._dir is not None:
+            shutil.rmtree(self._dir, ignore_errors=True)
+            self._dir = None
+
     def _place(self, filename: str, data: bytes) -> Path:
         safe = re.sub(r"[\\/:\x00-\x1f]", "_", Path(filename or "file").name).strip() or "file"
         folder = Path(tempfile.mkdtemp(dir=self._viewer_dir()))
@@ -309,13 +320,18 @@ def run_desktop() -> None:
     webview.settings["ALLOW_DOWNLOADS"] = True
     webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = True
 
+    desktop_api = DesktopApi()
+    from core import Encryption
+
+    Encryption.on_lock(desktop_api.wipe_viewer_files)
+
     window = webview.create_window(
         APP_TITLE,
         f"http://127.0.0.1:{port}",
         width=1280,
         height=820,
         min_size=(1024, 680),
-        js_api=DesktopApi(),
+        js_api=desktop_api,
     )
 
     def on_closing():

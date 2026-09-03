@@ -417,3 +417,45 @@ class TestFolderPostActionScope:
         r = _empty_results()
         r["post_actions"]["skipped_folders"] = 1
         assert "left untouched on the server" in build_commit_summary(r)
+
+
+# ---------------------------------------------------------------------------
+# Archive file never overwritten (security review 2026-09, finding 16)
+# ---------------------------------------------------------------------------
+
+
+class TestArchiveNoOverwrite:
+    def test_uid_reuse_gets_a_new_file(self, initialized_app):
+        from web.blueprints.api.commit import _save_email_to_archive
+
+        fid = _make_folder("F")
+        first = _raw_eml(subject="one", message_id="<a@x>")
+        second = _raw_eml(subject="two", message_id="<b@x>")
+        _save_email_to_archive(first, fid, None, "7_100")
+        _save_email_to_archive(second, fid, None, "7_100")  # same UID again
+        rows = Database.fetchall("SELECT filepath FROM messages WHERE folder_id = ?", (fid,))
+        paths = sorted(r["filepath"] for r in rows)
+        assert len(paths) == 2 and paths[0] != paths[1]
+        for p in paths:
+            assert (Config.get_base_path() / p).exists()
+        # The first message's ciphertext is intact.
+        firstfile = Config.get_base_path() / paths[0]
+        assert Encryption.decrypt(firstfile.read_bytes()) == first
+
+    def test_archive_file_is_owner_only(self, initialized_app):
+        import stat
+
+        from web.blueprints.api.commit import _save_email_to_archive
+
+        fid = _make_folder("F")
+        _save_email_to_archive(_raw_eml(message_id="<c@x>"), fid, None, "7_1")
+        row = Database.fetchone("SELECT filepath FROM messages WHERE folder_id = ?", (fid,))
+        mode = stat.S_IMODE((Config.get_base_path() / row["filepath"]).stat().st_mode)
+        assert mode == 0o600
+
+    @pytest.mark.parametrize("bad", ["../x", "12 OR 1", "", "abc"])
+    def test_malformed_uid_rejected(self, bad):
+        from web.blueprints.api.commit import _safe_uid
+
+        with pytest.raises(ValueError):
+            _safe_uid(bad)

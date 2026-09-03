@@ -77,60 +77,12 @@ class TestScanImportValidation:
         )
         assert resp.status_code == 404
 
-    def test_import_mbox_requires_path(self, authenticated_client, initialized_app):
-        resp = authenticated_client.post("/api/import/mbox", json={"folder_id": 1})
-        assert resp.status_code == 400
-
-    def test_import_mbox_requires_folder(self, authenticated_client, initialized_app, tmp_path):
-        f = tmp_path / "x.mbox"
-        f.write_text("placeholder")
-        resp = authenticated_client.post("/api/import/mbox", json={"path": str(f)})
-        assert resp.status_code == 400
-
-    def test_import_mbox_missing_file(self, authenticated_client, initialized_app):
-        resp = authenticated_client.post(
-            "/api/import/mbox", json={"path": "/no/file.mbox", "folder_id": 1}
-        )
-        assert resp.status_code == 404
-
-    def test_import_mbox_bad_folder(self, authenticated_client, initialized_app, tmp_path):
-        f = tmp_path / "x.mbox"
-        f.write_text("placeholder")
-        resp = authenticated_client.post(
-            "/api/import/mbox", json={"path": str(f), "folder_id": 9999}
-        )
-        assert resp.status_code == 404
-        assert "folder" in resp.get_json()["error"].lower()
-
-
-class TestImportEml:
-    def test_import_eml_requires_path(self, authenticated_client, initialized_app):
-        resp = authenticated_client.post("/api/import/eml", json={"folder_id": 1})
-        assert resp.status_code == 400
-
-    def test_import_eml_bad_folder(self, authenticated_client, initialized_app, tmp_path):
-        f = tmp_path / "m.eml"
-        f.write_bytes(_eml_bytes())
-        resp = authenticated_client.post(
-            "/api/import/eml", json={"path": str(f), "folder_id": 9999}
-        )
-        assert resp.status_code == 404
-
-    def test_import_eml_round_trip(self, authenticated_client, initialized_app, tmp_path):
-        fid = _make_folder("Imports")
-        f = tmp_path / "m.eml"
-        f.write_bytes(_eml_bytes(subject="A real import"))
-        resp = authenticated_client.post("/api/import/eml", json={"path": str(f), "folder_id": fid})
-        assert resp.status_code == 200
-        assert resp.get_json()["success"] is True
-        # A message row now exists in the destination folder
-        row = Database.fetchone("SELECT subject FROM messages WHERE folder_id = ?", (fid,))
-        assert row is not None and row["subject"] == "A real import"
-
-
-# ---------------------------------------------------------------------------
-# Fetch full import-email content + attachment
-# ---------------------------------------------------------------------------
+    def test_legacy_direct_import_routes_are_gone(self, authenticated_client, initialized_app):
+        """The legacy /api/import/mbox and /api/import/eml routes (unreferenced
+        by the UI; named archive files by Message-ID, leaking correspondent
+        domains) were removed in the September 2026 review, #15."""
+        assert authenticated_client.post("/api/import/mbox", json={}).status_code == 404
+        assert authenticated_client.post("/api/import/eml", json={}).status_code == 404
 
 
 class TestGetImportEmail:

@@ -215,7 +215,7 @@ def migrate_to_v3(
     except Exception as e:
         raise MigrationError(f"Failed to derive current keys: {e}")
 
-    if old_file_key != Encryption._file_key_v2:
+    if not secrets.compare_digest(old_file_key, Encryption._file_key_v2):
         raise InvalidPasswordError("Current password is incorrect.")
 
     # 3. The new random master and the keys below it.
