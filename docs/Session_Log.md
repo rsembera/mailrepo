@@ -6821,3 +6821,157 @@ suite run for sanity since nothing on that side changed.
 Committed to `main` and queued in the CHANGELOG under Unreleased. The
 published packages stay at 1.0.0; this goes out with the next release
 alongside whatever else lands.
+
+---
+
+## Session 93 — September 3, 2026 (MacBook)
+
+### The September security review, fixed end to end
+
+A second full security review of the shipped 1.0.0 tree
+(`docs/Security_Review_2026-09.md`, Claude Fable 5.1, three parallel
+read-throughs with independent re-verification of every Medium-or-above
+finding) produced twenty findings: four High, seven Medium, nine Low.
+Rick's instruction was to fix all of it, deferring nothing. All twenty
+are addressed on `main` as of this session, one commit per finding (or
+one per batch for the Lows), every commit with the full suite green.
+The suite grew from 686 to 794 tests.
+
+The review's own headline held up: the cryptographic core was sound
+and nothing in its design changed. Every finding was at an edge where
+untrusted content met code written for the user's own data.
+
+### The four Highs
+
+**#1 — The idle lock never locked.** The 30-second status poll counted
+as activity, so the server timeout could not be reached while a tab was
+open, and the "Session Timed Out" screen was cosmetic — cookie valid,
+archive unlocked underneath. Now: the poll is exempt from activity but
+still subject to the timeout check; the timed-out screen really logs
+out; and a new process-level watchdog thread (`web/idle.py`) locks the
+archive when idle past the timeout whether or not any request arrives
+— closed tab, dead webview, closed lid. `/auth/logout` requires the
+CSRF token.
+
+**#2 — Attachments served with the email's own Content-Type.** A
+`text/html` or SVG attachment opened inline was a page running script
+in the archive's own origin. New `web/responses.py`: only PDF, JPEG,
+PNG, GIF, WebP and plain text are ever inline (with nosniff and, except
+PDF, a sandboxing CSP); everything else is a download as
+`application/octet-stream`. Filenames go through werkzeug's encoder,
+which also closes #17. Global `after_request` adds nosniff,
+`X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`.
+
+**#3 — PDF export embedded local files.** Verified for real: with
+WeasyPrint's default fetcher, `<link rel="attachment"
+href="file:///…">` in an email embeds the named file in the exported
+PDF (pypdf confirms it, not a byte search). New `core/pdf_fetcher.py`
+confines every render to `data:` always and `http(s):` only when "Load
+remote" is ticked, on WeasyPrint's `URLFetcher` API with
+`allowed_protocols` as a second fence. `<link>` is stripped in every
+mode. The end-to-end test asserts the leak exists with the default
+fetcher and not with ours, so a WeasyPrint change will show up.
+
+**#4 — Restore trusted the backup's tombstone list.** `deleted_files`
+from `_backup_metadata.json` was joined and unlinked verbatim; an
+absolute path or `..` deleted any file the user could. Two validators
+now: tombstones must be plain relative paths under `data/` or
+`archive/` and the joined result must resolve inside staging; manifest
+zip names must be bare filenames. Tests forge tombstones into a real
+incremental and assert the outside file survives.
+
+### The seven Mediums
+
+**#5** `escapeHtml()` escapes quotes; the three private copies are gone.
+**#6** The post-backup shell command, backup location and prepare-restore
+require the master password (verified by unlocking), as Reset Database
+already did; the settings form prompts only when something dangerous
+actually changed. **#7** The folder post-action acts only on UIDs this
+commit actually archived (new plus duplicates), never a fresh `SEARCH
+ALL`; if anything failed, the folder is left untouched and the summary
+says so. **#9** STARTTLS when "Use SSL/TLS" is off; refused before any
+password is sent if the server does not advertise it; cleartext only to
+loopback (ProtonMail Bridge). **#10** The launcher binds its socket once
+and hands it to waitress; a per-launch nonce echoed by `/launch-check`
+replaces the "MailRepo" substring test. **#11** `SECRET_KEY` is
+per-process, never on disk, gone from backups; each login mints a
+`login_id` held in memory, and a replayed pre-logout cookie is dead even
+once the archive is unlocked again.
+
+**#8 — the one that needed a design.** Password change and recovery-key
+rotation replace a wrapper; the master underneath never changes, so an
+old key file plus the credential that opened it derives the live master
+forever, and nothing bound the two wrapper halves to each other. Two
+commits:
+
+- *MRC4.* The MRC3 envelope body, unchanged, plus a 16-byte `archive_id`
+  and an HMAC over the whole file under `HKDF(master,
+  "mailrepo.keyfile-bind.v4")`. Both unwrap paths verify the tag once the
+  master is in hand — a spliced-in half is refused. The encrypted
+  `settings` table records the current key file's tag (and the previous
+  one, so a crash between a rewrap's two writes cannot lock the owner
+  out); login refuses a key file whose tag is neither, which is what a
+  rolled-back file looks like. MRC3 files upgrade in place at first
+  login with no re-encryption and no recovery key. `salt_file_version()`
+  reports 3 for both, so every existing "is this the envelope?" check
+  still works. Rick's live archive will upgrade on his next login.
+- *Master-key rotation* (`core/master_rotation.py`,
+  `/auth/rotate-master-key`, "Rotate Master Key" in Settings). Fresh
+  master, every file and credential re-encrypted, SQLCipher rekeyed,
+  new key file with a new recovery key, its tag recorded as the sole
+  accepted one. Generalised from the v3 migration: backup-gated,
+  resumable, interruption marker with its own startup message. The test
+  proves the gap is real before rotation (old file + old password
+  decrypt a live file) and closed after.
+
+### The Lows
+
+**#12** `/api/filesystem/*` left as a read-anywhere by design; the audit
+row now says so honestly. **#13** startup sweeps leftover
+`mailrepo_pst_*` temp dirs. **#14** `umask(0o077)`, `data/` and
+`archive/` forced 0700, archive files created 0600. **#15** sync cache
+wiped on reset; the unreferenced legacy `/api/import/mbox` and
+`/api/import/eml` routes removed; `Encryption.lock()` runs hooks and the
+desktop shell uses one to wipe decrypted viewer files. **#16** archive
+files opened `O_EXCL` and disambiguated on collision; UIDs validated as
+decimal. **#18** every backup zip gets an HMAC keyed from the master
+(`<zip>.mac` beside it, recorded in the manifest); restore refuses on
+mismatch when unlocked; a legacy untagged backup is logged, not
+refused; the post-backup command in a just-restored database is cleared
+with a notice. **#19** `requirements.lock` pins the runtime set,
+verified to install clean in a fresh 3.13 venv; `build_deb.sh` uses it;
+the dev venv moved to pypdf 6.16.2, Pillow 12.3.0, WeasyPrint 69.0
+(which removes `default_url_fetcher` — the new fetcher already handles
+it), cryptography 50.0.1, Flask 3.1.3; each PDF attachment parse has a
+30 s wall-clock limit. **#20** stale `-wal`/`-shm` removed before
+restore; constant-time compares in the two migration paths; recovery
+token read from the form only; stale `.salt.v2tmp` cleaned at startup;
+process-global login limiter; the shell command no longer logged.
+
+`docs/Security_Audit.md` had three wrong rows (Argon2id `p`, key-file
+permissions, session timeout); corrected inline with an addendum
+pointing at the September review.
+
+### Working notes
+
+- Desktop Commander's `edit_block` needs `old_string`/`new_string`, not
+  `old_str`/`new_str`.
+- Two multi-route removals in `imports.py` swallowed a helper that sat
+  between the routes; `ruff` caught the undefined name. Removing by
+  route boundary needs a check that nothing else lives in the span.
+- The forged-tombstone tests from #4 started failing once #18 landed —
+  the tag catches the edit first. They now re-sign after forging, so
+  they prove the path validator holds even against a writer with the
+  key (a legacy untagged backup, or the owner's own machine).
+- MRC4 kept every existing caller working by having `salt_file_version()`
+  answer 3 for both formats; the two literal `blob[:4] == SALT_MAGIC_V3`
+  dispatches in `unlock()`/`verify_recovery_key()` were the only misses,
+  and the suite found them.
+
+### Not shipped yet
+
+All on `main`, queued in the CHANGELOG under Unreleased. This is the
+1.1 security release; the published packages stay at 1.0.0 until it is
+built, signed and notarized. Before that: a GUI smoke test of the
+MRC3→MRC4 upgrade on Rick's real archive, the rotate-master-key page,
+and the STARTTLS path on Apollo; and a `.deb` build from the lock.

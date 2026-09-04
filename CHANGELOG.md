@@ -103,6 +103,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cheap parameters even by misconfiguration.
 
 ### Security
+- **Security review, September 2026 (Session 93).** A full review of
+  the shipped 1.0.0 code found twenty issues; all are fixed in this
+  release. The encryption design itself was found sound and is
+  unchanged. The ones you might notice:
+  - **The idle timeout now really locks the archive.** Previously the
+    "Session Timed Out" screen appeared but the archive stayed open
+    underneath it, and the server-side timeout could never fire while a
+    tab was open. Now a background watchdog locks the archive when you
+    have been away, even if the window was closed or the laptop lid shut.
+  - **HTML, SVG and script attachments open as downloads, never as
+    pages.** Only PDFs, images and plain text open inline. An attachment
+    is content someone else chose, and opening it as a page from
+    MailRepo's own address could have run it with your session.
+  - **PDF export with "Load remote images" can no longer be tricked
+    into embedding files from your computer.** An email could name a
+    local file — your key file, an SSH key — and it would ride along
+    inside the exported PDF. Every export is now confined to images
+    from the internet (when you ask) and nothing from disk.
+  - **Restore checks that a backup is exactly what MailRepo wrote.**
+    Every backup now carries a tamper-evident tag keyed to your archive;
+    a backup edited by anyone else is refused. Older backups without a
+    tag still restore, with a note in the log.
+  - **Changing the post-backup command, the backup location, or
+    staging a restore now asks for your master password**, like Reset
+    Database already did.
+  - **Deleting from the server after archiving touches only what was
+    archived.** Previously, if a message failed to archive (or arrived
+    during the run) the folder-level delete could remove it from the
+    server anyway. Now any failure leaves the whole folder untouched
+    and the summary tells you.
+  - **"Use SSL/TLS" unticked now means STARTTLS, not cleartext.** The
+    connection is upgraded before your password is sent; a server that
+    cannot upgrade is refused. Plain connections are allowed only to
+    localhost (ProtonMail Bridge).
+  - **A stronger key file, upgraded automatically.** The two halves of
+    the key file (password and recovery key) are now bound to each other
+    and to the archive, so an older half cannot be spliced in and an
+    older key file copied over the live one is refused at login with a
+    clear message. Existing archives upgrade on the next login; nothing
+    is re-encrypted and no recovery key is needed.
+  - **New: Rotate Master Key (Settings → Security).** Changing your
+    password or recovery key protects the live archive, but if someone
+    may hold an old backup *and* the credential that opened it, only
+    rotating the master key helps: everything is re-encrypted and no
+    earlier password, recovery key or backup opens anything current.
+    Backup-gated and resumable, like the recovery-key upgrade.
+  - Smaller: archive files and the data folders are now owner-only on
+    disk; the session key is no longer stored or backed up; login
+    cookies cannot be replayed after a logout; the desktop launcher
+    verifies it is talking to its own server; decrypted temp files are
+    wiped on lock; a message with a reused IMAP UID can no longer
+    overwrite an earlier one; dependency versions are pinned for
+    packaged builds; and the unused legacy import endpoints are gone.
+  - The full list, with the reasoning, is `docs/Security_Review_2026-09.md`.
 - **A restored archive now has a way back if its password turns out to
   be lost (Session 80).** A backup opens with the credentials that were
   in use when it was made, and after a restore the login screen now

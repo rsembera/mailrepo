@@ -1,6 +1,6 @@
 # MailRepo — Navigation Map
 
-**Last Updated:** September 1, 2026
+**Last Updated:** September 3, 2026
 
 ---
 
@@ -32,6 +32,23 @@ phone notice on the download page, three pre-existing overflow bugs
 fixed), Liwan analytics, `robots.txt`, `sitemap.xml`, canonical URLs,
 and Google Search Console verification. No app code changed. See
 `Session_Log.md` Session 90.
+
+**September 3, 2026 — security review, all twenty findings fixed
+(Session 93).** `docs/Security_Review_2026-09.md`: four High, seven
+Medium, nine Low; crypto core found sound. Every finding is on `main`.
+Headline changes: the idle lock now locks (`web/idle.py` watchdog);
+attachments never inline with the email's Content-Type
+(`web/responses.py`); PDF export confined to `data:`/`http(s):`
+(`core/pdf_fetcher.py`); restore validates tombstone paths and refuses
+tampered zips (HMAC per backup, `<zip>.mac`); password-gated shell
+command/location/restore; STARTTLS; launcher binds once and verifies by
+nonce; per-process session key with login-bound cookies; **MRC4 key
+file** (halves bound by a keyed tag, rollback refused at login,
+automatic MRC3→MRC4 upgrade, `core/keyfile_binding.py`) and
+**master-key rotation** (`core/master_rotation.py`,
+`/auth/rotate-master-key`); `requirements.lock` pins packaged builds.
+Suite 686 → 794. This is the 1.1 security release; packages still at
+1.0.0 until built. See `Session_Log.md` Session 93.
 
 **September 2, 2026 — screenshot crop.** The four desktop screenshots
 were captured 3px wider than the app window and carried a strip of the
@@ -70,7 +87,9 @@ and `CHANGELOG.md` for the user-facing changelog under
 | `docs/Test_Coverage_Plan.md` | Tiered plan for the post-1.0 test-coverage expansion |
 | `CHANGELOG.md` | User-facing changelog (Keep a Changelog format) |
 | `docs/TESTING_CHECKLIST.md` | Manual testing checklist for release |
-| `docs/Security_Audit.md` | Feb 4, 2026 pre-release security review |
+| `docs/Security_Audit.md` | Feb 4, 2026 pre-release security review (three rows corrected Sept 3; addendum points at the September review) |
+| `docs/Security_Review_2026-09.md` | Sept 3, 2026 full security review — twenty findings, all fixed in Session 93 |
+| `requirements.lock` | Pinned runtime set for packaged builds (review #19); regenerate after upgrading and re-running the suite |
 | `docs/Backup_State_Management.md` | Backup state file design (Libram-style external state) |
 | `docs/Code_Quality_Review.md` | Jan 26 / Feb 17 code quality findings (most items closed) |
 | `docs/Flagging_Plan.md` | Star/flag feature design |
@@ -104,21 +123,24 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `main.py` | 305 | Command-line entry: `prepare_app()` runs the pre-flight checks (SQLCipher, pending restore, interrupted-state warnings) and builds the app; `main()` serves it with waitress and wires the checkpoint-and-backup shutdown |
-| `launcher.py` | 323 | Packaged-app entry (Session 88): pywebview window around the server; archive under Application Support / XDG data; free-port pick; second instance refused; shutdown on window close; DesktopApi bridge (open_bytes, print_html) for what a webview cannot do |
-| `setup_app.py` | 140 | py2app manifest — first-party code declared as packages; `install_requires` cleared so py2app builds from the venv |
-| `packaging/bundle_dylibs.py` | 155 | Post-py2app pass: otool closure of WeasyPrint's and readpst's Homebrew libraries into Contents/Frameworks + Helpers, install-name rewrite, re-sign, leak check |
+| `main.py` | 361 | Command-line entry: `prepare_app()` runs the pre-flight checks (SQLCipher, pending restore, interrupted-state warnings) and builds the app; `main()` serves it with waitress and wires the checkpoint-and-backup shutdown |
+| `launcher.py` | 351 | Packaged-app entry (Session 88): pywebview window around the server; archive under Application Support / XDG data; free-port pick; second instance refused; shutdown on window close; DesktopApi bridge (open_bytes, print_html) for what a webview cannot do |
+| `setup_app.py` | 139 | py2app manifest — first-party code declared as packages; `install_requires` cleared so py2app builds from the venv |
+| `packaging/bundle_dylibs.py` | 157 | Post-py2app pass: otool closure of WeasyPrint's and readpst's Homebrew libraries into Contents/Frameworks + Helpers, install-name rewrite, re-sign, leak check |
 | `assets/icon.icns`, `packaging/icons/` | — | App icons rendered from `web/static/assets/icon.svg` (macOS .icns, Linux hicolor set) |
 
 ### Core (`/core/`)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `imap.py` | 1,535 | IMAP client: connect, auth, folders, fetch, MOVE/COPY + UID-scoped expunge, Gmail-aware delete (incl. batched set delete), CONDSTORE |
-| `pdf_export.py` | 1,052 | PDF export: per-email PDFs, attachment merging, WeasyPrint |
-| `encryption.py` | 912 | Argon2id KDF + HKDF + AES-256-GCM (v2) plus the v3 envelope: random master wrapped under password and recovery key, each wrapper verified to open before the key file is written; work factor via argon2_parameters() — production everywhere, cheap only when the test suite's double guard (MAILREPO_FAST_KDF + MAILREPO_DATA_DIR) is met |
-| `password_change.py` | 636 | Password change — v2 full re-encryption, v3 rewrap; recovery-key password reset (needs no unlocked session), recovery-key rotation, on-disk backup gate, interruption marker |
-| `database.py` | 465 | SQLCipher connection, schema v5, FTS5, migrations, threading lock, hard refusal to open unencrypted |
+| `imap.py` | 1,565 | IMAP client: connect, auth, folders, fetch, MOVE/COPY + UID-scoped expunge, Gmail-aware delete (incl. batched set delete), CONDSTORE |
+| `pdf_export.py` | 1,083 | PDF export: per-email PDFs, attachment merging, WeasyPrint |
+| `encryption.py` | 1,049 | Argon2id KDF + HKDF + AES-256-GCM (v2) plus the v3 envelope: random master wrapped under password and recovery key, each wrapper verified to open before the key file is written; MRC4 (Session 93): the envelope plus archive_id and an HMAC binding the halves, verified at every unwrap; backup-MAC and key-file-bind subkeys; lock hooks; work factor via argon2_parameters() — production everywhere, cheap only when the test suite's double guard (MAILREPO_FAST_KDF + MAILREPO_DATA_DIR) is met |
+| `password_change.py` | 662 | Password change — v2 full re-encryption, v3 rewrap; recovery-key password reset (needs no unlocked session), recovery-key rotation, on-disk backup gate, interruption marker |
+| `database.py` | 493 | SQLCipher connection, schema v5, FTS5, migrations, threading lock, hard refusal to open unencrypted |
+| `keyfile_binding.py` | 131 | MRC4 rollback detection: records the current key file's tag in the encrypted settings table, refuses a rolled-back file at login, upgrades MRC3 → MRC4 in place (review #8a) |
+| `master_rotation.py` | 209 | Master-key rotation: fresh master, re-encrypt files + credentials, rekey SQLCipher, new MRC4 key file with new recovery key; backup-gated, resumable, interruption marker (review #8b) |
+| `pdf_fetcher.py` | 72 | The one WeasyPrint URL fetcher: `data:` always, `http(s):` on request, nothing from disk (review #3) |
 | `crypto_migration_v3.py` | 335 | v2 → v3 migration: re-encrypt under a random master, resumable via wrapped-master state file |
 | `importer.py` | 280 | mbox, Apple mbox, EML, PST import handling |
 | `pending_commit.py` | 222 | Commit resume: save/restore interrupted commits |
@@ -131,31 +153,33 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `app.py` | 212 | Flask factory, blueprint registration, auth/CSRF middleware |
+| `idle.py` | 127 | Process-level activity clock, idle-lock watchdog thread, per-login id (review #1, #11) |
+| `responses.py` | 88 | Attachment/EML response builder: inline allowlist, sandbox CSP, werkzeug-encoded filenames (review #2, #17) |
+| `app.py` | 258 | Flask factory, blueprint registration, auth/CSRF middleware |
 
 ### Blueprints (`/web/blueprints/`)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `auth.py` | 1,292 | Setup, login, logout, rate limiting, session management; recovery-key verification + server-side handoff to a mandatory password reset (no session granted), v3 upgrade flow, rotation API; pre-login disaster-recovery routes (`/auth/restore`, scan, prepare, search, browse) gated on `_recovery_door_open()` — no archive, OR an unverified restore; both login paths vouch for restored data (clear the marker) and the login screens carry the restored-from-backup banner |
-| `backups.py` | 273 | Backup/restore endpoints, folder picker |
-| `main.py` | 81 | Page routes: index, create_archive, settings |
+| `auth.py` | 1,422 | Setup, login, logout, rate limiting, session management; recovery-key verification + server-side handoff to a mandatory password reset (no session granted), v3 upgrade flow, rotation API; pre-login disaster-recovery routes (`/auth/restore`, scan, prepare, search, browse) gated on `_recovery_door_open()` — no archive, OR an unverified restore; both login paths vouch for restored data (clear the marker) and the login screens carry the restored-from-backup banner |
+| `backups.py` | 319 | Backup/restore endpoints, folder picker |
+| `main.py` | 115 | Page routes: index, create_archive, settings, `/launch-check` nonce echo for the desktop launcher |
 
 ### API (`/web/blueprints/api/`)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `exports.py` | 997 | Bulk PDF/encrypted-ZIP export pipeline + SSE progress |
-| `emails.py` | 839 | Archived email operations: view, move, delete, batch, download; folder listing carries per-subfolder tree counts |
+| `exports.py` | 1,000 | Bulk PDF/encrypted-ZIP export pipeline + SSE progress |
+| `emails.py` | 836 | Archived email operations: view, move, delete, batch, download; folder listing carries per-subfolder tree counts |
 | `filesystem.py` | 807 | File browser for imports, path validation, PST conversion |
-| `imports.py` | 796 | Mount/unmount imports, browse imported emails/folders |
-| `progress_commit.py` | 701 | SSE streaming for commit operations; batched Gmail deletes; unified post-action failure accounting + logging (Sessions 47/54/57) |
+| `imports.py` | 728 | Mount/unmount imports, browse imported emails/folders |
+| `progress_commit.py` | 754 | SSE streaming for commit operations; batched Gmail deletes; unified post-action failure accounting + logging (Sessions 47/54/57) |
 | `folders.py` | 711 | Archive folder CRUD, trash, restore, vault, retention; `tree_email_counts()` is the single roll-up behind every folder size the app shows |
-| `accounts.py` | 495 | IMAP account CRUD, Gmail auto-detection, folder listing |
-| `commit.py` | 488 | Email/folder commit workflow |
+| `accounts.py` | 488 | IMAP account CRUD, Gmail auto-detection, folder listing |
+| `commit.py` | 551 | Email/folder commit workflow |
 | `email_parser.py` | 336 | Email parsing: headers, body, attachments, body text extraction |
 | `progress_emails.py` | 286 | SSE streaming for email operations |
-| `settings.py` | 247 | App settings: timeout, retention, keepalive |
+| `settings.py` | 263 | App settings: timeout, retention, keepalive |
 | `streaming.py` | 162 | SSE helpers, heartbeat, connection management |
 | `threads.py` | 138 | Thread search and staging endpoints |
 | `progress.py` | 63 | Progress entry point (split into streams/state/handlers in Session 37) |
@@ -164,7 +188,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `backup.py` | 2,219 | Full/incremental backup, restore, retention, external state file (Libram-style), on-disk restore-chain verification, manifest sidecars stamped with the app identity and written to every backup destination, a durable record of backup locations kept outside the app folder, record-first location lookup (no disk search -- the folder picker covers unknown locations), filename-based chain reconstruction; unverified-restore marker (`data/.restore_unverified`, set by complete_restore, never inside a zip) |
+| `backup.py` | 2,375 | Full/incremental backup, restore, retention, external state file (Libram-style), on-disk restore-chain verification, manifest sidecars stamped with the app identity and written to every backup destination, a durable record of backup locations kept outside the app folder, record-first location lookup (no disk search -- the folder picker covers unknown locations), filename-based chain reconstruction; unverified-restore marker (`data/.restore_unverified`, set by complete_restore, never inside a zip) |
 | `log.py` | 51 | Logging setup, polling filter |
 | `__init__.py` | 34 | Shell command runner, path utilities |
 
@@ -177,29 +201,29 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | File | Lines | What It Does |
 |------|-------|--------------|
 | `password-toggle.js` | 128 | Show/hide password toggle (Session 88): auto-wires password inputs; reserve computed inline from the button's measured band (Daybook PLAN.md 9ab — CSS reserves lose specificity fights silently); re-mask defers submit one painted frame |
-| `desktop.js` | 82 | Desktop-shell bridge (Session 88): no-ops in a browser; in the packaged app routes open-in-new-tab, print, and same-origin _blank links through DesktopApi |
-| `app.js` | 737 | Init, event listeners, rail nav, nav guards, template-bindings wiring |
+| `desktop.js` | 98 | Desktop-shell bridge (Session 88): no-ops in a browser; in the packaged app routes open-in-new-tab, print, and same-origin _blank links through DesktopApi |
+| `app.js` | 739 | Init, event listeners, rail nav, nav guards, template-bindings wiring |
 | `template-bindings.js` | 143 | Single delegated handler for index.html data-tpl-action attrs (Session 38) |
 | `delegate.js` | 116 | `bindActions(container, handlers)` helper for per-view delegation |
 | `state.js` | 137 | Central state object, session persistence |
-| `utils.js` | 90 | escapeHtml, formatDate, debounce, extractName |
-| `modals.js` | 144 | Alert/confirm/prompt + canonical closeModal + registerModalCloseHandler |
-| `recovery-key.js` | 123 | One-time recovery-key screen: copy / print / download, beforeunload guard |
+| `utils.js` | 97 | escapeHtml, formatDate, debounce, extractName |
+| `modals.js` | 153 | Alert/confirm/prompt + canonical closeModal + registerModalCloseHandler |
+| `recovery-key.js` | 131 | One-time recovery-key screen: copy / print / download, beforeunload guard |
 
 ### Views (`/js/views/`)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `mail.js` | 2,427 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
-| `settings.js` | 1,468 | Settings: appearance, accounts, security, recovery-key status + check + rotation, backup, reset |
+| `mail.js` | 2,424 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
+| `settings.js` | 1,476 | Settings: appearance, accounts, security, recovery-key status + check + rotation, backup, reset |
 | `review.js` | 1,035 | Review staged items, destination editing, commit |
-| `backups.js` | 1,004 | Backup/restore UI, restore points, settings |
+| `backups.js` | 1,034 | Backup/restore UI, restore points, settings |
 | `folder-selection.js` | 897 | Bulk folder staging from IMAP/imports |
 | `vault.js` | 881 | Retention vault: move to vault, restore, permanent delete; subfolder links carry tree counts |
 | `trash.js` | 775 | Trash view: deleted folders, emails, restore, purge |
-| `folder-mgmt.js` | 667 | Manage folders: rename, color, create, delete |
+| `folder-mgmt.js` | 711 | Manage folders: rename, color, create, delete |
 | `starred.js` | 369 | Starred email view |
-| `recover.js` | 337 | Pre-login disaster recovery: scan a backup folder, list restore points, stage a restore. Deliberately talks to nothing else — there is no session, database or settings when it runs |
+| `recover.js` | 336 | Pre-login disaster recovery: scan a backup folder, list restore points, stage a restore. Deliberately talks to nothing else — there is no session, database or settings when it runs |
 
 ### Components (`/js/components/`)
 
@@ -212,12 +236,12 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `staging.js` | 561 | Staging workflow, destination picker, stage/unstage |
 | `file-picker.js` | 438 | Filesystem browser modal for import file selection |
 | `date-picker.js` | 383 | Date picker (ported from EdgeCase) for vault retention dates |
-| `progress.js` | 352 | SSE progress modal for commit/import operations |
+| `progress.js` | 356 | SSE progress modal for commit/import operations |
 | `context-menu.js` | 288 | Right-click context menu for sidebar/folders |
 | `folder-tree.js` | 265 | Reusable folder tree renderer |
 | `custom-select.js` | 223 | Custom dropdown select component |
-| `thread-stage.js` | 207 | Stage-entire-thread modal from email viewer |
-| `move-email-modal.js` | 112 | Move archived emails between folders |
+| `thread-stage.js` | 221 | Stage-entire-thread modal from email viewer |
+| `move-email-modal.js` | 122 | Move archived emails between folders |
 
 ---
 
