@@ -22,6 +22,24 @@ account is in `Session_Log.md` under Session 72.
 
 ---
 
+### Rotation done page: recovery key destroyed on refresh (v1.1)
+**Found:** Opus 5 flagged this while porting master rotation to EdgeCase.
+
+`/auth/rotate-master-key/done/<result_id>` pops the recovery key on
+first read — a page refresh while hand-copying the key loses it
+permanently. The test (`test_master_rotation.py`) explicitly asserts
+this one-time behavior. The key is recoverable via Settings → Generate
+New Recovery Key, but the sharp edge is unnecessary.
+
+EdgeCase's existing pattern is better: `_peek_recovery_handoff` reads
+without consuming, the key is dropped only on explicit acknowledgement,
+and a 30-minute TTL acts as backstop. The rotation done page should
+match that: peek-don't-consume, drop on confirm, same TTL.
+
+Backport from whatever Opus 5 builds for EdgeCase's rotation done page.
+
+---
+
 ## Release & distribution
 
 - **About modal credits: align to "Opus 4.5–5 and Fable 5" (1.0.1).** The
