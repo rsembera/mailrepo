@@ -188,38 +188,75 @@ class TestRotation:
 
 
 class TestRoute:
+    def _client(self, app):
+        from web import idle
+
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["authenticated"] = True
+            sess["csrf_token"] = "tok"
+            sess["login_id"] = idle.new_login_id()
+        return client
+
     def test_page_requires_session(self, app, v4_archive):
         assert app.test_client().get("/auth/rotate-master-key").status_code == 302
 
-    def test_page_renders_and_post_rotates(self, app, v4_archive):
-        from web import idle
-
-        client = app.test_client()
-        with client.session_transaction() as sess:
-            sess["authenticated"] = True
-            sess["csrf_token"] = "tok"
-            sess["login_id"] = idle.new_login_id()
-        resp = client.get("/auth/rotate-master-key")
+    def test_page_renders(self, app, v4_archive):
+        resp = self._client(app).get("/auth/rotate-master-key")
         assert resp.status_code == 200
         assert b"Rotate the master key" in resp.data
+        assert b"rotate-progress" in resp.data
 
-        before = Config.get_salt_path().read_bytes()
-        resp = client.post(
-            "/auth/rotate-master-key", data={"csrf_token": "tok", "password": PASSWORD}
+    def test_start_requires_csrf_and_password(self, app, v4_archive):
+        client = self._client(app)
+        assert (
+            client.post("/auth/api/rotate-master-key", json={"password": PASSWORD}).status_code
+            == 403
         )
-        assert resp.status_code == 200
-        assert b"recovery-key-value" in resp.data
-        assert Config.get_salt_path().read_bytes() != before
+        resp = client.post(
+            "/auth/api/rotate-master-key",
+            json={"password": "nope-nope-nope!"},
+            headers={"X-CSRF-Token": "tok"},
+        )
+        assert resp.status_code == 400
+        assert Config.get_salt_path().read_bytes() == v4_archive["old_salt"]
 
-    def test_post_without_csrf_is_bounced(self, app, v4_archive):
-        from web import idle
+    def test_stream_rotates_and_done_page_shows_key_once(self, app, v4_archive):
+        client = self._client(app)
+        resp = client.post(
+            "/auth/api/rotate-master-key",
+            json={"password": PASSWORD},
+            headers={"X-CSRF-Token": "tok"},
+        )
+        assert resp.status_code == 200, resp.get_json()
+        job_id = resp.get_json()["job_id"]
 
-        client = app.test_client()
-        with client.session_transaction() as sess:
-            sess["authenticated"] = True
-            sess["csrf_token"] = "tok"
-            sess["login_id"] = idle.new_login_id()
         before = Config.get_salt_path().read_bytes()
-        resp = client.post("/auth/rotate-master-key", data={"password": PASSWORD})
-        assert resp.status_code == 302
-        assert Config.get_salt_path().read_bytes() == before
+        stream = client.get(f"/auth/api/rotate-master-key-progress/{job_id}")
+        events = [
+            json.loads(line[6:])
+            for line in stream.get_data(as_text=True).splitlines()
+            if line.startswith("data: ")
+        ]
+        statuses = [e["status"] for e in events]
+        assert "encrypting" in statuses and statuses[-1] == "complete", statuses
+        assert Config.get_salt_path().read_bytes() != before
+        result_id = events[-1]["result_id"]
+        assert "recovery_key" not in json.dumps(events)  # never through the stream
+
+        done = client.get(f"/auth/rotate-master-key/done/{result_id}")
+        assert done.status_code == 200 and b"recovery-key-value" in done.data
+        # Once only.
+        again = client.get(f"/auth/rotate-master-key/done/{result_id}")
+        assert again.status_code == 302
+
+    def test_job_is_one_time(self, app, v4_archive):
+        client = self._client(app)
+        job_id = client.post(
+            "/auth/api/rotate-master-key",
+            json={"password": PASSWORD},
+            headers={"X-CSRF-Token": "tok"},
+        ).get_json()["job_id"]
+        client.get(f"/auth/api/rotate-master-key-progress/{job_id}").get_data()
+        second = client.get(f"/auth/api/rotate-master-key-progress/{job_id}").get_data(as_text=True)
+        assert "expired" in second

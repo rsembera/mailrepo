@@ -70,8 +70,19 @@
         </div>
         {% endif %}
 
-        <form method="POST" class="auth-form" id="rotate-form">
-            <input type="hidden" name="csrf_token" value="{{ session.get('csrf_token', '') }}">
+        <div id="rotate-error" class="error-box" hidden></div>
+
+        <div id="rotate-progress" hidden style="margin-bottom: var(--space-lg);">
+            <div class="progress-bar-container">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="rotate-progress-fill" style="width: 0%"></div>
+                </div>
+            </div>
+            <p class="setting-hint" id="rotate-progress-message" style="margin-top: var(--space-sm);">Starting...</p>
+            <p class="setting-hint"><strong>Do not close this window until it finishes.</strong></p>
+        </div>
+
+        <form class="auth-form" id="rotate-form">
             <div class="form-group">
                 <label for="password">Confirm your master password</label>
                 <input type="password" id="password" name="password" required
@@ -101,10 +112,69 @@
     'use strict';
     var form = document.getElementById('rotate-form');
     var button = document.getElementById('rotate-button');
+    var errorBox = document.getElementById('rotate-error');
+    var progress = document.getElementById('rotate-progress');
+    var fill = document.getElementById('rotate-progress-fill');
+    var message = document.getElementById('rotate-progress-message');
     if (!form || !button) { return; }
-    form.addEventListener('submit', function () {
+
+    function csrf() {
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        return meta ? meta.content : '';
+    }
+    function fail(text) {
+        errorBox.textContent = text;
+        errorBox.hidden = false;
+        progress.hidden = true;
+        form.hidden = false;
+        button.disabled = false;
+    }
+    function setWidth(pct) { fill.style.width = pct + '%'; }
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        errorBox.hidden = true;
         button.disabled = true;
-        button.textContent = 'Rotating — do not close this window...';
+
+        var body = {
+            password: document.getElementById('password').value,
+            new_password: document.getElementById('new_password').value
+        };
+        fetch('/auth/api/rotate-master-key', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() },
+            body: JSON.stringify(body)
+        }).then(function (r) { return r.json(); }).then(function (data) {
+            if (!data.job_id) { fail(data.error || 'Could not start the rotation.'); return; }
+            form.hidden = true;
+            progress.hidden = false;
+            var es = new EventSource('/auth/api/rotate-master-key-progress/' + data.job_id);
+            es.onmessage = function (ev) {
+                var p = JSON.parse(ev.data);
+                if (p.status === 'error') { es.close(); fail(p.message); return; }
+                if (p.message) { message.textContent = p.message; }
+                switch (p.status) {
+                    case 'backing_up': setWidth(3); break;
+                    case 'counting': setWidth(6); break;
+                    case 'encrypting':
+                        if (p.total > 0) { setWidth(6 + (p.current / p.total) * 74); }
+                        break;
+                    case 'credentials': setWidth(85); break;
+                    case 'database': setWidth(90); break;
+                    case 'finalizing': setWidth(95); break;
+                    case 'complete':
+                        setWidth(100);
+                        es.close();
+                        window.location.href = '/auth/rotate-master-key/done/' + p.result_id;
+                        break;
+                }
+            };
+            es.onerror = function () {
+                es.close();
+                fail('Lost contact with the server during the rotation. Log in again: if it was ' +
+                     'interrupted partway, re-running it picks up where it left off.');
+            };
+        }).catch(function () { fail('Could not start the rotation.'); });
     });
 })();
 </script>

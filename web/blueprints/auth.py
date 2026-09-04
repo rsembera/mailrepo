@@ -58,6 +58,8 @@ _RATE_BUCKET = "local"
 
 def _rate_key(_ip: str) -> str:
     return _RATE_BUCKET
+
+
 _MAX_ATTEMPTS = 5
 _LOCKOUT_SECONDS = 60
 
@@ -499,9 +501,7 @@ def recover_scan():
     try:
         points, source = backup.discover_restore_points_in(resolved)
     except PermissionError:
-        return jsonify(
-            {"success": False, "error": "MailRepo cannot read that folder."}
-        ), 403
+        return jsonify({"success": False, "error": "MailRepo cannot read that folder."}), 403
     except Exception as e:
         log.error(f"Recovery scan failed for {resolved}: {e}")
         return jsonify({"success": False, "error": f"Could not read that folder: {e}"}), 500
@@ -565,9 +565,7 @@ def recover_prepare():
     return jsonify(
         {
             "success": True,
-            "message": (
-                "Restore staged. Quit MailRepo and start it again to finish."
-            ),
+            "message": ("Restore staged. Quit MailRepo and start it again to finish."),
         }
     )
 
@@ -778,18 +776,14 @@ def login():
             # works fine without it, and pestering someone on every page
             # trains them to dismiss notices that matter.
             if needs_v3_migration():
-                return make_response(
-                    redirect(url_for("auth.upgrade_to_recovery_keys"))
-                )
+                return make_response(redirect(url_for("auth.upgrade_to_recovery_keys")))
 
             # Use make_response for explicit cookie handling (Safari/Firefox)
             response = make_response(redirect(url_for("main.index")))
             return response
         except InvalidPasswordError:
             _record_failed_attempt(client_ip)
-            return render_template(
-                "auth/login.html", error="Invalid password.", **restore_ctx
-            )
+            return render_template("auth/login.html", error="Invalid password.", **restore_ctx)
         except EncryptionError as e:
             return render_template("auth/login.html", error=str(e), **restore_ctx)
 
@@ -851,9 +845,7 @@ def login_with_recovery_key():
             # not a guess, so it does not spend a rate-limit attempt —
             # otherwise fumbling a 32-character string locks you out of
             # your own recovery path.
-            return render_template(
-                "auth/recovery_login.html", error=str(e), **restore_ctx
-            )
+            return render_template("auth/recovery_login.html", error=str(e), **restore_ctx)
 
         _clear_attempts(client_ip)
 
@@ -910,16 +902,12 @@ def set_password_post_recovery():
             errors.append("Passwords do not match.")
 
         if errors:
-            return render_template(
-                "auth/post_recovery_password.html", errors=errors, token=token
-            )
+            return render_template("auth/post_recovery_password.html", errors=errors, token=token)
 
         try:
             reset_password_with_recovery_key(recovery_key, password)
         except (PasswordChangeError, EncryptionError) as e:
-            return render_template(
-                "auth/post_recovery_password.html", errors=[str(e)], token=token
-            )
+            return render_template("auth/post_recovery_password.html", errors=[str(e)], token=token)
 
         _drop_recovery_handoff(token)
 
@@ -1012,9 +1000,7 @@ def upgrade_to_recovery_keys():
                     "not been changed and your password is unaffected.",
                     str(e),
                 ],
-                backup_ok=not problems
-                and age is not None
-                and age <= MAX_BACKUP_AGE_HOURS,
+                backup_ok=not problems and age is not None and age <= MAX_BACKUP_AGE_HOURS,
                 backup_age=age,
                 backup_problems=problems,
             )
@@ -1033,15 +1019,31 @@ def upgrade_to_recovery_keys():
     )
 
 
-@auth_bp.route("/rotate-master-key", methods=["GET", "POST"])
-def rotate_master_key_page():
-    """Offer, and perform, a master-key rotation (security review 2026-09, #8b).
+_rotation_jobs = {}  # job_id -> {"password", "new_password", "created_at"}
+_rotation_results = {}  # result_id -> {"recovery_key", "created_at"}
+_rotation_lock = threading.Lock()
+_ROTATION_TTL = 300  # seconds a pending job or an unfetched result may live
 
-    Same shape as the v3 upgrade: synchronous, gated on a verified recent
-    backup (taking one if needed), ending on the recovery-key screen
-    because the old recovery key is dead the moment the master changes.
+
+def _sweep_rotation_state():
+    cutoff = time.time() - _ROTATION_TTL
+    with _rotation_lock:
+        for d in (_rotation_jobs, _rotation_results):
+            for k in [k for k, v in d.items() if v["created_at"] < cutoff]:
+                d.pop(k, None)
+
+
+@auth_bp.route("/rotate-master-key", methods=["GET"])
+def rotate_master_key_page():
+    """Offer a master-key rotation (security review 2026-09, #8b).
+
+    The page explains when rotation, rather than a password change, is
+    the right tool. Submitting it POSTs to the API below and follows the
+    SSE progress stream, because a full re-encryption can take minutes
+    and a frozen page invites the force-quit the resumable design is
+    there to survive.
     """
-    from core.master_rotation import RotationError, rotate_master_key, rotation_backup_gate
+    from core.master_rotation import rotation_backup_gate
 
     if not session.get("authenticated") or not Encryption.is_unlocked():
         return redirect(url_for("auth.login"))
@@ -1050,55 +1052,148 @@ def rotate_master_key_page():
         flash("Add a recovery key first; rotation needs the v3 key file.", "info")
         return redirect(url_for("auth.upgrade_to_recovery_keys"))
 
-    backup_ok, _point, age, problems = rotation_backup_gate()
+    ok, _point, age, problems = rotation_backup_gate()
+    return render_template(
+        "auth/rotate_master_key.html",
+        backup_ok=ok,
+        backup_age=age,
+        backup_problems=problems,
+    )
 
-    def render(errors=None):
-        ok, _p, a, pr = rotation_backup_gate()
-        return render_template(
-            "auth/rotate_master_key.html",
-            errors=errors,
-            backup_ok=ok,
-            backup_age=a,
-            backup_problems=pr,
+
+@auth_bp.route("/api/rotate-master-key", methods=["POST"])
+def api_rotate_master_key_start():
+    """Validate and queue a rotation; the SSE endpoint does the work.
+
+    The password lives only in server memory under an opaque one-time id
+    until the progress stream consumes it — never in the cookie.
+    """
+    if not session.get("authenticated") or not Encryption.is_unlocked():
+        return {"error": "Not authenticated"}, 401
+
+    data = request.get_json() or {}
+    password = data.get("password", "")
+    new_password = data.get("new_password", "") or None
+    if new_password and len(new_password) < 12:
+        return {"error": "New password must be at least 12 characters."}, 400
+
+    try:
+        Encryption.unlock(password)
+    except InvalidPasswordError:
+        return {"error": "That is not your current master password."}, 400
+
+    _sweep_rotation_state()
+    job_id = secrets.token_urlsafe(32)
+    with _rotation_lock:
+        _rotation_jobs[job_id] = {
+            "password": password,
+            "new_password": new_password,
+            "created_at": time.time(),
+        }
+    return {"success": True, "job_id": job_id}
+
+
+@auth_bp.route("/api/rotate-master-key-progress/<job_id>")
+def api_rotate_master_key_progress(job_id):
+    """SSE: take a fresh backup if the gate needs one, rotate, stream progress.
+
+    Event vocabulary matches the password-change stream (counting /
+    encrypting current+total / credentials / database / finalizing /
+    complete / error) plus `backing_up`. On completion the new recovery
+    key is parked under a one-time result id for the done page to fetch;
+    it is never sent through the stream.
+    """
+    if not session.get("authenticated") or not Encryption.is_unlocked():
+        return {"error": "Not authenticated"}, 401
+
+    cutoff = time.time() - _ROTATION_TTL
+    with _rotation_lock:
+        job = _rotation_jobs.pop(job_id, None)
+        if job and job["created_at"] < cutoff:
+            job = None
+
+    def generate():
+        if not job:
+            yield f"data: {json.dumps({'status': 'error', 'message': 'Missing or expired rotation request'})}\n\n"
+            return
+
+        import queue
+
+        from core.master_rotation import RotationError, rotate_master_key, rotation_backup_gate
+
+        q = queue.Queue()
+        SENTINEL = object()
+
+        def worker():
+            try:
+                ok, _p, _a, _pr = rotation_backup_gate()
+                if not ok:
+                    q.put({"status": "backing_up", "message": "Taking a fresh backup first..."})
+                    location = get_setting("backup_location", "")
+                    create_full_backup(location if location else None)
+                key = rotate_master_key(job["password"], job["new_password"], progress_cb=q.put)
+                result_id = secrets.token_urlsafe(32)
+                with _rotation_lock:
+                    _rotation_results[result_id] = {"recovery_key": key, "created_at": time.time()}
+                q.put(
+                    {"status": "complete", "message": "Master key rotated.", "result_id": result_id}
+                )
+            except InvalidPasswordError as e:
+                q.put({"status": "error", "message": str(e)})
+            except RotationError as e:
+                q.put({"status": "error", "message": str(e)})
+            except Exception as e:
+                log.error(f"Master-key rotation failed: {e}")
+                q.put(
+                    {
+                        "status": "error",
+                        "message": (
+                            "The rotation could not be completed. If it was interrupted partway, "
+                            f"log in again and re-run it; already-converted files are skipped. ({e})"
+                        ),
+                    }
+                )
+            finally:
+                q.put(SENTINEL)
+
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+        while True:
+            ev = q.get()
+            if ev is SENTINEL:
+                break
+            yield f"data: {json.dumps(ev)}\n\n"
+        t.join(timeout=1.0)
+
+    return Response(generate(), mimetype="text/event-stream")
+
+
+@auth_bp.route("/rotate-master-key/done/<result_id>")
+def rotate_master_key_done(result_id):
+    """Show the new recovery key exactly once, then forget it."""
+    if not session.get("authenticated") or not Encryption.is_unlocked():
+        return redirect(url_for("auth.login"))
+
+    cutoff = time.time() - _ROTATION_TTL
+    with _rotation_lock:
+        result = _rotation_results.pop(result_id, None)
+        if result and result["created_at"] < cutoff:
+            result = None
+    if not result:
+        flash(
+            "The new recovery key from that rotation is no longer available. "
+            "Generate a new one from Settings → Security.",
+            "error",
         )
+        return redirect(url_for("main.index"))
 
-    if request.method == "POST":
-        token = request.form.get("csrf_token", "")
-        expected = session.get("csrf_token", "")
-        if not expected or not secrets.compare_digest(token, expected):
-            return redirect(url_for("auth.login"))
-
-        password = request.form.get("password", "")
-        new_password = request.form.get("new_password", "") or None
-        if new_password and len(new_password) < 12:
-            return render(["New password must be at least 12 characters."])
-
-        try:
-            if not backup_ok:
-                location = get_setting("backup_location", "")
-                create_full_backup(location if location else None)
-            recovery_key = rotate_master_key(password, new_password)
-        except InvalidPasswordError:
-            return render(["That is not your current master password."])
-        except RotationError as e:
-            return render([str(e)])
-        except Exception as e:
-            log.error(f"Master-key rotation failed: {e}")
-            return render(
-                [
-                    "The rotation could not be completed. If it was interrupted "
-                    "partway, log in again and re-run it; already-converted "
-                    "files are skipped.",
-                    str(e),
-                ]
-            )
-
-        flash("Master key rotated. Every earlier credential and backup now opens nothing current.", "success")
-        return render_template(
-            "auth/recovery_key.html", recovery_key=recovery_key, context="migration"
-        )
-
-    return render()
+    flash(
+        "Master key rotated. Every earlier credential and backup now opens nothing current.",
+        "success",
+    )
+    return render_template(
+        "auth/recovery_key.html", recovery_key=result["recovery_key"], context="migration"
+    )
 
 
 @auth_bp.route("/logout", methods=["POST"])

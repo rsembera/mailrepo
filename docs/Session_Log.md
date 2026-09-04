@@ -6975,3 +6975,32 @@ All on `main`, queued in the CHANGELOG under Unreleased. This is the
 built, signed and notarized. Before that: a GUI smoke test of the
 MRC3→MRC4 upgrade on Rick's real archive, the rotate-master-key page,
 and the STARTTLS path on Apollo; and a `.deb` build from the lock.
+
+### Later, same evening — rotation wording and a progress bar
+
+Rick read the "Rotate Master Key" hint and could not tell what it was
+for, which was the correct reaction: it compressed the wrapper/master
+distinction into a sentence and lost the reader. Rewritten in his
+words: *if your password has been compromised and you believe others
+may have access to your backups, you should also rotate the master
+key; this may take several minutes or longer.* The rotation page tells
+the January/April story plainly (old backup + old password yields the
+master; the master is unchanged by a password change; every later
+backup opens with it).
+
+Checked whether MailRepo should simply rotate on every password
+change. It should not: all three siblings do the 61-byte rewrap, and
+Daybook's own docstring records that the "old backup still opens with
+its old password" consequence was accepted deliberately (ruled August
+9). Rotation stays a separate, plainly-labelled action.
+
+The rotation page was a blocking form like the upgrade page; with the
+wording now promising minutes, that invites a force-quit. Rewired on
+the password-change pattern: `POST /auth/api/rotate-master-key` parks
+the password under a one-time job id; `/auth/api/rotate-master-key-
+progress/<id>` streams SSE (takes the gate backup first if needed) and
+parks the new recovery key under a one-time result id — it never
+travels through the stream; `/auth/rotate-master-key/done/<id>` shows
+it exactly once on the recovery-key screen. Progress bar on the page.
+Tests cover CSRF, wrong password, the full stream, the one-time job and
+the one-time result.
