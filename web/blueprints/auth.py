@@ -1033,6 +1033,74 @@ def upgrade_to_recovery_keys():
     )
 
 
+@auth_bp.route("/rotate-master-key", methods=["GET", "POST"])
+def rotate_master_key_page():
+    """Offer, and perform, a master-key rotation (security review 2026-09, #8b).
+
+    Same shape as the v3 upgrade: synchronous, gated on a verified recent
+    backup (taking one if needed), ending on the recovery-key screen
+    because the old recovery key is dead the moment the master changes.
+    """
+    from core.master_rotation import RotationError, rotate_master_key, rotation_backup_gate
+
+    if not session.get("authenticated") or not Encryption.is_unlocked():
+        return redirect(url_for("auth.login"))
+
+    if Encryption.salt_file_version() != 3:
+        flash("Add a recovery key first; rotation needs the v3 key file.", "info")
+        return redirect(url_for("auth.upgrade_to_recovery_keys"))
+
+    backup_ok, _point, age, problems = rotation_backup_gate()
+
+    def render(errors=None):
+        ok, _p, a, pr = rotation_backup_gate()
+        return render_template(
+            "auth/rotate_master_key.html",
+            errors=errors,
+            backup_ok=ok,
+            backup_age=a,
+            backup_problems=pr,
+        )
+
+    if request.method == "POST":
+        token = request.form.get("csrf_token", "")
+        expected = session.get("csrf_token", "")
+        if not expected or not secrets.compare_digest(token, expected):
+            return redirect(url_for("auth.login"))
+
+        password = request.form.get("password", "")
+        new_password = request.form.get("new_password", "") or None
+        if new_password and len(new_password) < 12:
+            return render(["New password must be at least 12 characters."])
+
+        try:
+            if not backup_ok:
+                location = get_setting("backup_location", "")
+                create_full_backup(location if location else None)
+            recovery_key = rotate_master_key(password, new_password)
+        except InvalidPasswordError:
+            return render(["That is not your current master password."])
+        except RotationError as e:
+            return render([str(e)])
+        except Exception as e:
+            log.error(f"Master-key rotation failed: {e}")
+            return render(
+                [
+                    "The rotation could not be completed. If it was interrupted "
+                    "partway, log in again and re-run it; already-converted "
+                    "files are skipped.",
+                    str(e),
+                ]
+            )
+
+        flash("Master key rotated. Every earlier credential and backup now opens nothing current.", "success")
+        return render_template(
+            "auth/recovery_key.html", recovery_key=recovery_key, context="migration"
+        )
+
+    return render()
+
+
 @auth_bp.route("/logout", methods=["POST"])
 def logout():
     """Log out, run backup check, and lock encryption.

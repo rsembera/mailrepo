@@ -367,6 +367,15 @@ function renderSecuritySection() {
                 <i data-lucide="shield-plus"></i>
                 Add a Recovery Key
             </a>
+            <a class="btn btn-secondary" href="/auth/rotate-master-key" id="rotateMasterKeyBtn" hidden>
+                <i data-lucide="key-round"></i>
+                Rotate Master Key
+            </a>
+            <p class="setting-hint" id="rotateMasterKeyHint" hidden style="margin-top: var(--space-sm);">
+                Changing the password or recovery key protects the live archive. If someone may hold an
+                old backup <em>and</em> the credential that opened it, rotate the master key: everything is
+                re-encrypted and no earlier credential or backup opens anything current.
+            </p>
         </div>
 
         <div id="checkRecoveryKeyForm" class="password-change-form">
@@ -459,6 +468,10 @@ function initRecoveryKeyHandlers() {
                     'This archive has a recovery key. You can check it or generate a new one below.';
                 if (rotateBtn) rotateBtn.hidden = false;
                 if (checkBtn) checkBtn.hidden = false;
+                const rmk = document.getElementById('rotateMasterKeyBtn');
+                const rmkHint = document.getElementById('rotateMasterKeyHint');
+                if (rmk) rmk.hidden = false;
+                if (rmkHint) rmkHint.hidden = false;
             } else {
                 statusEl.textContent =
                     'No recovery key. Without one, a forgotten password locks the archive permanently.';

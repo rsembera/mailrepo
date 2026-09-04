@@ -585,6 +585,19 @@ def describe_interrupted_password_change(marker: dict) -> str:
             "",
             "If the archive will not open at all, restore from backup.",
         ]
+    elif marker.get("phase") == "master_rotation":
+        lines = [
+            "A master-key rotation was interrupted before it finished.",
+            f"It began at {started} and stopped partway through re-encrypting",
+            "the archive.",
+            "",
+            "What this means: some files may be encrypted under the new key and",
+            "some under the old. Log in with your CURRENT password and run the",
+            "rotation again from Settings — already-converted files are",
+            "detected and skipped. If the archive will not open at all,",
+            "restore from backup; the backup taken just before the rotation",
+            "is the one to use.",
+        ]
     elif marker.get("phase") == "file_walk":
         lines = [
             "A master password change was interrupted before it finished.",

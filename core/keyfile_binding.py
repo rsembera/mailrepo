@@ -45,15 +45,23 @@ def _recorded_tags() -> list[str]:
         return []
 
 
-def record_current_tag(blob: bytes | None = None) -> None:
-    """Record the on-disk key file's tag as current. Requires an open database."""
+def record_current_tag(blob: bytes | None = None, *, sole: bool = False) -> None:
+    """Record the on-disk key file's tag as current. Requires an open database.
+
+    The previous tag is kept as a crash-window fallback — except with
+    ``sole=True`` (master rotation), where the previous key file wraps a
+    master that opens nothing and must not be accepted at all.
+    """
     tag = Encryption.key_file_tag_hex(blob)
     if tag is None:
         return
     tags = _recorded_tags()
-    if tags and tags[0] == tag:
-        return
-    new_tags = [tag] + [t for t in tags if t != tag][:1]
+    if sole:
+        new_tags = [tag]
+    else:
+        if tags and tags[0] == tag:
+            return
+        new_tags = [tag] + [t for t in tags if t != tag][:1]
     set_setting(SETTING_KEY, json.dumps(new_tags))
 
 

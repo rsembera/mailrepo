@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Rotate Master Key - {{ app_name }}{% endblock %}
+
+{% block body_class %}auth-page{% endblock %}
+
+{% block content %}
+<div class="auth-container auth-container-wide">
+    <div class="auth-card auth-card-wide">
+        <div class="auth-header">
+            <h1>Rotate the master key</h1>
+            <p class="auth-subtitle">
+                Re-encrypt everything under a brand-new key
+            </p>
+        </div>
+
+        {% if errors %}
+        <div class="error-box">
+            <ul>
+                {% for error in errors %}
+                <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <p>
+            Changing your password or recovery key replaces the wrapper around
+            the master key; the master key itself stays the same. That is enough
+            when a credential leaked but no one has a copy of your archive.
+        </p>
+
+        <p>
+            <strong>Rotate the master key when you think someone has both</strong>
+            — an old backup <em>and</em> the password or recovery key that opened
+            it. Rotation re-encrypts every message and stored credential under a
+            new master key, rekeys the database, and issues a new recovery key.
+            Afterwards, no earlier password, recovery key, or backup opens
+            anything current. Earlier backups become snapshots only.
+        </p>
+
+        <p>
+            Takes seconds for a typical archive, a couple of minutes for a very
+            large one. Your mail is not modified.
+        </p>
+
+        {% if backup_ok %}
+        <div class="success-box">
+            A verified backup from
+            {{ '%.1f'|format(backup_age) }} hours ago is in place.
+        </div>
+        {% else %}
+        <div class="error-box">
+            {% if backup_problems %}
+            <p>Your most recent backup could not be verified:</p>
+            <ul>
+                {% for problem in backup_problems %}
+                <li>{{ problem }}</li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p>
+                Your most recent backup is
+                {{ '%.1f'|format(backup_age) if backup_age else 'not available' }}
+                hours old.
+            </p>
+            {% endif %}
+            <p>
+                <strong>A fresh backup will be taken before rotation starts.</strong>
+                The last step cannot be resumed if it is interrupted, so the backup
+                is the way back.
+            </p>
+        </div>
+        {% endif %}
+
+        <form method="POST" class="auth-form" id="rotate-form">
+            <input type="hidden" name="csrf_token" value="{{ session.get('csrf_token', '') }}">
+            <div class="form-group">
+                <label for="password">Confirm your master password</label>
+                <input type="password" id="password" name="password" required
+                       autocomplete="current-password" autofocus>
+            </div>
+            <div class="form-group">
+                <label for="new_password">New master password <span class="setting-hint">(optional — leave blank to keep the current one)</span></label>
+                <input type="password" id="new_password" name="new_password"
+                       autocomplete="new-password" minlength="12">
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary btn-full" id="rotate-button">
+                    {% if backup_ok %}Rotate Now{% else %}Back Up and Rotate{% endif %}
+                </button>
+            </div>
+        </form>
+
+        <div class="auth-footer">
+            <p><a href="{{ url_for('main.index') }}">Not now</a></p>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+    var form = document.getElementById('rotate-form');
+    var button = document.getElementById('rotate-button');
+    if (!form || !button) { return; }
+    form.addEventListener('submit', function () {
+        button.disabled = true;
+        button.textContent = 'Rotating — do not close this window...';
+    });
+})();
+</script>
+{% endblock %}
