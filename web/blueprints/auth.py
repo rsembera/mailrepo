@@ -23,7 +23,7 @@ from flask import (
     url_for,
 )
 
-from core import Database, Encryption, EncryptionError, InvalidPasswordError
+from core import Database, Encryption, EncryptionError, InvalidPasswordError, keyfile_binding
 from core.config import Config
 from core.crypto_migration_v3 import migrate_to_v3, needs_v3_migration
 from core.database import get_setting
@@ -262,6 +262,7 @@ def setup():
         try:
             recovery_key = Encryption.initialize_v3(password)
             init_database()
+            keyfile_binding.record_current_tag()
 
             # Clear any stale session data before setting new values
             session.clear()
@@ -747,6 +748,14 @@ def login():
             Encryption.unlock(password)
             _clear_attempts(client_ip)  # Success - clear attempts
             init_database()
+            # Rollback check + MRC3→MRC4 upgrade. Raises EncryptionError
+            # (rendered below) if the key file is not this archive's.
+            try:
+                keyfile_binding.check_after_unlock()
+            except EncryptionError:
+                Database.close()
+                Encryption.lock()
+                raise
             cleanup_expired_trash()
 
             # The password unwrapped the key file and opened the

@@ -190,6 +190,31 @@ V3_OFF_SALT_RK = V3_OFF_WRAPPED_PW + WRAPPED_KEY_LENGTH
 V3_OFF_WRAPPED_RK = V3_OFF_SALT_RK + SALT_LENGTH
 V3_SALT_FILE_LENGTH = V3_OFF_WRAPPED_RK + WRAPPED_KEY_LENGTH
 
+# MRC4 (security review 2026-09, #8): the MRC3 envelope with a binding.
+#   0    4    magic "MRC4"
+#   4    16   archive_id  (random, fixed for the archive's life)
+#   20   186  body        (salt_pw ‖ wrapped_pw ‖ salt_rk ‖ wrapped_rk — MRC3 minus magic)
+#   206  32   tag         HMAC-SHA256(bind_key, magic ‖ archive_id ‖ body)
+#
+# bind_key is HKDF-Expand(master, "mailrepo.keyfile-bind.v4"), so only a
+# holder of the master can produce a tag. Two things fall out:
+#   * the two wrapper halves are bound to each other: splicing last
+#     month's recovery half into the live file fails the tag at unlock;
+#   * the settings table records the current (and previous) tag, so a
+#     whole old key file rolled back over the live one is refused at
+#     login with an honest message instead of quietly working.
+# Neither prevents offline use of an old file plus an old password —
+# only rotating the master (rotate_master_key) does that.
+SALT_MAGIC_V4 = b"MRC4"
+HKDF_INFO_KEYFILE_BIND_V4 = b"mailrepo.keyfile-bind.v4"
+ARCHIVE_ID_LENGTH = 16
+KEYFILE_TAG_LENGTH = 32
+V3_BODY_LENGTH = V3_SALT_FILE_LENGTH - len(SALT_MAGIC_V3)
+V4_OFF_ARCHIVE_ID = len(SALT_MAGIC_V4)
+V4_OFF_BODY = V4_OFF_ARCHIVE_ID + ARCHIVE_ID_LENGTH
+V4_OFF_TAG = V4_OFF_BODY + V3_BODY_LENGTH
+V4_SALT_FILE_LENGTH = V4_OFF_TAG + KEYFILE_TAG_LENGTH
+
 # Base32 excludes 0/1/8, so these can only be typos for lookalikes.
 _RECOVERY_KEY_FIXUPS = str.maketrans({"0": "O", "1": "I", "8": "B"})
 
@@ -276,9 +301,9 @@ class Encryption:
 
     @classmethod
     def salt_file_version(cls) -> int:
-        """Which key-file format is on disk: 2 (MRC2) or 3 (MRC3)."""
+        """Which key-file format is on disk: 2 (MRC2) or 3 (MRC3/MRC4 envelope)."""
         magic = cls.read_salt_blob()[:4]
-        if magic == SALT_MAGIC_V3:
+        if magic in (SALT_MAGIC_V3, SALT_MAGIC_V4):
             return 3
         if magic == SALT_MAGIC_V2:
             return 2
@@ -289,8 +314,13 @@ class Encryption:
 
     @classmethod
     def is_v3(cls) -> bool:
-        """True if the archive on disk uses the v3 envelope."""
+        """True if the archive on disk uses the v3 envelope (MRC3 or MRC4)."""
         return cls.salt_file_version() == 3
+
+    @classmethod
+    def key_file_is_bound(cls) -> bool:
+        """True if the key file on disk is MRC4 (envelope plus binding tag)."""
+        return cls.is_initialized() and cls.read_salt_blob()[:4] == SALT_MAGIC_V4
 
     @classmethod
     def has_recovery_key(cls) -> bool:
@@ -359,7 +389,7 @@ class Encryption:
 
         blob = cls.read_salt_blob()
 
-        if blob[:4] == SALT_MAGIC_V3:
+        if blob[:4] in (SALT_MAGIC_V3, SALT_MAGIC_V4):
             master = cls.unwrap_master_with_password(blob, password)
             cls._adopt_master(master, version=3)
             return True
@@ -419,7 +449,7 @@ class Encryption:
             raise EncryptionError("Encryption not initialized.")
 
         blob = cls.read_salt_blob()
-        if blob[:4] != SALT_MAGIC_V3:
+        if blob[:4] not in (SALT_MAGIC_V3, SALT_MAGIC_V4):
             raise EncryptionError(
                 "This archive predates recovery keys and cannot be opened with one. "
                 "It can only be opened with its master password."
@@ -443,7 +473,7 @@ class Encryption:
             raise EncryptionError("Encryption not initialized. Call initialize() first.")
 
         blob = cls.read_salt_blob()
-        if blob[:4] != SALT_MAGIC_V3:
+        if blob[:4] not in (SALT_MAGIC_V3, SALT_MAGIC_V4):
             raise EncryptionError(
                 "This archive predates recovery keys and cannot be opened with one. "
                 "It can only be opened with its master password."
@@ -468,7 +498,9 @@ class Encryption:
 
         master = secrets.token_bytes(MASTER_KEY_LENGTH)
         recovery_key = cls.generate_recovery_key()
-        blob = cls.build_v3_salt_blob(master, password, recovery_key)
+        blob = cls.upgrade_blob_to_v4(
+            cls.build_v3_salt_blob(master, password, recovery_key), master
+        )
 
         Config.get_data_path().mkdir(parents=True, exist_ok=True)
         cls._atomic_write_salt_file(blob)
@@ -478,7 +510,7 @@ class Encryption:
 
     @classmethod
     def write_v3_salt_file(cls, blob: bytes) -> None:
-        """Atomically replace the key file with a v3 blob (validated first)."""
+        """Atomically replace the key file with an MRC3/MRC4 blob (validated first)."""
         cls.parse_v3_salt_blob(blob)
         cls._atomic_write_salt_file(blob)
 
@@ -791,21 +823,119 @@ class Encryption:
         return blob
 
     @staticmethod
-    def parse_v3_salt_blob(blob: bytes) -> dict:
-        """Split an MRC3 blob into its fields. Raises if malformed."""
-        if blob[:4] != SALT_MAGIC_V3:
-            raise EncryptionError("Not a v3 (MRC3) key file.")
-        if len(blob) != V3_SALT_FILE_LENGTH:
-            raise EncryptionError(
-                f"v3 key file is {len(blob)} bytes, expected "
-                f"{V3_SALT_FILE_LENGTH}. The file may be truncated."
-            )
-        return {
-            "salt_pw": blob[V3_OFF_SALT_PW:V3_OFF_WRAPPED_PW],
-            "wrapped_pw": blob[V3_OFF_WRAPPED_PW:V3_OFF_SALT_RK],
-            "salt_rk": blob[V3_OFF_SALT_RK:V3_OFF_WRAPPED_RK],
-            "wrapped_rk": blob[V3_OFF_WRAPPED_RK:],
+    def envelope_body(blob: bytes) -> bytes:
+        """The 186-byte envelope body of an MRC3 or MRC4 blob."""
+        if blob[:4] == SALT_MAGIC_V3:
+            if len(blob) != V3_SALT_FILE_LENGTH:
+                raise EncryptionError(
+                    f"v3 key file is {len(blob)} bytes, expected "
+                    f"{V3_SALT_FILE_LENGTH}. The file may be truncated."
+                )
+            return blob[len(SALT_MAGIC_V3) :]
+        if blob[:4] == SALT_MAGIC_V4:
+            if len(blob) != V4_SALT_FILE_LENGTH:
+                raise EncryptionError(
+                    f"v4 key file is {len(blob)} bytes, expected "
+                    f"{V4_SALT_FILE_LENGTH}. The file may be truncated."
+                )
+            return blob[V4_OFF_BODY:V4_OFF_TAG]
+        raise EncryptionError("Not a v3 (MRC3/MRC4) key file.")
+
+    @classmethod
+    def parse_v3_salt_blob(cls, blob: bytes) -> dict:
+        """Split an MRC3 or MRC4 blob into its fields. Raises if malformed.
+
+        The four envelope fields are the same in both formats; MRC4 adds
+        ``archive_id`` and ``tag`` (None for MRC3).
+        """
+        body = cls.envelope_body(blob)
+        off = -len(SALT_MAGIC_V3)  # body offsets = v3 offsets minus the magic
+        fields = {
+            "salt_pw": body[V3_OFF_SALT_PW + off : V3_OFF_WRAPPED_PW + off],
+            "wrapped_pw": body[V3_OFF_WRAPPED_PW + off : V3_OFF_SALT_RK + off],
+            "salt_rk": body[V3_OFF_SALT_RK + off : V3_OFF_WRAPPED_RK + off],
+            "wrapped_rk": body[V3_OFF_WRAPPED_RK + off :],
+            "archive_id": None,
+            "tag": None,
         }
+        if blob[:4] == SALT_MAGIC_V4:
+            fields["archive_id"] = blob[V4_OFF_ARCHIVE_ID:V4_OFF_BODY]
+            fields["tag"] = blob[V4_OFF_TAG:]
+        return fields
+
+    # ----------------------------------------------------------
+    # MRC4 binding
+    # ----------------------------------------------------------
+
+    @classmethod
+    def _bind_key(cls, master: bytes) -> bytes:
+        return cls._derive_subkey_v2(master, HKDF_INFO_KEYFILE_BIND_V4)
+
+    @classmethod
+    def _keyfile_tag(cls, master: bytes, archive_id: bytes, body: bytes) -> bytes:
+        import hashlib
+        import hmac
+
+        return hmac.new(
+            cls._bind_key(master), SALT_MAGIC_V4 + archive_id + body, hashlib.sha256
+        ).digest()
+
+    @classmethod
+    def build_v4_blob(cls, master: bytes, body: bytes, archive_id: bytes | None = None) -> bytes:
+        """Wrap a 186-byte envelope body as MRC4 under ``master``."""
+        if len(body) != V3_BODY_LENGTH:
+            raise EncryptionError(f"Envelope body must be {V3_BODY_LENGTH} bytes, got {len(body)}.")
+        if archive_id is None:
+            archive_id = secrets.token_bytes(ARCHIVE_ID_LENGTH)
+        if len(archive_id) != ARCHIVE_ID_LENGTH:
+            raise EncryptionError("archive_id must be 16 bytes.")
+        blob = SALT_MAGIC_V4 + archive_id + body + cls._keyfile_tag(master, archive_id, body)
+        if len(blob) != V4_SALT_FILE_LENGTH:
+            raise EncryptionError("Built a malformed MRC4 blob.")
+        return blob
+
+    @classmethod
+    def upgrade_blob_to_v4(cls, blob: bytes, master: bytes) -> bytes:
+        """MRC3 → MRC4 without touching either wrapper (no re-encryption,
+        no recovery key needed). MRC4 in → same blob out."""
+        if blob[:4] == SALT_MAGIC_V4:
+            return blob
+        return cls.build_v4_blob(master, cls.envelope_body(blob))
+
+    @classmethod
+    def verify_binding(cls, blob: bytes, master: bytes) -> None:
+        """Raise if an MRC4 blob's tag does not match its contents.
+
+        A failure means one half of the key file did not come from the
+        same write as the other — a spliced-in wrapper. MRC3 has no tag
+        and passes.
+        """
+        if blob[:4] != SALT_MAGIC_V4:
+            return
+        f = cls.parse_v3_salt_blob(blob)
+        expected = cls._keyfile_tag(master, f["archive_id"], cls.envelope_body(blob))
+        if not secrets.compare_digest(expected, f["tag"]):
+            raise EncryptionError(
+                "The key file failed its integrity check: its two halves were not "
+                "written together. Someone may have spliced an older wrapper into "
+                "it. Restore data/.salt from a trusted backup, then change your "
+                "password and rotate the recovery key."
+            )
+
+    @classmethod
+    def key_file_tag_hex(cls, blob: bytes | None = None) -> Optional[str]:
+        """Hex tag of the key file on disk (or of ``blob``); None for MRC3."""
+        blob = cls.read_salt_blob() if blob is None else blob
+        if blob[:4] != SALT_MAGIC_V4:
+            return None
+        return blob[V4_OFF_TAG:].hex()
+
+    @classmethod
+    def archive_id_hex(cls, blob: bytes | None = None) -> Optional[str]:
+        blob = cls.read_salt_blob() if blob is None else blob
+        if blob[:4] != SALT_MAGIC_V4:
+            return None
+        return blob[V4_OFF_ARCHIVE_ID:V4_OFF_BODY].hex()
 
     @classmethod
     def unwrap_master_with_password(cls, blob: bytes, password: str) -> bytes:
@@ -817,9 +947,11 @@ class Encryption:
         fields = cls.parse_v3_salt_blob(blob)
         kek = cls._derive_master_v2(password, fields["salt_pw"])
         try:
-            return cls._decrypt_v2_with_key(fields["wrapped_pw"], kek)
+            master = cls._decrypt_v2_with_key(fields["wrapped_pw"], kek)
         except Exception:
             raise InvalidPasswordError("Invalid master password.")
+        cls.verify_binding(blob, master)
+        return master
 
     @classmethod
     def unwrap_master_with_recovery_key(cls, blob: bytes, recovery_key: str) -> bytes:
@@ -828,9 +960,11 @@ class Encryption:
         raw = cls.parse_recovery_key(recovery_key)
         kek = cls._derive_kek_from_recovery_key(raw, fields["salt_rk"])
         try:
-            return cls._decrypt_v2_with_key(fields["wrapped_rk"], kek)
+            master = cls._decrypt_v2_with_key(fields["wrapped_rk"], kek)
         except Exception:
             raise InvalidPasswordError("That recovery key does not open this archive.")
+        cls.verify_binding(blob, master)
+        return master
 
     @classmethod
     def rewrap_password(cls, blob: bytes, master: bytes, new_password: str) -> bytes:
@@ -847,11 +981,20 @@ class Encryption:
         kek_pw = cls._derive_master_v2(new_password, salt_pw)
         wrapped_pw = cls._encrypt_v2_with_key(master, kek_pw)
         new_blob = SALT_MAGIC_V3 + salt_pw + wrapped_pw + fields["salt_rk"] + fields["wrapped_rk"]
+        new_blob = cls._rebind_like(blob, new_blob, master)
 
         # A password wrapper that does not open locks the owner out of
         # their own archive with only the recovery key left standing.
         cls._assert_password_wrapper_opens(new_blob, kek_pw, master)
         return new_blob
+
+    @classmethod
+    def _rebind_like(cls, old_blob: bytes, new_v3_blob: bytes, master: bytes) -> bytes:
+        """If the file being replaced is MRC4, keep it MRC4 (same archive_id)."""
+        if old_blob[:4] != SALT_MAGIC_V4:
+            return new_v3_blob
+        archive_id = old_blob[V4_OFF_ARCHIVE_ID:V4_OFF_BODY]
+        return cls.build_v4_blob(master, cls.envelope_body(new_v3_blob), archive_id)
 
     @classmethod
     def rewrap_recovery_key(cls, blob: bytes, master: bytes, new_recovery_key: str) -> bytes:
@@ -868,6 +1011,7 @@ class Encryption:
         )
         wrapped_rk = cls._encrypt_v2_with_key(master, kek_rk)
         new_blob = SALT_MAGIC_V3 + fields["salt_pw"] + fields["wrapped_pw"] + salt_rk + wrapped_rk
+        new_blob = cls._rebind_like(blob, new_blob, master)
 
         # The key returned from here gets printed and filed away. Prove it
         # opens the blob before anyone writes it on paper.

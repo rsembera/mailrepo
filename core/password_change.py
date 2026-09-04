@@ -309,6 +309,9 @@ def _change_password_v3(
         progress_cb({"status": "finalizing", "message": "Updating key file..."})
 
     new_blob = Encryption.rewrap_password(blob, master, new_password)
+    from core.keyfile_binding import record_current_tag
+
+    record_current_tag(new_blob)
     Encryption.write_v3_salt_file(new_blob)
 
     if progress_cb:
@@ -356,6 +359,12 @@ def reset_password_with_recovery_key(recovery_key: str, new_password: str) -> di
     master = Encryption.unwrap_master_with_recovery_key(blob, recovery_key)
 
     new_blob = Encryption.rewrap_password(blob, master, new_password)
+    # Record the tag BEFORE the file lands: if we crash in between, the
+    # database knows the new tag and the old file's tag is still the
+    # "previous" one, so either state logs in (core/keyfile_binding.py).
+    from core.keyfile_binding import record_tag_with_master
+
+    record_tag_with_master(master, new_blob)
     Encryption.write_v3_salt_file(new_blob)
 
     log.info("Master password reset via recovery key (no session granted)")
@@ -388,6 +397,9 @@ def rotate_recovery_key(password: str) -> str:
 
     new_recovery_key = Encryption.generate_recovery_key()
     new_blob = Encryption.rewrap_recovery_key(blob, master, new_recovery_key)
+    from core.keyfile_binding import record_current_tag
+
+    record_current_tag(new_blob)
     Encryption.write_v3_salt_file(new_blob)
 
     log.info("Recovery key rotated; previous key revoked")

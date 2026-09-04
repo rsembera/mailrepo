@@ -1863,7 +1863,7 @@ def key_file_fingerprint(blob):
     if magic == b"MRC2":
         return {"version": 2, "password_id": None, "recovery_id": None}
 
-    if magic != b"MRC3":
+    if magic not in (b"MRC3", b"MRC4"):
         # No recognised magic. The magic was introduced with v2, so a key
         # file without it predates v2 — the Fernet/PBKDF2 scheme, whose
         # code was removed entirely in the v1 cleanup. Backups this old
@@ -1876,14 +1876,18 @@ def key_file_fingerprint(blob):
     from core.encryption import (
         V3_OFF_SALT_PW,
         V3_OFF_SALT_RK,
-        V3_SALT_FILE_LENGTH,
+        Encryption,
+        EncryptionError,
     )
 
-    if len(blob) != V3_SALT_FILE_LENGTH:
+    try:
+        body = Encryption.envelope_body(blob)
+    except EncryptionError:
         return None
 
-    pw_half = blob[V3_OFF_SALT_PW:V3_OFF_SALT_RK]
-    rk_half = blob[V3_OFF_SALT_RK:]
+    # Body offsets are the v3 offsets minus the 4-byte magic.
+    pw_half = body[V3_OFF_SALT_PW - 4 : V3_OFF_SALT_RK - 4]
+    rk_half = body[V3_OFF_SALT_RK - 4 :]
 
     return {
         "version": 3,
