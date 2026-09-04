@@ -372,9 +372,9 @@ function renderSecuritySection() {
                 Rotate Master Key
             </a>
             <p class="setting-hint" id="rotateMasterKeyHint" hidden style="margin-top: var(--space-sm);">
-                Changing the password or recovery key protects the live archive. If someone may hold an
-                old backup <em>and</em> the credential that opened it, rotate the master key: everything is
-                re-encrypted and no earlier credential or backup opens anything current.
+                If your password has been compromised and you believe others may have access to your
+                backups, you should also rotate the master key. This re-encrypts your whole archive and
+                may take several minutes or longer depending on its size.
             </p>
         </div>
 

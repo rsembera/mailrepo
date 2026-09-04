@@ -25,23 +25,20 @@
         {% endif %}
 
         <p>
-            Changing your password or recovery key replaces the wrapper around
-            the master key; the master key itself stays the same. That is enough
-            when a credential leaked but no one has a copy of your archive.
+            If your password has been compromised and you believe others may have
+            access to your backups, changing the password is not enough on its own.
+            Your mail is encrypted under a master key that a password change does
+            not replace, and every backup contains a copy of it — so someone who
+            can open one old backup with the old password can open every later
+            one too. Rotating the master key closes that: your whole archive is
+            re-encrypted under a new key, and no earlier password, recovery key or
+            backup can open anything current.
         </p>
 
         <p>
-            <strong>Rotate the master key when you think someone has both</strong>
-            — an old backup <em>and</em> the password or recovery key that opened
-            it. Rotation re-encrypts every message and stored credential under a
-            new master key, rekeys the database, and issues a new recovery key.
-            Afterwards, no earlier password, recovery key, or backup opens
-            anything current. Earlier backups become snapshots only.
-        </p>
-
-        <p>
-            Takes seconds for a typical archive, a couple of minutes for a very
-            large one. Your mail is not modified.
+            You will be given a new recovery key at the end; the current one
+            stops working. This may take several minutes or longer depending on
+            the size of your archive. Your mail is not modified.
         </p>
 
         {% if backup_ok %}
