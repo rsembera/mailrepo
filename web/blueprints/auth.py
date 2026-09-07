@@ -699,6 +699,17 @@ def recovery_key_confirmed():
     if not expected or not secrets.compare_digest(token, expected):
         return redirect(url_for("auth.login"))
 
+    result_id = request.form.get("result_id", "")
+    if result_id:
+        # Arrived from the master-key rotation done page: the key is
+        # acknowledged, so stop holding it.
+        _drop_rotation_result(result_id)
+        flash(
+            "Master key rotated. Every earlier credential and backup now opens nothing current.",
+            "success",
+        )
+        return redirect(url_for("main.index"))
+
     if request.form.get("context") == "migration":
         flash("Recovery key created. Your archive is unchanged.", "success")
         return redirect(url_for("main.index"))
@@ -1022,15 +1033,39 @@ def upgrade_to_recovery_keys():
 _rotation_jobs = {}  # job_id -> {"password", "new_password", "created_at"}
 _rotation_results = {}  # result_id -> {"recovery_key", "created_at"}
 _rotation_lock = threading.Lock()
-_ROTATION_TTL = 300  # seconds a pending job or an unfetched result may live
+_ROTATION_TTL = 300  # seconds a pending job may wait to be started
+# A finished rotation's recovery key lives until the user acknowledges it
+# on the done page, with this as the backstop. Long enough to hand-copy
+# the key and refresh the page once or twice; same figure as EdgeCase.
+_ROTATION_RESULT_TTL = 1800
 
 
 def _sweep_rotation_state():
-    cutoff = time.time() - _ROTATION_TTL
+    now = time.time()
     with _rotation_lock:
-        for d in (_rotation_jobs, _rotation_results):
+        for d, ttl in ((_rotation_jobs, _ROTATION_TTL), (_rotation_results, _ROTATION_RESULT_TTL)):
+            cutoff = now - ttl
             for k in [k for k, v in d.items() if v["created_at"] < cutoff]:
                 d.pop(k, None)
+
+
+def _peek_rotation_result(result_id):
+    """Read a finished rotation's recovery key WITHOUT consuming it, so a
+    page refresh while hand-copying does not destroy the only copy. The
+    entry is dropped by _drop_rotation_result on acknowledgement, or by
+    the TTL sweep."""
+    cutoff = time.time() - _ROTATION_RESULT_TTL
+    with _rotation_lock:
+        result = _rotation_results.get(result_id)
+        if result and result["created_at"] < cutoff:
+            _rotation_results.pop(result_id, None)
+            result = None
+    return result
+
+
+def _drop_rotation_result(result_id):
+    with _rotation_lock:
+        _rotation_results.pop(result_id, None)
 
 
 @auth_bp.route("/rotate-master-key", methods=["GET"])
@@ -1170,15 +1205,19 @@ def api_rotate_master_key_progress(job_id):
 
 @auth_bp.route("/rotate-master-key/done/<result_id>")
 def rotate_master_key_done(result_id):
-    """Show the new recovery key exactly once, then forget it."""
+    """Show the new recovery key until the user acknowledges it.
+
+    The key is read without being consumed, so a refresh mid-transcription
+    shows it again. It is forgotten when the acknowledgement form posts
+    (recovery_key_confirmed, which receives result_id) or when the
+    _ROTATION_RESULT_TTL backstop expires. Nothing lost is unrecoverable
+    either way: the user is logged in and can generate a new key from
+    Settings, but the sharp edge of a refresh wiping it was unnecessary.
+    """
     if not session.get("authenticated") or not Encryption.is_unlocked():
         return redirect(url_for("auth.login"))
 
-    cutoff = time.time() - _ROTATION_TTL
-    with _rotation_lock:
-        result = _rotation_results.pop(result_id, None)
-        if result and result["created_at"] < cutoff:
-            result = None
+    result = _peek_rotation_result(result_id)
     if not result:
         flash(
             "The new recovery key from that rotation is no longer available. "
@@ -1187,12 +1226,11 @@ def rotate_master_key_done(result_id):
         )
         return redirect(url_for("main.index"))
 
-    flash(
-        "Master key rotated. Every earlier credential and backup now opens nothing current.",
-        "success",
-    )
     return render_template(
-        "auth/recovery_key.html", recovery_key=result["recovery_key"], context="migration"
+        "auth/recovery_key.html",
+        recovery_key=result["recovery_key"],
+        context="migration",
+        result_id=result_id,
     )
 
 

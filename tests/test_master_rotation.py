@@ -246,9 +246,21 @@ class TestRoute:
 
         done = client.get(f"/auth/rotate-master-key/done/{result_id}")
         assert done.status_code == 200 and b"recovery-key-value" in done.data
-        # Once only.
+        assert result_id.encode() in done.data  # carried into the acknowledgement form
+        # A refresh while hand-copying must not destroy the key.
         again = client.get(f"/auth/rotate-master-key/done/{result_id}")
-        assert again.status_code == 302
+        assert again.status_code == 200 and b"recovery-key-value" in again.data
+        # Acknowledging drops it; after that the page is gone.
+        with client.session_transaction() as sess:
+            csrf = sess["csrf_token"]
+        ack = client.post(
+            "/auth/setup/recovery-key-saved",
+            data={"csrf_token": csrf, "context": "migration",
+                  "result_id": result_id, "confirm_saved": "on"},
+        )
+        assert ack.status_code == 302
+        gone = client.get(f"/auth/rotate-master-key/done/{result_id}")
+        assert gone.status_code == 302
 
     def test_job_is_one_time(self, app, v4_archive):
         client = self._client(app)

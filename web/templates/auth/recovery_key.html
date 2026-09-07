@@ -51,6 +51,7 @@
         <form method="POST" action="{{ url_for('auth.recovery_key_confirmed') }}" class="auth-form">
             <input type="hidden" name="csrf_token" value="{{ session.get('csrf_token', '') }}">
             <input type="hidden" name="context" value="{{ context }}">
+            {% if result_id %}<input type="hidden" name="result_id" value="{{ result_id }}">{% endif %}
             <div class="form-group form-group-checkbox">
                 <label>
                     <input type="checkbox" id="confirm-saved" name="confirm_saved" required>
