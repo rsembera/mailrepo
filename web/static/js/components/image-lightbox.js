@@ -213,10 +213,6 @@ function isZoomable(im) {
     return im.naturalWidth >= MIN_ZOOMABLE_PX && im.naturalHeight >= MIN_ZOOMABLE_PX;
 }
 
-function markZoomable(im) {
-    if (isZoomable(im)) im.style.cursor = 'zoom-in';
-}
-
 function inlineImageName(im) {
     const alt = (im.getAttribute('alt') || im.getAttribute('title') || '').trim();
     if (alt && alt.length <= 80) return alt;
@@ -225,22 +221,95 @@ function inlineImageName(im) {
 
 /**
  * Make qualifying <img> elements in a rendered email body open the
- * lightbox on click. Call once per rendered iframe document. Images
- * wrapped in a link keep their link behaviour.
- * @param {Document} doc - The body iframe's document
+ * lightbox on click.
+ *
+ * The body iframe is sandboxed without allow-scripts. WebKit (Safari and
+ * the desktop shell's WKWebView) then refuses to run *any* event listener
+ * whose target is inside that frame, even one the parent registered, and
+ * logs "Blocked script execution ... allow-scripts". Chrome allows it, so
+ * a listener inside the frame looks fine in one browser and is dead in
+ * the other. So nothing here listens inside the frame: the parent lays a
+ * transparent click target over each image, positioned from the image's
+ * layout rect (reading layout across the boundary is permitted). The
+ * frame never scrolls internally -- it is sized to its content -- so the
+ * targets stay aligned as long as they are repositioned whenever the
+ * frame's size changes, which a parent-side ResizeObserver reports.
+ *
+ * Images wrapped in a link get no target and keep their link behaviour.
+ *
+ * @param {HTMLIFrameElement} iframe - The rendered body iframe
+ * @param {HTMLElement} wrapper - Positioned element containing the iframe;
+ *   the target layer is appended to it
  */
-export function attachImageZoom(doc) {
-    doc.querySelectorAll('img').forEach((im) => {
-        // `complete` can be true for a data: image before it is decoded,
-        // with naturalWidth still 0 — so check now AND on load.
-        im.addEventListener('load', () => markZoomable(im), { once: true });
-        if (im.complete) markZoomable(im);
-    });
+export function attachImageZoom(iframe, wrapper) {
+    const doc = iframe.contentDocument;
+    if (!doc) return;
 
-    doc.addEventListener('click', (e) => {
-        const im = e.target && e.target.closest ? e.target.closest('img') : null;
-        if (!im || im.closest('a[href]') || !isZoomable(im)) return;
-        e.preventDefault();
-        openImageLightbox({ src: im.currentSrc || im.src, filename: inlineImageName(im) });
-    });
+    const layer = document.createElement('div');
+    layer.className = 'image-zoom-layer';
+    wrapper.appendChild(layer);
+
+    const targets = new Map();  // img -> button
+
+    const targetFor = (im) => {
+        let btn = targets.get(im);
+        if (!btn) {
+            btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'image-zoom-target';
+            btn.title = 'Click to enlarge';
+            btn.setAttribute('aria-label', 'Enlarge image');
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                openImageLightbox({ src: im.currentSrc || im.src, filename: inlineImageName(im) });
+            });
+            layer.appendChild(btn);
+            targets.set(im, btn);
+        }
+        return btn;
+    };
+
+    const reposition = () => {
+        if (!iframe.isConnected) { teardown(); return; }
+        const frameRect = iframe.getBoundingClientRect();
+        const wrapRect = wrapper.getBoundingClientRect();
+        const seen = new Set();
+        doc.querySelectorAll('img').forEach((im) => {
+            if (im.closest('a[href]') || !isZoomable(im)) return;
+            const r = im.getBoundingClientRect();
+            if (r.width < MIN_ZOOMABLE_PX || r.height < MIN_ZOOMABLE_PX) return;
+            const btn = targetFor(im);
+            seen.add(im);
+            btn.style.left = (r.left + frameRect.left - wrapRect.left) + 'px';
+            btn.style.top = (r.top + frameRect.top - wrapRect.top) + 'px';
+            btn.style.width = r.width + 'px';
+            btn.style.height = r.height + 'px';
+        });
+        targets.forEach((btn, im) => {
+            if (!seen.has(im)) { btn.remove(); targets.delete(im); }
+        });
+    };
+
+    // Everything below runs in the parent realm only.
+    let ro = null;
+    if (typeof window.ResizeObserver === 'function') {
+        ro = new window.ResizeObserver(() => reposition());
+        ro.observe(iframe);
+        ro.observe(wrapper);
+    }
+    const onResize = () => reposition();
+    window.addEventListener('resize', onResize);
+    // Image decodes that do not change the frame's height still move
+    // nothing the observer can see, so take a few timed passes as well.
+    const timers = [100, 400, 1200, 3000].map((ms) => setTimeout(reposition, ms));
+
+    function teardown() {
+        if (ro) ro.disconnect();
+        window.removeEventListener('resize', onResize);
+        timers.forEach(clearTimeout);
+        layer.remove();
+    }
+
+    reposition();
 }

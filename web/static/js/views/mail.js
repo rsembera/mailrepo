@@ -1662,8 +1662,12 @@ function renderHtmlBody(container, html, allowRemote = false) {
     iframe.style.width = '100%';
     iframe.style.border = 'none';
     iframe.style.display = 'block';  // Remove inline-element baseline gap
+    // Positioned wrapper so the image-zoom layer can sit over the frame.
+    const frameWrap = document.createElement('div');
+    frameWrap.className = 'email-html-frame';
+    frameWrap.appendChild(iframe);
     container.innerHTML = '';
-    container.appendChild(iframe);
+    container.appendChild(frameWrap);
     
     const doc = iframe.contentDocument || iframe.contentWindow.document;
     doc.open();
@@ -1738,7 +1742,7 @@ function renderHtmlBody(container, html, allowRemote = false) {
     doc.close();
 
     // Click-to-zoom on inline images (see components/image-lightbox.js).
-    attachImageZoom(doc);
+    attachImageZoom(iframe, frameWrap);
     
     // Resize the iframe to match its content height. The iframe contains
     // an HTML document whose size can change at any time (images loading,
