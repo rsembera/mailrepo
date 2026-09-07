@@ -13,7 +13,8 @@
 
 import { escapeHtml, formatDate, extractName } from '../utils.js';
 import { state, loadFolders } from '../state.js';
-import { showConfirm, showAlert } from '../modals.js';
+import { showConfirm } from '../modals.js';
+import { showToast } from '../toast.js';
 import { refreshSidebarFolders } from '../components/sidebar.js';
 import { bindActions } from '../delegate.js';
 
@@ -529,7 +530,7 @@ export async function restoreFolder(folderId) {
         const data = await response.json();
 
         if (!response.ok) {
-            showAlert('Error', data.error || 'Failed to restore folder');
+            showToast(data.error || 'Failed to restore folder', 'error');
             return;
         }
 
@@ -553,11 +554,11 @@ export async function restoreFolder(folderId) {
         refreshSidebarFolders();
 
         if (data.folder && data.folder.renamed) {
-            showAlert('Folder Restored', `Folder restored as "${data.folder.name}" to avoid a naming conflict.`);
+            showToast(`Folder restored as "${data.folder.name}" to avoid a naming conflict.`, 'info');
         }
     } catch (error) {
         console.error('Error restoring folder:', error);
-        showAlert('Error', 'Failed to restore folder');
+        showToast('Failed to restore folder', 'error');
     }
 }
 
@@ -588,7 +589,7 @@ export async function permanentlyDeleteFolder(folderId) {
 
         if (!response.ok) {
             const data = await response.json();
-            showAlert('Error', data.error || 'Failed to delete folder');
+            showToast(data.error || 'Failed to delete folder', 'error');
             return;
         }
 
@@ -606,7 +607,7 @@ export async function permanentlyDeleteFolder(folderId) {
         showTrashView();
     } catch (error) {
         console.error('Error deleting folder:', error);
-        showAlert('Error', 'Failed to delete folder');
+        showToast('Failed to delete folder', 'error');
     }
 }
 
@@ -626,7 +627,7 @@ export async function emptyTrash() {
 
         if (!response.ok) {
             const data = await response.json();
-            showAlert('Error', data.error || 'Failed to empty trash');
+            showToast(data.error || 'Failed to empty trash', 'error');
             return;
         }
 
@@ -634,7 +635,7 @@ export async function emptyTrash() {
         showTrashView();
     } catch (error) {
         console.error('Error emptying trash:', error);
-        showAlert('Error', 'Failed to empty trash');
+        showToast('Failed to empty trash', 'error');
     }
 }
 
@@ -671,13 +672,13 @@ async function restoreEmail(emailId, destinationFolderId) {
                 });
                 return;
             }
-            showAlert('Error', data.error || 'Failed to restore email');
+            showToast(data.error || 'Failed to restore email', 'error');
             return;
         }
 
         if (!response.ok) {
             const data = await response.json();
-            showAlert('Error', data.error || 'Failed to restore email');
+            showToast(data.error || 'Failed to restore email', 'error');
             return;
         }
 
@@ -686,7 +687,7 @@ async function restoreEmail(emailId, destinationFolderId) {
         updateTrashBadge();
     } catch (error) {
         console.error('Error restoring email:', error);
-        showAlert('Error', 'Failed to restore email');
+        showToast('Failed to restore email', 'error');
     }
 }
 
@@ -708,7 +709,7 @@ async function permanentlyDeleteEmail(emailId) {
 
         if (!response.ok) {
             const data = await response.json();
-            showAlert('Error', data.error || 'Failed to delete email');
+            showToast(data.error || 'Failed to delete email', 'error');
             return;
         }
 
@@ -717,7 +718,7 @@ async function permanentlyDeleteEmail(emailId) {
         updateTrashBadge();
     } catch (error) {
         console.error('Error deleting email:', error);
-        showAlert('Error', 'Failed to delete email');
+        showToast('Failed to delete email', 'error');
     }
 }
 
@@ -743,7 +744,7 @@ async function emptyTrashEmails() {
         updateTrashBadge();
     } catch (error) {
         console.error('Error emptying trash:', error);
-        showAlert('Error', 'Failed to empty trash');
+        showToast('Failed to empty trash', 'error');
     }
 }
 

@@ -9,7 +9,7 @@
 
 import { escapeHtml, escapeForOnclick } from '../utils.js';
 import { state, setSelectedFoldersGetter, setSelectedFoldersClearer, updateStagedBadge } from '../state.js';
-import { showAlert } from '../modals.js';
+import { showToast } from '../toast.js';
 import { buildImapFolderTree, getFolderIcon } from '../components/sidebar.js';
 import { getMountedImports } from '../components/imports.js';
 import { bindActions } from '../delegate.js';
@@ -749,7 +749,7 @@ export function stageAllFolders() {
     });
     
     if (unstagedPaths.length === 0) {
-        showAlert('All Staged', 'All folders are already staged.');
+        showToast('All folders are already staged.', 'info');
         return;
     }
     

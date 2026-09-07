@@ -10,6 +10,7 @@
 import { escapeHtml, escapeForOnclick } from '../utils.js';
 import { getStagedEmails, getStagedFolders, clearAllStaged, updateStagedBadge, openChangeDestinationModal } from '../components/staging.js';
 import { showConfirm, showAlert } from '../modals.js';
+import { showToast } from '../toast.js';
 import { state, loadFolders } from '../state.js';
 import { refreshSidebarFolders } from '../components/sidebar.js';
 import { bindActions } from '../delegate.js';
@@ -1016,7 +1017,7 @@ async function commitAll() {
                 await refreshSidebar();
                 renderReviewView();
                 const msg = data.message || 'Commit complete.';
-                showAlert('Commit Complete', msg);
+                showToast(msg, 'success');
             },
             onError: (err) => {
                 modal.classList.remove('active');

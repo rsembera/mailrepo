@@ -7,6 +7,7 @@
 import { escapeHtml, extractName, formatDate } from '../utils.js';
 import { state } from '../state.js';
 import { bindActions } from '../delegate.js';
+import { showToast } from '../toast.js';
 
 // Reference to DOM elements (set via init)
 let emailListEl = null;
@@ -615,7 +616,7 @@ async function deleteArchivedEmail(emailId) {
     const email = state.emails.find(e => e.id == emailId);
     if (!email) return;
     
-    const { showConfirm, showAlert } = await import('../modals.js');
+    const { showConfirm } = await import('../modals.js');
     const confirmed = await showConfirm('Delete Email', `Move "${email.subject || '(no subject)'}" to trash?`, { okText: 'Move to Trash' });
     if (!confirmed) return;
     
@@ -623,7 +624,7 @@ async function deleteArchivedEmail(emailId) {
         const response = await fetch(`/api/messages/${emailId}`, { method: 'DELETE' });
         if (!response.ok) {
             const data = await response.json();
-            showAlert('Error', data.error || 'Failed to delete email');
+            showToast(data.error || 'Failed to delete email', 'error');
             return;
         }
         
@@ -636,7 +637,7 @@ async function deleteArchivedEmail(emailId) {
         updateTrashBadge();
     } catch (error) {
         console.error('Error deleting email:', error);
-        showAlert('Error', 'Failed to delete email');
+        showToast('Failed to delete email', 'error');
     }
 }
 
@@ -725,7 +726,7 @@ async function deleteSelectedArchivedEmails() {
     if (selectedArchivedEmails.size === 0) return;
     
     const count = selectedArchivedEmails.size;
-    const { showConfirm, showAlert } = await import('../modals.js');
+    const { showConfirm } = await import('../modals.js');
     const confirmed = await showConfirm(
         'Delete Emails',
         `Move ${count} email${count > 1 ? 's' : ''} to trash?`,
@@ -752,7 +753,7 @@ async function deleteSelectedArchivedEmails() {
         updateTrashBadge();
     } catch (error) {
         console.error('Error deleting emails:', error);
-        showAlert('Error', 'Failed to delete some emails');
+        showToast('Failed to delete some emails', 'error');
     }
 }
 

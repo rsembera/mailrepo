@@ -1,0 +1,75 @@
+/* MailRepo - Toast notifications */
+
+/* ============================================
+   TOASTS (non-blocking status messages)
+   ============================================ */
+.toast-container {
+    position: fixed;
+    left: 50%;
+    bottom: var(--space-lg);
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-xs);
+    /* Above the lightbox (1060) and regular modals (1050), below the
+       system alert/confirm modals (1100): a toast should never be hidden
+       behind the modal whose action it reports on. */
+    z-index: 1080;
+    pointer-events: none;
+    max-width: min(480px, calc(100vw - 2 * var(--space-lg)));
+}
+
+.toast {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-md);
+    background: var(--color-text-heading);
+    color: #fff;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    pointer-events: auto;
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    border-left: 4px solid transparent;
+}
+
+.toast-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.toast-icon {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    margin-top: 1px;
+}
+
+.toast-message {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.toast-info    { border-left-color: var(--color-primary-light); }
+.toast-success { border-left-color: #4ade80; }
+.toast-warning { border-left-color: #fbbf24; }
+.toast-error   { border-left-color: #f87171; }
+
+.toast-info    .toast-icon { color: var(--color-primary-light); }
+.toast-success .toast-icon { color: #4ade80; }
+.toast-warning .toast-icon { color: #fbbf24; }
+.toast-error   .toast-icon { color: #f87171; }
+
+@media (prefers-reduced-motion: reduce) {
+    .toast { transition: none; transform: none; }
+}
+
+@media print {
+    .toast-container { display: none; }
+}

@@ -16,7 +16,8 @@
 
 import { escapeHtml, debounce } from './utils.js';
 import { state, loadFolders, confirmNavigation } from './state.js';
-import { closeModal, showPrompt, showConfirm, showAlert, initModalListeners } from './modals.js';
+import { closeModal, showPrompt, showConfirm, initModalListeners } from './modals.js';
+import { showToast } from './toast.js';
 import { renderFolderTree } from './components/folder-tree.js';
 import { initEmailList, renderEmailList, toggleEmailSelection, updateSelectAllState } from './components/email-list.js';
 import { initSidebar, toggleSection, handleTreeItemClick, refreshSidebarFolders, refreshSidebarAccounts, loadAccountLabels, buildImapFolderTree, getFolderIcon } from './components/sidebar.js';
@@ -260,14 +261,14 @@ async function createFolder(returnToStage) {
     const fromStage = elements.newFolderModal.dataset.fromStage === 'true';
     
     if (!name) {
-        showAlert('Invalid Name', 'Folder name cannot be empty.');
+        showToast('Folder name cannot be empty.', 'warning');
         document.getElementById('newFolderName').focus();
         return;
     }
     
     // Check for invalid characters/names
     if (/^[.\s]+$/.test(name) || /[\/\\]/.test(name)) {
-        showAlert('Invalid Name', 'Folder name contains invalid characters.');
+        showToast('Folder name contains invalid characters.', 'warning');
         document.getElementById('newFolderName').focus();
         return;
     }
@@ -281,7 +282,7 @@ async function createFolder(returnToStage) {
         
         if (!response.ok) {
             const data = await response.json();
-            showAlert('Error', data.error || 'Failed to create folder');
+            showToast(data.error || 'Failed to create folder', 'error');
             return;
         }
         
@@ -312,7 +313,7 @@ async function createFolder(returnToStage) {
         
     } catch (error) {
         console.error('Error creating folder:', error);
-        showAlert('Error', 'Failed to create folder');
+        showToast('Failed to create folder', 'error');
     }
 }
 
@@ -672,8 +673,7 @@ async function resumeCommit(commitId) {
         }, {
             onComplete: async (data) => {
                 modal.classList.remove('active');
-                const { showAlert } = await import('./modals.js');
-                showAlert('Commit Complete', data.message || 'Commit resumed and completed.');
+                showToast(data.message || 'Commit resumed and completed.', 'success');
             },
             onError: async (err) => {
                 modal.classList.remove('active');

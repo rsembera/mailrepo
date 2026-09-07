@@ -14,6 +14,7 @@ import { renderEmailList, clearEmailFilter, clearArchivedEmailSelection } from '
 import { bindActions } from '../delegate.js';
 import { filenameFromDisposition, isDesktop, openBlobExternally, printHtmlExternally } from '../desktop.js';
 import { attachImageZoom, openImageLightbox } from '../components/image-lightbox.js';
+import { showToast } from '../toast.js';
 
 // DOM element references
 let contextTitle = null;
@@ -945,8 +946,7 @@ async function openSearchResult(messageId, folderId) {
         
     } catch (error) {
         console.error('Error loading email:', error);
-        const { showAlert } = await import('../modals.js');
-        showAlert('Error', error.message);
+        showToast(error.message, 'error');
     }
 }
 
@@ -2126,8 +2126,7 @@ export async function copyAsReply() {
     const htmlBody = email.html_body || (email.text_body ? plainTextToHtml(email.text_body) : '');
     
     if (!textBody && !htmlBody) {
-        const { showAlert } = await import('../modals.js');
-        showAlert('Copy as Reply', 'No text content available to quote.');
+        showToast('No text content available to quote.', 'info');
         return;
     }
     
@@ -2159,8 +2158,7 @@ export async function copyAsReply() {
             }, 1500);
         }
     } catch (error) {
-        const { showAlert } = await import('../modals.js');
-        showAlert('Copy Failed', 'Could not copy to clipboard: ' + error.message);
+        showToast('Could not copy to clipboard: ' + error.message, 'error');
     }
 }
 
@@ -2242,8 +2240,7 @@ export async function viewEmailSource() {
             const subject = currentViewerContext.emailData?.subject || 'email';
             await openBlobExternally(new Blob([data.source], { type: 'text/plain' }), `${subject}.eml.txt`);
         } catch (error) {
-            const { showAlert } = await import('../modals.js');
-            showAlert('Error', error.message);
+            showToast(error.message, 'error');
         }
         return;
     }
@@ -2251,8 +2248,7 @@ export async function viewEmailSource() {
     // Open window immediately (before async fetch) to avoid popup blocker
     const win = window.open('', '_blank');
     if (!win) {
-        const { showAlert } = await import('../modals.js');
-        showAlert('Error', 'Unable to open new window. Please allow popups for this site.');
+        showToast('Unable to open new window. Please allow popups for this site.', 'error');
         return;
     }
     

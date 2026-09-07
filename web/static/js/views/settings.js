@@ -10,6 +10,7 @@ import { escapeHtml } from '../utils.js';
 import { state } from '../state.js';
 import { bindActions } from '../delegate.js';
 import { closeModal, registerModalCloseHandler } from '../modals.js';
+import { showToast } from '../toast.js';
 
 let contextTitle = null;
 let contextMeta = null;
@@ -1223,12 +1224,12 @@ async function testAccount(accountId) {
         const response = await fetch(`/api/accounts/${accountId}/test`, { method: 'POST' });
         const data = await response.json();
         if (data.success) {
-            showAlert('Connection Test', 'Connection successful!');
+            showToast('Connection successful!', 'success');
         } else {
             showAlert('Connection Test', `Connection failed: ${data.error}`);
         }
     } catch (e) {
-        showAlert('Error', 'Connection test failed');
+        showToast('Connection test failed', 'error');
     }
 };
 
@@ -1236,7 +1237,7 @@ async function testAccount(accountId) {
  * Delete an account.
  */
 async function deleteAccount(accountId) {
-    const { showConfirm, showAlert } = await import('../modals.js');
+    const { showConfirm } = await import('../modals.js');
     const confirmed = await showConfirm('Delete Account', 'Are you sure you want to remove this account?', {
         confirmText: 'Delete',
         confirmClass: 'btn-danger'
@@ -1252,10 +1253,10 @@ async function deleteAccount(accountId) {
             window.dispatchEvent(event);
         } else {
             const data = await response.json();
-            showAlert('Error', data.error || 'Failed to delete account');
+            showToast(data.error || 'Failed to delete account', 'error');
         }
     } catch (e) {
-        showAlert('Error', 'Failed to delete account');
+        showToast('Failed to delete account', 'error');
     }
 };
 
@@ -1324,7 +1325,6 @@ document.addEventListener('DOMContentLoaded', () => {
  * Create or update an account from the modal form.
  */
 async function saveAccount() {
-    const { showAlert } = await import('../modals.js');
     const name = document.getElementById('accountName').value.trim();
     const email = document.getElementById('accountEmail').value.trim();
     const password = document.getElementById('accountPassword').value;
@@ -1334,7 +1334,7 @@ async function saveAccount() {
     
     // For new accounts, password is required; for edits, it's optional
     if (!name || !email || (!editingAccountId && !password)) {
-        showAlert('Missing Fields', 'Please fill in all required fields');
+        showToast('Please fill in all required fields', 'warning');
         return;
     }
     
@@ -1359,10 +1359,10 @@ async function saveAccount() {
             const event = new CustomEvent('accountsChanged');
             window.dispatchEvent(event);
         } else {
-            showAlert('Error', data.error || `Failed to ${isEdit ? 'update' : 'create'} account`);
+            showToast(data.error || `Failed to ${isEdit ? 'update' : 'create'} account`, 'error');
         }
     } catch (e) {
-        showAlert('Error', `Failed to ${editingAccountId ? 'update' : 'create'} account`);
+        showToast(`Failed to ${editingAccountId ? 'update' : 'create'} account`, 'error');
     }
 }
 

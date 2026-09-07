@@ -10,7 +10,8 @@
 
 import { escapeHtml, escapeForOnclick } from '../utils.js';
 import { state, loadFolders, setSelectedFoldersGetter, setSelectedFoldersClearer } from '../state.js';
-import { closeModal, showPrompt, showConfirm, showAlert } from '../modals.js';
+import { closeModal, showPrompt, showConfirm } from '../modals.js';
+import { showToast } from '../toast.js';
 import { refreshSidebarFolders, buildImapFolderTree, getFolderIcon } from '../components/sidebar.js';
 import { updateStagedBadge } from '../components/staging.js';
 import { getMountedImports } from '../components/imports.js';
@@ -64,14 +65,14 @@ export async function renameFolder(folderId) {
     
     const trimmedName = newName.trim();
     if (!trimmedName) {
-        showAlert('Invalid Name', 'Folder name cannot be empty.');
+        showToast('Folder name cannot be empty.', 'warning');
         return;
     }
     if (trimmedName === folder.name) return; // No change
     
     // Check for invalid characters/names
     if (/^[.\s]+$/.test(trimmedName) || /[\/\\]/.test(trimmedName)) {
-        showAlert('Invalid Name', 'Folder name contains invalid characters.');
+        showToast('Folder name contains invalid characters.', 'warning');
         return;
     }
     
@@ -84,7 +85,7 @@ export async function renameFolder(folderId) {
         
         if (!response.ok) {
             const data = await response.json();
-            showAlert('Error', data.error || 'Failed to rename folder');
+            showToast(data.error || 'Failed to rename folder', 'error');
             return;
         }
         
@@ -93,7 +94,7 @@ export async function renameFolder(folderId) {
         refreshSidebarFolders();
     } catch (error) {
         console.error('Error renaming folder:', error);
-        showAlert('Error', 'Failed to rename folder');
+        showToast('Failed to rename folder', 'error');
     }
 }
 
@@ -107,13 +108,13 @@ export async function createSubfolder(parentId) {
     
     const trimmedName = name.trim();
     if (!trimmedName) {
-        showAlert('Invalid Name', 'Folder name cannot be empty.');
+        showToast('Folder name cannot be empty.', 'warning');
         return;
     }
     
     // Check for invalid characters/names
     if (/^[.\s]+$/.test(trimmedName) || /[\/\\]/.test(trimmedName)) {
-        showAlert('Invalid Name', 'Folder name contains invalid characters.');
+        showToast('Folder name contains invalid characters.', 'warning');
         return;
     }
     
@@ -126,7 +127,7 @@ export async function createSubfolder(parentId) {
         
         if (!response.ok) {
             const data = await response.json();
-            showAlert('Error', data.error || 'Failed to create folder');
+            showToast(data.error || 'Failed to create folder', 'error');
             return;
         }
         
@@ -136,7 +137,7 @@ export async function createSubfolder(parentId) {
         refreshSidebarFolders();
     } catch (error) {
         console.error('Error creating subfolder:', error);
-        showAlert('Error', 'Failed to create subfolder');
+        showToast('Failed to create subfolder', 'error');
     }
 }
 
@@ -249,7 +250,7 @@ export async function confirmMoveFolder() {
         
         if (!response.ok) {
             const data = await response.json();
-            showAlert('Error', data.error || 'Failed to move folder');
+            showToast(data.error || 'Failed to move folder', 'error');
             return;
         }
         
@@ -268,7 +269,7 @@ export async function confirmMoveFolder() {
         }
     } catch (error) {
         console.error('Error moving folder:', error);
-        showAlert('Error', 'Failed to move folder');
+        showToast('Failed to move folder', 'error');
     }
 }
 
@@ -317,7 +318,7 @@ export async function deleteFolder(folderId) {
         
         if (!response.ok) {
             const data = await response.json();
-            showAlert('Error', data.error || 'Failed to delete folder');
+            showToast(data.error || 'Failed to delete folder', 'error');
             return;
         }
         
@@ -362,7 +363,7 @@ export async function deleteFolder(folderId) {
         }
     } catch (error) {
         console.error('Error deleting folder:', error);
-        showAlert('Error', 'Failed to delete folder');
+        showToast('Failed to delete folder', 'error');
     }
 }
 
@@ -401,7 +402,7 @@ export async function exportFolder(folderId) {
         
         if (!response.ok) {
             const data = await response.json();
-            showAlert('Error', data.error || 'Failed to export folder');
+            showToast(data.error || 'Failed to export folder', 'error');
             return;
         }
         
@@ -427,7 +428,7 @@ export async function exportFolder(folderId) {
         // Hide progress modal on error
         if (modal) modal.classList.remove('active');
         console.error('Error exporting folder:', error);
-        showAlert('Error', 'Failed to export folder');
+        showToast('Failed to export folder', 'error');
     }
 }
 
@@ -538,7 +539,7 @@ async function setFolderColor(folderId, color) {
         
         if (!response.ok) {
             const data = await response.json();
-            showAlert('Error', data.error || 'Failed to update color');
+            showToast(data.error || 'Failed to update color', 'error');
             return;
         }
         
@@ -666,7 +667,7 @@ async function confirmMoveToVault() {
         
         if (!response.ok) {
             const data = await response.json();
-            showAlert('Error', data.error || 'Failed to move folder to vault');
+            showToast(data.error || 'Failed to move folder to vault', 'error');
             return;
         }
         
@@ -706,6 +707,6 @@ async function confirmMoveToVault() {
         
     } catch (error) {
         console.error('Error moving folder to vault:', error);
-        showAlert('Error', 'Failed to move folder to vault');
+        showToast('Failed to move folder to vault', 'error');
     }
 }

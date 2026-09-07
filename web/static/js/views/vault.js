@@ -11,7 +11,8 @@
 
 import { escapeHtml } from '../utils.js';
 import { state, loadFolders } from '../state.js';
-import { closeModal, showConfirm, showAlert } from '../modals.js';
+import { closeModal, showConfirm } from '../modals.js';
+import { showToast } from '../toast.js';
 import { refreshSidebarFolders } from '../components/sidebar.js';
 import { formatDate, daysUntil } from '../components/date-picker.js';
 import { renderEmailList } from '../components/email-list.js';
@@ -706,7 +707,7 @@ export async function confirmRestoreFolder() {
         
         if (!response.ok) {
             const data = await response.json();
-            showAlert('Error', data.error || 'Failed to restore folder');
+            showToast(data.error || 'Failed to restore folder', 'error');
             return;
         }
         
@@ -720,7 +721,7 @@ export async function confirmRestoreFolder() {
         
     } catch (error) {
         console.error('Error restoring folder:', error);
-        showAlert('Error', 'Failed to restore folder');
+        showToast('Failed to restore folder', 'error');
     }
 }
 
@@ -746,7 +747,7 @@ async function permadeleteFolder(folderId) {
         
         if (!response.ok) {
             const data = await response.json();
-            showAlert('Error', data.error || 'Failed to delete folder');
+            showToast(data.error || 'Failed to delete folder', 'error');
             return;
         }
         
@@ -759,7 +760,7 @@ async function permadeleteFolder(folderId) {
         
     } catch (error) {
         console.error('Error deleting folder:', error);
-        showAlert('Error', 'Failed to delete folder');
+        showToast('Failed to delete folder', 'error');
     }
 }
 
@@ -790,7 +791,7 @@ async function deleteAllOverdue() {
         
         if (!response.ok) {
             const data = await response.json();
-            showAlert('Error', data.error || 'Failed to delete folders');
+            showToast(data.error || 'Failed to delete folders', 'error');
             return;
         }
         
@@ -803,7 +804,7 @@ async function deleteAllOverdue() {
         
     } catch (error) {
         console.error('Error deleting folders:', error);
-        showAlert('Error', 'Failed to delete folders');
+        showToast('Failed to delete folders', 'error');
     }
 }
 

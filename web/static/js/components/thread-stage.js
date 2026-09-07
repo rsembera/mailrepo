@@ -17,6 +17,7 @@
 
 import { state, updateStagedBadge } from '../state.js';
 import { showAlert } from '../modals.js';
+import { showToast } from '../toast.js';
 import { openChangeDestinationModal } from './staging.js';
 import { renderEmailList, clearEmail } from './email-list.js';
 
@@ -214,7 +215,7 @@ async function _findAndStageThread({ accountId, folder, uid, subject, destinatio
         if (result.timed_out) {
             notes.push('Search timed out — some messages may not be staged.');
         }
-        await showAlert('Thread staged', notes.join(' '));
+        showToast(notes.join(' '), 'info');
     }
 }
 

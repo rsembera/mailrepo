@@ -8,6 +8,7 @@
 import { escapeHtml } from '../utils.js';
 import { confirmNavigation } from '../state.js';
 import { closeModal } from '../modals.js';
+import { showToast } from '../toast.js';
 import { initFilePicker, openFilePicker } from './file-picker.js';
 
 // Mounted imports stored in memory (session-only)
@@ -135,8 +136,7 @@ async function mountMboxFromPath(path, name) {
     // Check for duplicate mount
     const existing = findMountedByPath(path);
     if (existing) {
-        const { showAlert } = await import('../modals.js');
-        showAlert('Already Mounted', `This file is already mounted as "${existing.name}".`);
+        showToast(`This file is already mounted as "${existing.name}".`, 'info');
         return existing.id;
     }
     
@@ -189,8 +189,7 @@ async function mountAppleMboxFolder(path, name, tree) {
     // Check for duplicate mount
     const existing = findMountedByPath(path);
     if (existing) {
-        const { showAlert } = await import('../modals.js');
-        showAlert('Already Mounted', `This folder is already mounted as "${existing.name}".`);
+        showToast(`This folder is already mounted as "${existing.name}".`, 'info');
         return existing.id;
     }
     
@@ -258,8 +257,7 @@ async function mountEmlFolderFromPath(path, name) {
     // Check for duplicate mount
     const existing = findMountedByPath(path);
     if (existing) {
-        const { showAlert } = await import('../modals.js');
-        showAlert('Already Mounted', `This folder is already mounted as "${existing.name}".`);
+        showToast(`This folder is already mounted as "${existing.name}".`, 'info');
         return existing.id;
     }
     // Scan folder for .eml files
@@ -337,8 +335,7 @@ async function handlePstImport() {
         
     } catch (error) {
         console.error('Error checking PST support:', error);
-        const { showAlert } = await import('../modals.js');
-        showAlert('Error', 'Failed to check PST support');
+        showToast('Failed to check PST support', 'error');
     }
 }
 
@@ -349,8 +346,7 @@ async function mountPstFromPath(path, name) {
     // Check for duplicate mount
     const existing = findMountedByPath(path);
     if (existing) {
-        const { showAlert } = await import('../modals.js');
-        showAlert('Already Mounted', `This file is already mounted as "${existing.name}".`);
+        showToast(`This file is already mounted as "${existing.name}".`, 'info');
         return existing.id;
     }
     

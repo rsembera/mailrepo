@@ -9,7 +9,8 @@
  */
 
 import { state, setStagedBadgeElement, updateStagedBadge } from '../state.js';
-import { closeModal, showAlert, showPrompt } from '../modals.js';
+import { closeModal, showPrompt } from '../modals.js';
+import { showToast } from '../toast.js';
 import { renderFolderTree } from '../components/folder-tree.js';
 import { renderEmailList } from '../components/email-list.js';
 import { getPendingFolderStaging, clearPendingFolderStaging, refreshFolderSelectionView, clearAllSelected } from '../views/folder-selection.js';
@@ -209,13 +210,13 @@ async function createFolderInTree(parentId) {
     
     const trimmedName = name.trim();
     if (!trimmedName) {
-        showAlert('Invalid Name', 'Folder name cannot be empty.');
+        showToast('Folder name cannot be empty.', 'warning');
         return;
     }
     
     // Check for invalid characters/names
     if (/^[.\s]+$/.test(trimmedName) || /[\/\\]/.test(trimmedName)) {
-        showAlert('Invalid Name', 'Folder name contains invalid characters.');
+        showToast('Folder name contains invalid characters.', 'warning');
         return;
     }
     
@@ -254,7 +255,7 @@ async function createFolderInTree(parentId) {
         
     } catch (error) {
         console.error('Error creating folder:', error);
-        showAlert('Error', error.message);
+        showToast(error.message, 'error');
     }
 }
 
