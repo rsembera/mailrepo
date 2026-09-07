@@ -1,7 +1,7 @@
 """
 MailRepo API — Export Routes
 
-Bulk export of archived emails as PDF or .eml ZIP.
+Bulk export of archived emails as PDF, .eml ZIP, or mbox.
 
 The export runs as a background job so progress can be streamed to the UI
 via Server-Sent Events. The flow is:
@@ -35,7 +35,7 @@ import threading
 import uuid
 import zipfile
 from collections import deque
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from flask import Response, jsonify, request, send_file, stream_with_context
@@ -438,6 +438,115 @@ def _build_eml_zip(message_ids: list[int]) -> tuple[bytes, str]:
 
 
 # ---------------------------------------------------------------------------
+# mbox builder
+# ---------------------------------------------------------------------------
+
+# A line that would be read as a message separator: "From " at the start
+# of a line, or an already-escaped one. mboxrd escapes both by prefixing
+# another ">", so the escaping is reversible and unambiguous.
+_MBOX_FROM_LINE = re.compile(rb"^(>*From )", re.MULTILINE)
+
+
+def _mbox_separator(raw: bytes, fallback_ts: int | None) -> bytes:
+    """Return the ``From sender date`` separator line for one message.
+
+    Sender comes from Return-Path, then From; date from the Date header,
+    then the archive's stored timestamp. Both fall back to something valid
+    rather than failing: a bad separator makes the whole file unreadable
+    to Apple Mail, whereas a placeholder sender is merely uninformative.
+    """
+    from email import utils
+    from email.parser import BytesHeaderParser
+
+    try:
+        msg = BytesHeaderParser().parsebytes(raw)
+    except Exception:
+        msg = None
+
+    addr = ""
+    if msg is not None:
+        for header in ("Return-Path", "From"):
+            value = msg.get(header)
+            if value:
+                _, addr = utils.parseaddr(str(value))
+                if addr:
+                    break
+    # Printable ASCII only; a space or newline here would corrupt the line.
+    addr = re.sub(r"[^\x21-\x7e]", "", addr) or "MAILER-DAEMON"
+
+    dt = None
+    if msg is not None and msg.get("Date"):
+        try:
+            dt = utils.parsedate_to_datetime(str(msg.get("Date")))
+        except Exception:
+            dt = None
+    if dt is None and fallback_ts:
+        try:
+            dt = datetime.fromtimestamp(int(fallback_ts), timezone.utc)
+        except (ValueError, OverflowError, OSError):
+            dt = None
+    if dt is None:
+        dt = datetime.now(timezone.utc)
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return f"From {addr} {dt.ctime()}\n".encode("ascii")
+
+
+def _mbox_encode_message(raw: bytes) -> bytes:
+    """Normalise one raw message for mbox: LF line endings, mboxrd
+    ``From `` escaping, terminated by a blank line."""
+    body = raw.replace(b"\r\n", b"\n")
+    body = _MBOX_FROM_LINE.sub(rb">\1", body)
+    if not body.endswith(b"\n"):
+        body += b"\n"
+    return body + b"\n"
+
+
+def _build_mbox(message_ids: list[int], scope_label: str = "") -> tuple[bytes, str]:
+    """Build a single mbox file (mboxrd flavour) of decrypted messages.
+
+    Returns ``(bytes, filename_hint)``. Messages are in date order. The
+    folder structure is flattened: mail clients import one mbox file as
+    one mailbox, which is what the format is for. The file is named after
+    the export scope where possible, since Apple Mail and Thunderbird use
+    the filename as the imported mailbox's name.
+
+    Messages are otherwise untouched -- no headers are added or rewritten.
+    """
+    if not message_ids:
+        return b"", "export.mbox"
+
+    placeholders = ",".join("?" * len(message_ids))
+    rows = Database.fetchall(
+        f"""
+        SELECT m.id, m.date, m.filepath
+        FROM messages m
+        WHERE m.id IN ({placeholders}) AND m.deleted_at IS NULL
+        ORDER BY m.date, m.id
+        """,
+        tuple(message_ids),
+    )
+
+    buf = io.BytesIO()
+    for row in rows:
+        filepath = Config.get_base_path() / row["filepath"]
+        if not filepath.exists():
+            continue
+        try:
+            decrypted = Encryption.decrypt(filepath.read_bytes())
+        except Exception as e:
+            logger.warning("Failed to decrypt message %s for export: %s", row["id"], e)
+            continue
+        buf.write(_mbox_separator(decrypted, row["date"]))
+        buf.write(_mbox_encode_message(decrypted))
+
+    safe_scope = re.sub(r"[^A-Za-z0-9 _\-]", "_", scope_label or "")[:50].strip()
+    stamp = datetime.now().strftime("%Y%m%d_%H%M")
+    base = f"{safe_scope}_{stamp}" if safe_scope else f"mailrepo_export_{stamp}"
+    return buf.getvalue(), f"{base}.mbox"
+
+
+# ---------------------------------------------------------------------------
 # Background worker
 # ---------------------------------------------------------------------------
 
@@ -454,7 +563,7 @@ def _run_export_job(job_id: str, payload: dict) -> None:
             return
 
         export_format = payload.get("format", "pdf")
-        if export_format not in ("pdf", "eml", "both"):
+        if export_format not in ("pdf", "eml", "mbox", "both"):
             _fail_job(job_id, f"Unknown format: {export_format!r}")
             return
 
@@ -462,6 +571,8 @@ def _run_export_job(job_id: str, payload: dict) -> None:
             _build_pdf_only(job_id, message_ids, scope_label, payload)
         elif export_format == "eml":
             _build_eml_only(job_id, message_ids, scope_label, payload)
+        elif export_format == "mbox":
+            _build_mbox_only(job_id, message_ids, scope_label, payload)
         else:  # both
             _build_pdf_and_eml(job_id, message_ids, scope_label, payload)
     except Exception as e:
@@ -623,6 +734,44 @@ def _build_eml_only(job_id: str, message_ids: list[int], scope_label: str, paylo
         result_mimetype="application/zip",
         result_filename=filename,
         summary={"format": "eml", "email_count": len(message_ids)},
+        output_dir=payload.get("output_dir"),
+    )
+
+
+def _build_mbox_only(job_id: str, message_ids: list[int], scope_label: str, payload: dict) -> None:
+    """mbox export: one file, or an AES-256 ZIP wrapping it when a password
+    is given (mbox has no encryption of its own)."""
+    password = (payload.get("encryption_password") or "").strip()
+    verb = "Bundling and encrypting" if password else "Bundling"
+    _push_event(
+        job_id, "status", {"phase": "loading", "message": f"{verb} {len(message_ids)} emails..."}
+    )
+    _push_event(
+        job_id,
+        "progress",
+        {"phase": "loading", "current": 0, "total": len(message_ids), "percent": 5},
+    )
+    mbox_bytes, mbox_filename = _build_mbox(message_ids, scope_label)
+    _push_event(job_id, "progress", {"phase": "done", "percent": 100})
+
+    if password:
+        zip_bytes = _encrypt_to_zip(mbox_bytes, mbox_filename, password)
+        _finish_job(
+            job_id,
+            result_bytes=zip_bytes,
+            result_mimetype="application/zip",
+            result_filename=mbox_filename[: -len(".mbox")] + ".zip",
+            summary={"format": "mbox", "email_count": len(message_ids), "encrypted": True},
+            output_dir=payload.get("output_dir"),
+        )
+        return
+
+    _finish_job(
+        job_id,
+        result_bytes=mbox_bytes,
+        result_mimetype="application/mbox",
+        result_filename=mbox_filename,
+        summary={"format": "mbox", "email_count": len(message_ids)},
         output_dir=payload.get("output_dir"),
     )
 
@@ -837,8 +986,8 @@ def start_export():
     payload = request.get_json() or {}
     if not payload.get("selection"):
         return jsonify({"error": "selection is required"}), 400
-    if payload.get("format") not in ("pdf", "eml", "both"):
-        return jsonify({"error": "format must be pdf, eml, or both"}), 400
+    if payload.get("format") not in ("pdf", "eml", "mbox", "both"):
+        return jsonify({"error": "format must be pdf, eml, mbox, or both"}), 400
 
     job_id = _new_job()
     thread = threading.Thread(

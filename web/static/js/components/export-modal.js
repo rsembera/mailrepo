@@ -10,7 +10,7 @@
  * 1. openExportModal({source, ...}) shows the form view, including a
  *    destination-folder picker (defaults to ~/Downloads or whatever the
  *    user used last time).
- * 2. User picks format (pdf/eml/both), sort order, optional toggles, and
+ * 2. User picks format (pdf/eml/mbox/both), sort order, optional toggles, and
  *    clicks Export.
  * 3. We POST /api/export/start with `output_dir` set; server writes the
  *    file directly to disk in that location, with a chronological/numeric
@@ -218,6 +218,14 @@ function _renderFormView() {
                         </div>
                     </label>
                     <label class="export-format-option">
+                        <input type="radio" name="export-format" value="mbox" ${prefs.format === 'mbox' ? 'checked' : ''}>
+                        <div class="export-format-card">
+                            <div class="export-format-icon"><i data-lucide="inbox"></i></div>
+                            <div class="export-format-name">mbox</div>
+                            <div class="export-format-hint">One mailbox file to import into Apple Mail or Thunderbird</div>
+                        </div>
+                    </label>
+                    <label class="export-format-option">
                         <input type="radio" name="export-format" value="both" ${prefs.format === 'both' ? 'checked' : ''}>
                         <div class="export-format-card">
                             <div class="export-format-icon"><i data-lucide="layers"></i></div>
@@ -311,7 +319,7 @@ function _renderFormView() {
         const fmt = _modalEl.querySelector('input[name="export-format"]:checked')?.value || 'pdf';
         const pdfOpts = _modalEl.querySelector('#export-pdf-options');
         if (pdfOpts) {
-            pdfOpts.style.display = (fmt === 'eml') ? 'none' : '';
+            pdfOpts.style.display = (fmt === 'eml' || fmt === 'mbox') ? 'none' : '';
         }
     };
     _modalEl.querySelectorAll('input[name="export-format"]').forEach(input => {

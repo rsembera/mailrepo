@@ -42,7 +42,7 @@ Windows is not yet supported (planned).
 - **Import existing archives** — Bring in existing email from .mbox files (including Apple Mail exports), individual .eml files, and Outlook .pst files.
 - **Full-text search** — Search across subjects, senders, recipients, and email body text, entirely offline, inside the encrypted archive.
 - **PDF export and printing** — Export folders or single emails as clean, court-and-client-ready PDFs.
-- **Export as ZIP** — Export any folder as standard .eml files you can open in any email client. Your data is never locked in.
+- **Export** — Export any folder or selection as PDF, as a ZIP of standard .eml files, or as an .mbox mailbox file you can import straight into Apple Mail or Thunderbird. Your data is never locked in.
 - **Backup and restore** — Full and incremental backups with integrity manifests, including an automatic backup when you close the app.
 - **Retention vault** — Permanently delete emails with a clear audit trail.
 

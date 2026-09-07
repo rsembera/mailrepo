@@ -263,6 +263,79 @@ class TestJobStateMachine:
 # ---------------------------------------------------------------------------
 
 
+class TestMboxBuilder:
+    def test_round_trip_through_python_mailbox(self, initialized_app, tmp_path):
+        """The file must be readable by a standard mbox parser and yield the
+        original messages, in date order, with headers intact."""
+        import mailbox
+
+        fid = _make_folder("Clients")
+        _make_message(fid, subject="Second", body="content two", date=1739633500)
+        _make_message(fid, subject="First", body="content one", date=1739633400)
+        ids = ex._message_ids_in_folders([fid])
+        data, filename = ex._build_mbox(ids, "Clients")
+        assert filename.startswith("Clients_") and filename.endswith(".mbox")
+        assert data.startswith(b"From a@example.com ")
+
+        path = tmp_path / "out.mbox"
+        path.write_bytes(data)
+        msgs = list(mailbox.mbox(str(path)))
+        assert [m["Subject"] for m in msgs] == ["First", "Second"]
+        assert msgs[0].get_payload().strip() == "content one"
+        assert all(m["Message-ID"] for m in msgs)
+
+    def test_separator_uses_date_header_and_return_path(self, initialized_app):
+        raw = (
+            b"Return-Path: <bounce@example.org>\r\nFrom: Alice <alice@example.com>\r\n"
+            b"Date: Mon, 07 Sep 2026 10:30:00 -0400\r\nSubject: x\r\n\r\nbody\r\n"
+        )
+        line = ex._mbox_separator(raw, None)
+        assert line == b"From bounce@example.org Mon Sep  7 14:30:00 2026\n"
+
+    def test_separator_falls_back_to_stored_timestamp(self, initialized_app):
+        raw = b"Subject: no date, no sender\r\n\r\nbody\r\n"
+        line = ex._mbox_separator(raw, 1739633400)
+        assert line.startswith(b"From MAILER-DAEMON ")
+        assert line.endswith(b" 2025\n")
+
+    def test_from_lines_in_body_are_escaped(self, initialized_app):
+        raw = b"Subject: s\r\n\r\nFrom the top\r\n>From before\r\nnot From here\r\n"
+        out = ex._mbox_encode_message(raw)
+        assert b"\n>From the top\n>>From before\nnot From here\n\n" == out[out.index(b"\n\n") + 1:]
+        assert b"\r" not in out
+
+    def test_empty_selection(self, initialized_app):
+        data, filename = ex._build_mbox([])
+        assert data == b"" and filename == "export.mbox"
+
+    def test_mbox_job_plain_and_encrypted(self, initialized_app):
+        fid = _make_folder("Clients")
+        _make_message(fid, subject="One", body="alpha body")
+        sel = {"source": "folder", "folder_id": fid, "include_subfolders": True}
+
+        job_id = ex._new_job()
+        ex._run_export_job(job_id, {"selection": sel, "format": "mbox"})
+        job = ex._get_job(job_id)
+        assert job["status"] == "done"
+        assert job["result_mimetype"] == "application/mbox"
+        assert job["result_filename"].endswith(".mbox")
+        assert b"alpha body" in job["result_bytes"]
+
+        job_id = ex._new_job()
+        ex._run_export_job(
+            job_id, {"selection": sel, "format": "mbox", "encryption_password": "correct horse"}
+        )
+        job = ex._get_job(job_id)
+        assert job["status"] == "done"
+        assert job["result_mimetype"] == "application/zip"
+        assert job["result_filename"].endswith(".zip")
+        with pyzipper.AESZipFile(io.BytesIO(job["result_bytes"])) as zf:
+            zf.setpassword(b"correct horse")
+            names = zf.namelist()
+            assert len(names) == 1 and names[0].endswith(".mbox")
+            assert b"alpha body" in zf.read(names[0])
+
+
 class TestEmlZipBuilders:
     def test_plain_zip_round_trip(self, initialized_app):
         fid = _make_folder("Clients")
