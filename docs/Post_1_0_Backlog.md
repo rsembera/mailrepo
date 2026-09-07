@@ -22,7 +22,7 @@ account is in `Session_Log.md` under Session 72.
 
 ---
 
-### Rotation done page: recovery key destroyed on refresh (v1.1)
+### ~~Rotation done page: recovery key destroyed on refresh~~ — DONE Session 94
 **Found:** Opus 5 flagged this while porting master rotation to EdgeCase.
 
 `/auth/rotate-master-key/done/<result_id>` pops the recovery key on
@@ -42,41 +42,26 @@ Backport from whatever Opus 5 builds for EdgeCase's rotation done page.
 
 ## Release & distribution
 
-- **About modal credits: align to "Opus 4.5–5 and Fable 5" (1.0.1).** The
-  README and website carry Rick's fuller wording; the modal baked into
-  the 1.0.0 artifacts says 4.5–4.8. Not worth a sixth notarization
-  round on launch night.
+1.0.0 shipped August 31, 2026: signed and notarized .dmg, .deb built on
+Apollo, `v1.0.0` tagged, mailrepo.ca live with docs and download page.
+The items that used to sit here (packaging, tag, website) are done.
 
-- **Website: switch to the SVG logo/icon.** mailrepo.ca (the
-  `mailrepo-website` repo on Apollo, pushed to Sentinel) still serves
+### Next release (1.1)
+Everything under `[Unreleased]` in the CHANGELOG. Rick dogfoods for a
+few weeks first (the EdgeCase lesson). Release checklist when the time
+comes: version bump in `core/config.py` (`Config.VERSION`, which the About page reads) and `setup_app.py` (`APP_VERSION`), and pass it to `packaging/build_deb.sh`, build .dmg on the
+MacBook and .deb on Apollo, notarize, update both SHA-256 hashes in
+`download.html` **and** the app README, `git tag v1.1.0`, then
+`git revert 37e3edc` in `mailrepo-website` to re-apply the mbox docs
+paragraph and push the site.
+
+- **About modal credits: align to "Opus 4.5–5 and Fable 5".** The
+  README and website carry Rick's fuller wording; the modal baked into
+  the 1.0.0 artifacts says 4.5–4.8. Fold into 1.1.
+
+- **Website: switch to the SVG logo/icon.** mailrepo.ca still serves
   the raster logo. Replace with `web/static/assets/logo.svg` and
   `icon.svg` (Session 87). Do this before the launch announcement.
-
-### Packaging (.dmg for macOS, .deb for Linux)
-**Priority:** Next major milestone after dogfooding.
-
-Currently MailRepo ships as a `git clone` + `python -m venv` + `pip install`
-setup. For solo practitioners (lawyers, therapists, journalists — the
-target audience), that\'s a barrier. The unlock for actual adoption is a
-double-click installer.
-
-- macOS `.dmg`: PyInstaller or py2app to bundle the Python runtime +
-  dependencies + a launcher. Sign with a developer ID so Gatekeeper
-  doesn\'t scare people off. Notarization optional but recommended.
-- Linux `.deb`: dh_virtualenv or pyinstaller, target Debian/Ubuntu LTS.
-- Both should include SQLCipher and libpst (for PST import).
-- Auto-update path: not in v1 of packaging. Manual reinstall is fine
-  for now.
-
-Rick is dogfooding 1.0 for an unspecified period before tagging a
-release and starting on packaging.
-
-### `git tag v1.0.0`
-Not yet tagged. Will happen after dogfooding settles.
-
-### Website update (mailrepo.ca on Sentinel)
-Announce 1.0, list current crypto stack, link to docs / repo. Rick\'s
-own task; will be done outside of these working sessions.
 
 ---
 
@@ -145,8 +130,10 @@ Source-level survey only. Claude read the frontend but cannot use the
 app, so nothing here covers flow, clarity, or whether the staging model
 reads correctly first time — those need Rick at the keyboard.
 
-### Non-blocking feedback channel
-**Priority:** Highest of the UX items. Real friction, small build.
+### ~~Non-blocking feedback channel~~ — DONE Session 94
+`toast.js`; 67 of 81 alerts demoted, the 14 that explain or gate a step stay modal.
+
+**Was:** Highest of the UX items. Real friction, small build.
 
 `showAlert` is the only way the app tells the user anything — 80 call
 sites, and no toast/inline/status system anywhere in the JS (one stray

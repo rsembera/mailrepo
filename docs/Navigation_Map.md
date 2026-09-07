@@ -208,13 +208,14 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `state.js` | 137 | Central state object, session persistence |
 | `utils.js` | 97 | escapeHtml, formatDate, debounce, extractName |
 | `modals.js` | 153 | Alert/confirm/prompt + canonical closeModal + registerModalCloseHandler |
+| `toast.js` | 106 | showToast(message, type) — non-blocking status card, bottom centre, auto-dismiss (Session 94); modals stay for anything needing a decision |
 | `recovery-key.js` | 131 | One-time recovery-key screen: copy / print / download, beforeunload guard |
 
 ### Views (`/js/views/`)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `mail.js` | 2,424 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
+| `mail.js` | 2,472 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
 | `settings.js` | 1,476 | Settings: appearance, accounts, security, recovery-key status + check + rotation, backup, reset |
 | `review.js` | 1,035 | Review staged items, destination editing, commit |
 | `backups.js` | 1,034 | Backup/restore UI, restore points, settings |
@@ -229,7 +230,8 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `export-modal.js` | 867 | Bulk export UI: scope picker, scope-aware password, progress |
+| `export-modal.js` | 875 | Bulk export UI: scope picker, format (pdf/eml/mbox/both), scope-aware password, progress |
+| `image-lightbox.js` | 315 | Click-to-zoom overlay for inline images and image attachments (Session 94); click targets are laid over the sandboxed body iframe from the parent, because WebKit runs no listeners inside a no-scripts frame |
 | `email-list.js` | 793 | Email list rendering, selection, toolbar, filter input |
 | `sidebar.js` | 744 | Sidebar: archive folders, IMAP folders, imports, resize |
 | `imports.js` | 728 | Import mount/unmount, browse, folder/email display |
@@ -378,7 +380,7 @@ first run of this found a `ReferenceError` that had been shipping.
 
 ---
 
-## Test Suite (664 tests)
+## Test Suite (802 tests)
 
 | File | Coverage |
 |------|----------|

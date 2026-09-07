@@ -7004,3 +7004,90 @@ travels through the stream; `/auth/rotate-master-key/done/<id>` shows
 it exactly once on the recovery-key screen. Progress bar on the page.
 Tests cover CSRF, wrong password, the full stream, the one-time job and
 the one-time result.
+
+## Session 94 — September 7, 2026 (MacBook)
+
+Feature morning, all on `main`, nothing released: Rick dogfoods for a
+few weeks before 1.1 (the EdgeCase lesson). Six code commits
+(`664e0de` … `748e6bf`), then this docs commit.
+
+### Click-to-zoom image lightbox (`664e0de`, `6ad3db4`, `1948703`)
+
+Rick's request: a client attaches an inline photo, it renders small,
+and the only way to see it larger was to run from source and open it
+in a browser tab. New `components/image-lightbox.js`: fit-to-window
+overlay, 1:1 toggle when the image is bigger than the viewport,
+download, and open-in-default-app on desktop. Image attachments get a
+Preview button where "Open in new tab" was; PDFs and text keep the
+external-open button.
+
+Two rounds of fixes, both from Rick testing in Safari rather than from
+review. First, `img.complete` is true for a `data:` image before it is
+decoded, so the zoom cursor was never applied — mark on `load` as well.
+Second, and the one that matters: the body iframe is sandboxed without
+`allow-scripts`, and **WebKit refuses to run any event listener whose
+target is inside such a frame, even one the parent registered** —
+Safari's console says "Blocked script execution … allow-scripts", once
+per click. Chrome permits it, so the first version worked in Chrome and
+was dead in Safari and the desktop shell's WKWebView. The existing
+per-image `load` fallback listeners in `renderHtmlBody` are also dead
+there; the ResizeObserver carries the sizing. The fix keeps the sandbox
+intact: the parent lays a transparent button over each zoomable image
+(positioned from the image's layout rect, which *can* be read across
+the boundary) inside a new positioned wrapper `.email-html-frame`, and
+repositions on a parent-realm ResizeObserver, window resize, and a few
+timed passes. Comment in `attachImageZoom` records the constraint.
+
+Known consequence: right-click on a zoomable image hits the overlay,
+so the native "Copy Image" is gone; the lightbox's download button
+covers it. Passing right-clicks through is a one-liner if wanted.
+
+### mbox export (`cc7be8c`)
+
+Apple Mail was refusing Rick's drag-and-drop of `.eml` files. Fourth
+export format: one mboxrd file, messages in date order, separator built
+from Return-Path then From and Date then the stored timestamp so a
+malformed message cannot produce a separator that breaks the file for
+the rest. CRLF → LF and body `From ` lines escaped; nothing else in the
+messages touched — no headers added, so no round-trip folder marker
+for MailRepo's own importer (deliberate: pristine over convenient).
+Folder structure flattened (one file = one mailbox); file named after
+the export scope because Apple Mail and Thunderbird use the filename as
+the mailbox name. Password wraps it in the existing AES-256 ZIP. Six
+tests including a round-trip through Python's `mailbox` parser. Rick
+imported a real export into Apple Mail: fine.
+
+Website docs were pushed live and then reverted (`37e3edc` in
+`mailrepo-website`): the download page serves 1.0.0, which has no mbox
+option. Re-apply with the release — noted in the backlog checklist.
+Lesson for Claude: the site tracks the *published* build, not `main`.
+
+### Rotation done page (`50997da`)
+
+`/auth/rotate-master-key/done/<id>` popped the recovery key on first
+read; a refresh mid-copy destroyed it. Now `_peek_rotation_result`
+(no consume), dropped in `recovery_key_confirmed` via a `result_id`
+hidden field, 30-minute `_ROTATION_RESULT_TTL` backstop; pending jobs
+keep 5 minutes. The "rotated" flash moved to the acknowledgement
+redirect so it does not repeat per refresh. Test updated: refresh shows
+the key again; acknowledge; then gone.
+
+### Toasts (`748e6bf`)
+
+`toast.js` (`showToast(message, type)`), bottom centre, auto-dismiss
+4/4/5/7 s by type, hover pauses, click closes, stack of three,
+`role=alert` for errors. 67 of 81 `showAlert` sites demoted; the 14
+kept as modals are the ones the user must read and act on — PST/import
+failures, thread lookup failures, Move Incomplete, commit failures,
+search error, connection-test failure detail, Restore Prepared (gates a
+logout). Every `showConfirm` untouched. Conversion done by a script
+keyed on the census line numbers with each rewrite printed and checked;
+lint back to the 65-warning baseline.
+
+### Housekeeping
+
+`docs/Post_1_0_Backlog.md` was stale — its Release & distribution
+section still described packaging as a future milestone. Rewritten to
+reflect 1.0.0 shipped, with a 1.1 release checklist (version lives in
+`core/config.py` and `setup_app.py`; SHA-256s in `download.html` *and*
+the README). Suite is 802 tests.

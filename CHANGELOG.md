@@ -10,6 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Click-to-zoom on images (Session 94).** Inline images in an email
+  body and image attachments open in an in-app lightbox: fit-to-window,
+  a 1:1 toggle for large images, download, and open-in-default-app in
+  the desktop build. Hover shows a border and magnifier badge; Esc or a
+  click outside closes. Image attachments get a Preview button in place
+  of "Open in new tab". The body frame's sandbox is unchanged — WebKit
+  refuses to run listeners inside a no-scripts frame, so the click
+  targets are laid over the frame from the parent page instead.
+- **mbox export (Session 94).** A fourth export format: one standard
+  mailbox file of the selected messages in date order, for importing
+  straight into Apple Mail (File › Import Mailboxes › Files in mbox
+  format) or Thunderbird. Messages are untouched apart from the line
+  ending and `From `-line conventions the format requires; folder
+  structure is flattened since one file is one mailbox. Works with the
+  export password (wrapped in the AES-256 ZIP).
+- **Toast notifications (Session 94).** Successes, validation nudges and
+  routine failures now appear as a small self-dismissing card at the
+  bottom of the window instead of a dialog that needs a click — 67 of
+  the 81 alerts. Dialogs remain for anything that has to be read and
+  acted on (import and commit failures, thread lookup problems,
+  "Restore prepared"), and for every confirmation.
 - **Desktop app shell (Session 88).** MailRepo can now be built as a
   macOS application: a native window around the same server the
   command line runs, with the archive kept in the standard
@@ -28,6 +49,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   most apps. The field always re-masks the moment you submit.
 
 ### Fixed
+- **Rotate-master-key page no longer loses the new recovery key on
+  refresh (Session 94).** The key was shown once and forgotten on first
+  read, so refreshing mid-copy destroyed the only copy. It now stays
+  until the acknowledgement checkbox is confirmed, with a 30-minute
+  backstop — the same pattern EdgeCase uses.
 - **HTML emails no longer grow a huge blank area below the content
   (Session 92).** The viewer sized its frame in a way that could only
   ever grow, and re-measured every time it grew. Emails whose own styles
