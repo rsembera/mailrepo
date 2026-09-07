@@ -13,6 +13,7 @@ import { state } from '../state.js';
 import { renderEmailList, clearEmailFilter, clearArchivedEmailSelection } from '../components/email-list.js';
 import { bindActions } from '../delegate.js';
 import { filenameFromDisposition, isDesktop, openBlobExternally, printHtmlExternally } from '../desktop.js';
+import { attachImageZoom, openImageLightbox } from '../components/image-lightbox.js';
 
 // DOM element references
 let contextTitle = null;
@@ -214,6 +215,7 @@ export function initMailView(config) {
         bindActions(viewerAttachments, {
             downloadAtt: (el) => downloadImportAttachment(Number(el.dataset.attachmentIndex), false),
             viewAtt:     (el) => downloadImportAttachment(Number(el.dataset.attachmentIndex), true),
+            previewAtt:  (el) => previewImageAttachment(Number(el.dataset.attachmentIndex)),
         });
     }
 }
@@ -1557,6 +1559,8 @@ function renderEmailContent(email, context = null) {
             const originalIndex = email.attachments.indexOf(att);
             const downloadUrl = getAttachmentDownloadUrl(context, originalIndex);
             const isViewable = isViewableInBrowser(att.content_type, att.filename);
+            const isImage = isPreviewableImage(att.content_type, att.filename);
+            const previewBtn = `<button class="attachment-action" data-action="previewAtt" data-attachment-index="${originalIndex}" title="Preview"><i data-lucide="zoom-in"></i></button>`;
             
             if (downloadUrl && downloadUrl.startsWith('import-attachment:')) {
                 // Import attachments need special handling with POST request
@@ -1566,7 +1570,7 @@ function renderEmailContent(email, context = null) {
                         <span class="attachment-name">${escapeHtml(att.filename)}</span>
                         <span class="attachment-actions">
                             <button class="attachment-action" data-action="downloadAtt" data-attachment-index="${originalIndex}" title="Download"><i data-lucide="download"></i></button>
-                            ${isViewable ? `<button class="attachment-action" data-action="viewAtt" data-attachment-index="${originalIndex}" title="Open in new tab"><i data-lucide="external-link"></i></button>` : ''}
+                            ${isImage ? previewBtn : isViewable ? `<button class="attachment-action" data-action="viewAtt" data-attachment-index="${originalIndex}" title="Open in new tab"><i data-lucide="external-link"></i></button>` : ''}
                         </span>
                     </div>
                 `;
@@ -1578,7 +1582,7 @@ function renderEmailContent(email, context = null) {
                         <span class="attachment-name">${escapeHtml(att.filename)}</span>
                         <span class="attachment-actions">
                             <a href="${downloadUrl}" download class="attachment-action" title="Download"><i data-lucide="download"></i></a>
-                            ${isViewable ? `<a href="${viewUrl}" target="_blank" class="attachment-action" title="Open in new tab"><i data-lucide="external-link"></i></a>` : ''}
+                            ${isImage ? previewBtn : isViewable ? `<a href="${viewUrl}" target="_blank" class="attachment-action" title="Open in new tab"><i data-lucide="external-link"></i></a>` : ''}
                         </span>
                     </div>
                 `;
@@ -1732,6 +1736,9 @@ function renderHtmlBody(container, html, allowRemote = false) {
         </html>
     `);
     doc.close();
+
+    // Click-to-zoom on inline images (see components/image-lightbox.js).
+    attachImageZoom(doc);
     
     // Resize the iframe to match its content height. The iframe contains
     // an HTML document whose size can change at any time (images loading,
@@ -1865,6 +1872,42 @@ function isViewableInBrowser(contentType, filename) {
 }
 
 /**
+ * Image attachments the lightbox can show: the raster subset of
+ * isViewableInBrowser. SVG is deliberately absent, as above.
+ */
+function isPreviewableImage(contentType, filename) {
+    const types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (contentType && types.includes(contentType.split(';')[0].trim().toLowerCase())) return true;
+    const ext = filename ? filename.split('.').pop()?.toLowerCase() : '';
+    return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
+}
+
+/**
+ * Fetch an image attachment for the current viewer context and open it in
+ * the lightbox. Archive and IMAP attachments are a GET on their download
+ * URL; import attachments go through the POST endpoint.
+ */
+async function previewImageAttachment(index) {
+    if (!currentViewerContext) return;
+    try {
+        let blob, filename;
+        if (currentViewerContext.type === 'import') {
+            ({ blob, filename } = await fetchImportAttachment(index));
+        } else {
+            const url = getAttachmentDownloadUrl(currentViewerContext, index);
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Server error (${response.status})`);
+            filename = filenameFromDisposition(response.headers.get('Content-Disposition'));
+            blob = await response.blob();
+        }
+        openImageLightbox({ blob, filename });
+    } catch (error) {
+        console.error('Error previewing attachment:', error);
+        alert('Failed to preview attachment: ' + error.message);
+    }
+}
+
+/**
  * Get attachment download URL based on viewer context.
  */
 function getAttachmentDownloadUrl(context, index) {
@@ -1894,47 +1937,52 @@ export function closeEmailViewer() {
 }
 
 /**
- * Download attachment from an import source.
+ * Fetch an attachment from an import source as { blob, filename }.
  * Uses POST request since imports require body parameters.
  */
-async function downloadImportAttachment(index, viewInline = false) {
+async function fetchImportAttachment(index, viewInline = false) {
     if (!currentViewerContext || currentViewerContext.type !== 'import') {
-        console.error('No import context available');
-        return;
+        throw new Error('No import context available');
+    }
+    const response = await fetch('/api/import/attachment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            sourcePath: currentViewerContext.sourcePath,
+            uid: currentViewerContext.uid,
+            importType: currentViewerContext.importType,
+            folderPath: currentViewerContext.folderPath,
+            emailSourcePath: currentViewerContext.emailSourcePath,
+            index: index,
+            inline: viewInline,
+        }),
+    });
+    
+    if (!response.ok) {
+        // Try to get error message, but handle non-JSON responses
+        let errorMsg = 'Failed to download attachment';
+        const contentType = response.headers.get('Content-Type') || '';
+        if (contentType.includes('application/json')) {
+            const data = await response.json();
+            errorMsg = data.error || errorMsg;
+        } else {
+            errorMsg = `Server error (${response.status})`;
+        }
+        throw new Error(errorMsg);
     }
     
+    // Get filename from Content-Disposition header
+    const filename = filenameFromDisposition(response.headers.get('Content-Disposition')) || 'attachment';
+    const blob = await response.blob();
+    return { blob, filename };
+}
+
+/**
+ * Download (or open externally) an attachment from an import source.
+ */
+async function downloadImportAttachment(index, viewInline = false) {
     try {
-        const response = await fetch('/api/import/attachment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                sourcePath: currentViewerContext.sourcePath,
-                uid: currentViewerContext.uid,
-                importType: currentViewerContext.importType,
-                folderPath: currentViewerContext.folderPath,
-                emailSourcePath: currentViewerContext.emailSourcePath,
-                index: index,
-                inline: viewInline,
-            }),
-        });
-        
-        if (!response.ok) {
-            // Try to get error message, but handle non-JSON responses
-            let errorMsg = 'Failed to download attachment';
-            const contentType = response.headers.get('Content-Type') || '';
-            if (contentType.includes('application/json')) {
-                const data = await response.json();
-                errorMsg = data.error || errorMsg;
-            } else {
-                errorMsg = `Server error (${response.status})`;
-            }
-            throw new Error(errorMsg);
-        }
-        
-        // Get filename from Content-Disposition header
-        const filename = filenameFromDisposition(response.headers.get('Content-Disposition')) || 'attachment';
-        
-        const blob = await response.blob();
+        const { blob, filename } = await fetchImportAttachment(index, viewInline);
         
         if (viewInline) {
             // Open in new tab — or, in the desktop shell, in the default app

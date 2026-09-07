@@ -1,0 +1,118 @@
+/* MailRepo - Image Lightbox */
+
+/* ============================================
+   IMAGE LIGHTBOX (click-to-zoom in the email viewer)
+   ============================================ */
+.image-lightbox {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    background: rgba(0, 0, 0, 0.88);
+    /* Above the email viewer overlay (1000) and regular modals (1050);
+       system alert/confirm modals at 1100 still stack above. */
+    z-index: 1060;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s, visibility 0.15s;
+    outline: none;
+}
+
+.image-lightbox.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.image-lightbox-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.8125rem;
+    flex: 0 0 auto;
+}
+
+.image-lightbox-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.image-lightbox-size {
+    color: rgba(255, 255, 255, 0.55);
+    font-variant-numeric: tabular-nums;
+}
+
+.image-lightbox-actions {
+    display: flex;
+    gap: var(--space-xs);
+}
+
+.image-lightbox-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    color: rgba(255, 255, 255, 0.85);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font: inherit;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+.image-lightbox-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+.image-lightbox-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.image-lightbox-btn i {
+    width: 18px;
+    height: 18px;
+}
+
+/* Fit mode: image centred and constrained to the stage. */
+.image-lightbox-stage {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding: 0 var(--space-md) var(--space-md);
+}
+
+.image-lightbox-stage img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    user-select: none;
+    -webkit-user-drag: none;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* Actual-size mode: image at natural pixels, stage scrolls. Block layout
+   (not flex) so a wide image scrolls from its left edge instead of being
+   centred with its left side cut off. */
+.image-lightbox.actual-size .image-lightbox-stage {
+    display: block;
+    overflow: auto;
+}
+
+.image-lightbox.actual-size .image-lightbox-stage img {
+    max-width: none;
+    max-height: none;
+    display: block;
+    margin: 0 auto;
+}
