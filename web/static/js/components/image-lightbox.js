@@ -231,8 +231,10 @@ function inlineImageName(im) {
  */
 export function attachImageZoom(doc) {
     doc.querySelectorAll('img').forEach((im) => {
+        // `complete` can be true for a data: image before it is decoded,
+        // with naturalWidth still 0 — so check now AND on load.
+        im.addEventListener('load', () => markZoomable(im), { once: true });
         if (im.complete) markZoomable(im);
-        else im.addEventListener('load', () => markZoomable(im), { once: true });
     });
 
     doc.addEventListener('click', (e) => {
