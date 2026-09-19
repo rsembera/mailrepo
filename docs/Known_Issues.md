@@ -5,6 +5,41 @@ future session can pick up where the last one left off.
 
 ---
 
+## OPEN 2026-09-19 (Session 95): first VERIFIED slow upload on office Wi-Fi; wrapper rate parser was broken
+
+**Supersedes the 2026-07-24 line "the tether is the only network ever
+verified slow."** Read this entry before citing either July conclusion.
+
+Measured live at the office, 15:35-15:40: default route `en0` via
+192.168.0.1, NOT constrained (wrapper verdict "regular"), so not the
+tether (a hotspot would be 172.20.10.x and would have been skipped).
+Tailscale path **direct, IPv4** (108.162.170.89). Backup sync: 12.3 MB @
+234 KB/s, 52s. Fresh 12 MB probes: **upload 296 KB/s, download 2.3 MB/s.**
+
+What this does and doesn't show: the office network is *intermittently*
+slow on upload to Sentinel -- the same network ran ~5 MB/s on Jul 18/24,
+so the old "always shaped" theory (Session 57) stays dead. Not yet
+separated: office uplink vs Sentinel's home downlink (a Speedtest upload
+at the office during a slow spell would split them). One lead: today's
+direct path was IPv4; July's fast runs were on a direct IPv6 path.
+`office-gateways.conf` stays EMPTY until there is a pattern.
+
+**Wrapper bug, FIXED:** since the evening of 2026-09-16 every run logged
+`WARN no rate parsed` -- Homebrew rsync 3.5.0 prints thousands separators
+("234,157.33") where Apple's openrsync did not, so the numeric check
+failed and the SLOW snapshot + auto-probe never fired (today's slow run
+went undocumented by the black box). `backup-sync.sh` now strips commas
+from the summary line and the probe rate. Verified against today's real
+summary line (classifies SLOW) and with a live run (`OK nothing
+substantial`). Pre-fix copy: `backup-sync.sh.bak-2026-09-19`.
+
+**Also unexplained (separate problem):** 2026-09-16 12:21-15:23, a string
+of catch-up runs with ssh exit=255, several hanging 767-1809s, then one
+SLOW run (266s elapsed) whose probe was FAST (25.9 MB/s). That is a
+connection/hang problem, not throughput. Not investigated.
+
+---
+
 ## RESOLVED 2026-08-08 (Session 65): launchd catch-up had NEVER worked — TCC blocked iCloud Drive
 
 iCloud Drive is TCC-protected; launchd-spawned bash had no grant, so the

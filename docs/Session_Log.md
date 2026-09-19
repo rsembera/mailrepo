@@ -7091,3 +7091,36 @@ section still described packaging as a future milestone. Rewritten to
 reflect 1.0.0 shipped, with a 1.1 release checklist (version lives in
 `core/config.py` and `setup_app.py`; SHA-256s in `download.html` *and*
 the README). Suite is 802 tests.
+
+---
+
+## Session 95 — September 19, 2026 (MacBook, at the office)
+
+### Slow Sentinel sync at the office: reopened with a verified measurement; wrapper rate parser fixed
+
+Rick reported a slow backup over the office network (12.3 MB @ 234 KB/s,
+52s). Claude first answered from the superseded Session 57 conclusion
+(office shaping); Rick corrected it -- Sessions 62-63 had pinned the
+tether and acquitted waverley361. Checked the machine instead of the
+docs: route `en0` via 192.168.0.1, not constrained, Tailscale direct
+(IPv4). Fresh probes: upload 296 KB/s, download 2.3 MB/s. So this is the
+first verified slow upload on office Wi-Fi -- intermittent, since the
+same network did ~5 MB/s in July. Office uplink vs Sentinel's home
+downlink not yet separated. `office-gateways.conf` stays empty.
+
+**Found and fixed (ops wrapper, outside the repo):** the rate parser had
+been failing since 2026-09-16 evening -- Homebrew rsync 3.5.0 prints
+comma thousands separators, so every run logged `WARN no rate parsed`
+and the SLOW snapshot/auto-probe never fired. `backup-sync.sh` now
+strips commas (summary line + probe). Tested on today's real summary
+line and with a live run. Backup copy kept alongside.
+
+**Noted, not investigated:** the 2026-09-16 afternoon run of ssh exit=255
+hangs (up to 30 min) in the catch-up log.
+
+No repo code changed; no CHANGELOG or Navigation_Map update needed.
+Details in `docs/Known_Issues.md` (new OPEN entry at top).
+
+### Commits
+
+- (this entry) -- docs: Session 95; office slow upload verified, wrapper rate parser fixed
