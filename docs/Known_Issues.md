@@ -20,9 +20,29 @@ What this does and doesn't show: the office network is *intermittently*
 slow on upload to Sentinel -- the same network ran ~5 MB/s on Jul 18/24,
 so the old "always shaped" theory (Session 57) stays dead. Not yet
 separated: office uplink vs Sentinel's home downlink (a Speedtest upload
-at the office during a slow spell would split them). One lead: today's
-direct path was IPv4; July's fast runs were on a direct IPv6 path.
-`office-gateways.conf` stays EMPTY until there is a pattern.
+at the office during a slow spell would split them). (CORRECTION, same
+day: an earlier version of this entry said July's fast runs were on a
+direct IPv6 path. Unverified and likely wrong -- the docs record IPv6
+only for the SLOW July runs. Today's path was direct IPv4; path family is
+not a lead.) `office-gateways.conf` stays EMPTY until there is a pattern.
+
+**Follow-up measurements, same afternoon (15:45-15:55), both ends healthy:**
+office link outside the tunnel 52 Mbps up / 330 down (`networkQuality`);
+Sentinel's home downlink 30 MB/s (curl on Sentinel). Through the tunnel,
+upload 296 / 296 / 304 KB/s -- pinned. Latency flat (~52 ms) under load,
+loss 1% idle AND under load. Flat rate + no queue build-up = a rate
+limiter on the tunnel's UDP flow, not congestion. Tailscale direct,
+UDP ok, en0 has global IPv6, nearest DERP Toronto.
+
+**Lead (UNPROVEN):** the tether (carrier) and the office (Rogers) are
+unrelated networks, yet both pin at ~200-300 KB/s INTO Sentinel while
+downloads FROM Sentinel are fast. Common element = the home end. Suspect
+inbound-UDP throttling on the Hitron CODA-4680 ("IP flood detection" /
+DoS protection). Test: note whether it is on; if so, turn it off before an
+office day and re-probe. If already off, the lead is dead. Intermittent
+throughout (fast Jul 18/24; Rick reports fast Sep 18, no log entry to
+confirm). Plan: let the repaired black box collect slow-run snapshots
+for ~2 weeks before changing anything.
 
 **Wrapper bug, FIXED:** since the evening of 2026-09-16 every run logged
 `WARN no rate parsed` -- Homebrew rsync 3.5.0 prints thousands separators

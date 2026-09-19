@@ -7124,3 +7124,13 @@ Details in `docs/Known_Issues.md` (new OPEN entry at top).
 ### Commits
 
 - (this entry) -- docs: Session 95; office slow upload verified, wrapper rate parser fixed
+
+### Session 95 addendum — follow-up measurements; IPv6 claim corrected
+
+Both ends healthy (office 52/330 Mbps outside the tunnel; Sentinel
+downlink 30 MB/s); tunnel upload pinned at 296-304 KB/s with flat latency
+and unchanged 1% loss -> a rate limiter on the tunnel's UDP, not
+congestion. Tether and office share the ceiling into Sentinel, so the
+home end (Hitron flood detection) is the unproven lead. Corrected an
+unverified line Claude wrote earlier today (July fast runs "on IPv6").
+Decision: change nothing; let the repaired logger gather evidence.
