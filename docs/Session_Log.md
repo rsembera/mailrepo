@@ -7134,3 +7134,14 @@ congestion. Tether and office share the ceiling into Sentinel, so the
 home end (Hitron flood detection) is the unproven lead. Corrected an
 unverified line Claude wrote earlier today (July fast runs "on IPv6").
 Decision: change nothing; let the repaired logger gather evidence.
+
+### Session 95 addendum 2 — evening, from home: Hitron checked, lead untestable
+
+Rick checked the home Hitron (CODA-4680-TPIA, fw 7.2.4.5.2b8, up 103
+days). No IP Flood Detection toggle exists on this model; firewall is at
+Minimum with "IDS enabled", and Custom offers only Entire Firewall
+ON/OFF. Decided not to disable the firewall (IPv6 exposure). Nothing
+changed. The home-end theory stays plausible but untestable short of
+bridge mode; plan unchanged (let the logger collect). Also explained the
+`.mac` backup sidecar (HMAC-SHA256 integrity tag, finding 18 fix) --
+verified against `utils/backup.py` and tonight's file. Home sync 8.2 MB/s.

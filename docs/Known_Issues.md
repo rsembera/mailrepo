@@ -44,6 +44,23 @@ throughout (fast Jul 18/24; Rick reports fast Sep 18, no log entry to
 confirm). Plan: let the repaired black box collect slow-run snapshots
 for ~2 weeks before changing anything.
 
+**Hitron checked, same evening (21:25-21:40) -- lead is UNTESTABLE from
+the admin UI. Do not go looking again.** CODA-4680-TPIA, firmware
+7.2.4.5.2b8, WAN 108.162.170.89 (= the address the office tunnel lands
+on, so it IS the box in the path), uptime 103 days. There is NO "IP Flood
+Detection" toggle on this model (Claude's menu memory was wrong).
+Security > Firewall is at Minimum, which still lists "IDS enabled";
+Custom exposes only "Entire Firewall ON/OFF" -- all-or-nothing, no
+separate IDS switch. Decision: do NOT turn the firewall off, even as a
+test -- the connection has IPv6, so the firewall is the only thing in
+front of every device incl. Sentinel. Nothing was changed or saved.
+Only clean test left: bridge mode + own router (not worth it for a ~50s
+delay; take the answer as a side effect if that ever happens for other
+reasons). Untried cheap variable: a reboot (103 days up on a Puma box) --
+held back deliberately so it isn't confounded with anything else.
+Supporting data point: the 21:19 sync FROM HOME ran at 8.2 MB/s, same
+files that crawled at 234 KB/s from the office at 15:35.
+
 **Wrapper bug, FIXED:** since the evening of 2026-09-16 every run logged
 `WARN no rate parsed` -- Homebrew rsync 3.5.0 prints thousands separators
 ("234,157.33") where Apple's openrsync did not, so the numeric check
