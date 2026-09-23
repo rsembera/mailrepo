@@ -1,6 +1,6 @@
 # MailRepo — Navigation Map
 
-**Last Updated:** September 3, 2026
+**Last Updated:** September 23, 2026
 
 ---
 
@@ -153,7 +153,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `idle.py` | 127 | Process-level activity clock, idle-lock watchdog thread, per-login id (review #1, #11) |
+| `idle.py` | 173 | Process-level activity clock, idle-lock watchdog thread (skips while a backup or logout is running), logout claim, per-login id (review #1, #11) |
 | `responses.py` | 88 | Attachment/EML response builder: inline allowlist, sandbox CSP, werkzeug-encoded filenames (review #2, #17) |
 | `app.py` | 258 | Flask factory, blueprint registration, auth/CSRF middleware |
 
@@ -161,7 +161,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `auth.py` | 1,517 | Setup, login, logout, rate limiting, session management; recovery-key verification + server-side handoff to a mandatory password reset (no session granted), v3 upgrade flow, rotation API, master-key rotation (page + one-time job + SSE progress + one-time done page); pre-login disaster-recovery routes (`/auth/restore`, scan, prepare, search, browse) gated on `_recovery_door_open()` — no archive, OR an unverified restore; both login paths vouch for restored data (clear the marker) and the login screens carry the restored-from-backup banner |
+| `auth.py` | 1,565 | Setup, login, logout, rate limiting, session management; recovery-key verification + server-side handoff to a mandatory password reset (no session granted), v3 upgrade flow, rotation API, master-key rotation (page + one-time job + SSE progress + one-time done page); pre-login disaster-recovery routes (`/auth/restore`, scan, prepare, search, browse) gated on `_recovery_door_open()` — no archive, OR an unverified restore; both login paths vouch for restored data (clear the marker) and the login screens carry the restored-from-backup banner |
 | `backups.py` | 319 | Backup/restore endpoints, folder picker |
 | `main.py` | 115 | Page routes: index, create_archive, settings, `/launch-check` nonce echo for the desktop launcher |
 
@@ -188,7 +188,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `backup.py` | 2,375 | Full/incremental backup, restore, retention, external state file (Libram-style), on-disk restore-chain verification, manifest sidecars stamped with the app identity and written to every backup destination, a durable record of backup locations kept outside the app folder, record-first location lookup (no disk search -- the folder picker covers unknown locations), filename-based chain reconstruction; unverified-restore marker (`data/.restore_unverified`, set by complete_restore, never inside a zip) |
+| `backup.py` | 2,467 | Full/incremental backup (serialized on `backup_lock`; names claimed atomically; full chain_id derived from its filename), restore, retention, external state file (Libram-style), on-disk restore-chain verification, manifest sidecars stamped with the app identity and written to every backup destination, a durable record of backup locations kept outside the app folder, record-first location lookup (no disk search -- the folder picker covers unknown locations), filename-based chain reconstruction; unverified-restore marker (`data/.restore_unverified`, set by complete_restore, never inside a zip) |
 | `log.py` | 51 | Logging setup, polling filter |
 | `__init__.py` | 34 | Shell command runner, path utilities |
 
@@ -380,7 +380,7 @@ first run of this found a `ReferenceError` that had been shipping.
 
 ---
 
-## Test Suite (802 tests)
+## Test Suite (815 tests)
 
 | File | Coverage |
 |------|----------|
@@ -396,6 +396,7 @@ first run of this found a `ReferenceError` that had been shipping.
 | `tests/test_encryption.py` | v2 `Encryption` lifecycle: init / unlock / lock / wrong-password (no v1 code remains) |
 | `tests/test_encryption_v2.py` | v2 encryption: Argon2id, HKDF, AES-256-GCM, file/DB round-trip |
 | `tests/test_password_change.py` | v2-native password change; on-disk backup gate (missing/truncated/zero-byte) + interruption marker lifecycle (23 tests, Session 67) |
+| `tests/test_backup_concurrency.py` | Two fulls in one second get distinct chains and reconstruct to the same ids; atomic name claim never touches a colliding zip and leaves no partial on failure; concurrent backups serialize with nothing orphaned; duplicate or post-lock logout skips the backup check; watchdog never locks mid-backup or mid-logout (13 tests, Session 96) |
 | `tests/test_backup.py` | Backup: state-file round-trip + corruption degrade, change detection, WAL-checkpoint no-op, interrupted-backup baseline safety (17 tests, Session 39) |
 | `tests/test_pending_commit.py` | Commit-resume state machine: session creation, status transitions, resume detection, post-action filtering, clear/discard (19 tests, Session 39) |
 | `tests/test_database.py` | Schema, migrations, FTS5 |

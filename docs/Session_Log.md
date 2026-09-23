@@ -7145,3 +7145,55 @@ changed. The home-end theory stays plausible but untestable short of
 bridge mode; plan unchanged (let the logger collect). Also explained the
 `.mac` backup sidecar (HMAC-SHA256 integrity tag, finding 18 fix) --
 verified against `utils/backup.py` and tonight's file. Home sync 8.2 MB/s.
+
+## Session 96 — September 23, 2026 (MacBook)
+
+**Backup concurrency and chain_id audit, ported from EdgeCase.** Rick
+brought the four-item audit (EdgeCase 595081e / c451766, Hermanubis
+0096407) and first queued it for the next release (no point release);
+then asked for it fixed now. All four verified against the code first.
+
+1. **chain_id.** `create_full_backup` stamped chain_id from a second
+   clock read at second resolution. New `chain_id_from_filename()` derives
+   it from the claimed name: unsuffixed -> legacy `%Y%m%d_%H%M%S`, suffixed
+   -> `..._<micro>`. `reconstruct_manifest_entries` uses the same helper.
+2. **Atomic claim.** `reserve_backup_path()` (O_CREAT|O_EXCL, 0600)
+   replaces `generate_backup_filename`. Cleanup is `_discard_reservation`,
+   also on non-OSError failures; pre-restore reserves after its no-files
+   check. **Found while testing:** the round-trip test showed a plain
+   `incr_<second>` taken *after* a suffixed `full_<second>_<micro>` sorts
+   ahead of it on reconstruction and joins the previous chain. The plain
+   name is now used only when no backup of any type holds that second.
+   (Old folders written by the pre-fix exists-check could already hold
+   that pattern; reconstruction is still labelled inference.)
+3. **Serialization.** Module `backup_lock` (RLock) + `@_serialized` on
+   create_backup/full/incremental/pre_restore, cleanup_old_backups,
+   record_backup_check, save_manifest, _write_backup_state,
+   _save_baseline_hashes.
+4. **Logout.** `idle.claim_logout()/release_logout()`; a duplicate
+   /auth/logout skips the backup check, and so does one after the
+   archive is locked. `window.mailrepoLogout()` has no client-side guard;
+   the server claim covers it. **Also fixed (beyond the brief):** the
+   watchdog could lock mid-backup, since the timeout countdown posts
+   /logout (starting a backup) as the watchdog reaches the timeout; it
+   now skips while a logout is claimed or `backup_lock` is held, holding
+   the lock while it locks.
+
+Tests: `tests/test_backup_concurrency.py`, 13 tests, 9 red against the
+old code (2 as AttributeError on the new API). 7 sealing mutations all
+caught. Soak: 4 looping full-suite runs as load (12 runs, all 815 green)
+while the new + collision + logout tests looped 40x, 0 failures.
+802 -> 815. ruff clean.
+
+**Flagged, not fixed:** an *unauthenticated* POST to /auth/logout skips
+the CSRF check (it only applies when the session is authenticated), then
+runs the backup check and locks. SameSite=Lax means a cross-site POST
+arrives without the cookie, so the review #20 fix can be bypassed in
+browser mode: a hostile page can force a lock and, if a backup is due,
+the post-backup command. Not yet tested.
+
+### Commits
+
+- 1e87fda -- Backups: chain_id from filename, atomic name claim, serialized writes, single logout
+- (this entry) -- docs: Session 96
+

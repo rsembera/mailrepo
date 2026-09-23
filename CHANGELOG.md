@@ -49,6 +49,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   most apps. The field always re-masks the moment you submit.
 
 ### Fixed
+- **Backups: two fulls in one second, concurrent backups, double logout
+  (Session 96).** Ported from the EdgeCase/Hermanubis backup audit.
+  A full backup's chain id was stamped to the second separately from its
+  (already disambiguated) filename, so two fulls in one second shared a
+  chain: the first vanished from restore points and its incrementals were
+  attributed to the second. The chain id now comes from the filename;
+  existing backups keep their ids. Backup names are now claimed atomically,
+  so a failed backup can only clean up its own file — never another zip
+  that raced it for the same name — and no partial zip is left behind on
+  any failure. Backup creation and every manifest update now run one at a
+  time, so a manual backup overlapping a logout or shutdown backup no
+  longer drops one of them from the manifest. A duplicate logout (timeout
+  countdown plus Log Out, or a double submit) no longer runs a second
+  backup check and post-backup command, and the idle lock no longer fires
+  in the middle of a backup or a logout — it waits for the next tick.
+  New backup zips are 0600.
 - **Rotate-master-key page no longer loses the new recovery key on
   refresh (Session 94).** The key was shown once and forgotten on first
   read, so refreshing mid-copy destroyed the only copy. It now stays
