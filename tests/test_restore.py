@@ -541,14 +541,13 @@ class TestBackupFilenameCollisions:
     """Finding 6. Two backups in one second used to overwrite each other."""
 
     def test_same_second_backups_get_distinct_filenames(self, archive_with_backup):
-        from utils.backup import generate_backup_filename
+        from utils.backup import reserve_backup_path
 
         backups_dir = Config.get_data_path().parent / "backups"
         backups_dir.mkdir(parents=True, exist_ok=True)
 
-        first = generate_backup_filename("full", backups_dir)
-        (backups_dir / first).write_bytes(b"placeholder")
-        second = generate_backup_filename("full", backups_dir)
+        first = reserve_backup_path(backups_dir, "full")
+        second = reserve_backup_path(backups_dir, "full")
 
         assert first != second, "second backup in the same second would overwrite the first"
 

@@ -1258,11 +1258,21 @@ def logout():
 
     timed_out = request.form.get("reason") == "timeout"
 
-    # Run automatic backup check before closing database
-    _run_auto_backup_check()
-
-    Database.close()
-    Encryption.lock()
+    # Only one logout runs the backup check. The timeout countdown and the
+    # Log Out button both post here, and a double submit can too; the
+    # duplicate used to run a second, concurrent backup check and
+    # post-backup command. It now skips straight to clearing its session.
+    # A logout arriving after the archive is already locked has nothing to
+    # back up (the settings it needs are in the encrypted database).
+    if idle.claim_logout():
+        try:
+            if Encryption.is_unlocked():
+                # Run automatic backup check before closing database
+                _run_auto_backup_check()
+            Database.close()
+            Encryption.lock()
+        finally:
+            idle.release_logout()
     session.clear()
     if timed_out:
         flash("Your session timed out due to inactivity. Please log in again.", "info")

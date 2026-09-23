@@ -26,6 +26,35 @@ _lock = threading.Lock()
 _last_activity: float = time.time()
 _watchdog_started = False
 _login_id: str = ""
+_logout_in_progress = False
+
+
+def claim_logout() -> bool:
+    """Take ownership of a logout; False if another one already has it.
+
+    The client posts /auth/logout from both the Log Out button and the
+    timeout countdown, and a double submit is possible, so two logouts
+    can overlap. Only the claimant runs the backup check and the
+    post-backup command. Ported from EdgeCase (2026-09-16,
+    _logout_claim_lock); held here so the watchdog can see it.
+    """
+    global _logout_in_progress
+    with _lock:
+        if _logout_in_progress:
+            return False
+        _logout_in_progress = True
+        return True
+
+
+def release_logout() -> None:
+    global _logout_in_progress
+    with _lock:
+        _logout_in_progress = False
+
+
+def logout_in_progress() -> bool:
+    with _lock:
+        return _logout_in_progress
 
 
 def new_login_id() -> str:
@@ -96,12 +125,29 @@ def check_and_lock(now: float | None = None) -> bool:
     if seconds_idle(now) <= timeout:
         return False
 
-    log.info("Idle timeout reached; locking archive")
+    # Never lock under a running backup or logout. The timeout countdown
+    # posts /auth/logout at the same moment this thread reaches the
+    # timeout, and that logout starts a backup: locking mid-backup closes
+    # the database under it, drops the key its integrity tag needs, and
+    # fails the post-backup command's settings read. A logout locks on its
+    # own when done; a backup finishes and the next tick locks.
+    if logout_in_progress():
+        return False
+
+    from utils import backup
+
+    if not backup.backup_lock.acquire(blocking=False):
+        log.info("Idle timeout reached during a backup; locking when it finishes")
+        return False
     try:
-        Database.close()
-    except Exception as e:  # noqa: BLE001
-        log.warning(f"Database close during idle lock failed: {e}")
-    Encryption.lock()
+        log.info("Idle timeout reached; locking archive")
+        try:
+            Database.close()
+        except Exception as e:  # noqa: BLE001
+            log.warning(f"Database close during idle lock failed: {e}")
+        Encryption.lock()
+    finally:
+        backup.backup_lock.release()
     return True
 
 

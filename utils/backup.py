@@ -13,14 +13,42 @@ import json
 import os
 import re
 import shutil
+import threading
 import zipfile
 from datetime import datetime, timedelta
+from functools import wraps
 from pathlib import Path
 
 from core.config import Config
 from utils.log import get_logger
 
 log = get_logger(__name__)
+
+
+# Backups and every manifest / backup-state read-modify-write run one at a
+# time. Backups start from Backup Now, logout, shutdown, the password-change
+# and rotation fulls, and pre-restore; a manual backup can still be running
+# when another path starts its own on a different thread. Unserialized,
+# both loaded the manifest and whichever saved last dropped the other's
+# entry (an orphan zip no restore list shows) along with its hash baseline.
+# Reentrant because create_backup calls create_full/incremental, and those
+# call save_manifest and _save_baseline_hashes. Ported from EdgeCase
+# (c451766). Process-local: the launcher's single-instance check is what
+# keeps a second process off the same data directory.
+#
+# Public so the idle watchdog can hold it while locking: a lock that lands
+# mid-backup closes the database under it and drops the key the backup's
+# integrity tag is computed with.
+backup_lock = threading.RLock()
+
+
+def _serialized(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        with backup_lock:
+            return fn(*args, **kwargs)
+
+    return wrapper
 
 
 def _atomic_write_text(path, text):
@@ -400,6 +428,7 @@ def manifest_destinations(manifest):
     return list(destinations)
 
 
+@_serialized
 def save_manifest(manifest):
     """Save backup manifest to disk (atomic, crash-safe write).
 
@@ -475,6 +504,7 @@ def _read_backup_state():
     return {}
 
 
+@_serialized
 def _write_backup_state(state):
     """Write backup state to external JSON file (atomic, crash-safe write)."""
     state_file = _get_backup_state_file()
@@ -505,6 +535,7 @@ def _get_baseline_hashes():
     return {}
 
 
+@_serialized
 def _save_baseline_hashes(hashes, file_info=None):
     """
     Save hash baseline to external state file.
@@ -536,40 +567,85 @@ def _save_baseline_hashes(hashes, file_info=None):
     _write_backup_state(state)
 
 
-def generate_backup_filename(backup_type, backup_dir=None):
-    """Generate a backup filename that does not already exist.
+def reserve_backup_path(backup_dir, prefix) -> Path:
+    """Claim a unique backup filename by creating it, and return its path.
 
     Second resolution alone is not enough. Two backups inside the same
     second produced the same name: the second zip overwrote the first
-    while BOTH manifest entries survived, pointing at one file. Restoring
-    the older point then silently applied the newer one's content, and
-    the older one's deletion metadata was destroyed outright. This is not
-    theoretical — it happened unprompted on the first run of the script
-    written to reproduce the other restore bugs, and it corrupted that
-    run's results.
+    while BOTH manifest entries survived, pointing at one file. That was
+    first fixed with an exists() check and a microsecond suffix, but a
+    check followed by a write is not a claim — two concurrent backups
+    could both see the name free and both write it — and each creation
+    path's failure cleanup unlinked whatever was at the path, which under
+    that race is the other backup's zip.
 
-    Interactive use makes it rare; scripted flows and the automatic
-    backup path make it plausible.
+    The name is now claimed atomically with O_CREAT|O_EXCL (mode 0600).
+    The format is unchanged: the second stamp when that second is unused,
+    otherwise the _%f microsecond suffix, so restore, retention and
+    manifest reconstruction parse and sort exactly as before. The caller writes
+    its zip over the empty reservation and on any failure removes it with
+    _discard_reservation — which can only ever be the caller's own file.
+
+    Not ZipFile mode 'x': FileExistsError is an OSError, and the creation
+    paths' OSError cleanup would then unlink the zip it collided with.
     """
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    name = f"{backup_type}_{timestamp}.zip"
-
-    if backup_dir is None:
-        return name
-
     directory = Path(backup_dir)
-    if not (directory / name).exists():
-        return name
 
-    # Collision: disambiguate rather than overwrite. Microseconds are
-    # enough and keep the name sortable and human-readable.
-    for _ in range(100):
-        micro = datetime.now().strftime("%Y-%m-%d_%H%M%S_%f")
-        name = f"{backup_type}_{micro}.zip"
-        if not (directory / name).exists():
-            return name
+    # The plain second-stamped name only when NO backup of any type holds
+    # that second yet. Reconstruction orders a second's backups by suffix,
+    # with the plain name first, so a plain `incr_` taken after a suffixed
+    # `full_` in the same second would sort ahead of it and be stitched to
+    # the previous chain.
+    second = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    plain_free = not any(directory.glob(f"*_{second}.zip")) and not any(
+        directory.glob(f"*_{second}_*.zip")
+    )
 
-    raise RuntimeError(f"Could not generate a unique backup filename in {directory}")
+    for attempt in range(101):
+        if attempt == 0:
+            if not plain_free:
+                continue
+            path = directory / f"{prefix}_{second}.zip"
+        else:
+            path = directory / f"{prefix}_{datetime.now().strftime('%Y-%m-%d_%H%M%S_%f')}.zip"
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except FileExistsError:
+            continue
+        os.close(fd)
+        return path
+
+    raise RuntimeError(f"Could not reserve a unique {prefix} backup name in {directory}")
+
+
+def _discard_reservation(path):
+    """Remove a reserved (possibly partially written) backup after a failure."""
+    try:
+        Path(path).unlink()
+    except FileNotFoundError:
+        pass
+
+
+def chain_id_from_filename(filename) -> str:
+    """The chain id a full backup named ``filename`` opens.
+
+    Derived from the name, never from a second clock read: the two used to
+    be stamped separately, so two fulls in one second got distinct
+    (suffixed) names but the same chain_id, and the second replaced the
+    first in every structure keyed by chain — the first full vanished from
+    restore points and its incrementals were attributed to the second.
+
+    An unsuffixed name gives exactly the legacy ``%Y%m%d_%H%M%S`` id, so
+    existing manifests stay valid; a suffixed one appends ``_<micro>``.
+    reconstruct_manifest_entries uses this too, so a rebuilt manifest
+    agrees with the original.
+    """
+    match = _BACKUP_FILENAME_RE.match(filename)
+    if not match:
+        raise ValueError(f"Not a backup filename: {filename!r}")
+    _prefix, date_part, time_part, micro = match.groups()
+    chain_id = f"{date_part.replace('-', '')}_{time_part}"
+    return f"{chain_id}_{micro}" if micro else chain_id
 
 
 def validate_backup_location(backup_dir):
@@ -629,6 +705,7 @@ def validate_backup_location(backup_dir):
         return False, f"Cannot access backup location: {e}"
 
 
+@_serialized
 def create_backup(backup_dir=None):
     """
     Create a backup, automatically deciding between full and incremental.
@@ -670,6 +747,7 @@ def create_backup(backup_dir=None):
         return create_incremental_backup(backup_dir)
 
 
+@_serialized
 def create_full_backup(backup_dir=None):
     """
     Create a full backup of all data.
@@ -690,19 +768,19 @@ def create_full_backup(backup_dir=None):
     if not valid:
         raise ValueError(error)
 
-    filename = generate_backup_filename("full", backup_dir)
-    backup_path = backup_dir / filename
-
     files = get_all_backup_files()
     if not files:
         raise ValueError("No files to backup")
+
+    backup_path = reserve_backup_path(backup_dir, "full")
+    filename = backup_path.name
 
     # Calculate hashes and collect file info for smart change detection
     hashes = {}
     file_info = {}
     total_size = 0
 
-    # Create zip archive
+    # Create zip archive (over the reservation)
     try:
         with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for rel_path, abs_path in files.items():
@@ -717,10 +795,12 @@ def create_full_backup(backup_dir=None):
                 }
                 total_size += meta["size"]
     except OSError as e:
-        # Clean up partial backup
-        if backup_path.exists():
-            backup_path.unlink()
+        # Clean up partial backup: always our own reservation.
+        _discard_reservation(backup_path)
         raise ValueError(f"Failed to create backup: {e}")
+    except BaseException:
+        _discard_reservation(backup_path)
+        raise
 
     # Verify backup
     verify_backup(backup_path)
@@ -728,7 +808,7 @@ def create_full_backup(backup_dir=None):
 
     # Update manifest
     manifest = load_manifest()
-    chain_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    chain_id = chain_id_from_filename(filename)
 
     backup_info = {
         "filename": filename,
@@ -752,6 +832,7 @@ def create_full_backup(backup_dir=None):
     return backup_info
 
 
+@_serialized
 def create_incremental_backup(backup_dir=None):
     """
     Create an incremental backup (only changed files since last backup).
@@ -805,8 +886,8 @@ def create_incremental_backup(backup_dir=None):
         _save_baseline_hashes(current_hashes, current_file_info)
         return None
 
-    filename = generate_backup_filename("incr", backup_dir)
-    backup_path = backup_dir / filename
+    backup_path = reserve_backup_path(backup_dir, "incr")
+    filename = backup_path.name
 
     total_size = 0
 
@@ -822,10 +903,12 @@ def create_incremental_backup(backup_dir=None):
                 metadata = {"deleted_files": deleted_files}
                 zf.writestr("_backup_metadata.json", json.dumps(metadata))
     except OSError as e:
-        # Clean up partial backup
-        if backup_path.exists():
-            backup_path.unlink()
+        # Clean up partial backup: always our own reservation.
+        _discard_reservation(backup_path)
         raise ValueError(f"Failed to create backup: {e}")
+    except BaseException:
+        _discard_reservation(backup_path)
+        raise
 
     # Verify backup
     verify_backup(backup_path)
@@ -1234,7 +1317,7 @@ def reconstruct_manifest_entries(folder):
         if backup_type == "pre_restore":
             chain_id = f"pre_restore_{name}"
         elif backup_type == "full":
-            current_chain = created.strftime("%Y%m%d_%H%M%S")
+            current_chain = chain_id_from_filename(name)
             chain_id = current_chain
         else:
             if current_chain is None:
@@ -1410,6 +1493,7 @@ def prepare_restore_from_point(point):
     return str(staging_dir)
 
 
+@_serialized
 def create_pre_restore_backup():
     """Create a backup of current state before restore (safety net).
 
@@ -1432,16 +1516,22 @@ def create_pre_restore_backup():
     backup_dir = Path(location) if location else get_backups_dir()
     backup_dir.mkdir(parents=True, exist_ok=True)
 
-    filename = generate_backup_filename("pre_restore", backup_dir)
-    backup_path = backup_dir / filename
-
     files = get_all_backup_files()
     if not files:
         return None  # Nothing to back up
 
-    with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for rel_path, abs_path in files.items():
-            zf.write(abs_path, rel_path)
+    # Reserved only after the check above, so "nothing to back up" leaves
+    # no empty file behind.
+    backup_path = reserve_backup_path(backup_dir, "pre_restore")
+    filename = backup_path.name
+
+    try:
+        with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for rel_path, abs_path in files.items():
+                zf.write(abs_path, rel_path)
+    except BaseException:
+        _discard_reservation(backup_path)
+        raise
 
     verify_backup(backup_path)
     mac = write_backup_mac(backup_path)
@@ -1601,6 +1691,7 @@ def cancel_restore():
     return False
 
 
+@_serialized
 def cleanup_old_backups(retention, custom_location=None):
     """
     Delete backups older than the retention period.
@@ -2365,6 +2456,7 @@ def check_backup_needed(frequency="daily"):
     return False
 
 
+@_serialized
 def record_backup_check():
     """
     Record that we checked for backup today.
