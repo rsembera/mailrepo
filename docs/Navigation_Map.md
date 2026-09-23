@@ -380,7 +380,7 @@ first run of this found a `ReferenceError` that had been shipping.
 
 ---
 
-## Test Suite (815 tests)
+## Test Suite (816 tests)
 
 | File | Coverage |
 |------|----------|
@@ -392,7 +392,7 @@ first run of this found a `ReferenceError` that had been shipping.
 | `tests/test_recovery_key.py` | v3 envelope: recovery-key format and parse tolerance, wrapping structure, unlock by either credential yielding identical keys, tamper detection, independent rewrap of each wrapper (40 tests, Session 68) |
 | `tests/test_restore.py` | Restore path: staged files decrypt to original plaintext, backup carries its own key material, incremental chains and deletion propagation, staging-is-not-production, complete/cancel, chain verification, restore-point credential labelling; plus Session 74 regressions — delete-then-recreate, missing mid-chain incremental, filename collisions, safety-backup visibility and location, retention refusing to prune when the kept chain is broken (41 tests, Sessions 68–74) |
 | `tests/test_disaster_recovery.py` | Recovery with no archive to log in to: manifest sidecars written to every backup destination and surviving an unwritable one, folder discovery via sidecar or filename reconstruction, chain-reconstruction rules (incrementals join the preceding full, a new full starts a chain, orphans dropped, chronological not lexical ordering), credential note when no key file remains, route gates (public with no archive, closed once one is vouched for, open again for an unverified restore, CSRF), the full loop from total loss to decryptable mail, and a vanished backup destination not being recreated by the sidecar write (64 tests, Sessions 77-80, 85) |
-| `tests/test_auth.py` | Auth boundary: setup, login + rate-limit lockout, logout, CSRF enforcement, password-change job-id handoff end-to-end (22 tests, Session 40) |
+| `tests/test_auth.py` | Auth boundary: setup, login + rate-limit lockout, logout (incl. sessionless logout never reaching the handler, Session 96), CSRF enforcement, password-change job-id handoff end-to-end (22 tests, Session 40) |
 | `tests/test_encryption.py` | v2 `Encryption` lifecycle: init / unlock / lock / wrong-password (no v1 code remains) |
 | `tests/test_encryption_v2.py` | v2 encryption: Argon2id, HKDF, AES-256-GCM, file/DB round-trip |
 | `tests/test_password_change.py` | v2-native password change; on-disk backup gate (missing/truncated/zero-byte) + interruption marker lifecycle (23 tests, Session 67) |

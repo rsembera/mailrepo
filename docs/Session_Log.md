@@ -7185,15 +7185,27 @@ caught. Soak: 4 looping full-suite runs as load (12 runs, all 815 green)
 while the new + collision + logout tests looped 40x, 0 failures.
 802 -> 815. ruff clean.
 
-**Flagged, not fixed:** an *unauthenticated* POST to /auth/logout skips
-the CSRF check (it only applies when the session is authenticated), then
-runs the backup check and locks. SameSite=Lax means a cross-site POST
-arrives without the cookie, so the review #20 fix can be bypassed in
-browser mode: a hostile page can force a lock and, if a backup is due,
-the post-backup command. Not yet tested.
+**Flagged, then withdrawn (see addendum):** an unauthenticated POST to
+/auth/logout was reported as bypassing the CSRF check. Wrong -- see below.
 
 ### Commits
 
 - 1e87fda -- Backups: chain_id from filename, atomic name claim, serialized writes, single logout
 - (this entry) -- docs: Session 96
+
+### Session 96 addendum -- logout CSRF "gap" withdrawn
+
+The flag above came from reading the logout handler alone. Traced end to
+end: `auth.logout` is not a public endpoint, so `check_auth` redirects a
+sessionless request to login before the handler runs. A cross-site POST
+(no SameSite=Lax cookie) cannot lock the archive or reach the backup
+check; review #20's fix holds. Confirmed by test against unchanged code.
+Added a guard, `TestLogout::test_sessionless_logout_never_reaches_the_handler`,
+which fails if `auth.logout` is ever made public (sealing mutation
+verified). 815 -> 816.
+
+### Commits
+
+- 9443e03 -- Test: sessionless /auth/logout never reaches the handler
+- (this entry) -- docs: Session 96 addendum
 
