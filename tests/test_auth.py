@@ -166,6 +166,23 @@ class TestLogout:
         assert "/auth/login" in resp.headers["Location"]
         assert Encryption.is_unlocked() is False
 
+    def test_sessionless_logout_never_reaches_the_handler(self, initialized_app, monkeypatch):
+        """A cross-site POST arrives without the SameSite=Lax cookie, so
+        with no session at all. The handler's CSRF check only runs for an
+        authenticated session; what keeps a sessionless POST from locking
+        the archive and running the backup check (and post-backup command)
+        is check_auth redirecting it first. Guards against auth.logout ever
+        being added to the public endpoints."""
+        calls = {"n": 0}
+        monkeypatch.setattr(
+            auth, "_run_auto_backup_check", lambda: calls.__setitem__("n", calls["n"] + 1)
+        )
+        app, _ = initialized_app
+        resp = app.test_client().post("/auth/logout", data={"reason": "timeout"})
+        assert resp.status_code == 302
+        assert calls["n"] == 0
+        assert Encryption.is_unlocked() is True
+
 
 class TestIdleLock:
     """Security review 2026-09, finding 1: the idle lock must actually lock.
