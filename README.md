@@ -21,7 +21,7 @@ Therapists, lawyers, accountants, and journalists handle sensitive client corres
 
 | Platform | File | SHA-256 |
 |---|---|---|
-| macOS 11+ (Apple Silicon) | [MailRepo-1.0.0.dmg](https://github.com/rsembera/mailrepo/releases/download/v1.0.0/MailRepo-1.0.0.dmg) | `2cce5321474f9ac373dc9a8c2b3c762464df2a1318443baaff13cc5dac76d3dc` |
+| macOS 26+ (Apple Silicon) | [MailRepo-1.0.0.dmg](https://github.com/rsembera/mailrepo/releases/download/v1.0.0/MailRepo-1.0.0.dmg) | `2cce5321474f9ac373dc9a8c2b3c762464df2a1318443baaff13cc5dac76d3dc` |
 | Debian 13 (Trixie), amd64 | [mailrepo_1.0.0_amd64.deb](https://github.com/rsembera/mailrepo/releases/download/v1.0.0/mailrepo_1.0.0_amd64.deb) | `73c974df41511862d9b0fc862569162cc3c2f29cbd5d7c9ba027e136d8804d96` |
 
 The macOS app is signed and notarized. Install the .deb with `sudo apt install ./mailrepo_1.0.0_amd64.deb` — dependencies resolve automatically.

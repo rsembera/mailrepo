@@ -83,7 +83,7 @@ OPTIONS = {
         'CFBundleVersion': APP_VERSION,
         'CFBundleShortVersionString': APP_VERSION,
         'NSHighResolutionCapable': True,
-        'LSMinimumSystemVersion': '11.0',
+        'LSMinimumSystemVersion': '26.0',
         'NSRequiresAquaSystemAppearance': False,
     },
     'packages': THIRD_PARTY_PACKAGES + FIRST_PARTY_PACKAGES,

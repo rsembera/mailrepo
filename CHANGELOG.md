@@ -49,6 +49,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   most apps. The field always re-masks the moment you submit.
 
 ### Fixed
+- **Declared macOS floor corrected to 26.** The bundled Python and
+  the WeasyPrint/readpst native libraries come from Homebrew and are
+  built for macOS 26, so the app cannot launch on anything older.
+  `LSMinimumSystemVersion` said 11.0 and the README said 11+, which let
+  the 1.0.0 DMG install on Big Sur through Sequoia and then fail at
+  launch. Both now say 26. Lowering the real floor is a build-pipeline
+  job (python.org Python plus a low-target native stack) and is not
+  done here.
 - **Backups: two fulls in one second, concurrent backups, double logout
   (Session 96).** Ported from the EdgeCase/Hermanubis backup audit.
   A full backup's chain id was stamped to the second separately from its
