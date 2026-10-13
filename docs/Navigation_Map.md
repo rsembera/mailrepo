@@ -133,7 +133,8 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `imap.py` | 1,565 | IMAP client: connect, auth, folders, fetch, MOVE/COPY + UID-scoped expunge, Gmail-aware delete (incl. batched set delete), CONDSTORE |
+| `imap.py` | 1,610 | IMAP client: connect, auth, folders, batched header fetch (`fetch_headers_batch`, 100 UIDs per FETCH, keyed by UID in the response), MOVE/COPY + UID-scoped expunge, Gmail-aware delete (incl. batched set delete), CONDSTORE |
+| `imap_pool.py` | 185 | One held, authenticated IMAP connection per account (`ImapPool.acquire` -> lease, `release`); per-account lock, NOOP probe + lazy reconnect, `close_all` on lock/exit, `evict` on account change (Session 97) |
 | `pdf_export.py` | 1,083 | PDF export: per-email PDFs, attachment merging, WeasyPrint |
 | `encryption.py` | 1,049 | Argon2id KDF + HKDF + AES-256-GCM (v2) plus the v3 envelope: random master wrapped under password and recovery key, each wrapper verified to open before the key file is written; MRC4 (Session 93): the envelope plus archive_id and an HMAC binding the halves, verified at every unwrap; backup-MAC and key-file-bind subkeys; lock hooks; work factor via argon2_parameters() — production everywhere, cheap only when the test suite's double guard (MAILREPO_FAST_KDF + MAILREPO_DATA_DIR) is met |
 | `password_change.py` | 662 | Password change — v2 full re-encryption, v3 rewrap; recovery-key password reset (needs no unlocked session), recovery-key rotation, on-disk backup gate, interruption marker |
@@ -173,14 +174,14 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `emails.py` | 836 | Archived email operations: view, move, delete, batch, download; folder listing carries per-subfolder tree counts |
 | `filesystem.py` | 807 | File browser for imports, path validation, PST conversion |
 | `imports.py` | 728 | Mount/unmount imports, browse imported emails/folders |
-| `progress_commit.py` | 754 | SSE streaming for commit operations; batched Gmail deletes; unified post-action failure accounting + logging (Sessions 47/54/57) |
+| `progress_commit.py` | 759 | SSE streaming for commit operations; batched Gmail deletes; unified post-action failure accounting + logging (Sessions 47/54/57); post-actions evict only acted-on UIDs from the folder cache (Session 97) |
 | `folders.py` | 711 | Archive folder CRUD, trash, restore, vault, retention; `tree_email_counts()` is the single roll-up behind every folder size the app shows |
-| `accounts.py` | 488 | IMAP account CRUD, Gmail auto-detection, folder listing |
+| `accounts.py` | 487 | IMAP account CRUD, Gmail auto-detection, folder listing |
 | `commit.py` | 551 | Email/folder commit workflow |
 | `email_parser.py` | 336 | Email parsing: headers, body, attachments, body text extraction |
-| `progress_emails.py` | 286 | SSE streaming for email operations |
+| `progress_emails.py` | 309 | Folder listing stream: `cached` event first, TTL + CONDSTORE short-circuits, incremental sync in FETCH chunks; `refresh=true` reconciles keeping the cache, `rebuild=true` discards it (Session 97) |
 | `settings.py` | 263 | App settings: timeout, retention, keepalive |
-| `streaming.py` | 162 | SSE helpers, heartbeat, connection management |
+| `streaming.py` | 186 | Email-cache helpers: read/write rows, stale removal, `evict_cached_uids` after post-commit actions (Session 97) |
 | `threads.py` | 138 | Thread search and staging endpoints |
 | `progress.py` | 63 | Progress entry point (split into streams/state/handlers in Session 37) |
 
@@ -215,7 +216,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `mail.js` | 2,472 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
+| `mail.js` | 2,502 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
 | `settings.js` | 1,476 | Settings: appearance, accounts, security, recovery-key status + check + rotation, backup, reset |
 | `review.js` | 1,035 | Review staged items, destination editing, commit |
 | `backups.js` | 1,034 | Backup/restore UI, restore points, settings |
@@ -232,13 +233,13 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 |------|-------|--------------|
 | `export-modal.js` | 875 | Bulk export UI: scope picker, format (pdf/eml/mbox/both), scope-aware password, progress |
 | `image-lightbox.js` | 315 | Click-to-zoom overlay for inline images and image attachments (Session 94); click targets are laid over the sandboxed body iframe from the parent, because WebKit runs no listeners inside a no-scripts frame |
-| `email-list.js` | 793 | Email list rendering, selection, toolbar, filter input |
+| `email-list.js` | 794 | Email list rendering, selection, toolbar, filter input |
 | `sidebar.js` | 744 | Sidebar: archive folders, IMAP folders, imports, resize |
 | `imports.js` | 728 | Import mount/unmount, browse, folder/email display |
 | `staging.js` | 561 | Staging workflow, destination picker, stage/unstage |
 | `file-picker.js` | 438 | Filesystem browser modal for import file selection |
 | `date-picker.js` | 383 | Date picker (ported from EdgeCase) for vault retention dates |
-| `progress.js` | 356 | SSE progress modal for commit/import operations |
+| `progress.js` | 369 | SSE progress modal for commit/import operations |
 | `context-menu.js` | 288 | Right-click context menu for sidebar/folders |
 | `folder-tree.js` | 265 | Reusable folder tree renderer |
 | `custom-select.js` | 223 | Custom dropdown select component |
@@ -406,13 +407,15 @@ first run of this found a `ReferenceError` that had been shipping.
 | `tests/test_api_emails.py` | Emails API: FTS search (folder scoping, subfolder toggle, trash exclusion), folder listing, decrypt-and-parse viewer + raw source via real encrypted fixtures, soft-delete/restore (incl. needs-destination 409), permanent delete, flagging, move (28 tests, Session 41) |
 | `tests/test_api_imports.py` | Import + export API: mbox/eml scan + import validation, single-.eml import round-trip, import-email content + attachment from disk, unencrypted-ZIP folder export decrypt round-trip (19 tests, Session 41) |
 | `tests/test_api_accounts.py` | Accounts API: listing + runtime `is_gmail` detection, create/update validation, no-password update, cached-folder fast path, delete, server detection (23 tests, Session 41) |
-| `tests/test_commit.py` | Commit helpers (archive-folder-from-path, duplicate detection, summary, post-action key parsing, atomic save + orphan cleanup) + SSE `/api/commit/stream` empty-guard and import round-trip (22 tests, Session 41) |
+| `tests/test_commit.py` | Commit helpers (archive-folder-from-path, duplicate detection, summary, post-action key parsing, atomic save + orphan cleanup) + SSE `/api/commit/stream` empty-guard and import round-trip (29 tests, Sessions 41/97) |
 | `tests/test_api_threads.py` | Thread-discovery request validation before IMAP connect (6 tests, Session 41) |
 | `tests/test_api_settings.py` | Settings API: validated retention/timeout/thread-size endpoints, session-status, keepalive, reset-database guards (14 tests, Session 41) |
 | `tests/test_api_exports.py` | Export pipeline: scope resolution (folder/messages/search + subfolders + FTS), job state machine (save-to-disk, disambiguation, TTL GC), plain + AES-256 ZIP decrypt round-trips, endpoint contracts (39 tests, Session 42) |
 | `tests/test_importer.py` | Importer: header decode + metadata, mbox/eml import driven by `test_files/` edge cases; malformed mail archived byte-for-byte, corrupt mbox handled per-message (29 tests, Session 42) |
 | `tests/test_sync_cache.py` | Sync-cache state + TTL freshness logic, and the pure `IMAP.detect_server` domain lookup (14 tests, Session 42) |
-| `tests/test_imap.py` | `core/imap.py` dispatch logic via a mocked connection (no real IMAP): MOVE-vs-COPY, UID-scoped vs bare expunge, COPYUID parsing, Gmail delete-via-trash, spam-folder resolution, call-site contract (20 tests, Session 45) |
+| `tests/test_imap.py` | `core/imap.py` dispatch logic via a mocked connection (no real IMAP): MOVE-vs-COPY, UID-scoped vs bare expunge, COPYUID parsing, Gmail delete-via-trash, spam-folder resolution, call-site contract, batched header fetch parsing/chunking (39 tests, Sessions 45/97) |
+| `tests/test_imap_pool.py` | `core/imap_pool.py`: reuse, folder-cache reset, dead-connection reconnect, lock release on connect failure, same-account queueing, acquire timeout, close on `Encryption.lock()`, evict (10 tests, Session 97) |
+| `tests/test_progress_emails.py` | `/api/accounts/<id>/emails/stream`: TTL serve, `refresh=true` keeps cache and fetches only new UIDs, `rebuild=true` refetches all, CONDSTORE short-circuit, `cached` event ordering (7 tests, Session 97) |
 | `tests/test_account_utils.py` | `is_gmail_host` host detection (4 tests, Session 45) |
 | `tests/test_commit_dispatch.py` | Post-commit dispatch: Gmail vs standard delete routing, per-iteration source re-select over multiple UIDs (2 tests, Session 45) |
 

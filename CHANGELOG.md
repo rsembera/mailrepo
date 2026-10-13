@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Folder loading behaves like a mail client (Session 97).** Opening an
+  IMAP folder now shows the cached list immediately and checks the
+  server in the background; the header line reports "checking for new
+  mail" and then the count. The app holds one authenticated IMAP
+  connection per account and reuses it across clicks instead of logging
+  in afresh each time, reconnecting on its own if the server dropped it.
+  New headers are fetched in batches of 100 per command rather than one
+  message per round trip, so a folder of several hundred messages loads
+  in seconds. The Refresh button reconciles against the server while
+  keeping the cache (only new messages are downloaded); Shift-click
+  Refresh discards the folder cache and rebuilds it.
 - **Click-to-zoom on images (Session 94).** Inline images in an email
   body and image attachments open in an in-app lightbox: fit-to-window,
   a 1:1 toggle for large images, download, and open-in-default-app in
@@ -49,6 +60,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   most apps. The field always re-masks the moment you submit.
 
 ### Fixed
+- **Archiving no longer forces a full re-download of the folder
+  (Session 97).** Every post-commit action (archive, trash, delete)
+  wiped the whole source folder's cached listing, so the next view
+  re-fetched every remaining message one at a time; because sessions
+  usually end with a commit this also showed up as "it reloads
+  everything when I log in." Only the acted-on messages are now removed
+  from the cache. Also: a stale cached UID no longer blocks fetching
+  newer messages (the high-water mark is recomputed after stale rows are
+  dropped).
 - **Declared macOS floor corrected to 26.** The bundled Python and
   the WeasyPrint/readpst native libraries come from Homebrew and are
   built for macOS 26, so the app cannot launch on anything older.

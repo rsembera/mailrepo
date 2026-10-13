@@ -7209,3 +7209,67 @@ verified). 815 -> 816.
 - 9443e03 -- Test: sessionless /auth/logout never reaches the handler
 - (this entry) -- docs: Session 96 addendum
 
+## Session 97 — October 13, 2026 (MacBook)
+
+**IMAP folder loading: make it behave like a mail client.** Rick noticed
+the Gmail Sent folder "refreshes a lot" and, on closer questioning, that
+the whole folder reloads after archiving and at login. Verified against
+source (`claude/IMAP_Sync_Plan.md` in the project holds the full
+analysis). Four causes, all design shortcuts rather than constraints:
+
+1. **Cache wipe after commit (the one Rick was actually seeing).** All
+   three post-action sites in `progress_commit.py` called
+   `clear_folder_cache` on the whole source folder. New
+   `streaming.evict_cached_uids(account_id, folder, uids)` removes only
+   the acted-on rows and resets the TTL. Batch-delete, per-item, and
+   folder-level paths all collect `acted_uids`.
+2. **One FETCH per message.** `IMAP.fetch_headers_batch(uids)` issues one
+   `UID FETCH <set> (UID BODY.PEEK[HEADER.FIELDS ...])` per 100 UIDs and
+   keys results by the `UID n` in each response tuple (imaplib answers in
+   server order, with lone `b')'` separators). `fetch_headers` delegates
+   to it. `progress_emails` and `accounts.list_emails` use it; progress is
+   per chunk.
+3. **Refresh nuked the cache.** `refresh=true` now only skips the TTL and
+   CONDSTORE short-circuits and runs the normal reconcile (SEARCH, drop
+   stale, fetch above high-water mark). `rebuild=true` is the old wipe,
+   reachable by Shift-click on Refresh (tooltip says so). Found while
+   testing: `highest_cached_uid` was computed before stale rows were
+   dropped, so a stale high UID could block new fetches; now recomputed.
+4. **Fresh TLS connection + login per click.** New `core/imap_pool.py`:
+   `ImapPool.acquire(account_id, creds)` returns a lease that proxies the
+   `IMAP` client; call sites change one line each (13 sites across
+   accounts/commit/threads/progress_commit/progress_emails) and call
+   `release()` where they called `disconnect()`. Per-account
+   `threading.Lock` (waitress is multi-threaded; IMAP is one command at a
+   time), 300 s acquire timeout, NOOP probe + lazy reconnect on acquire,
+   `_folder_cache` cleared per lease so a held connection doesn't serve
+   last request's folder list. `close_all` registered via
+   `Encryption.on_lock` (covers logout, idle watchdog, session timeout)
+   and called from `main._cleanup`; `evict(account_id)` on credential
+   update and account delete. Deliberately no keepalive thread and no
+   mid-command retry: a dropped socket surfaces as IMAPError as before and
+   the next acquire reconnects.
+
+**Cache-first UI.** The stream now emits a `cached` event with whatever
+the cache holds before connecting (not on rebuild). `progress.js` gains
+`onCached`/`onUpdate`; `mail.js` renders the list on `cached`, moves the
+server check into the header meta line ("N emails · checking for new
+mail…" / "fetching x of y…"), and on a post-cache error keeps the list and
+toasts instead of replacing it.
+
+Tests: `test_imap_pool.py` (10), `test_progress_emails.py` (7, SSE
+end-to-end with a fake IMAP), batch-fetch parsing in `test_imap.py` (5),
+eviction in `test_commit.py` (1). The `_run_post_action` helper now
+patches `core.imap.IMAP.connect_with_credentials` directly (ruff removed
+the now-unused `IMAP` import from `progress_commit`); `conftest` closes
+the pool per test. 816 -> 839, ruff clean, eslint at the 65-warning
+baseline.
+
+Deferred (in the plan doc): IMAP IDLE; multiple connections per account.
+Navigation Map per-file counts updated; the cloc overview table was not
+re-run this session.
+
+### Commits
+
+- 7f017be -- IMAP: hold one connection per account, batch header fetch, incremental refresh, evict-not-wipe after commit, cache-first folder view
+- (this entry) -- docs: Session 97
