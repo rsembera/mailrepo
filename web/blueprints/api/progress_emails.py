@@ -16,7 +16,7 @@ in progress.py (the coordinator).
 
 from flask import Response, request, stream_with_context
 
-from core import IMAP, Database, IMAPError
+from core import IMAP, Database, IMAPError, ImapPool
 from core.sync_cache import (
     get_folder_sync_state,
     is_cache_fresh,
@@ -58,7 +58,14 @@ def stream_account_emails(account_id):
         )
 
     folder = request.args.get("folder", "INBOX")
-    force_refresh = request.args.get("refresh", "").lower() == "true"
+    # refresh=true: skip the TTL and CONDSTORE short-circuits and reconcile
+    # against the server, keeping the cache (fetch only what is new, drop
+    # what is gone). rebuild=true: additionally discard the folder cache
+    # and re-download every header -- the escape hatch for the rare case
+    # incremental sync cannot see (a message reappearing with a lower
+    # UID without a UIDVALIDITY change).
+    rebuild = request.args.get("rebuild", "").lower() == "true"
+    force_refresh = rebuild or request.args.get("refresh", "").lower() == "true"
 
     def generate():
         client = None
@@ -84,6 +91,17 @@ def stream_account_emails(account_id):
                         )
                         return
 
+            # ----- Cache first -------------------------------------------
+            # Whatever we hold for this folder goes out immediately so the
+            # list renders while the server check runs. "complete" below
+            # still carries the authoritative list. A rebuild shows the
+            # full progress panel instead, since the cache is being thrown
+            # away.
+            if not rebuild:
+                known = get_any_cached_emails(account_id, folder)
+                if known:
+                    yield sse_message("cached", {"emails": known, "total": len(known)})
+
             # ----- Connect to server -------------------------------------
             yield sse_message(
                 "status",
@@ -94,7 +112,7 @@ def stream_account_emails(account_id):
             )
 
             try:
-                client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+                client = ImapPool.acquire(account_id, account["credentials_encrypted"])
             except IMAPError as e:
                 # Connection failed -- try to use cache
                 cached_emails = get_any_cached_emails(account_id, folder)
@@ -162,7 +180,7 @@ def stream_account_emails(account_id):
             highest_cached_uid = 0
             cache_valid = False
 
-            if uidvalidity and not force_refresh:
+            if uidvalidity and not rebuild:
                 cached_emails = get_cached_emails(account_id, folder, uidvalidity)
                 if cached_emails:
                     cache_valid = True
@@ -175,7 +193,7 @@ def stream_account_emails(account_id):
                         },
                     )
 
-            if force_refresh and uidvalidity:
+            if rebuild and uidvalidity:
                 clear_folder_cache(account_id, folder)
                 cached_emails = []
                 cache_valid = False
@@ -199,6 +217,7 @@ def stream_account_emails(account_id):
                 )
                 if stale_removed > 0:
                     cached_emails = get_cached_emails(account_id, folder, uidvalidity)
+                    highest_cached_uid = get_highest_cached_uid(account_id, folder, uidvalidity)
 
             # Determine which UIDs are new (not in cache)
             if cache_valid and highest_cached_uid > 0:
@@ -225,23 +244,27 @@ def stream_account_emails(account_id):
             # Start with cached emails
             emails = list(cached_emails)
 
-            # Fetch new emails
+            # Fetch new emails, one FETCH per chunk rather than per message
             if total_new > 0:
-                for i, uid in enumerate(new_uids):
-                    headers = client.fetch_headers(uid)
-                    emails.insert(0, headers)
+                fetched = 0
+                chunk_size = IMAP.HEADER_FETCH_CHUNK
+                for start in range(0, total_new, chunk_size):
+                    chunk = new_uids[start : start + chunk_size]
+                    batch = client.fetch_headers_batch(chunk)
+                    for headers in batch:
+                        emails.append(headers)
+                        if uidvalidity:
+                            cache_email(account_id, folder, uidvalidity, headers)
+                    fetched += len(chunk)
 
-                    if uidvalidity:
-                        cache_email(account_id, folder, uidvalidity, headers)
-
-                    current = total_cached + i + 1
+                    current = total_cached + fetched
                     yield sse_message(
                         "progress",
                         {
                             "current": current,
                             "total": total,
                             "percent": int(current / total * 100) if total > 0 else 100,
-                            "subject": headers.get("subject", "")[:50],
+                            "subject": batch[-1].get("subject", "")[:50] if batch else "",
                             "phase": "fetching",
                         },
                     )
@@ -272,7 +295,7 @@ def stream_account_emails(account_id):
         finally:
             if client:
                 try:
-                    client.disconnect()
+                    client.release()
                 except Exception:
                     pass
 

@@ -16,6 +16,8 @@ export function createProgress(container) {
     let eventSource = null;
     let onComplete = null;
     let onError = null;
+    let onCached = null;
+    let onUpdate = null;
     
     /**
      * Render the progress UI.
@@ -32,6 +34,8 @@ export function createProgress(container) {
         } = state;
         
         const showBar = total > 0;
+        
+        if (onUpdate) onUpdate(state);
         
         container.innerHTML = `
             <div class="progress-display">
@@ -67,6 +71,8 @@ export function createProgress(container) {
     function startStream(url, options = {}) {
         onComplete = options.onComplete || null;
         onError = options.onError || null;
+        onCached = options.onCached || null;
+        onUpdate = options.onUpdate || null;
         
         // Close any existing connection
         if (eventSource) {
@@ -76,6 +82,13 @@ export function createProgress(container) {
         render({ phase: 'connecting', message: 'Connecting...' });
         
         eventSource = new EventSource(url);
+        
+        // Folder listings send what is already cached before touching the
+        // server, so the caller can show the list and keep the check in
+        // the background.
+        eventSource.addEventListener('cached', (e) => {
+            if (onCached) onCached(JSON.parse(e.data));
+        });
         
         eventSource.addEventListener('status', (e) => {
             const data = JSON.parse(e.data);

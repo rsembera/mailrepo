@@ -69,10 +69,12 @@ def reset_singletons(temp_data_dir, tmp_path, monkeypatch):
     # Force Config to use our temp dir
     Config.set_base_path(temp_data_dir)
 
-    # Reset Encryption state
+    # Reset Encryption state (and, through its lock hook, the IMAP pool)
     from core.encryption import Encryption
+    from core.imap_pool import ImapPool
 
     Encryption.lock()
+    ImapPool.close_all()
 
     # Reset Database state
     from core.database import Database

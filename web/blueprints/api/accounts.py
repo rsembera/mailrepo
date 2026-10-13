@@ -11,7 +11,7 @@ from email.header import decode_header
 
 from flask import jsonify, request
 
-from core import IMAP, Database, IMAPError
+from core import IMAP, Database, IMAPError, ImapPool
 from core.account_utils import is_gmail_host
 from web.responses import attachment_response, eml_download
 
@@ -163,6 +163,7 @@ def update_account(account_id):
 
         # Save new credentials
         IMAP.save_credentials(account_id, email_addr, password, host, port, use_ssl)
+        ImapPool.evict(account_id)
         message = test_result["message"]
     else:
         message = "Account updated (password unchanged)"
@@ -230,21 +231,18 @@ def get_account_emails(account_id):
 
     client = None
     try:
-        client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+        client = ImapPool.acquire(account_id, account["credentials_encrypted"])
         client.select_folder(folder)
         uids = client.search("ALL", limit=limit)
 
-        emails = []
-        for uid in uids:
-            headers = client.fetch_headers(uid)
-            emails.append(headers)
+        emails = client.fetch_headers_batch(uids)
 
         return jsonify({"emails": emails})
     except IMAPError as e:
         return jsonify({"error": str(e)}), 500
     finally:
         if client:
-            client.disconnect()
+            client.release()
 
 
 @api_bp.route("/accounts/<int:account_id>/emails/<uid>", methods=["GET"])
@@ -262,7 +260,7 @@ def get_account_email(account_id, uid):
 
     client = None
     try:
-        client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+        client = ImapPool.acquire(account_id, account["credentials_encrypted"])
         client.select_folder(folder)
         email_data = client.fetch_full(uid)
         return jsonify({"email": email_data})
@@ -270,7 +268,7 @@ def get_account_email(account_id, uid):
         return jsonify({"error": str(e)}), 500
     finally:
         if client:
-            client.disconnect()
+            client.release()
 
 
 @api_bp.route("/accounts/<int:account_id>/folders", methods=["GET"])
@@ -302,7 +300,7 @@ def get_account_folders(account_id):
 
     client = None
     try:
-        client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+        client = ImapPool.acquire(account_id, account["credentials_encrypted"])
         folders = client.list_folders()
 
         # Only update cache if folder list actually changed
@@ -325,7 +323,7 @@ def get_account_folders(account_id):
         return jsonify({"error": str(e)}), 500
     finally:
         if client:
-            client.disconnect()
+            client.release()
 
 
 @api_bp.route("/accounts/<int:account_id>", methods=["DELETE"])
@@ -335,6 +333,7 @@ def delete_account(account_id):
     if not account:
         return jsonify({"error": "Account not found"}), 404
 
+    ImapPool.evict(account_id)
     Database.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
     Database.commit()
     return jsonify({"success": True})
@@ -374,7 +373,7 @@ def download_imap_email(account_id, uid):
 
     client = None
     try:
-        client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+        client = ImapPool.acquire(account_id, account["credentials_encrypted"])
         client.select_folder(folder)
         raw_bytes = client.fetch_raw(uid)
 
@@ -391,7 +390,7 @@ def download_imap_email(account_id, uid):
         return jsonify({"error": str(e)}), 500
     finally:
         if client:
-            client.disconnect()
+            client.release()
 
 
 @api_bp.route("/accounts/<int:account_id>/emails/<uid>/attachments/<int:index>", methods=["GET"])
@@ -409,7 +408,7 @@ def download_imap_attachment(account_id, uid, index):
 
     client = None
     try:
-        client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+        client = ImapPool.acquire(account_id, account["credentials_encrypted"])
         client.select_folder(folder)
         raw_bytes = client.fetch_raw(uid)
         msg = email.message_from_bytes(raw_bytes)
@@ -452,7 +451,7 @@ def download_imap_attachment(account_id, uid, index):
         return jsonify({"error": str(e)}), 500
     finally:
         if client:
-            client.disconnect()
+            client.release()
 
 
 @api_bp.route("/accounts/<int:account_id>/emails/<uid>/source", methods=["GET"])
@@ -470,7 +469,7 @@ def get_imap_email_source(account_id, uid):
 
     client = None
     try:
-        client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+        client = ImapPool.acquire(account_id, account["credentials_encrypted"])
         client.select_folder(folder)
         raw_bytes = client.fetch_raw(uid)
 
@@ -485,4 +484,4 @@ def get_imap_email_source(account_id, uid):
         return jsonify({"error": str(e)}), 500
     finally:
         if client:
-            client.disconnect()
+            client.release()

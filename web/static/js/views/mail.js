@@ -247,7 +247,7 @@ export function selectView(view) {
  * Load emails from an IMAP account folder.
  * Uses streaming for progress updates.
  */
-export async function loadAccountEmails(accountId, folder = 'INBOX', { forceRefresh = false } = {}) {
+export async function loadAccountEmails(accountId, folder = 'INBOX', { forceRefresh = false, rebuild = false } = {}) {
     // Restore default header actions and toolbar
     restoreDefaultHeaderActions();
     
@@ -273,15 +273,43 @@ export async function loadAccountEmails(accountId, folder = 'INBOX', { forceRefr
     
     // Start streaming - fetch all emails (or use a large limit)
     // The backend can handle large numbers efficiently with streaming
-    const streamUrl = `/api/accounts/${accountId}/emails/stream?folder=${encodeURIComponent(folder)}${forceRefresh ? '&refresh=true' : ''}`;
+    const params = rebuild ? '&rebuild=true' : (forceRefresh ? '&refresh=true' : '');
+    const streamUrl = `/api/accounts/${accountId}/emails/stream?folder=${encodeURIComponent(folder)}${params}`;
+    
+    // Cache-first: once the server sends what it already holds, the list
+    // renders and the server check continues in the header meta line
+    // instead of a blocking progress panel.
+    let showingCache = false;
     
     progress.startStream(streamUrl, {
+        onCached: (data) => {
+            showingCache = true;
+            state.emails = data.emails || [];
+            if (contextMeta) contextMeta.textContent = `${state.emails.length} emails · checking for new mail…`;
+            renderEmailList();
+        },
+        onUpdate: (p) => {
+            if (!showingCache || !contextMeta) return;
+            if (p.phase === 'loading' && p.total > 0) {
+                contextMeta.textContent = `${state.emails.length} emails · fetching ${p.current} of ${p.total}…`;
+            }
+        },
         onComplete: (data) => {
             state.emails = data.emails || [];
-            if (contextMeta) contextMeta.textContent = `${state.emails.length} emails`;
+            if (contextMeta) {
+                contextMeta.textContent = data.offline
+                    ? `${state.emails.length} emails · server unavailable, showing cached`
+                    : `${state.emails.length} emails`;
+            }
             renderEmailList();
         },
         onError: (err) => {
+            if (showingCache) {
+                // Keep the cached list on screen; say what happened.
+                if (contextMeta) contextMeta.textContent = `${state.emails.length} emails · could not check server`;
+                showToast(err.error || 'Could not check the server for new mail', 'error');
+                return;
+            }
             if (contextTitle) contextTitle.textContent = 'Error';
             if (contextMeta) contextMeta.textContent = '';
             showError(err.error || 'Failed to load emails');
@@ -1193,17 +1221,19 @@ function navigateToImapFolder(accountId, folderPath) {
 };
 
 /**
- * Refresh the current IMAP folder, bypassing cache.
+ * Refresh the current IMAP folder: reconcile against the server, keeping
+ * the cache. Pass { rebuild: true } (Shift-click) to discard the cache and
+ * re-download every header.
  */
 // Preemptively exported as an ES function (in addition to the legacy
 // window.refreshImapFolder assignment below) so that email-list.js can
 // receive it as a callback via app.js's initEmailList config. Both forms
 // stay until mail.js itself is converted; the window one gets removed then.
-export function refreshImapFolder() {
+export function refreshImapFolder({ rebuild = false } = {}) {
     if (state.currentView?.type !== 'account') return;
     const accountId = state.currentView.id;
     const folder = state.currentView.folder || 'INBOX';
-    loadAccountEmails(accountId, folder, { forceRefresh: true });
+    loadAccountEmails(accountId, folder, { forceRefresh: true, rebuild });
 }
 
 /**

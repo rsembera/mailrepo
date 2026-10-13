@@ -340,9 +340,74 @@ class IMAP:
         except Exception as e:
             raise IMAPError(f"Search failed: {e}")
 
+    # UIDs per FETCH command when loading a folder listing. One command
+    # per chunk instead of one per message: a 500-message folder is five
+    # round trips, not five hundred.
+    HEADER_FETCH_CHUNK = 100
+
+    _HEADER_FIELDS = "(UID BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID)])"
+    _UID_IN_RESPONSE = re.compile(rb"\bUID (\d+)")
+
+    def _headers_from_bytes(self, uid: str, header_data) -> dict:
+        if isinstance(header_data, bytes):
+            header_data = header_data.decode("utf-8", errors="replace")
+        msg = email.message_from_string(header_data)
+        return {
+            "uid": uid,
+            "subject": self._decode_header(msg.get("Subject", "")),
+            "from": self._decode_header(msg.get("From", "")),
+            "to": self._decode_header(msg.get("To", "")),
+            "date": msg.get("Date", ""),
+            "message_id": msg.get("Message-ID", ""),
+        }
+
+    def fetch_headers_batch(self, uids: list[str]) -> list[dict]:
+        """
+        Fetch headers for many messages with one FETCH per chunk.
+
+        imaplib returns a batch as a flat list: each message is a
+        ``(b'<seq> (UID <n> BODY[...] {len}', b'<headers>')`` tuple,
+        usually followed by a lone ``b')'``. Servers may answer in any
+        order, so each result is keyed by the UID parsed out of the
+        response rather than by position in the request.
+
+        Args:
+            uids: Message UIDs. Order is preserved in the result.
+
+        Returns:
+            One dict per UID that the server returned; UIDs the server did
+            not answer for (expunged between SEARCH and FETCH) are omitted.
+        """
+        if not self.connection:
+            raise IMAPError("Not connected")
+
+        uids = [str(u) for u in uids]
+        found: dict[str, dict] = {}
+        for start in range(0, len(uids), self.HEADER_FETCH_CHUNK):
+            chunk = uids[start : start + self.HEADER_FETCH_CHUNK]
+            if not chunk:
+                continue
+            try:
+                status, data = self.connection.uid("FETCH", ",".join(chunk), self._HEADER_FIELDS)
+            except Exception as e:
+                raise IMAPError(f"Failed to fetch headers for {len(chunk)} messages: {e}")
+            if status != "OK":
+                raise IMAPError(f"Failed to fetch headers for {len(chunk)} messages")
+            for part in data or []:
+                if not isinstance(part, tuple) or len(part) < 2:
+                    continue
+                meta = part[0] if isinstance(part[0], bytes) else str(part[0]).encode()
+                m = self._UID_IN_RESPONSE.search(meta)
+                if not m:
+                    continue
+                uid = m.group(1).decode()
+                found[uid] = self._headers_from_bytes(uid, part[1])
+
+        return [found[u] for u in uids if u in found]
+
     def fetch_headers(self, uid: str) -> dict:
         """
-        Fetch message headers (lightweight).
+        Fetch message headers (lightweight) for a single message.
 
         Args:
             uid: Message UID.
@@ -350,33 +415,13 @@ class IMAP:
         Returns:
             Dict with subject, from, to, date, etc.
         """
-        if not self.connection:
-            raise IMAPError("Not connected")
-
         try:
-            status, data = self.connection.uid(
-                "FETCH", uid, "(BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID)])"
-            )
-            if status != "OK" or not data[0]:
-                raise IMAPError(f"Failed to fetch headers for {uid}")
-
-            # Parse headers
-            header_data = data[0][1]
-            if isinstance(header_data, bytes):
-                header_data = header_data.decode("utf-8", errors="replace")
-
-            msg = email.message_from_string(header_data)
-
-            return {
-                "uid": uid,
-                "subject": self._decode_header(msg.get("Subject", "")),
-                "from": self._decode_header(msg.get("From", "")),
-                "to": self._decode_header(msg.get("To", "")),
-                "date": msg.get("Date", ""),
-                "message_id": msg.get("Message-ID", ""),
-            }
-        except Exception as e:
+            results = self.fetch_headers_batch([uid])
+        except IMAPError as e:
             raise IMAPError(f"Failed to fetch headers for {uid}: {e}")
+        if not results:
+            raise IMAPError(f"Failed to fetch headers for {uid}")
+        return results[0]
 
     def fetch_raw(self, uid: str) -> bytes:
         """

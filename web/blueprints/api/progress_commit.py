@@ -22,7 +22,7 @@ import socket
 
 from flask import Response, request, stream_with_context
 
-from core import IMAP, Database, IMAPError
+from core import Database, IMAPError, ImapPool
 from core.account_utils import is_gmail_host
 from core.pending_commit import (
     clear_commit_session,
@@ -45,7 +45,7 @@ from .commit import (
     create_archive_folder_from_path,
 )
 from .progress import sse_message
-from .streaming import clear_folder_cache
+from .streaming import evict_cached_uids
 
 logger = logging.getLogger(__name__)
 
@@ -222,7 +222,7 @@ def stream_commit():
                     },
                 )
 
-                client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+                client = ImapPool.acquire(account_id, account["credentials_encrypted"])
 
                 # Group by source folder
                 by_folder = {}
@@ -320,7 +320,7 @@ def stream_commit():
             finally:
                 if client:
                     try:
-                        client.disconnect()
+                        client.release()
                     except Exception:
                         pass
 
@@ -474,7 +474,7 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
         # account-scoped set serves both levels.
         accounted_ids = set()
         try:
-            client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+            client = ImapPool.acquire(account_id, account["credentials_encrypted"])
             # Gmail needs a provider-aware delete (its IMAP delete only
             # removes a label, not the message); detected from the host.
             is_gmail = is_gmail_host(client.host)
@@ -489,7 +489,7 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
                 by_folder[src_folder].append(item)
 
             for source_folder, folder_items in by_folder.items():
-                actions_applied = False
+                acted_uids = []
                 try:
                     client.select_folder(source_folder)
 
@@ -530,7 +530,7 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
                                         results["post_actions"]["by_action"].get("delete", 0) + 1
                                     )
                                     mark_item_done(item["id"])
-                                    actions_applied = True
+                                    acted_uids.append(uid)
                                 else:
                                     results["post_actions"]["failed"] += 1
                             # The batch leaves Trash selected; restore the source
@@ -554,8 +554,8 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
                                     len(remaining),
                                     e,
                                 )
-                                if actions_applied:
-                                    clear_folder_cache(int(account_id), source_folder)
+                                if acted_uids:
+                                    evict_cached_uids(int(account_id), source_folder, acted_uids)
                                 continue
 
                     for item in folder_items:
@@ -579,7 +579,7 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
                             )
                             mark_item_done(item["id"])
                             accounted_ids.add(item["id"])
-                            actions_applied = True
+                            acted_uids.append(uid)
                         except IMAPError as e:
                             results["post_actions"]["failed"] += 1
                             accounted_ids.add(item["id"])
@@ -591,9 +591,11 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
                                 e,
                             )
 
-                    # Invalidate email cache so UI reflects changes
-                    if actions_applied:
-                        clear_folder_cache(int(account_id), source_folder)
+                    # Drop only the acted-on rows from the folder cache. Wiping
+                    # the whole folder here forced a full re-download on the
+                    # next view; the sync path reconciles the rest anyway.
+                    if acted_uids:
+                        evict_cached_uids(int(account_id), source_folder, acted_uids)
                 except IMAPError as e:
                     unaccounted = [it for it in folder_items if it["id"] not in accounted_ids]
                     results["post_actions"]["failed"] += len(unaccounted)
@@ -630,7 +632,7 @@ def _apply_post_actions_from_pending(commit_id: str, items: list, results: dict)
         finally:
             if client:
                 try:
-                    client.disconnect()
+                    client.release()
                 except Exception:
                     pass
 
@@ -712,15 +714,17 @@ def _apply_folder_post_action(
 
     client = None
     try:
-        client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+        client = ImapPool.acquire(account_id, account["credentials_encrypted"])
         # Gmail needs a provider-aware delete (its IMAP delete only removes
         # a label, not the message); detected from the connected host.
         is_gmail = is_gmail_host(client.host)
         client.select_folder(imap_folder)
 
+        acted_uids = []
         for uid in archived_uids:
             try:
                 apply_email_action(client, action, uid, imap_folder, is_gmail)
+                acted_uids.append(uid)
                 results["post_actions"]["success"] += 1
                 results["post_actions"]["by_action"][action] = (
                     results["post_actions"]["by_action"].get(action, 0) + 1
@@ -735,8 +739,9 @@ def _apply_folder_post_action(
                     e,
                 )
 
-        # Invalidate email cache for this folder so UI reflects changes
-        clear_folder_cache(int(account_id), imap_folder)
+        # Drop only the acted-on rows; the rest of the folder cache survives.
+        if acted_uids:
+            evict_cached_uids(int(account_id), imap_folder, acted_uids)
 
     except Exception as e:
         results["post_actions"]["failed"] += 1
@@ -749,6 +754,6 @@ def _apply_folder_post_action(
     finally:
         if client:
             try:
-                client.disconnect()
+                client.release()
             except Exception:
                 pass

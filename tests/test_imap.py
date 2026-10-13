@@ -412,3 +412,55 @@ class TestStartTLS:
         assert not is_loopback_host("1270.0.1")
         assert not is_loopback_host("imap.gmail.com")
         assert not is_loopback_host("")
+
+
+class TestFetchHeadersBatch:
+    """One FETCH per chunk, results keyed by the UID in the response."""
+
+    @staticmethod
+    def _resp(uid, subject):
+        meta = f"7 (UID {uid} BODY[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID)] {{40}}".encode()
+        body = f"Subject: {subject}\r\nFrom: a@x\r\nMessage-ID: <{uid}@x>\r\n\r\n".encode()
+        return (meta, body)
+
+    def test_out_of_order_response_maps_by_uid(self):
+        client, conn = make_client()
+        conn.uid.return_value = (
+            "OK",
+            [self._resp(12, "twelve"), b")", self._resp(10, "ten"), b")", self._resp(11, "eleven"), b")"],
+        )
+        got = client.fetch_headers_batch(["10", "11", "12"])
+        assert [(h["uid"], h["subject"]) for h in got] == [
+            ("10", "ten"), ("11", "eleven"), ("12", "twelve")
+        ]
+        assert got[0]["message_id"] == "<10@x>"
+        verb, uid_set, fields = conn.uid.call_args[0]
+        assert (verb, uid_set) == ("FETCH", "10,11,12")
+        assert fields.startswith("(UID BODY.PEEK")
+
+    def test_chunks_at_boundary(self):
+        client, conn = make_client()
+        conn.uid.return_value = ("OK", [])
+        client.fetch_headers_batch([str(i) for i in range(1, 102)])
+        assert conn.uid.call_count == 2
+        first = conn.uid.call_args_list[0][0][1]
+        second = conn.uid.call_args_list[1][0][1]
+        assert first.count(",") == 99 and second == "101"
+
+    def test_missing_uid_is_omitted_not_fatal(self):
+        client, conn = make_client()
+        conn.uid.return_value = ("OK", [self._resp(5, "five"), b")"])
+        got = client.fetch_headers_batch(["4", "5"])
+        assert [h["uid"] for h in got] == ["5"]
+
+    def test_single_uid_wrapper_raises_when_absent(self):
+        client, conn = make_client()
+        conn.uid.return_value = ("OK", [])
+        with pytest.raises(IMAPError):
+            client.fetch_headers("9")
+
+    def test_bad_status_raises(self):
+        client, conn = make_client()
+        conn.uid.return_value = ("NO", [b"nope"])
+        with pytest.raises(IMAPError):
+            client.fetch_headers_batch(["1"])

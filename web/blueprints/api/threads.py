@@ -11,7 +11,7 @@ See docs/Stage_Thread_Plan.md for the design rationale.
 
 from flask import jsonify, request
 
-from core import IMAP, Database, IMAPError
+from core import Database, IMAPError, ImapPool
 from core.database import get_setting
 from core.imap import THREAD_MAX_MESSAGES_DEFAULT
 from utils.log import get_logger
@@ -89,7 +89,7 @@ def find_thread():
     # Connect and run the thread walk. Always disconnect on exit, even on error.
     client = None
     try:
-        client = IMAP.connect_with_credentials(row["credentials_encrypted"])
+        client = ImapPool.acquire(account_id, row["credentials_encrypted"])
 
         # Identify the Sent folder for cross-folder search (unless caller opted out).
         # Skip Sent if it IS the source folder (e.g. user clicked on a message
@@ -133,6 +133,6 @@ def find_thread():
     finally:
         if client:
             try:
-                client.disconnect()
+                client.release()
             except Exception:
                 pass

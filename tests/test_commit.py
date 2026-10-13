@@ -378,11 +378,11 @@ def imap_account(initialized_app):
 
 
 def _run_post_action(monkeypatch, account_id, action, archived, failed):
+    from core.imap import IMAP
     from web.blueprints.api import progress_commit as pc
 
     fake = _FakeImap()
-    monkeypatch.setattr(pc.IMAP, "connect_with_credentials", classmethod(lambda cls, creds: fake))
-    monkeypatch.setattr(pc, "clear_folder_cache", lambda *a, **k: None)
+    monkeypatch.setattr(IMAP, "connect_with_credentials", classmethod(lambda cls, creds: fake))
     results = _empty_results()
     events = list(
         pc._apply_folder_post_action(
@@ -412,6 +412,29 @@ class TestFolderPostActionScope:
         fake, results, _ = _run_post_action(monkeypatch, imap_account, "archive", [], [])
         assert fake.acted_on == []
         assert fake.selected is None
+
+    def test_only_acted_uids_leave_the_folder_cache(self, imap_account, monkeypatch):
+        """Post-commit used to wipe the whole folder cache, forcing a full
+        re-download on the next view. Now only the acted-on rows go."""
+        from core import sync_cache
+        from web.blueprints.api.streaming import cache_email
+
+        folder = "INBOX/Clients"
+        for uid in ("1", "2", "3", "4", "5"):
+            cache_email(imap_account, folder, 42, {"uid": uid, "subject": f"s{uid}"})
+        Database.commit()
+        sync_cache.update_folder_sync_state(imap_account, folder, 42, 99)
+        assert sync_cache.is_cache_fresh(imap_account, folder)
+
+        fake, results, _ = _run_post_action(monkeypatch, imap_account, "archive", ["2", "4"], [])
+
+        assert fake.acted_on == [("archive", "2"), ("archive", "4")]
+        remaining = Database.fetchall(
+            "SELECT uid FROM email_cache WHERE account_id = ? AND folder_name = ? ORDER BY uid",
+            (imap_account, folder),
+        )
+        assert [r["uid"] for r in remaining] == ["1", "3", "5"]
+        assert not sync_cache.is_cache_fresh(imap_account, folder), "TTL must reset"
 
     def test_summary_mentions_skipped_folder(self):
         r = _empty_results()

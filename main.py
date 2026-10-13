@@ -61,7 +61,9 @@ def _cleanup(app):
 
     try:
         from core.database import Database, get_setting
+        from core.imap_pool import ImapPool
 
+        ImapPool.close_all()
         with app.app_context():
             # Checkpoint WAL first so backup captures all changes
             Database.checkpoint()

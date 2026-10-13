@@ -7,7 +7,7 @@ Supports post-commit actions (archive, trash, delete) for IMAP emails.
 
 import os
 
-from core import IMAP, Config, Database, Encryption
+from core import Config, Database, Encryption, ImapPool
 
 from .email_parser import (
     extract_body_text,
@@ -381,7 +381,7 @@ def commit_imap_folder(
     if not account:
         raise ValueError(f"Account {account_id} not found")
 
-    client = IMAP.connect_with_credentials(account["credentials_encrypted"])
+    client = ImapPool.acquire(account_id, account["credentials_encrypted"])
     try:
         folder_info = client.select_folder(imap_folder)
         if folder_info.get("message_count", 0) == 0:
@@ -475,7 +475,7 @@ def commit_imap_folder(
                     "commitPhase": "folders",
                 }
     finally:
-        client.disconnect()
+        client.release()
 
 
 def apply_email_action(client, action: str, uid: str, source_folder: str, is_gmail: bool) -> None:

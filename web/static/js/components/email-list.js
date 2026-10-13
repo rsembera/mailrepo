@@ -299,7 +299,7 @@ export function renderEmailList() {
                 </div>
                 <div class="toolbar-actions">
                     ${state.currentView?.type === 'account' ? `
-                    <button class="btn btn-secondary btn-icon-only" data-action="refresh" title="Refresh folder">
+                    <button class="btn btn-secondary btn-icon-only" data-action="refresh" title="Refresh folder (Shift-click: rebuild cache)">
                         <i data-lucide="refresh-cw"></i>
                     </button>
                     ` : ''}
@@ -463,7 +463,7 @@ export function renderEmailList() {
             exportArchived:    () => exportSelectedArchivedEmails(),
             deleteArchived:    () => deleteSelectedArchivedEmails(),
             // Account-view toolbar
-            refresh:           () => onRefresh && onRefresh(),
+            refresh:           (el, ev) => onRefresh && onRefresh({ rebuild: !!ev.shiftKey }),
             selectAll:         () => selectAllEmails(),
             clearSelected:     () => clearSelectedEmails(),
             openStage:         () => openStageModalForSelected(),

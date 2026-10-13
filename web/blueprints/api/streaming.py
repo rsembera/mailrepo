@@ -70,6 +70,30 @@ def clear_folder_cache(account_id: int, folder: str):
     clear_folder_sync_state(account_id, folder)
 
 
+def evict_cached_uids(account_id: int, folder: str, uids: list) -> None:
+    """
+    Drop specific UIDs from the folder cache after a post-commit action
+    (archive/trash/delete) removed them from the server.
+
+    Only the rows that changed are touched: the rest of the folder's
+    cache survives, so the next view does not re-download everything.
+    The sync state is cleared so the next load checks the server instead
+    of serving the pre-commit list from the TTL window.
+    """
+    uids = [str(u) for u in uids if u is not None]
+    if uids:
+        placeholders = ",".join("?" * len(uids))
+        Database.execute(
+            f"""DELETE FROM email_cache
+               WHERE account_id = ? AND folder_name = ? AND uid IN ({placeholders})""",
+            (account_id, folder, *uids),
+        )
+        Database.commit()
+    from core.sync_cache import clear_folder_sync_state
+
+    clear_folder_sync_state(account_id, folder)
+
+
 def get_any_cached_emails(account_id: int, folder: str) -> list[dict]:
     """
     Get cached emails regardless of UIDVALIDITY (for offline mode).
