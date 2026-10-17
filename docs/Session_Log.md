@@ -7273,3 +7273,25 @@ re-run this session.
 
 - 7f017be -- IMAP: hold one connection per account, batch header fetch, incremental refresh, evict-not-wipe after commit, cache-first folder view
 - (this entry) -- docs: Session 97
+
+## Session 98 — October 16, 2026 (MacBook)
+
+**2-minute blind spot.** Dogfooding Session 97: a message arrived while
+MailRepo was open; a re-click on INBOX within two minutes served the
+cache without asking the server, so the message did not appear. The
+120 s `FOLDER_CACHE_TTL_SECONDS` was sized for the old cost of a check
+(fresh TLS + login per click). With the held connection a check is
+sub-second and runs behind the cached list, so the window now only needs
+to absorb a double-click: cut to 10 s. Test pin updated. 839 tests, ruff
+clean.
+
+Rick had understood Session 97 as including push. It did not: IMAP IDLE
+was deferred in the plan and in the summary, but the practical meaning
+("MailRepo never learns about new mail on its own") was not spelled out.
+IDLE is the next item.
+
+### Commits
+
+- ecc2945 -- Folder cache: 10 s TTL, not 120 s
+- (this entry) -- docs: Session 98
+

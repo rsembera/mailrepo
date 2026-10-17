@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in seconds. The Refresh button reconciles against the server while
   keeping the cache (only new messages are downloaded); Shift-click
   Refresh discards the folder cache and rebuilds it.
+- **Folder clicks always check the server (Session 98).** The window in
+  which a folder was served from cache without asking the server is now
+  10 seconds (was 2 minutes). The longer window predated the held
+  connection and had become a blind spot: mail that arrived in it was
+  not shown and nothing said so.
 - **Click-to-zoom on images (Session 94).** Inline images in an email
   body and image attachments open in an in-app lightbox: fit-to-window,
   a 1:1 toggle for large images, download, and open-in-default-app in
