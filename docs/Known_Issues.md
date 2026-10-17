@@ -5,6 +5,40 @@ future session can pick up where the last one left off.
 
 ---
 
+## MITIGATED 2026-10-17 (Session 99): office deferral reinstated -- the office leg FAILS to connect, it isn't just slow
+
+**Reverses the 2026-07-24 "one rule" decision** (skip only on constrained
+links). Read before removing it.
+
+The black box since Session 95 shows the real office problem is
+connection failure, not throughput. On office days -- Sep 16, Oct 2, 9,
+14, 16 -- the catch-up agent logged strings of ssh `exit=255`: mostly
+~10 s (cannot connect at all), some hanging 456-915 s. Oct 16 alone:
+13 failures from 10:56 to 14:32. When a run did get through after such
+a spell it crawled (Oct 2: 79 KB/s; Oct 9: 72 KB/s) while the probe
+straight after was fast (2.2 / 3.8 MB/s), so the link comes and goes
+rather than being uniformly shaped. Oct 16 19:05 and 19:52 (Rick
+confirms still at the office) were slow with a slow probe
+(~250-300 KB/s). The 21:35 run from home delivered at 8.3 MB/s.
+
+**Change (ops wrapper, outside the repo):** `backup-sync.sh` gains
+`on_office_network()`: the default gateway's MAC, as printed by
+`arp -n`, is matched against `mailrepo-ops/office-gateways.conf`
+(office router `ae:20:2e:7:84:21`). The interactive path and
+`--catchup` both defer there exactly as on a tether -- pending flag set,
+launchd agent ships at home. Gateway IP is NOT usable: the office and
+the home Hitron are both 192.168.0.1. Empty or missing conf = old
+behaviour. `--status` reports `office -> syncs deferred here`.
+Verified at the office: status and a catch-up pass both resolve to
+`net=office`. Pre-change copy: `backup-sync.sh.bak-2026-10-17`.
+Home-side check pending (expect `regular`, pending flag clearing).
+
+Not investigated, and now hidden by the skip: *why* the office leg
+fails (Tailscale path flapping, office UDP handling, or the home end).
+The Session 95 entry below stays OPEN for that.
+
+---
+
 ## OPEN 2026-09-19 (Session 95): first VERIFIED slow upload on office Wi-Fi; wrapper rate parser was broken
 
 **Supersedes the 2026-07-24 line "the tether is the only network ever

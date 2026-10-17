@@ -7295,3 +7295,30 @@ IDLE is the next item.
 - ecc2945 -- Folder cache: 10 s TTL, not 120 s
 - (this entry) -- docs: Session 98
 
+
+---
+
+## Session 99 — October 17, 2026 (MacBook, at the office)
+
+### Sentinel sync now deferred on the office network
+
+Rick reported a slow backup sync at the office on Oct 16. The wrapper
+log since Session 95 showed the office problem is mostly *failure to
+connect*: strings of ssh exit=255 (10 s fails and 8-15 min hangs) on
+Sep 16, Oct 2, 9, 14 and 16, plus slow runs at ~75-300 KB/s; home ran
+8.3 MB/s the same night. Rick chose to defer at the office and let the
+launchd catch-up ship at home.
+
+**Ops wrapper (outside the repo):** `backup-sync.sh` adds an office
+check by gateway MAC (`office-gateways.conf`; IP can't distinguish --
+office and home are both 192.168.0.1). Reverses the 2026-07-24
+single-rule decision on new evidence. Verified at the office
+(`--status` and `--catchup` -> office). Home-side check still to do.
+Backup: `backup-sync.sh.bak-2026-10-17`.
+
+No repo code changed; no CHANGELOG or Navigation_Map update needed.
+Details in `docs/Known_Issues.md` (new MITIGATED entry at top).
+
+### Commits
+
+- (this entry) -- docs: Session 99; office deferral reinstated in ops wrapper
