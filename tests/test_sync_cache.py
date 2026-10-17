@@ -58,7 +58,7 @@ class TestSyncCacheState:
 
 class TestCacheFreshness:
     def test_ttl_constant(self):
-        assert sync_cache.FOLDER_CACHE_TTL_SECONDS == 120
+        assert sync_cache.FOLDER_CACHE_TTL_SECONDS == 10
 
     def test_no_state_is_not_fresh(self, initialized_app):
         assert sync_cache.is_cache_fresh(1, "INBOX") is False

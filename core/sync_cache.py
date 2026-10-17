@@ -98,8 +98,13 @@ def clear_folder_sync_state(account_id: int, folder: str) -> None:
     conn.commit()
 
 
-# How many seconds a cached folder is considered fresh.
-FOLDER_CACHE_TTL_SECONDS = 120
+# How many seconds a cached folder is served without asking the server.
+# Was 120 s when every check cost a fresh TLS connection and login. With
+# the held connection (Session 97) a check is sub-second and runs behind
+# the cached list, so the window only needs to absorb a double-click.
+# Anything longer is a blind spot: mail that arrived in the window is not
+# shown and nothing says so (Session 98).
+FOLDER_CACHE_TTL_SECONDS = 10
 
 
 def is_cache_fresh(account_id: int, folder: str) -> bool:
