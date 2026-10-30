@@ -7322,3 +7322,26 @@ Details in `docs/Known_Issues.md` (new MITIGATED entry at top).
 ### Commits
 
 - (this entry) -- docs: Session 99; office deferral reinstated in ops wrapper
+
+---
+
+## Session 100 — October 30, 2026 (MacBook, at the office)
+
+### Office deferral missed a MailRepo-launched full backup; wrapper hardened
+
+The launch-time full backup at the office ran the Sentinel rsync
+(~230 MB) instead of deferring, though `--status` from a terminal said
+`office`. Stopped by hand; pending flag kept for the home catch-up.
+Reproduced one cause: with a minimal PATH, `arp`/`route` aren't found
+and the office check silently says "regular". An expired ARP entry is
+the other possibility. `backup-sync.sh` (ops, outside the repo) now pins
+`/usr/sbin:/sbin` on PATH and pings the gateway once if `arp` returns no
+MAC. Verified with a minimal PATH at the office. Backup:
+`backup-sync.sh.bak-2026-10-30`.
+
+No repo code changed; no CHANGELOG or Navigation_Map update needed.
+Details in `docs/Known_Issues.md` (new FIXED entry at top).
+
+### Commits
+
+- (this entry) -- docs: Session 100; office deferral PATH/ARP fix in ops wrapper

@@ -5,6 +5,32 @@ future session can pick up where the last one left off.
 
 ---
 
+## FIXED 2026-10-30: office deferral did not fire for a MailRepo-launched backup
+
+At the office (gateway MAC `ae:20:2e:7:84:21`, listed in
+`office-gateways.conf`), the launch-time full backup at 15:56 ran the
+Sentinel rsync anyway (~230 MB) instead of deferring. `--status` from a
+terminal at the same moment correctly said `office`. Stopped by hand at
+106 s (logged `WARN ... exit=20`); pending flag stayed set for the
+home catch-up.
+
+Cause (one confirmed, one possible): `on_office_network()` calls `route`
+and `arp`, which live in `/sbin` and `/usr/sbin`. Run with a minimal
+PATH (`/usr/bin:/bin`), the check silently returns "regular" --
+reproduced. Not confirmed that MailRepo's post-backup environment
+lacked those directories (the process was gone before its env could be
+read). Second possibility: the gateway's ARP entry had expired, so
+`arp -n` returned no MAC.
+
+**Fix (ops wrapper, outside the repo):** the script now prepends
+`/usr/sbin:/sbin:/usr/bin:/bin` to PATH, and if `arp` returns no MAC it
+pings the gateway once and retries. Verified at the office: minimal-PATH
+`--status` now reports `office`. Pre-fix copy:
+`backup-sync.sh.bak-2026-10-30`. Next office-day backup should log
+`SKIP office network`.
+
+---
+
 ## MITIGATED 2026-10-17 (Session 99): office deferral reinstated -- the office leg FAILS to connect, it isn't just slow
 
 **Reverses the 2026-07-24 "one rule" decision** (skip only on constrained
