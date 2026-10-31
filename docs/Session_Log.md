@@ -7345,3 +7345,25 @@ Details in `docs/Known_Issues.md` (new FIXED entry at top).
 ### Commits
 
 - (this entry) -- docs: Session 100; office deferral PATH/ARP fix in ops wrapper
+
+---
+
+## Session 101 — October 31, 2026 (MacBook, at the office)
+
+### Office deferral: real cause found (ARP table hidden from MailRepo), RA fallback added
+
+An office backup synced again at 12:53 despite Session 100's fix. Running
+the wrapper exactly as MailRepo launches it reproduced the miss: `arp`
+returns "no entry" for the gateway inside MailRepo's process tree, though
+the terminal and launchd see it. `backup-sync.sh` (ops, outside the repo)
+now falls back to decoding the gateway MAC from the router's EUI-64 IPv6
+Router Advertisement (`ipconfig getsummary`), which is still visible.
+Verified the MailRepo way: deferred, `SKIP office network`. Also: per-run
+decision logging to `catchup-debug.log`; PATH additions appended so
+Homebrew rsync stays first. Session 100's cause marked superseded.
+
+No repo code changed; no CHANGELOG or Navigation_Map update needed.
+
+### Commits
+
+- (this entry) -- docs: Session 101; office deferral root cause + RA fallback

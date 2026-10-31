@@ -5,7 +5,39 @@ future session can pick up where the last one left off.
 
 ---
 
-## FIXED 2026-10-30: office deferral did not fire for a MailRepo-launched backup
+## FIXED 2026-10-31: real cause of the office-deferral misses -- macOS hides the ARP table from MailRepo
+
+**Supersedes the cause given in the 2026-10-30 entry below** (PATH /
+expired ARP entry). That fix did not help: on 2026-10-31 at 12:53 an
+office backup synced again, one second after the launchd catch-up had
+correctly logged `net=office`.
+
+Reproduced by running the script exactly as MailRepo does (venv Homebrew
+Python 3.14, `subprocess.run(path, shell=True, capture_output=True)`):
+`arp -n 192.168.0.1` returns `-- no entry` and `arp -an` returns nothing,
+even immediately after a successful ping. The same commands from a
+terminal or launchd see the entry. So under MailRepo the gateway MAC is
+unreadable, `on_office_network()` fails, and the sync runs. (Likely macOS
+Local Network privacy filtering the neighbour table for that process;
+not confirmed beyond the behaviour.)
+
+**Fix (ops wrapper):** fall back to the router's IPv6 Router Advertisement,
+which `ipconfig getsummary` still shows under MailRepo. The office
+router's RA source is EUI-64 (`fe80::ac20:2eff:fe07:8421`), which decodes
+to the same MAC (`ae:20:2e:7:84:21`). No RA or a non-EUI-64 address
+yields no MAC, which means "regular" -- the pre-existing behaviour.
+Verified the MailRepo way at the office: `mac=arp:no/ra:ae:20:2e:7:84:21
+decision=defer`, logged `SKIP office network`.
+
+Also on 2026-10-31: every MailRepo-launched run now logs its inputs
+(gateway, MAC, rsync binary, decision) to `catchup-debug.log`; and the
+2026-10-30 PATH change is now appended rather than prepended, because
+prepending had switched rsync to Apple's openrsync. Backups:
+`backup-sync.sh.bak-2026-10-31` (pre-logging), `...-10-31b` (pre-RA).
+
+---
+
+## SUPERSEDED (cause wrong, see above) 2026-10-30: office deferral did not fire for a MailRepo-launched backup
 
 At the office (gateway MAC `ae:20:2e:7:84:21`, listed in
 `office-gateways.conf`), the launch-time full backup at 15:56 ran the
