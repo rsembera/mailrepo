@@ -15,7 +15,7 @@ class Config:
 
     # Application info
     APP_NAME = "MailRepo"
-    VERSION = "1.0.0"
+    VERSION = "1.1.0-dev"
 
     # Default paths (can be overridden via environment variables)
     _base_path: Optional[Path] = None
