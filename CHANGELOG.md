@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Development builds on `main` now identify as `1.1.0-dev` (terminal banner, web UI, backup manifests) instead of `1.0.0`.
+
 ### Added
 - **Folder loading behaves like a mail client (Session 97).** Opening an
   IMAP folder now shows the cached list immediately and checks the

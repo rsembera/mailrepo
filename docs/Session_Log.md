@@ -7367,3 +7367,22 @@ No repo code changed; no CHANGELOG or Navigation_Map update needed.
 ### Commits
 
 - (this entry) -- docs: Session 101; office deferral root cause + RA fallback
+
+---
+
+## Session 102 — November 1, 2026 (MacBook)
+
+### Version string on main: 1.0.0 -> 1.1.0-dev
+
+Rick noticed the terminal banner said MailRepo v1.0.0 while running
+`main` (v1.0.0-63-g4346dec). `core/config.py` VERSION bumped to
+`1.1.0-dev`. Checked consumers first: terminal banner, web UI
+(`app_version`), and backup manifests store/display it as a string;
+nothing compares it. `setup_app.py` APP_VERSION left at 1.0.0 (CFBundle
+needs a numeric version) -- set both to 1.1.0 at release, along with the
+`build_deb.sh` argument. 839 tests pass.
+
+### Commits
+
+- `b614767` -- Mark main as 1.1.0-dev
+- (this entry) -- docs: Session 102; CHANGELOG
