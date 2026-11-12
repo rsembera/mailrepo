@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **A PDF export shows what the archive holds (Session 103).** One
+  email's HTML or styling could change the rest of a combined PDF:
+  blank the cover page and the other emails, or stamp content on every
+  page. Badly formed newsletters did some of this by accident. Each
+  email is now confined to its own part of the document.
+- **The app's pages only run the app's own scripts (Session 103).** A
+  Content-Security-Policy stops anything injected into a page from
+  running. It is enforced when MailRepo is used from a browser; in the
+  desktop app it is in report-only form until it has been checked
+  there.
+- **Converted PST files are removed (Session 103).** A PST import is
+  converted to plain-text mailbox files in the temp folder. On macOS
+  they were never removed until the next launch. They now go when the
+  import is unmounted, when the archive locks, and at exit.
+- Removed an unused route that returned any file on the machine as
+  text (Session 103).
+
 - **Email content can no longer run script in the app (Session 103).**
   Three paths let a crafted message do so: a `Date` header containing
   markup, shown in the mailbox list; "Copy as reply" on an HTML email;
@@ -79,6 +96,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   most apps. The field always re-masks the moment you submit.
 
 ### Fixed
+
+- **Folder trees from "."-separated mail servers (Session 103).**
+  Staging whole folders from a server that separates levels with "."
+  (many Dovecot and Courier hosts) kept each folder but lost the
+  arrangement, naming them by their full path. The tree is kept now.
+- **Search leaves out the trash (Session 103).** Search results, and
+  an export of them, included mail in trashed folders. The results
+  list also says when it is showing only the newest 100 of more.
+- **Imports say what they could not read (Session 103).** `.eml` files
+  and PST folders that failed to parse were left out without a word.
+  PST conversion is allowed thirty minutes instead of five.
+- **Lists show what the server did (Session 103).** Moving selected
+  emails to trash, or emptying trashed emails, cleared them from the
+  list even when a deletion failed.
+- Unmounting a PST import unstages what was staged from it, since its
+  files go with it (Session 103).
 
 - **Staging keeps folders apart (Session 103).** A message could show
   as already staged, and be skipped by "Stage thread", because a

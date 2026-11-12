@@ -123,7 +123,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `main.py` | 361 | Command-line entry: `prepare_app()` runs the pre-flight checks (SQLCipher, pending restore, interrupted-state warnings) and builds the app; `main()` serves it with waitress and wires the checkpoint-and-backup shutdown |
+| `main.py` | 329 | Command-line entry: `prepare_app()` runs the pre-flight checks (SQLCipher, pending restore, interrupted-state warnings) and builds the app; `main()` serves it with waitress and wires the checkpoint-and-backup shutdown |
 | `launcher.py` | 351 | Packaged-app entry (Session 88): pywebview window around the server; archive under Application Support / XDG data; free-port pick; second instance refused; shutdown on window close; DesktopApi bridge (open_bytes, print_html) for what a webview cannot do |
 | `setup_app.py` | 139 | py2app manifest — first-party code declared as packages; `install_requires` cleared so py2app builds from the venv |
 | `packaging/bundle_dylibs.py` | 157 | Post-py2app pass: otool closure of WeasyPrint's and readpst's Homebrew libraries into Contents/Frameworks + Helpers, install-name rewrite, re-sign, leak check |
@@ -135,12 +135,14 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 |------|-------|--------------|
 | `imap.py` | 1,511 | IMAP client: connect, auth, folders, batched header fetch (`fetch_headers_batch`, 100 UIDs per FETCH, keyed by UID in the response), MOVE/COPY + UID-scoped expunge, Gmail-aware delete (incl. batched set delete), CONDSTORE |
 | `imap_pool.py` | 185 | One held, authenticated IMAP connection per account (`ImapPool.acquire` -> lease, `release`); per-account lock, NOOP probe + lazy reconnect, `close_all` on lock/exit, `evict` on account change (Session 97) |
-| `pdf_export.py` | 1,021 | PDF export: per-email PDFs, attachment merging, WeasyPrint |
+| `pdf_export.py` | 804 | PDF export: per-email PDFs, attachment merging, WeasyPrint; email HTML is cleaned by `pdf_email_html.py` |
 | `encryption.py` | 1,083 | Argon2id KDF + HKDF + AES-256-GCM (v2) plus the v3 envelope: random master wrapped under password and recovery key, each wrapper verified to open before the key file is written; MRC4 (Session 93): the envelope plus archive_id and an HMAC binding the halves, verified at every unwrap; backup-MAC and key-file-bind subkeys; lock hooks; work factor via argon2_parameters() — production everywhere, cheap only when the test suite's double guard (MAILREPO_FAST_KDF + MAILREPO_DATA_DIR) is met |
 | `password_change.py` | 830 | Password change — v2 full re-encryption, v3 rewrap; recovery-key password reset (needs no unlocked session), recovery-key rotation, on-disk backup gate, interruption marker |
 | `database.py` | 506 | SQLCipher connection, schema v5, FTS5, migrations, threading lock, hard refusal to open unencrypted |
 | `keyfile_binding.py` | 131 | MRC4 rollback detection: records the current key file's tag in the encrypted settings table, refuses a rolled-back file at login, upgrades MRC3 → MRC4 in place (review #8a) |
 | `master_rotation.py` | 234 | Master-key rotation: fresh master, re-encrypt files + credentials, rekey SQLCipher, new MRC4 key file with new recovery key; backup-gated, resumable, interruption marker (review #8b) |
+| `pdf_email_html.py` | 322 | One email's HTML made safe to sit in a combined PDF: parsed with WeasyPrint's own parsers (tinyhtml5, tinycss2), written back balanced, every style rule confined to that email (Session 103) |
+| `pst_temp.py` | 92 | PST conversion directories in the temp folder: create, recognise, remove; removed on unmount, lock, exit and launch (Session 103) |
 | `pdf_fetcher.py` | 72 | The one WeasyPrint URL fetcher: `data:` always, `http(s):` on request, nothing from disk (review #3) |
 | `crypto_migration_v3.py` | 301 | v2 → v3 migration: re-encrypt under a random master, resumable via wrapped-master state file |
 | `pending_commit.py` | 222 | Commit resume: save/restore interrupted commits |
@@ -157,7 +159,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 |------|-------|--------------|
 | `idle.py` | 226 | Process-level activity clock, idle-lock watchdog thread (skips while a backup or logout is running), logout claim, per-login id (review #1, #11) |
 | `responses.py` | 88 | Attachment/EML response builder: inline allowlist, sandbox CSP, werkzeug-encoded filenames (review #2, #17) |
-| `app.py` | 268 | Flask factory, blueprint registration, auth/CSRF middleware |
+| `app.py` | 357 | Flask factory, blueprint registration, auth/CSRF middleware; `content_security_policy()` and `csp_mode()` for the page policy (Session 103) |
 
 ### Blueprints (`/web/blueprints/`)
 
@@ -173,7 +175,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 |------|-------|--------------|
 | `exports.py` | 1,203 | Bulk PDF/encrypted-ZIP export pipeline + SSE progress |
 | `emails.py` | 694 | Archived email operations: view, move, delete, batch, download; folder listing carries per-subfolder tree counts |
-| `filesystem.py` | 813 | File browser for imports, path validation, PST conversion |
+| `filesystem.py` | 757 | File browser for imports, path validation, PST conversion |
 | `imports.py` | 396 | Mount/unmount imports, browse imported emails/folders |
 | `progress_commit.py` | 767 | SSE streaming for commit operations; batched Gmail deletes; unified post-action failure accounting + logging (Sessions 47/54/57); post-actions evict only acted-on UIDs from the folder cache (Session 97) |
 | `folders.py` | 576 | Archive folder CRUD, trash, restore, vault, retention; `tree_email_counts()` is the single roll-up behind every folder size the app shows |
@@ -204,14 +206,15 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 |------|-------|--------------|
 | `password-toggle.js` | 128 | Show/hide password toggle (Session 88): auto-wires password inputs; reserve computed inline from the button's measured band (Daybook PLAN.md 9ab — CSS reserves lose specificity fights silently); re-mask defers submit one painted frame |
 | `desktop.js` | 98 | Desktop-shell bridge (Session 88): no-ops in a browser; in the packaged app routes open-in-new-tab, print, and same-origin _blank links through DesktopApi |
-| `app.js` | 718 | Init, event listeners, rail nav, nav guards, template-bindings wiring |
-| `template-bindings.js` | 143 | Single delegated handler for index.html data-tpl-action attrs (Session 38) |
+| `app.js` | 731 | Init, event listeners, rail nav, nav guards, template-bindings wiring |
+| `template-bindings.js` | 145 | Single delegated handler for index.html data-tpl-action attrs (Session 38) |
 | `delegate.js` | 116 | `bindActions(container, handlers)` helper for per-view delegation |
-| `state.js` | 210 | Central state object; staged-item persistence (`persistStaged` / `restoreStaged`, the only writer); `isStagedInView` / `unstageInView` |
+| `state.js` | 245 | Central state object; staged-item persistence (`persistStaged` / `restoreStaged`, the only writer); `isStagedInView` / `unstageInView` |
 | `staged-key.js` | 63 | Keys for staged emails: source type + account/import + folder + id, since ids repeat across folders (Session 103). No DOM; tested in Node |
 | `list-load.js` | 27 | `beginListLoad(state)`: guard that tells a mailbox load it has been superseded (Session 103). No DOM; tested in Node |
+| `archive-paths.js` | 100 | Archive paths for staged folders, using the separator the IMAP server reported (`imapDelimiter`, `computeArchivePaths`, `getFolderName`) (Session 103). No DOM; tested in Node |
 | `utils.js` | 86 | escapeHtml, formatDate, debounce, extractName |
-| `modals.js` | 164 | Alert/confirm/prompt + canonical closeModal + registerModalCloseHandler |
+| `modals.js` | 166 | Alert/confirm/prompt + canonical closeModal + registerModalCloseHandler |
 | `toast.js` | 106 | showToast(message, type) — non-blocking status card, bottom centre, auto-dismiss (Session 94); modals stay for anything needing a decision |
 | `recovery-key.js` | 131 | One-time recovery-key screen: copy / print / download, beforeunload guard |
 
@@ -219,13 +222,13 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `mail.js` | 2,563 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav; guarded list loads; sandboxed print frame |
+| `mail.js` | 2,568 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav; guarded list loads; sandboxed print frame |
 | `settings.js` | 1,482 | Settings: appearance, accounts, security, recovery-key status + check + rotation, backup, reset |
-| `review.js` | 1,080 | Review staged items, destination editing, commit |
+| `review.js` | 1,081 | Review staged items, destination editing, commit |
 | `backups.js` | 1,034 | Backup/restore UI, restore points, settings |
 | `folder-selection.js` | 897 | Bulk folder staging from IMAP/imports |
 | `vault.js` | 881 | Retention vault: move to vault, restore, permanent delete; subfolder links carry tree counts |
-| `trash.js` | 775 | Trash view: deleted folders, emails, restore, purge |
+| `trash.js` | 785 | Trash view: deleted folders, emails, restore, purge |
 | `folder-mgmt.js` | 711 | Manage folders: rename, color, create, delete |
 | `starred.js` | 369 | Starred email view |
 | `recover.js` | 336 | Pre-login disaster recovery: scan a backup folder, list restore points, stage a restore. Deliberately talks to nothing else — there is no session, database or settings when it runs |
@@ -236,10 +239,10 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 |------|-------|--------------|
 | `export-modal.js` | 888 | Bulk export UI: scope picker, format (pdf/eml/mbox/both), scope-aware password, progress |
 | `image-lightbox.js` | 315 | Click-to-zoom overlay for inline images and image attachments (Session 94); click targets are laid over the sandboxed body iframe from the parent, because WebKit runs no listeners inside a no-scripts frame |
-| `email-list.js` | 792 | Email list rendering, selection, toolbar, filter input |
-| `sidebar.js` | 744 | Sidebar: archive folders, IMAP folders, imports, resize |
-| `imports.js` | 728 | Import mount/unmount, browse, folder/email display |
-| `staging.js` | 526 | Staging workflow, destination picker, stage/unstage |
+| `email-list.js` | 800 | Email list rendering, selection, toolbar, filter input |
+| `sidebar.js` | 749 | Sidebar: archive folders, IMAP folders, imports, resize |
+| `imports.js` | 747 | Import mount/unmount, browse, folder/email display |
+| `staging.js` | 451 | Staging workflow, destination picker, stage/unstage |
 | `file-picker.js` | 438 | Filesystem browser modal for import file selection |
 | `date-picker.js` | 383 | Date picker (ported from EdgeCase) for vault retention dates |
 | `progress.js` | 375 | SSE progress modal for commit/import operations |
@@ -273,7 +276,7 @@ context-menu (69).
 | File | Lines | What It Does |
 |------|-------|--------------|
 | `main/index.html` | 697 | Main dashboard (three-pane layout); all interactivity via data-tpl-action |
-| `base.html` | 423 | Base layout, left rail, sidebar, content area, modals |
+| `base.html` | 473 | Base layout, left rail, sidebar, content area, modals |
 | `auth/login.html` | 92 | Login form; includes the restored-from-backup banner |
 | `auth/setup.html` | 76 | Master password setup; links to disaster recovery so a lost archive is not mistaken for a first run |
 | `auth/recover.html` | 62 | Pre-login restore: backup-folder input, restore points, credential note |
@@ -421,8 +424,11 @@ first run of this found a `ReferenceError` that had been shipping.
 | `tests/test_export_counts.py` | Zip and mbox exports report what was written and what was left out (Session 103) |
 | `tests/test_import_bytes.py` | mbox read as the original bytes, lazily, from one open mailbox; `.emlx` delimited by its byte count (Session 103) |
 | `tests/test_second_pass.py` | Restore completion (moved not copied, stale state cleared, re-runnable), launch notices on the login screen, restored-database check, reset, PDF export attachments / ordering / skipped count, mbox folder names (20 tests, Session 103) |
-| `tests/test_frontend_js.py` | Front end: runs `tests/js/*.test.mjs` in Node when Node 22.7+ is installed, plus checks on the JavaScript source that run everywhere: staged keys, single storage writer, escaping of dates / ids / error text / data attributes, inert parsing of email HTML, sandboxed print frame, list-load guards (15 tests, Session 103) |
-| `tests/js/*.test.mjs` | Node test-runner files (`node --test tests/js/*.test.mjs`): staged keys and persistence, list-load guard, commit progress stream, confirm dialog labels (26 tests, Session 103) |
+| `tests/test_frontend_js.py` | Front end: runs `tests/js/*.test.mjs` in Node when Node 22.7+ is installed, plus checks on the JavaScript source that run everywhere (24 tests, Session 103) |
+| `tests/js/*.test.mjs` | Node test-runner files (`node --test tests/js/*.test.mjs`): staged keys and persistence, list-load guard, archive paths, commit progress stream, confirm dialog labels (38 tests, Session 103) |
+| `tests/test_pdf_email_html.py` | PDF export: what follows an email stays outside it, every style rule confined, positions, removed elements, escaping; rendered exports still show the cover and the next email (117 tests, Session 103) |
+| `tests/test_pst_temp.py` | PST conversion directories: symlinked temp folder, cleanup route accepts only its own, lock / exit / launch removal, read-file route gone (15 tests, Session 103) |
+| `tests/test_csp.py` | Page Content-Security-Policy: no inline script without this request's nonce, templates and scripts free of inline handlers, attachments keep their own policy, desktop report-only, MAILREPO_CSP switch (18 tests, Session 103) |
 | `tests/test_commit_durability.py` | Folder commit: archive rows are committed before the server post-action starts (Session 103) |
 | `tests/test_purge.py` | Permanent deletion removes the files: automatic trash cleanup, folder tree, Empty Trash, vault batch delete (7 tests, Session 103) |
 | `tests/test_folder_cache_sync.py` | IMAP folder cache vs server: an emptied folder shows empty; chunked stale removal (Session 103) |

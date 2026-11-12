@@ -7749,3 +7749,93 @@ nothing. It needs the inline scripts and `onclick` attributes in
 - `ecef5ea` -- Viewer: email HTML can no longer run in the app page; list loads guarded
 - (this entry) -- docs: Session 103, JavaScript read-through
 
+### Session 103, continued: third pass (remaining server code, the rest of the JavaScript, templates, page policy)
+
+Read: `threads.py`, `filesystem.py` (browse, eml, Apple Mail, PST),
+the HTML/CSS half of `pdf_export.py`, `imports.js`, the folder and
+IMAP half of `sidebar.js`, `staging.js` archive paths, the destructive
+flows in `trash.js`, `vault.js`, `email-list.js`, the password change
+in `settings.js`, restore and settings in `backups.js`, the start and
+progress of `export-modal.js`, search in `mail.js`, every template's
+scripts, `setup_app.py`, `build_deb.sh`.
+
+**PDF export (`b3a1260`).** A combined PDF is one document, and each
+email's HTML and CSS were cleaned by regular expressions.
+
+- T1. One email could change the rest of the document. Reproduced with
+  a real render: an unterminated style rule, an unclosed `<style>` or
+  comment, a brace inside a CSS string, or `@import` of a `data:`
+  stylesheet blanked the cover page and every other email; `position:
+  fixed`, also when spelt with an entity or a CSS escape, repeats on
+  every page. Some of this is ordinary sloppy mail; all of it is
+  available to a correspondent who wants an export to misrepresent
+  the record. `core/pdf_email_html.py` parses each email with the
+  parsers WeasyPrint itself uses and writes it back balanced, every
+  rule confined to that email. Ordinary mail renders pixel-identical
+  on the samples compared (newsletter, quoted reply, Outlook).
+
+**PST import (`b3a1260`).**
+
+- T2. The cleanup route compared a resolved path with an unresolved
+  temp root. On macOS the temp folder is behind a symlink, so every
+  cleanup was refused (confirmed on the MacBook) and the converted
+  mailbox, plain text, stayed in the temp folder until the next
+  launch. `core/pst_temp.py`; also removed at lock and exit.
+- T3. Conversion was cut off at five minutes. Thirty now, and the idle
+  lock waits.
+- T4. Unmounting a PST import left its staged items staged, to fail at
+  commit (`5047a3e`).
+- `/api/filesystem/read-file` removed: unused, and it returned any
+  file on the machine as text.
+
+**Staging and search (`5047a3e`).**
+
+- T5. Whole-folder staging assumed "/" between IMAP folder levels. A
+  "."-separated server's tree was flattened into folders named by
+  their whole path. `archive-paths.js`.
+- T6. Search, and the export of search results, included mail in
+  trashed folders. The list is capped at 100 and did not say so.
+- T7. Import files and PST folders that could not be read were left
+  out silently.
+- T8. Moving selected emails to trash, and emptying trashed emails,
+  cleared the list whether or not the server had done it.
+- T9. Starred, Trash, Vault and the folder picker painted when their
+  load finished, over whatever screen was then showing.
+- `showConfirm` honours `okClass`, a third spelling in use.
+
+**Page policy (`6bf90ef`).** Content-Security-Policy on the app's own
+pages: only the app's script files and nonce-carrying template blocks
+run. Enforced in browser mode. Sent report-only in the desktop shell,
+with `'unsafe-eval'`, because pywebview builds its bridge with
+`new Function()` and the policy has not been run inside WebKit.
+`MAILREPO_CSP=enforce|report|off` overrides.
+
+**Seen running** (headless Chrome against a demo instance in the
+sandbox): every rail screen, a folder, an email, an HTML email with
+remote content blocked and then loaded, copy-as-reply, the print
+frame, search, logout: no policy violation, no script error. An
+injected `onerror`, `javascript:` link and `<script>` were each
+blocked.
+
+**Left as it is, noted:** a multi-folder PST import can only be staged
+by folder (its folders are not listed in the sidebar for browsing);
+the three-second heartbeat renders the whole index page each time;
+`sidebar.js` can offer a parent folder the server never listed.
+
+**Not read line by line:** `folder-mgmt.js`, `recover.js`,
+`file-picker.js`, `date-picker.js`, `context-menu.js`,
+`image-lightbox.js`, `custom-select.js`, the account forms in
+`settings.js`, the CSS.
+
+1,115 passed, 1 skipped in the sandbox. 65 sealing mutations caught
+this pass; one more was equivalent (rmtree already refuses symlinks).
+The commit message of `b3a1260` gives 132 tests for
+`test_pdf_email_html.py`; it is 117.
+
+### Commits (continued)
+
+- `b3a1260` -- PDF export: one email can no longer change the rest of the document; PST temp cleanup
+- `5047a3e` -- Third pass, front end and search: separators, PST staging, late screens, trashed folders
+- `6bf90ef` -- Content-Security-Policy on the app's own pages
+- (this entry) -- docs: Session 103, third pass
+
