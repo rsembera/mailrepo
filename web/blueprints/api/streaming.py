@@ -159,8 +159,9 @@ def remove_stale_cache_entries(
     Returns:
         Number of stale entries removed
     """
-    if not valid_uids:
-        return 0
+    # An empty ``valid_uids`` is a real answer: the folder was emptied on
+    # the server, so everything cached for it is stale. (This used to
+    # return early, and an emptied folder kept showing its old messages.)
 
     # Get all cached UIDs for this folder
     cached = Database.fetchall(
@@ -174,13 +175,16 @@ def remove_stale_cache_entries(
     stale_uids = cached_uids - valid_uid_set
 
     if stale_uids:
-        # Delete stale entries
-        placeholders = ",".join("?" * len(stale_uids))
-        Database.execute(
-            f"""DELETE FROM email_cache
-               WHERE account_id = ? AND folder_name = ? AND uid IN ({placeholders})""",
-            (account_id, folder, *stale_uids),
-        )
+        # Delete stale entries, a bounded number of parameters at a time
+        stale_list = sorted(stale_uids)
+        for start in range(0, len(stale_list), 500):
+            chunk = stale_list[start : start + 500]
+            placeholders = ",".join("?" * len(chunk))
+            Database.execute(
+                f"""DELETE FROM email_cache
+                   WHERE account_id = ? AND folder_name = ? AND uid IN ({placeholders})""",
+                (account_id, folder, *chunk),
+            )
         Database.commit()
 
     return len(stale_uids)

@@ -15,6 +15,7 @@ import re
 import shutil
 import threading
 import zipfile
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
@@ -206,12 +207,101 @@ def get_all_backup_files():
     return files
 
 
-def get_file_hashes():
+DB_REL_PATH = "data/mailrepo.db"
+
+
+def _settle_database():
+    """Commit and checkpoint so the database file on disk is current.
+
+    The database runs in WAL mode: until a checkpoint, recent commits
+    live in the -wal file, which backups do not carry, and the main
+    file's mtime does not move. Every backup path starts here so that
+    neither change detection nor the copy depends on the caller having
+    checkpointed first (the rotation and upgrade backups did not).
+
+    Must be called with Database._lock held. The commit is deliberate:
+    the app shares one connection, so another thread's half-finished
+    batch is already committed by whichever request commits next.
+    """
+    from core.database import Database
+
+    conn = Database._connection  # noqa: SLF001 - peek; never opens the database
+    if conn is None:
+        return
+    conn.commit()
+    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+
+
+def _check_snapshot(snapshot):
+    """Refuse a database copy that SQLite itself says is damaged."""
+    from core.database import SQLCIPHER_AVAILABLE, Database
+
+    key = Database._db_key  # noqa: SLF001
+    if not key or not SQLCIPHER_AVAILABLE:
+        return  # locked: nothing in this process can have been writing
+    from sqlcipher3 import dbapi2 as sqlcipher
+
+    conn = sqlcipher.connect(str(snapshot))
+    try:
+        conn.execute(f"PRAGMA key = \"x'{key}'\"")
+        result = conn.execute("PRAGMA quick_check").fetchall()
+    except Exception as e:
+        raise ValueError(f"Backup refused: the database copy could not be read ({e})")
+    finally:
+        conn.close()
+    if result != [("ok",)]:
+        detail = "; ".join(str(r[0]) for r in result[:3])
+        raise ValueError(f"Backup refused: the database copy failed its integrity check ({detail})")
+
+
+@contextmanager
+def _database_snapshot():
+    """Yield ``(path, metadata)`` for a still copy of the database, or
+    ``(None, None)`` if there is no database.
+
+    Zipping the live file is not safe: a checkpoint on another thread
+    rewrites pages in it mid-read, and the copy is then a mix of old and
+    new pages that passes the zip CRC and the MAC and fails only when
+    someone restores it (code review 2026-11, #1). So the database is
+    held still (Database._lock) only for as long as it takes to copy it
+    beside itself; the zip is then built from the copy with the lock
+    released. ``metadata`` is the live file's mtime/size at that moment,
+    which is what change detection compares against next time.
+
+    Take the snapshot BEFORE listing archive files: every row in the
+    copy then has its file in the listing.
+    """
+    from core.database import Database
+
+    db_path = get_data_dir() / "mailrepo.db"
+    if not db_path.exists():
+        yield None, None
+        return
+
+    snapshot = get_data_dir() / ".backup_snapshot.db"
+    with Database._lock:  # noqa: SLF001
+        _settle_database()
+        shutil.copyfile(db_path, snapshot)
+        metadata = get_file_metadata(db_path)
+    try:
+        _check_snapshot(snapshot)
+        yield snapshot, metadata
+    finally:
+        try:
+            snapshot.unlink(missing_ok=True)
+        except OSError as e:
+            log.warning(f"Could not remove database snapshot: {e}")
+
+
+def get_file_hashes(db_snapshot=None, db_metadata=None):
     """
     Calculate hashes for all backup files.
     Returns tuple: (hashes_dict, file_info_dict)
 
     Uses smart change detection: only rehashes files where mtime/size changed.
+    With ``db_snapshot``, the database entry describes the snapshot (its
+    hash, and the live file's metadata when it was taken) so the recorded
+    baseline is exactly what went into the zip.
     """
     files = get_all_backup_files()
     state = _read_backup_state()
@@ -221,6 +311,11 @@ def get_file_hashes():
     new_file_info = {}
 
     for rel_path, abs_path in files.items():
+        if rel_path == DB_REL_PATH and db_snapshot is not None:
+            file_hash = get_file_hash(db_snapshot)
+            hashes[rel_path] = file_hash
+            new_file_info[rel_path] = {"hash": file_hash, **db_metadata}
+            continue
         current_meta = get_file_metadata(abs_path)
         prev_info = previous_file_info.get(rel_path, {})
 
@@ -768,39 +863,45 @@ def create_full_backup(backup_dir=None):
     if not valid:
         raise ValueError(error)
 
-    files = get_all_backup_files()
-    if not files:
-        raise ValueError("No files to backup")
+    with _database_snapshot() as (db_snapshot, db_metadata):
+        files = get_all_backup_files()
+        if not files:
+            raise ValueError("No files to backup")
+        if db_snapshot is not None:
+            files[DB_REL_PATH] = db_snapshot
 
-    backup_path = reserve_backup_path(backup_dir, "full")
-    filename = backup_path.name
+        backup_path = reserve_backup_path(backup_dir, "full")
+        filename = backup_path.name
 
-    # Calculate hashes and collect file info for smart change detection
-    hashes = {}
-    file_info = {}
-    total_size = 0
+        # Calculate hashes and collect file info for smart change detection
+        hashes = {}
+        file_info = {}
+        total_size = 0
 
-    # Create zip archive (over the reservation)
-    try:
-        with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            for rel_path, abs_path in files.items():
-                zf.write(abs_path, rel_path)
-                file_hash = get_file_hash(abs_path)
-                meta = get_file_metadata(abs_path)
-                hashes[rel_path] = file_hash
-                file_info[rel_path] = {
-                    "hash": file_hash,
-                    "mtime": meta["mtime"],
-                    "size": meta["size"],
-                }
-                total_size += meta["size"]
-    except OSError as e:
-        # Clean up partial backup: always our own reservation.
-        _discard_reservation(backup_path)
-        raise ValueError(f"Failed to create backup: {e}")
-    except BaseException:
-        _discard_reservation(backup_path)
-        raise
+        # Create zip archive (over the reservation)
+        try:
+            with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                for rel_path, abs_path in files.items():
+                    zf.write(abs_path, rel_path)
+                    file_hash = get_file_hash(abs_path)
+                    if rel_path == DB_REL_PATH and db_metadata is not None:
+                        meta = db_metadata
+                    else:
+                        meta = get_file_metadata(abs_path)
+                    hashes[rel_path] = file_hash
+                    file_info[rel_path] = {
+                        "hash": file_hash,
+                        "mtime": meta["mtime"],
+                        "size": meta["size"],
+                    }
+                    total_size += meta["size"]
+        except OSError as e:
+            # Clean up partial backup: always our own reservation.
+            _discard_reservation(backup_path)
+            raise ValueError(f"Failed to create backup: {e}")
+        except BaseException:
+            _discard_reservation(backup_path)
+            raise
 
     # Verify backup
     verify_backup(backup_path)
@@ -851,6 +952,14 @@ def create_incremental_backup(backup_dir=None):
         # No previous backup, need full backup first
         return create_full_backup(backup_dir)
 
+    # Bring the database file up to date first: until a checkpoint, recent
+    # commits sit in the WAL and the main file's mtime has not moved, so
+    # the quick check below would report "no changes".
+    from core.database import Database
+
+    with Database._lock:  # noqa: SLF001
+        _settle_database()
+
     # Quick check: any files changed? (mtime/size only, no hashing)
     if not has_file_changes():
         return None  # No changes - skip expensive hash computation
@@ -865,50 +974,53 @@ def create_incremental_backup(backup_dir=None):
     if not valid:
         raise ValueError(error)
 
-    # Get current state (uses smart mtime/size change detection)
-    current_hashes, current_file_info = get_file_hashes()
+    with _database_snapshot() as (db_snapshot, db_metadata):
+        # Get current state (uses smart mtime/size change detection)
+        current_hashes, current_file_info = get_file_hashes(db_snapshot, db_metadata)
 
-    # Find changes
-    changed_files = {}
-    files = get_all_backup_files()
+        # Find changes
+        changed_files = {}
+        files = get_all_backup_files()
+        if db_snapshot is not None:
+            files[DB_REL_PATH] = db_snapshot
 
-    for rel_path, current_hash in current_hashes.items():
-        if rel_path not in previous_hashes or previous_hashes[rel_path] != current_hash:
-            changed_files[rel_path] = files[rel_path]
+        for rel_path, current_hash in current_hashes.items():
+            if rel_path not in previous_hashes or previous_hashes[rel_path] != current_hash:
+                changed_files[rel_path] = files[rel_path]
 
-    # Check for deleted files (track in manifest but don't include in zip)
-    deleted_files = [p for p in previous_hashes if p not in current_hashes]
+        # Check for deleted files (track in manifest but don't include in zip)
+        deleted_files = [p for p in previous_hashes if p not in current_hashes]
 
-    if not changed_files and not deleted_files:
-        # No changes - update baseline in external state file
-        # This prevents checkpoint-induced hash changes from appearing
-        # as "changes" on the next backup check
-        _save_baseline_hashes(current_hashes, current_file_info)
-        return None
+        if not changed_files and not deleted_files:
+            # No changes - update baseline in external state file
+            # This prevents checkpoint-induced hash changes from appearing
+            # as "changes" on the next backup check
+            _save_baseline_hashes(current_hashes, current_file_info)
+            return None
 
-    backup_path = reserve_backup_path(backup_dir, "incr")
-    filename = backup_path.name
+        backup_path = reserve_backup_path(backup_dir, "incr")
+        filename = backup_path.name
 
-    total_size = 0
+        total_size = 0
 
-    # Create zip with only changed files
-    try:
-        with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            for rel_path, abs_path in changed_files.items():
-                zf.write(abs_path, rel_path)
-                total_size += abs_path.stat().st_size
+        # Create zip with only changed files
+        try:
+            with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                for rel_path, abs_path in changed_files.items():
+                    zf.write(abs_path, rel_path)
+                    total_size += abs_path.stat().st_size
 
-            # Include a metadata file listing deleted files
-            if deleted_files:
-                metadata = {"deleted_files": deleted_files}
-                zf.writestr("_backup_metadata.json", json.dumps(metadata))
-    except OSError as e:
-        # Clean up partial backup: always our own reservation.
-        _discard_reservation(backup_path)
-        raise ValueError(f"Failed to create backup: {e}")
-    except BaseException:
-        _discard_reservation(backup_path)
-        raise
+                # Include a metadata file listing deleted files
+                if deleted_files:
+                    metadata = {"deleted_files": deleted_files}
+                    zf.writestr("_backup_metadata.json", json.dumps(metadata))
+        except OSError as e:
+            # Clean up partial backup: always our own reservation.
+            _discard_reservation(backup_path)
+            raise ValueError(f"Failed to create backup: {e}")
+        except BaseException:
+            _discard_reservation(backup_path)
+            raise
 
     # Verify backup
     verify_backup(backup_path)
@@ -1516,22 +1628,25 @@ def create_pre_restore_backup():
     backup_dir = Path(location) if location else get_backups_dir()
     backup_dir.mkdir(parents=True, exist_ok=True)
 
-    files = get_all_backup_files()
-    if not files:
-        return None  # Nothing to back up
+    with _database_snapshot() as (db_snapshot, _db_metadata):
+        files = get_all_backup_files()
+        if not files:
+            return None  # Nothing to back up
+        if db_snapshot is not None:
+            files[DB_REL_PATH] = db_snapshot
 
-    # Reserved only after the check above, so "nothing to back up" leaves
-    # no empty file behind.
-    backup_path = reserve_backup_path(backup_dir, "pre_restore")
-    filename = backup_path.name
+        # Reserved only after the check above, so "nothing to back up"
+        # leaves no empty file behind.
+        backup_path = reserve_backup_path(backup_dir, "pre_restore")
+        filename = backup_path.name
 
-    try:
-        with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            for rel_path, abs_path in files.items():
-                zf.write(abs_path, rel_path)
-    except BaseException:
-        _discard_reservation(backup_path)
-        raise
+        try:
+            with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                for rel_path, abs_path in files.items():
+                    zf.write(abs_path, rel_path)
+        except BaseException:
+            _discard_reservation(backup_path)
+            raise
 
     verify_backup(backup_path)
     mac = write_backup_mac(backup_path)

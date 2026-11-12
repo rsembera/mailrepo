@@ -380,6 +380,13 @@ def stream_commit():
                             event["type"], {k: v for k, v in event.items() if k != "type"}
                         )
 
+                    # Make the archive rows durable BEFORE anything is
+                    # removed from the server. commit_imap_folder commits
+                    # every ten messages, so up to nine rows are still
+                    # uncommitted here, and the post-action below can run
+                    # for minutes (code review 2026-11, #3).
+                    Database.commit()
+
                     # Apply post-action for IMAP folder if set
                     folder_action = pending_item.get("source_action", "leave")
                     if folder_action and folder_action != "leave":
