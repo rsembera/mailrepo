@@ -6,7 +6,7 @@ to select files and folders for import.
 """
 
 import os
-from email import message_from_binary_file, message_from_bytes
+from email import message_from_bytes
 from email.parser import BytesHeaderParser
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -19,6 +19,9 @@ from . import api_bp
 from .email_parser import decode_email_header, iter_mbox_bytes
 
 log = get_logger()
+
+# readpst gets this long to convert one PST file.
+PST_CONVERT_TIMEOUT = 30 * 60
 
 _HEADERS = BytesHeaderParser()
 
@@ -233,59 +236,6 @@ def scan_eml_folder():
         return jsonify({"error": str(e)}), 500
 
 
-@api_bp.route("/filesystem/read-file", methods=["POST"])
-def read_file_content():
-    """
-    Read a file's content (for parsing emails client-side).
-
-    Request body:
-        path: File path to read
-
-    Returns:
-        content: File content as text
-    """
-    data = request.get_json() or {}
-    path = data.get("path", "").strip()
-
-    if not path:
-        return jsonify({"error": "Path is required"}), 400
-
-    path = os.path.expanduser(path)
-    path = os.path.realpath(path)
-
-    if not os.path.exists(path):
-        return jsonify({"error": "File not found"}), 404
-
-    if not os.path.isfile(path):
-        return jsonify({"error": "Not a file"}), 400
-
-    # Limit file size to prevent memory issues (50MB)
-    try:
-        size = os.path.getsize(path)
-        if size > 50 * 1024 * 1024:
-            return jsonify({"error": "File too large (max 50MB)"}), 400
-    except OSError:
-        return jsonify({"error": "Cannot read file"}), 400
-
-    try:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            content = f.read()
-
-        return jsonify(
-            {
-                "path": path,
-                "name": os.path.basename(path),
-                "content": content,
-                "size": size,
-            }
-        )
-
-    except PermissionError:
-        return jsonify({"error": "Permission denied"}), 403
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
 @api_bp.route("/filesystem/parse-mbox", methods=["POST"])
 def parse_mbox_file():
     """
@@ -420,8 +370,10 @@ def parse_eml_file():
         return jsonify({"error": "Not a file"}), 400
 
     try:
+        # The listing needs the headers only, not a MIME tree of every
+        # attachment; a folder of .eml files is one request per file.
         with open(path, "rb") as f:
-            message = message_from_binary_file(f)
+            message = _HEADERS.parse(f, headersonly=True)
 
         # Parse date
         date_str = message.get("Date", "")
@@ -674,7 +626,9 @@ def convert_pst_to_mbox():
     """
     import shutil
     import subprocess
-    import tempfile
+
+    from core import pst_temp
+    from web import idle
 
     data = request.get_json() or {}
     pst_path = data.get("path", "").strip()
@@ -703,20 +657,24 @@ def convert_pst_to_mbox():
             }
         ), 400
 
+    temp_dir = None
     try:
         # Create temp directory for conversion
-        temp_dir = tempfile.mkdtemp(prefix="mailrepo_pst_")
+        temp_dir = pst_temp.create()
 
         # Run readpst to convert PST to mbox
         # -r: recursive (outputs folders as subdirectories with mbox files)
         # -o: output directory
         # -w: overwrite existing files
-        result = subprocess.run(
-            [readpst_path, "-r", "-w", "-o", temp_dir, pst_path],
-            capture_output=True,
-            text=True,
-            timeout=300,  # 5 minute timeout
-        )
+        # A mailbox of several gigabytes takes many minutes; the idle
+        # lock waits for it rather than cutting it off.
+        with idle.busy("pst-convert"):
+            result = subprocess.run(
+                [readpst_path, "-r", "-w", "-o", temp_dir, pst_path],
+                capture_output=True,
+                text=True,
+                timeout=PST_CONVERT_TIMEOUT,
+            )
 
         if result.returncode != 0:
             # Clean up on error
@@ -772,7 +730,7 @@ def convert_pst_to_mbox():
         shutil.rmtree(temp_dir, ignore_errors=True)
         return jsonify({"error": "PST conversion timed out (file may be too large)"}), 500
     except Exception as e:
-        if "temp_dir" in locals():
+        if temp_dir:
             shutil.rmtree(temp_dir, ignore_errors=True)
         return jsonify({"error": f"PST conversion failed: {e}"}), 500
 
@@ -785,29 +743,15 @@ def cleanup_pst_temp():
     Request body:
         temp_dir: Path to temporary directory to remove
     """
-    import shutil
+    from core import pst_temp
 
     data = request.get_json() or {}
-    temp_dir = data.get("temp_dir", "").strip()
+    temp_dir = (data.get("temp_dir") or "").strip()
 
     if not temp_dir:
         return jsonify({"error": "temp_dir is required"}), 400
 
-    # Security: only allow cleanup of paths in system temp directory
-    import tempfile
-
-    system_temp = tempfile.gettempdir()
-
-    temp_dir = os.path.realpath(temp_dir)
-    if not temp_dir.startswith(system_temp):
+    # Only a directory this app made for a conversion, nothing else.
+    if not pst_temp.remove(temp_dir):
         return jsonify({"error": "Invalid temp directory"}), 400
-
-    if not temp_dir.startswith(os.path.join(system_temp, "mailrepo_pst_")):
-        return jsonify({"error": "Invalid temp directory"}), 400
-
-    try:
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
-        return jsonify({"success": True})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return jsonify({"success": True})

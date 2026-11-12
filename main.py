@@ -60,11 +60,13 @@ def _cleanup(app):
     _cleanup_done = True
 
     try:
+        from core import pst_temp
         from core.database import Database
         from core.encryption import Encryption
         from core.imap_pool import ImapPool
 
         ImapPool.close_all()
+        pst_temp.remove_own()
         with app.app_context():
             # After a logout or an idle lock there is nothing to do: the
             # archive holds no keys, and logout already ran this check.
@@ -108,19 +110,6 @@ Environment variables:
 """
     print(help_text)
     sys.exit(0)
-
-
-def _sweep_pst_temp_dirs() -> None:
-    """Remove mailrepo_pst_* directories left in the temp folder."""
-    import glob
-    import shutil
-    import tempfile
-
-    for d in glob.glob(os.path.join(tempfile.gettempdir(), "mailrepo_pst_*")):
-        try:
-            shutil.rmtree(d, ignore_errors=True)
-        except OSError:
-            pass
 
 
 def prepare_app():
@@ -228,7 +217,10 @@ def prepare_app():
     # PST imports decrypt to a plaintext mbox in $TMPDIR and rely on the
     # browser to ask for cleanup; a crash or force-quit leaves it there.
     # Sweep leftovers from earlier runs (#13).
-    _sweep_pst_temp_dirs()
+    # Plain-text PST conversions a previous run left in the temp folder.
+    from core import pst_temp
+
+    pst_temp.sweep()
 
     # Pre-1.1 builds kept the Flask session key in data/.secret_key and
     # backed it up. The key is per-process now; remove the leftover so it
