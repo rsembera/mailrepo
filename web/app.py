@@ -177,6 +177,7 @@ def create_app(test_config: dict = None) -> Flask:
             "auth.recover_browse",
             "static",
             "main.launch_check",
+            "main.health",
         }
 
         if request.endpoint in public_endpoints:
@@ -250,7 +251,9 @@ def create_app(test_config: dict = None) -> Flask:
         # page with nothing behind it. It is still subject to the check
         # below, so it is the request that reports "timed out" to the page.
         passive_endpoints = {"api.session_status"}
-        is_passive = request.endpoint in passive_endpoints
+        # HEAD asks whether something is there. Nobody at the keyboard
+        # sends one; a script on a timer does.
+        is_passive = request.endpoint in passive_endpoints or request.method == "HEAD"
 
         try:
             timeout_minutes = int(get_setting("session_timeout", "30"))

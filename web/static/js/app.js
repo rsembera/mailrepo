@@ -31,7 +31,7 @@ import { initVault, showVaultView, updateVaultBadge, checkOverdueFolders, hideOv
 import { initSettingsView, showSettingsView } from './views/settings.js';
 import { initBackupsView, showBackupsView } from './views/backups.js';
 import { initReviewView, showReviewView } from './views/review.js';
-import { initImports, getImportEmails, getMountedImports, renderImportsSection } from './components/imports.js';
+import { initImports, getImportEmails, getMountedImports, renderImportsSection, getImportFolderName } from './components/imports.js';
 import { initTemplateBindings, registerHandler as registerTemplateHandler } from './template-bindings.js';
 import { initDesktopLinkHandling } from './desktop.js';
 
@@ -414,7 +414,9 @@ function loadImportEmails(importId, folderPath = null) {
     }
     
     // Update header
-    const title = folderPath || imp.name;
+    // The folder's name, not its path: for a converted PST the path is
+    // a file in the temp folder.
+    const title = (folderPath && getImportFolderName(importId, folderPath)) || folderPath || imp.name;
     elements.contextTitle.textContent = title;
     elements.contextMeta.textContent = `${emails.length} email${emails.length !== 1 ? 's' : ''} (imported)`;
     

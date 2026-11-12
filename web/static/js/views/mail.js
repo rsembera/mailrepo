@@ -1117,7 +1117,15 @@ function renderImapNavigation(accountId, folderPath) {
                     html += `<span class="breadcrumb-current">${escapeHtml(part)}</span>`;
                 } else {
                     const pathToHere = parts.slice(0, i + 1).join(delimiter);
-                    html += `<a href="#" data-action="navImap" data-account-id="${accountId}" data-folder-path="${escapeHtml(pathToHere)}" class="breadcrumb-link">${escapeHtml(part)}</a>`;
+                    // Only a level that is a mailbox can be opened. A level
+                    // the server never listed, or marks as a container, is
+                    // shown as a name.
+                    const listed = imapData.folders.find(f => f.name === pathToHere);
+                    if (listed && !listed.noselect) {
+                        html += `<a href="#" data-action="navImap" data-account-id="${accountId}" data-folder-path="${escapeHtml(pathToHere)}" class="breadcrumb-link">${escapeHtml(part)}</a>`;
+                    } else {
+                        html += `<span class="breadcrumb-current">${escapeHtml(part)}</span>`;
+                    }
                 }
             });
             html += `</div>`;

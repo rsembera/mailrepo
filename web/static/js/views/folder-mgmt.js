@@ -510,8 +510,10 @@ export function openMoveToVault(folderId) {
     // Setting a retention period in years, shared by the preset buttons
     // and the custom input so the two cannot drift apart.
     const applyYears = (years) => {
-        const date = new Date();
-        date.setFullYear(date.getFullYear() + years);
+        // The start of that day, as a date picked from the calendar is.
+        // It used to carry the time of day the button was pressed.
+        const today = new Date();
+        const date = new Date(today.getFullYear() + years, today.getMonth(), today.getDate());
         vaultDatePicker.setDate(date);
         updateVaultConfirmButton();
     };

@@ -262,6 +262,23 @@ async function createFolderInTree(parentId) {
 }
 
 /**
+ * For an import whose folders are not where their files are (a converted
+ * PST), a lookup from a folder's file path to its place in the mailbox.
+ * Null for everything else.
+ */
+function importLogicalPaths(pending) {
+    if (pending.sourceType !== 'import') return null;
+    const imp = getMountedImports().find(i => i.id === pending.importId);
+    const byPath = new Map();
+    const walk = (folders) => (folders || []).forEach(f => {
+        if (f.logicalPath) byPath.set(f.fullPath, f.logicalPath);
+        walk(f.children);
+    });
+    walk(imp && imp.folders);
+    return byPath.size ? (path) => byPath.get(path) : null;
+}
+
+/**
  * Confirm staging - handles both email and folder staging.
  */
 export function confirmStage() {
@@ -294,7 +311,9 @@ export function confirmStage() {
         const delimiter = pending.sourceType === 'import'
             ? '/'
             : imapDelimiter(state.imapFolders, pending.accountId);
-        const archivePaths = computeArchivePaths(pending.folders, delimiter);
+        const archivePaths = computeArchivePaths(
+            pending.folders, delimiter, importLogicalPaths(pending)
+        );
         
         // Add each folder as a separate entry with its destination and archive path
         pending.folders.forEach(folder => {

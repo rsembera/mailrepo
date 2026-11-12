@@ -7909,3 +7909,65 @@ working copy is the running app, so this commit is on
 
 - (this entry) -- Account edits apply and test connection changes; old folder export removed; docs
 
+### Session 103, continued: the items left open, and the CSS
+
+**V1. The idle lock's server-side clock never ran down.** The page
+pings the server every three seconds, and the ping was `HEAD /`, an
+ordinary request: it reset the session's and the watchdog's
+last-activity time, against `web/idle.py`'s own rule that only real
+activity moves the clock. While a page was open the lock therefore
+depended entirely on the page's own inactivity timer, and that timer
+only starts if one request made at page load succeeds. Confirmed by
+test: a session ten minutes idle read as active after one heartbeat.
+The heartbeat now goes to `/health`, a public route that does nothing;
+HEAD requests are never activity. (It also no longer renders the whole
+index page every three seconds.)
+
+**V2. Staging a PST's folders archived nothing.** A converted PST is
+a directory per folder, each holding a file named `mbox`. The server
+had no case for the `pst` import type when reading a staged folder, so
+committing created the archive folders, filed no mail, and reported
+"3 folders archived". Each folder was also named after its file, so
+all of them were to be called "mbox". Never worked; not a regression.
+Fixed in `email_parser.py`, `archive-paths.js` (`pstLogicalPath`),
+`imports.js`, `staging.js`. PST folders are now also listed in the
+sidebar and can be browsed and staged email by email.
+Run end to end in headless Chrome with real mbox files standing in for
+readpst's output: three folders browsed, an email opened, all staged
+and committed, six emails filed under `Inbox`, `Inbox/Clients`,
+`Sent Items`, conversion removed on unmount. readpst itself was not
+run.
+
+**Smaller.**
+- A parent IMAP folder that only appears inside other folders' paths
+  was offered as a mailbox, in the tree and the breadcrumb. Opening or
+  staging it failed. Not selectable now (`imap-tree.js`).
+- Settings and Backups build new dropdowns each time they are shown,
+  and the vault dialog a new date picker each time it opens; each
+  added a page-wide click listener and never removed it. One shared
+  listener each. Opening one dropdown while another was open left the
+  first believing it was open, so it needed two clicks next time.
+- A preset retention period ("7 years") carried the time of day the
+  button was pressed; a date picked from the calendar is midnight.
+  Both are midnight now.
+- `base.html` offered two fonts that are not shipped.
+
+**CSS.** Checked mechanically, not read for taste: every module is
+imported, every `url()` target and font file exists, nothing is loaded
+from outside the app, all 8,253 lines parse without error. 78 class
+names appear in no template or script; some are built at run time
+(`toast-<type>`), so none were removed.
+
+Also read in full this time: `context-menu.js`, `custom-select.js`,
+`date-picker.js`, the rest of `image-lightbox.js`. Nothing else found.
+
+1,135 passed, 1 skipped in the sandbox; 47 Node tests. 25 sealing
+mutations caught this round, after one false start: the mutation run
+was first made against a baseline with a failing test, which makes
+every mutation look caught. Baseline is now confirmed green before
+each run.
+
+### Commits (continued)
+
+- (this entry) -- Heartbeat no longer resets the idle clock; PST folders archive their mail; smaller fixes; docs
+

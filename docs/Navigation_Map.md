@@ -159,7 +159,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 |------|-------|--------------|
 | `idle.py` | 226 | Process-level activity clock, idle-lock watchdog thread (skips while a backup or logout is running), logout claim, per-login id (review #1, #11) |
 | `responses.py` | 88 | Attachment/EML response builder: inline allowlist, sandbox CSP, werkzeug-encoded filenames (review #2, #17) |
-| `app.py` | 357 | Flask factory, blueprint registration, auth/CSRF middleware; `content_security_policy()` and `csp_mode()` for the page policy (Session 103) |
+| `app.py` | 358 | Flask factory, blueprint registration, auth/CSRF middleware; `content_security_policy()` and `csp_mode()` for the page policy (Session 103) |
 
 ### Blueprints (`/web/blueprints/`)
 
@@ -167,7 +167,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 |------|-------|--------------|
 | `auth.py` | 1,641 | Setup, login, logout, rate limiting, session management; recovery-key verification + server-side handoff to a mandatory password reset (no session granted), v3 upgrade flow, rotation API, master-key rotation (page + one-time job + SSE progress + one-time done page); pre-login disaster-recovery routes (`/auth/restore`, scan, prepare, search, browse) gated on `_recovery_door_open()` — no archive, OR an unverified restore; both login paths vouch for restored data (clear the marker) and the login screens carry the restored-from-backup banner |
 | `backups.py` | 305 | Backup/restore endpoints, folder picker |
-| `main.py` | 115 | Page routes: index, create_archive, settings, `/launch-check` nonce echo for the desktop launcher |
+| `main.py` | 127 | Page routes: index, create_archive, settings, `/launch-check` nonce echo for the desktop launcher, `/health` for the page heartbeat (public, does nothing) |
 
 ### API (`/web/blueprints/api/`)
 
@@ -181,7 +181,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `folders.py` | 576 | Archive folder CRUD, trash, restore, vault, retention; `tree_email_counts()` is the single roll-up behind every folder size the app shows |
 | `accounts.py` | 503 | IMAP account CRUD, Gmail auto-detection, folder listing |
 | `commit.py` | 658 | Email/folder commit workflow |
-| `email_parser.py` | 435 | Email parsing: headers, body, attachments, body text extraction |
+| `email_parser.py` | 444 | Email parsing: headers, body, attachments, body text extraction |
 | `progress_emails.py` | 316 | Folder listing stream: `cached` event first, TTL + CONDSTORE short-circuits, incremental sync in FETCH chunks; `refresh=true` reconciles keeping the cache, `rebuild=true` discards it (Session 97) |
 | `settings.py` | 288 | App settings: timeout, retention, keepalive |
 | `streaming.py` | 190 | Email-cache helpers: read/write rows, stale removal, `evict_cached_uids` after post-commit actions (Session 97) |
@@ -206,13 +206,14 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 |------|-------|--------------|
 | `password-toggle.js` | 128 | Show/hide password toggle (Session 88): auto-wires password inputs; reserve computed inline from the button's measured band (Daybook PLAN.md 9ab — CSS reserves lose specificity fights silently); re-mask defers submit one painted frame |
 | `desktop.js` | 98 | Desktop-shell bridge (Session 88): no-ops in a browser; in the packaged app routes open-in-new-tab, print, and same-origin _blank links through DesktopApi |
-| `app.js` | 731 | Init, event listeners, rail nav, nav guards, template-bindings wiring |
+| `app.js` | 733 | Init, event listeners, rail nav, nav guards, template-bindings wiring |
 | `template-bindings.js` | 145 | Single delegated handler for index.html data-tpl-action attrs (Session 38) |
 | `delegate.js` | 116 | `bindActions(container, handlers)` helper for per-view delegation |
 | `state.js` | 245 | Central state object; staged-item persistence (`persistStaged` / `restoreStaged`, the only writer); `isStagedInView` / `unstageInView` |
 | `staged-key.js` | 63 | Keys for staged emails: source type + account/import + folder + id, since ids repeat across folders (Session 103). No DOM; tested in Node |
 | `list-load.js` | 27 | `beginListLoad(state)`: guard that tells a mailbox load it has been superseded (Session 103). No DOM; tested in Node |
-| `archive-paths.js` | 100 | Archive paths for staged folders, using the separator the IMAP server reported (`imapDelimiter`, `computeArchivePaths`, `getFolderName`) (Session 103). No DOM; tested in Node |
+| `archive-paths.js` | 125 | Archive paths for staged folders: the IMAP server's own separator (`imapDelimiter`), converted-PST folders by mailbox path (`pstLogicalPath`), `computeArchivePaths`, `getFolderName` (Session 103). No DOM; tested in Node |
+| `imap-tree.js` | 72 | `buildImapFolderTree`: the server's flat mailbox list as a tree; a level the server never listed is not selectable (Session 103). No DOM; tested in Node |
 | `utils.js` | 86 | escapeHtml, formatDate, debounce, extractName |
 | `modals.js` | 166 | Alert/confirm/prompt + canonical closeModal + registerModalCloseHandler |
 | `toast.js` | 106 | showToast(message, type) — non-blocking status card, bottom centre, auto-dismiss (Session 94); modals stay for anything needing a decision |
@@ -222,14 +223,14 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `mail.js` | 2,568 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav; guarded list loads; sandboxed print frame |
+| `mail.js` | 2,576 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav; guarded list loads; sandboxed print frame |
 | `settings.js` | 1,489 | Settings: appearance, accounts, security, recovery-key status + check + rotation, backup, reset |
 | `review.js` | 1,081 | Review staged items, destination editing, commit |
 | `backups.js` | 1,034 | Backup/restore UI, restore points, settings |
 | `folder-selection.js` | 897 | Bulk folder staging from IMAP/imports |
 | `vault.js` | 881 | Retention vault: move to vault, restore, permanent delete; subfolder links carry tree counts |
 | `trash.js` | 785 | Trash view: deleted folders, emails, restore, purge |
-| `folder-mgmt.js` | 646 | Manage folders: rename, color, create, delete |
+| `folder-mgmt.js` | 648 | Manage folders: rename, color, create, delete |
 | `starred.js` | 369 | Starred email view |
 | `recover.js` | 336 | Pre-login disaster recovery: scan a backup folder, list restore points, stage a restore. Deliberately talks to nothing else — there is no session, database or settings when it runs |
 
@@ -240,15 +241,15 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `export-modal.js` | 888 | Bulk export UI: scope picker, format (pdf/eml/mbox/both), scope-aware password, progress |
 | `image-lightbox.js` | 315 | Click-to-zoom overlay for inline images and image attachments (Session 94); click targets are laid over the sandboxed body iframe from the parent, because WebKit runs no listeners inside a no-scripts frame |
 | `email-list.js` | 800 | Email list rendering, selection, toolbar, filter input |
-| `sidebar.js` | 749 | Sidebar: archive folders, IMAP folders, imports, resize |
-| `imports.js` | 747 | Import mount/unmount, browse, folder/email display |
-| `staging.js` | 451 | Staging workflow, destination picker, stage/unstage |
+| `sidebar.js` | 696 | Sidebar: archive folders, IMAP folders, imports, resize |
+| `imports.js` | 763 | Import mount/unmount, browse, folder/email display |
+| `staging.js` | 470 | Staging workflow, destination picker, stage/unstage |
 | `file-picker.js` | 438 | Filesystem browser modal for import file selection |
-| `date-picker.js` | 383 | Date picker (ported from EdgeCase) for vault retention dates |
+| `date-picker.js` | 405 | Date picker (ported from EdgeCase) for vault retention dates |
 | `progress.js` | 375 | SSE progress modal for commit/import operations |
 | `context-menu.js` | 288 | Right-click context menu for sidebar/folders |
 | `folder-tree.js` | 265 | Reusable folder tree renderer |
-| `custom-select.js` | 223 | Custom dropdown select component |
+| `custom-select.js` | 242 | Custom dropdown select component |
 | `thread-stage.js` | 218 | Stage-entire-thread modal from email viewer |
 | `move-email-modal.js` | 122 | Move archived emails between folders |
 
@@ -424,8 +425,8 @@ first run of this found a `ReferenceError` that had been shipping.
 | `tests/test_export_counts.py` | Zip and mbox exports report what was written and what was left out (Session 103) |
 | `tests/test_import_bytes.py` | mbox read as the original bytes, lazily, from one open mailbox; `.emlx` delimited by its byte count (Session 103) |
 | `tests/test_second_pass.py` | Restore completion (moved not copied, stale state cleared, re-runnable), launch notices on the login screen, restored-database check, reset, PDF export attachments / ordering / skipped count, mbox folder names (20 tests, Session 103) |
-| `tests/test_frontend_js.py` | Front end: runs `tests/js/*.test.mjs` in Node when Node 22.7+ is installed, plus checks on the JavaScript source that run everywhere (24 tests, Session 103) |
-| `tests/js/*.test.mjs` | Node test-runner files (`node --test tests/js/*.test.mjs`): staged keys and persistence, list-load guard, archive paths, commit progress stream, confirm dialog labels (38 tests, Session 103) |
+| `tests/test_frontend_js.py` | Front end: runs `tests/js/*.test.mjs` in Node when Node 22.7+ is installed, plus checks on the JavaScript source that run everywhere (30 tests, Session 103) |
+| `tests/js/*.test.mjs` | Node test-runner files (`node --test tests/js/*.test.mjs`): staged keys and persistence, list-load guard, archive paths, IMAP tree, commit progress stream, confirm dialog labels (47 tests, Session 103) |
 | `tests/test_pdf_email_html.py` | PDF export: what follows an email stays outside it, every style rule confined, positions, removed elements, escaping; rendered exports still show the cover and the next email (117 tests, Session 103) |
 | `tests/test_pst_temp.py` | PST conversion directories: symlinked temp folder, cleanup route accepts only its own, lock / exit / launch removal, read-file route gone (15 tests, Session 103) |
 | `tests/test_csp.py` | Page Content-Security-Policy: no inline script without this request's nonce, templates and scripts free of inline handlers, attachments keep their own policy, desktop report-only, MAILREPO_CSP switch (18 tests, Session 103) |

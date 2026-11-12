@@ -117,6 +117,13 @@ def iter_emails_from_import_folder(source_path: str, folder_path: str, import_ty
         for index, raw in iter_mbox_bytes(source_path):
             if not folder_path or _mbox_folder_of(raw) == folder_path:
                 yield f"mbox-{index}", raw
+    elif import_type == "pst":
+        # A converted PST: each folder is an mbox file of its own, and
+        # folder_path is that file. There was no case for it, so staging
+        # PST folders created the archive folders, archived nothing, and
+        # reported success.
+        for index, raw in iter_mbox_bytes(folder_path):
+            yield f"mbox-{index}", raw
 
 
 def count_emails_in_import_folder(source_path: str, folder_path: str, import_type: str) -> int:
@@ -139,6 +146,8 @@ def count_emails_in_import_folder(source_path: str, folder_path: str, import_typ
         return sum(
             1 for _i, raw in iter_mbox_bytes(source_path) if _mbox_folder_of(raw) == folder_path
         )
+    if import_type == "pst":
+        return mbox_message_count(folder_path)
     return 0
 
 

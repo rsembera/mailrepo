@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **The idle lock no longer depends on the page alone (Session 103).**
+  The app's own three-second "is the server there?" check was being
+  counted as you using it, so the server never saw the archive as
+  idle while a window was open; the lock relied on a timer in the page
+  itself. The check no longer counts as activity.
+
 - **A PDF export shows what the archive holds (Session 103).** One
   email's HTML or styling could change the rest of a combined PDF:
   blank the cover page and the other emails, or stamp content on every
@@ -96,6 +102,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   most apps. The field always re-masks the moment you submit.
 
 ### Fixed
+
+- **PST imports archive their mail (Session 103).** Staging the folders
+  of a PST import created the folders in the archive, filed nothing in
+  them, and reported success. The mail is filed now, under each
+  folder's own name and arrangement. A PST's folders are also listed
+  in the sidebar, so they can be browsed and staged email by email.
+- A parent mail folder that exists only as part of other folders'
+  names is no longer offered as a folder to open or stage; dropdowns
+  no longer need a second click after another one was open; a preset
+  retention period ends at the start of its day, like a date picked
+  from the calendar (Session 103).
 
 - **Editing an account keeps your changes (Session 103).** Changing an
   account's server, port or email address without retyping the

@@ -10,6 +10,7 @@
  */
 
 import { escapeHtml } from '../utils.js';
+import { buildImapFolderTree } from '../imap-tree.js';
 import { state, confirmNavigation } from '../state.js';
 import { initContextMenu, showFolderContextMenu, showFolderContextMenuAtElement, showArchiveHeaderContextMenu } from './context-menu.js';
 
@@ -591,62 +592,8 @@ export async function loadAccountLabels(accountId, options = false) {
     }
 }
 
-/**
- * Build a tree structure from flat IMAP folder list.
- */
-export function buildImapFolderTree(folders) {
-    let delimiter = null;
-    for (const folder of folders) {
-        if (folder.delimiter) {
-            delimiter = folder.delimiter;
-            break;
-        }
-    }
-    
-    if (!delimiter) {
-        const hasSlashPaths = folders.some(f => f.name.includes('/') && !f.name.startsWith('['));
-        delimiter = hasSlashPaths ? '/' : null;
-    }
-    
-    const priorityFolders = ['INBOX', 'Sent', 'Sent Messages', 'Drafts', 'Trash', 'Junk', 'Spam', 'Archive'];
-    const root = { children: {} };
-    
-    folders.forEach(folder => {
-        const parts = delimiter ? folder.name.split(delimiter) : [folder.name];
-        let current = root;
-        
-        parts.forEach((part, idx) => {
-            if (!current.children[part]) {
-                current.children[part] = {
-                    name: part,
-                    fullPath: delimiter ? parts.slice(0, idx + 1).join(delimiter) : folder.name,
-                    noselect: false,
-                    children: {}
-                };
-            }
-            // Set noselect on the final node (the actual folder entry)
-            if (idx === parts.length - 1 && folder.noselect) {
-                current.children[part].noselect = true;
-            }
-            current = current.children[part];
-        });
-    });
-    
-    function toArray(node) {
-        return Object.values(node.children)
-            .map(child => ({ ...child, noselect: child.noselect || false, children: toArray(child) }))
-            .sort((a, b) => {
-                const aIdx = priorityFolders.findIndex(p => a.name.toUpperCase().includes(p.toUpperCase()));
-                const bIdx = priorityFolders.findIndex(p => b.name.toUpperCase().includes(p.toUpperCase()));
-                if (aIdx !== -1 && bIdx === -1) return -1;
-                if (aIdx === -1 && bIdx !== -1) return 1;
-                if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
-                return a.name.localeCompare(b.name);
-            });
-    }
-    
-    return toArray(root);
-}
+// The tree builder lives in ../imap-tree.js (no DOM, tested in Node).
+export { buildImapFolderTree };
 
 /**
  * Render IMAP folder tree as HTML.

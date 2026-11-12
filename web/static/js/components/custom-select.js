@@ -14,6 +14,28 @@
  * Events: Dispatches 'change' event on the container with detail.value
  */
 
+// Every select on the page, and the one page-wide listener that closes
+// them on an outside click. Each select used to add a listener of its
+// own, and Settings and Backups build new selects every time they are
+// shown, so the listeners (and the discarded selects they held on to)
+// piled up for as long as the app stayed open.
+const liveSelects = new Set();
+let outsideClickBound = false;
+
+function bindOutsideClick() {
+    if (outsideClickBound) return;
+    outsideClickBound = true;
+    document.addEventListener('click', (e) => {
+        liveSelects.forEach(select => {
+            if (!select.container.isConnected) {
+                liveSelects.delete(select);  // its screen has been replaced
+            } else if (!select.container.contains(e.target)) {
+                select.close();
+            }
+        });
+    });
+}
+
 export class CustomSelect {
     constructor(container) {
         this.container = container;
@@ -85,12 +107,9 @@ export class CustomSelect {
             }
         });
         
-        // Close on outside click
-        document.addEventListener('click', (e) => {
-            if (!this.container.contains(e.target)) {
-                this.close();
-            }
-        });
+        // Close on outside click: one listener for every select (below).
+        liveSelects.add(this);
+        bindOutsideClick();
         
         // Keyboard navigation
         this.container.addEventListener('keydown', (e) => {
@@ -107,11 +126,11 @@ export class CustomSelect {
     }
     
     open() {
-        // Close any other open custom selects first
-        document.querySelectorAll('.custom-select.open').forEach(el => {
-            if (el !== this.container) {
-                el.classList.remove('open');
-            }
+        // Close any other open custom selects first. Through the object,
+        // not by removing its class: that left the other select believing
+        // it was open, and its next click did nothing.
+        liveSelects.forEach(other => {
+            if (other !== this && other.isOpen) other.close();
         });
         
         this.isOpen = true;

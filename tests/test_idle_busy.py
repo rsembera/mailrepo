@@ -137,3 +137,79 @@ class TestLockDropsTheDatabaseKey:
         Encryption.unlock(password)
         Database.set_key(Encryption.get_db_key())
         assert Database.fetchone("SELECT name FROM folders")["name"] == "kept"
+
+
+# --- the page's heartbeat (code review 2026-11, last pass) -------------------
+
+
+def _aged_session(client, seconds):
+    import time
+
+    from web import idle
+
+    then = time.time() - seconds
+    with client.session_transaction() as sess:
+        sess["last_activity"] = then
+    idle.touch(then)
+    return then
+
+
+def test_heartbeat_does_not_count_as_activity(authenticated_client):
+    """The page pings the server every three seconds. That used to be
+    HEAD /, an ordinary request, so the idle clock was reset every three
+    seconds for as long as a page was open."""
+    from web import idle
+
+    then = _aged_session(authenticated_client, 600)
+    resp = authenticated_client._client.head("/health")
+    assert resp.status_code == 204
+    assert idle.last_activity() == then
+    with authenticated_client.session_transaction() as sess:
+        assert sess["last_activity"] == then
+
+
+def test_a_head_request_to_a_page_is_not_activity_either(authenticated_client):
+    from core import Database
+    from web import idle
+
+    Database.execute("INSERT INTO folders (name) VALUES ('Clients')")
+    Database.commit()
+    then = _aged_session(authenticated_client, 600)
+    assert authenticated_client._client.head("/").status_code == 200
+    assert idle.last_activity() == then
+
+
+def test_a_real_request_still_is(authenticated_client):
+    from web import idle
+
+    then = _aged_session(authenticated_client, 600)
+    assert authenticated_client.get("/api/folders").status_code == 200
+    assert idle.last_activity() > then + 500
+
+
+def test_health_answers_without_a_session_and_says_nothing(client, initialized_app):
+    resp = client.head("/health")
+    assert resp.status_code == 204
+    assert resp.get_data() == b""
+    assert "Set-Cookie" not in resp.headers
+
+
+def test_an_expired_session_is_still_expired_after_heartbeats(authenticated_client):
+    """Heartbeats arriving all through the idle period change nothing."""
+    from core.database import set_setting
+
+    set_setting("session_timeout", "1")
+    _aged_session(authenticated_client, 120)
+    for _ in range(5):
+        authenticated_client._client.head("/health")
+    resp = authenticated_client.get("/api/folders")
+    assert resp.status_code == 401
+    assert resp.get_json()["code"] == "session_timeout"
+
+
+def test_the_page_heartbeat_uses_the_health_route():
+    from pathlib import Path
+
+    base = (Path(__file__).resolve().parent.parent / "web" / "templates" / "base.html").read_text()
+    assert "fetch('/health', { method: 'HEAD', cache: 'no-store' })" in base
+    assert "fetch('/', { method: 'HEAD'" not in base

@@ -10,6 +10,7 @@ import { confirmNavigation } from '../state.js';
 import { closeModal } from '../modals.js';
 import { showToast } from '../toast.js';
 import { initFilePicker, openFilePicker } from './file-picker.js';
+import { pstLogicalPath } from '../archive-paths.js';
 
 // Mounted imports stored in memory (session-only)
 const mountedImports = new Map();
@@ -411,9 +412,14 @@ async function mountPstFromPath(path, name) {
                 emails.forEach(e => e.sourcePath = mboxFile.path);
                 
                 if (emails.length > 0) {
+                    // Named and nested by where the folder sits in the
+                    // mailbox. The file itself is always called "mbox",
+                    // which is what every folder used to be archived as.
+                    const logicalPath = pstLogicalPath(mboxFile.name, baseName);
                     folders.push({
-                        name: mboxFile.name,
+                        name: logicalPath,
                         fullPath: mboxFile.path,
+                        logicalPath,
                         emails: emails,
                         children: [],
                     });
@@ -541,6 +547,15 @@ export function getImportEmails(importId, folderPath = null) {
 }
 
 /**
+ * Display name of a folder of a mounted import, or null.
+ */
+export function getImportFolderName(importId, folderPath) {
+    const imp = mountedImports.get(importId);
+    const folder = imp && imp.folders ? findFolder(imp.folders, folderPath) : null;
+    return folder ? folder.name : null;
+}
+
+/**
  * Find a folder in the folder tree.
  */
 function findFolder(folders, path) {
@@ -581,8 +596,9 @@ export function renderImportsSection() {
     let html = '';
     
     for (const imp of imports) {
-        const icon = (imp.type === 'mbox' || imp.type === 'apple-mbox') ? 'archive' : 'folder-open';
-        const hasChildren = (imp.type === 'mbox' || imp.type === 'apple-mbox') && imp.folders && imp.folders.length > 0;
+        const hasTree = imp.type === 'mbox' || imp.type === 'apple-mbox' || imp.type === 'pst';
+        const icon = hasTree ? 'archive' : 'folder-open';
+        const hasChildren = hasTree && imp.folders && imp.folders.length > 0;
         
         html += `
             <div class="tree-item import-item" data-import-id="${imp.id}">

@@ -241,7 +241,7 @@ def _js(name):
 def test_staged_folders_follow_the_servers_separator():
     staging = _js("components/staging.js")
     assert "imapDelimiter(state.imapFolders, pending.accountId)" in staging
-    assert "computeArchivePaths(pending.folders, delimiter)" in staging
+    assert "pending.folders, delimiter, importLogicalPaths(pending)" in staging
     # The old copy assumed "/" everywhere.
     assert "function computeArchivePaths" not in staging
     assert "function getFolderName" not in staging
@@ -334,3 +334,52 @@ def test_the_old_folder_export_is_gone():
     assert "exportProgressModal" not in index
     # The About box shows the running version, not a constant.
     assert 'class="about-version">v{{ app_version }}<' in index
+
+
+# --- last pass ---------------------------------------------------------------
+
+
+def test_pst_folders_are_named_and_archived_by_mailbox_path():
+    imports = _js("components/imports.js")
+    assert "const logicalPath = pstLogicalPath(mboxFile.name, baseName);" in imports
+    assert "name: logicalPath," in imports
+    # ...and can be browsed from the sidebar like any other import with folders.
+    assert (
+        "const hasTree = imp.type === 'mbox' || imp.type === 'apple-mbox' || imp.type === 'pst';"
+        in imports
+    )
+    staging = _js("components/staging.js")
+    assert "pending.folders, delimiter, importLogicalPaths(pending)" in staging
+    app = _js("app.js")
+    assert "getImportFolderName(importId, folderPath)" in app
+
+
+def test_pickers_and_selects_share_one_outside_click_listener():
+    for name, registry in (
+        ("components/custom-select.js", "liveSelects"),
+        ("components/date-picker.js", "livePickers"),
+    ):
+        source = _js(name)
+        assert source.count("document.addEventListener('click'") == 1, name
+        assert "if (outsideClickBound) return;" in source, name
+        assert f"{registry}.add(this);" in source, name
+        assert ".container.isConnected" in source, name
+    select = _js("components/custom-select.js")
+    assert "if (other !== this && other.isOpen) other.close();" in select
+    assert "el.classList.remove('open')" not in select
+
+
+def test_preset_retention_dates_start_at_midnight_like_picked_ones():
+    mgmt = _js("views/folder-mgmt.js")
+    apply = mgmt[mgmt.index("const applyYears = (years) => {") :][:500]
+    assert "new Date(today.getFullYear() + years, today.getMonth(), today.getDate())" in apply
+    assert "setFullYear" not in apply
+
+
+def test_breadcrumb_links_only_to_real_mailboxes():
+    mail = _js("views/mail.js")
+    assert "const listed = imapData.folders.find(f => f.name === pathToHere);" in mail
+    assert "if (listed && !listed.noselect) {" in mail
+    sidebar = _js("components/sidebar.js")
+    assert "function buildImapFolderTree" not in sidebar
+    assert "from '../imap-tree.js'" in sidebar

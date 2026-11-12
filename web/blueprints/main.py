@@ -21,6 +21,18 @@ from core import Database
 main_bp = Blueprint("main", __name__)
 
 
+@main_bp.route("/health")
+def health():
+    """Answer "is the server there?" and nothing else.
+
+    For the page's three-second heartbeat. Public, so it runs none of
+    the session handling: it used to be HEAD /, which rendered the whole
+    index page each time and, worse, counted as activity, so the
+    server-side idle clock never ran down while a page was open.
+    """
+    return ("", 204, {"Cache-Control": "no-store"})
+
+
 @main_bp.route("/launch-check")
 def launch_check():
     """Echo the per-launch nonce so the desktop launcher can confirm the

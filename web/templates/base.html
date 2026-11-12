@@ -30,9 +30,7 @@
             const fontFamilies = {
                 'lexend': "var(--font-lexend)",
                 'libre-baskerville': "var(--font-libre)",
-                'lora': "var(--font-lora)",
-                'source-sans': "var(--font-source-sans)",
-                'literata': "var(--font-literata)"
+                'source-sans': "var(--font-source-sans)"
             };
             document.documentElement.style.setProperty('--font-ui', fontFamilies[font] || fontFamilies['lexend']);
             document.documentElement.style.setProperty('--font-body', fontFamilies[font] || fontFamilies['lexend']);
@@ -101,9 +99,11 @@
         // Make available globally for other scripts
         window.showServerDisconnect = showDisconnect;
         
-        // Heartbeat check - ping server every 3 seconds
+        // Heartbeat check - ping server every 3 seconds. /health is
+        // public and does nothing: a heartbeat must not count as the
+        // reader being active, or the idle lock never comes.
         function checkHeartbeat() {
-            fetch('/', { method: 'HEAD', cache: 'no-store' })
+            fetch('/health', { method: 'HEAD', cache: 'no-store' })
                 .then(response => {
                     if (!response.ok) {
                         showDisconnect();

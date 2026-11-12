@@ -47,6 +47,21 @@ export function getFolderName(fullPath, delimiter = '/') {
 }
 
 /**
+ * Where a folder of a converted PST sits in the mailbox, from the path
+ * of its file relative to the conversion directory. readpst writes each
+ * folder as "<its path>/mbox".
+ * @param {string} relativePath - e.g. "Personal Folders/Inbox/mbox"
+ * @param {string} fallback - name to use for a file at the top level
+ * @returns {string} e.g. "Personal Folders/Inbox"
+ */
+export function pstLogicalPath(relativePath, fallback) {
+    const parts = relativePath.split('/').filter(Boolean);
+    if (parts.length && parts[parts.length - 1] === 'mbox') parts.pop();
+    if (parts.length) parts[parts.length - 1] = parts[parts.length - 1].replace(/\.mbox$/, '');
+    return parts.join('/') || fallback;
+}
+
+/**
  * Compute archive paths for staged folders.
  *
  * For each folder: if an ancestor is staged with it, the path continues
@@ -55,9 +70,19 @@ export function getFolderName(fullPath, delimiter = '/') {
  *
  * @param {string[]} folderPaths - All folder paths being staged
  * @param {string} [delimiter='/'] - the source's hierarchy separator
+ * @param {(path: string) => string} [logicalOf] - where a folder's path
+ *   on disk is not its place in the mailbox (a converted PST: every
+ *   folder is a file called "mbox" in a directory of its own), the path
+ *   to name and nest it by. The result is still keyed by the path given.
  * @returns {Object} Map of fullPath -> archivePath
  */
-export function computeArchivePaths(folderPaths, delimiter = '/') {
+export function computeArchivePaths(folderPaths, delimiter = '/', logicalOf = null) {
+    if (logicalOf) {
+        const original = new Map(folderPaths.map(p => [logicalOf(p) || p, p]));
+        const logical = computeArchivePaths([...original.keys()], delimiter);
+        return Object.fromEntries(Object.entries(logical).map(([l, a]) => [original.get(l), a]));
+    }
+
     const archivePaths = {};
 
     // Shortest first, so ancestors are done before descendants.

@@ -13,6 +13,26 @@ const PICKER_CONFIG = {
     yearRangeEnd: 2045
 };
 
+// Every picker on the page, and the one page-wide listener that closes
+// them. A new picker is built each time the vault dialog opens; each
+// used to add its own listener and never remove it.
+const livePickers = new Set();
+let outsideClickBound = false;
+
+function bindOutsideClick() {
+    if (outsideClickBound) return;
+    outsideClickBound = true;
+    document.addEventListener('click', () => {
+        livePickers.forEach(picker => {
+            if (!picker.container.isConnected) {
+                livePickers.delete(picker);
+            } else {
+                picker.close();
+            }
+        });
+    });
+}
+
 export class DatePicker {
     /**
      * Create a date picker
@@ -290,7 +310,9 @@ export class DatePicker {
             }
         });
         
-        document.addEventListener('click', () => this.close());
+        // Close on an outside click: one listener for every picker.
+        livePickers.add(this);
+        bindOutsideClick();
     }
 
     

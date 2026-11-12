@@ -80,3 +80,32 @@ test('the separator comes from what the server reported', () => {
     assert.equal(imapDelimiter(folders, 3), '/');
     assert.equal(imapDelimiter(folders, 99), '/');
 });
+
+const { pstLogicalPath } = await import('../../web/static/js/archive-paths.js');
+
+test('a converted PST folder is named by its place in the mailbox, not "mbox"', () => {
+    assert.equal(pstLogicalPath('Personal Folders/Inbox/mbox', 'x'), 'Personal Folders/Inbox');
+    assert.equal(pstLogicalPath('Personal Folders/Inbox/Clients/mbox', 'x'), 'Personal Folders/Inbox/Clients');
+    assert.equal(pstLogicalPath('mbox', 'Archive 2019'), 'Archive 2019');
+    assert.equal(pstLogicalPath('Sent Items.mbox', 'x'), 'Sent Items');
+    assert.equal(pstLogicalPath('A/mbox/mbox', 'x'), 'A/mbox');
+});
+
+test('PST folders are archived by mailbox path, keyed by their file', () => {
+    const files = {
+        '/tmp/mailrepo_pst_a/PF/Inbox/mbox': 'PF/Inbox',
+        '/tmp/mailrepo_pst_a/PF/Inbox/Clients/mbox': 'PF/Inbox/Clients',
+        '/tmp/mailrepo_pst_a/PF/Sent Items/mbox': 'PF/Sent Items',
+    };
+    assert.deepEqual(computeArchivePaths(Object.keys(files), '/', p => files[p]), {
+        '/tmp/mailrepo_pst_a/PF/Inbox/mbox': 'Inbox',
+        '/tmp/mailrepo_pst_a/PF/Inbox/Clients/mbox': 'Inbox/Clients',
+        '/tmp/mailrepo_pst_a/PF/Sent Items/mbox': 'Sent Items',
+    });
+    // Without the lookup every one of them was "mbox".
+    assert.deepEqual(new Set(Object.values(computeArchivePaths(Object.keys(files)))), new Set(['mbox']));
+});
+
+test('a folder the lookup does not know keeps its own path', () => {
+    assert.deepEqual(computeArchivePaths(['A', 'A/B'], '/', () => undefined), { A: 'A', 'A/B': 'A/B' });
+});
