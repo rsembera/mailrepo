@@ -673,7 +673,15 @@ async function resumeCommit(commitId) {
         }, {
             onComplete: async (data) => {
                 modal.classList.remove('active');
-                showToast(data.message || 'Commit resumed and completed.', 'success');
+                const msg = data.message || 'Commit resumed and completed.';
+                const { describeCommitProblems } = await import('./views/review.js');
+                const problems = describeCommitProblems(data.results);
+                if (problems) {
+                    const { showAlert } = await import('./modals.js');
+                    showAlert('Commit finished with problems', `${msg}\n\n${problems}`);
+                } else {
+                    showToast(msg, 'success');
+                }
             },
             onError: async (err) => {
                 modal.classList.remove('active');

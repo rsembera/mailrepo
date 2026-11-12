@@ -464,6 +464,11 @@ a.btn:hover {
     text-align: left;
 }
 
+/* Launch-time notices are plain text with their own line breaks. */
+.startup-notice {
+    white-space: pre-line;
+}
+
 .restored-notice a {
     color: #92400E;
     font-weight: 600;

@@ -12,3 +12,10 @@
     {% endif %}
 </div>
 {% endif %}
+{# Conditions found at launch that must be read before a password is
+   typed: an interrupted key change, a missing database, a restore that
+   failed. The desktop app has no terminal, so this is the only place
+   they can be seen. #}
+{% for notice in startup_notices or [] %}
+<div class="restored-notice startup-notice">{{ notice }}</div>
+{% endfor %}

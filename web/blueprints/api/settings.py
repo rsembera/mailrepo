@@ -196,8 +196,17 @@ def reset_database():
         return jsonify({"success": False, "error": "Incorrect password"}), 401
 
     try:
-        # Close database connection
-        Database.close()
+        # Mail-server connections belong to the archive being destroyed.
+        # Account ids start again from 1 in the new one, so a connection
+        # left in the pool would be handed to the NEW account 1 and show
+        # the old account's mailbox.
+        from core import ImapPool, sync_cache
+
+        ImapPool.close_all()
+        sync_cache.close()
+
+        # Close the database connection and drop its key
+        Database.forget_key()
 
         # Delete database file
         db_path = Config.get_database_path()
@@ -238,6 +247,22 @@ def reset_database():
         salt_path = Config.get_salt_path()
         if salt_path.exists():
             salt_path.unlink()
+
+        # Markers and resume state that described the old archive. Left
+        # behind, an interrupted-key-change marker would greet the new
+        # archive's first login with a warning about the old one.
+        for leftover in (
+            ".password_change_in_progress",
+            ".master_rotation_state",
+            ".v3_migration_state",
+            ".restore_unverified",
+            ".backup_snapshot.db",
+            ".backup_state.json",
+        ):
+            try:
+                (Config.get_data_path() / leftover).unlink(missing_ok=True)
+            except OSError as e:
+                log.warning(f"Could not remove {leftover} during reset: {e}")
 
         # Delete a stale secret key file from before 1.1 (no longer used)
         secret_key_path = Config.get_secret_key_path()

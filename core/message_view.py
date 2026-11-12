@@ -184,7 +184,7 @@ def _attached_message_bytes(part) -> bytes:
     return part.get_payload(decode=True) or b""
 
 
-def parse_message(raw: bytes) -> dict:
+def parse_message(raw: bytes, linkify: bool = True) -> dict:
     """Parse a raw message into bodies and an ordered attachment list.
 
     Returns a dict with ``msg`` (the parsed message, for headers),
@@ -259,7 +259,7 @@ def parse_message(raw: bytes) -> dict:
         html_body = _CID_REF.sub(
             lambda m: inline_images.get(m.group(1), m.group(0)), html_body
         )
-    if html_body:
+    if html_body and linkify:
         html_body = linkify_html(html_body)
 
     return {

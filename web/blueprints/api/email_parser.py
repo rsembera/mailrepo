@@ -88,8 +88,16 @@ def iter_mbox_bytes(path: str):
 
 
 def _mbox_folder_of(raw: bytes) -> str:
+    """The folder a message in an mbox belongs to, as the import list shows it.
+
+    Decoded exactly as the scan decodes it (filesystem.parse_mbox_file).
+    The scan showed "Séance" while the commit compared against the raw
+    "=?UTF-8?Q?S=C3=A9ance?=", so a folder with an accented name
+    committed as empty.
+    """
     headers = BytesHeaderParser().parsebytes(raw, headersonly=True)
-    return headers.get("X-Folder") or headers.get("X-Gmail-Labels") or ""
+    folder = headers.get("X-Folder") or headers.get("X-Gmail-Labels") or ""
+    return decode_email_header(folder) if folder else ""
 
 
 def iter_emails_from_import_folder(source_path: str, folder_path: str, import_type: str):

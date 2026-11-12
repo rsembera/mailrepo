@@ -119,7 +119,10 @@ export function showAlert(title, message) {
     return new Promise(resolve => {
         alertResolver = resolve;
         document.getElementById('alertTitle').textContent = title;
-        document.getElementById('alertMessage').textContent = message;
+        const messageEl = document.getElementById('alertMessage');
+        messageEl.textContent = message;
+        // Messages may carry their own line breaks (a list of failures).
+        messageEl.style.whiteSpace = 'pre-line';
         document.getElementById('alertModal').classList.add('active');
     });
 }

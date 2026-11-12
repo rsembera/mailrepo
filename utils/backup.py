@@ -1679,6 +1679,53 @@ def check_restore_pending():
     return None
 
 
+def _fsync_dir(path) -> None:
+    try:
+        dir_fd = os.open(str(path), os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(dir_fd)
+    except OSError:
+        pass
+    finally:
+        os.close(dir_fd)
+
+
+def _move_into_place(source: Path, target: Path) -> None:
+    """Rename ``source`` over ``target``; copy only if they are on different disks."""
+    try:
+        if target.is_dir() and not source.is_dir():
+            shutil.rmtree(target)
+        os.replace(source, target)
+    except OSError:
+        # Different filesystems (a data folder split across volumes).
+        if source.is_dir():
+            if target.exists():
+                shutil.rmtree(target)
+            shutil.copytree(source, target)
+        else:
+            shutil.copy2(source, target)
+
+
+def _clear_state_superseded_by_restore(data_dir: Path) -> None:
+    """Remove bookkeeping that belonged to the archive a restore replaced."""
+    stale = [
+        ".password_change_in_progress",  # interrupted key-change marker
+        ".sync_cache.db",  # IMAP sync state for the replaced database
+        ".sync_cache.db-wal",
+        ".sync_cache.db-shm",
+        ".backup_snapshot.db",
+        ".master_rotation_state",  # resume state for a rotation of the replaced archive
+        ".v3_migration_state",
+    ]
+    for name in stale:
+        try:
+            (data_dir / name).unlink(missing_ok=True)
+        except OSError as e:
+            log.warning(f"Could not remove {name} after restore: {e}")
+
+
 def complete_restore():
     """
     Complete a pending restore by replacing production files.
@@ -1693,38 +1740,59 @@ def complete_restore():
 
     data_dir = get_data_dir()
     archive_dir = get_archive_dir()
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    # Everything is MOVED out of staging, not copied. Staging sits beside
+    # the live data on the same disk, so a move is a rename: it cannot
+    # run out of space halfway, and it needs no room for a second copy
+    # of the archive. Each step leaves a state that running this
+    # function again completes, because the marker is removed last.
 
     # Replace database
     staged_db = staging_dir / "data" / "mailrepo.db"
-    if staged_db.exists():
-        data_dir.mkdir(parents=True, exist_ok=True)
+    restoring_database = staged_db.exists()
+    if restoring_database:
         target_db = data_dir / "mailrepo.db"
-        if target_db.exists():
-            target_db.unlink()
         # A -wal left from an unclean exit would be replayed into the
         # restored database on next open. Remove both sidecars first.
         for ext in ("-wal", "-shm"):
             sidecar = data_dir / f"mailrepo.db{ext}"
             if sidecar.exists():
                 sidecar.unlink()
-        shutil.copy2(staged_db, target_db)
+        _move_into_place(staged_db, target_db)
 
     # Replace security files. (.secret_key is no longer used or backed
     # up; one found in an old backup is simply not restored.)
     for security_file in [".salt"]:
         staged_file = staging_dir / "data" / security_file
         if staged_file.exists():
-            target_file = data_dir / security_file
-            if target_file.exists():
-                target_file.unlink()
-            shutil.copy2(staged_file, target_file)
+            _move_into_place(staged_file, data_dir / security_file)
 
-    # Replace archive folder
+    # Replace archive folder. The outgoing one is set aside first and
+    # deleted only once the restored one is in place.
     staged_archive = staging_dir / "archive"
+    outgoing = archive_dir.with_name(archive_dir.name + ".replaced")
+    if outgoing.exists():
+        shutil.rmtree(outgoing)  # left by an attempt that was interrupted
     if staged_archive.exists():
         if archive_dir.exists():
-            shutil.rmtree(archive_dir)
-        shutil.copytree(staged_archive, archive_dir)
+            os.rename(archive_dir, outgoing)
+        _move_into_place(staged_archive, archive_dir)
+    elif restoring_database and archive_dir.exists():
+        # The backup holds a database and no mail: the archive was empty
+        # at that point. Leaving today's files in place would strand
+        # them beside a database that has never heard of them.
+        os.rename(archive_dir, outgoing)
+        archive_dir.mkdir(parents=True, exist_ok=True)
+    if outgoing.exists():
+        shutil.rmtree(outgoing)
+
+    # State that described the archive being replaced, not the one now
+    # on disk. An interruption marker in particular: "restore from
+    # backup" is the documented way out of an interrupted key change,
+    # and the warning must not outlive the restore that answered it.
+    _clear_state_superseded_by_restore(data_dir)
+    _fsync_dir(data_dir)
 
     # Clean up staging
     shutil.rmtree(staging_dir)

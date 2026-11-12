@@ -639,6 +639,37 @@ function openChangeDestPicker(oldDestId) {
     });
 };
 
+/**
+ * Plain-text account of what a commit could not do, or '' if nothing
+ * went wrong. Failed emails are still on the server: post-commit
+ * actions only ever touch what was archived.
+ */
+export function describeCommitProblems(results) {
+    if (!results) return '';
+    const failed = results.failed || [];
+    const post = results.post_actions || {};
+    const lines = [];
+
+    if (failed.length) {
+        lines.push(`Not archived (${failed.length}), still on the server:`);
+        failed.slice(0, 10).forEach(f => {
+            const what = f.subject || (f.uid != null ? `message ${f.uid}` : 'message');
+            lines.push(`• ${what}: ${f.error || 'unknown error'}`);
+        });
+        if (failed.length > 10) lines.push(`…and ${failed.length - 10} more.`);
+    }
+    if (results.folders_failed) {
+        lines.push(`${results.folders_failed} folder${results.folders_failed === 1 ? '' : 's'} could not be committed.`);
+    }
+    if (post.failed) {
+        lines.push(`${post.failed} server update${post.failed === 1 ? '' : 's'} failed. Those emails are archived; remove them from the server yourself if you want them gone.`);
+    }
+    if (post.skipped_folders) {
+        lines.push(`${post.skipped_folders} folder${post.skipped_folders === 1 ? ' was' : 's were'} left untouched on the server because some of ${post.skipped_folders === 1 ? 'its' : 'their'} emails could not be archived.`);
+    }
+    return lines.join('\n');
+}
+
 function renderSourceActionDropdown(sourceKey, selectedValue = 'leave') {
     let options = [
         { value: 'leave', label: 'Leave in place' },
@@ -1017,7 +1048,15 @@ async function commitAll() {
                 await refreshSidebar();
                 renderReviewView();
                 const msg = data.message || 'Commit complete.';
-                showToast(msg, 'success');
+                const problems = describeCommitProblems(data.results);
+                if (problems) {
+                    // Anything that did not go as asked stays on screen
+                    // until it is read. It used to be a green toast that
+                    // faded, with the failed items already unstaged.
+                    showAlert('Commit finished with problems', `${msg}\n\n${problems}`);
+                } else {
+                    showToast(msg, 'success');
+                }
             },
             onError: (err) => {
                 modal.classList.remove('active');

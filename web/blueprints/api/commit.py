@@ -321,7 +321,7 @@ def commit_import_email(item: dict, results: dict) -> dict:
         return {"status": "success", "subject": subject, "uid": uid}
 
     except Exception as e:
-        results["failed"].append({"uid": uid, "error": str(e)})
+        results["failed"].append({"uid": uid, "subject": subject, "error": str(e)})
         return {"status": "failed", "subject": subject, "uid": uid, "error": str(e)}
 
 
@@ -393,7 +393,7 @@ def commit_imap_email(
         return {"status": "success", "subject": subject, "uid": uid}
 
     except Exception as e:
-        results["failed"].append({"uid": uid, "error": str(e)})
+        results["failed"].append({"uid": uid, "subject": subject, "error": str(e)})
         return {"status": "failed", "subject": subject, "uid": uid, "error": str(e)}
 
 

@@ -674,6 +674,7 @@ def _build_pdf_only(job_id: str, message_ids: list[int], scope_label: str, paylo
             summary={
                 "format": "pdf",
                 "email_count": final_data.get("email_count", 0),
+                "skipped_count": final_data.get("skipped_count", 0),
                 "appendix_count": final_data.get("appendix_count", 0),
             },
             output_dir=payload.get("output_dir"),
@@ -729,6 +730,7 @@ def _build_pdf_only(job_id: str, message_ids: list[int], scope_label: str, paylo
         summary={
             "format": "pdf",
             "email_count": final_data.get("email_count", 0),
+            "skipped_count": final_data.get("skipped_count", 0),
             "appendix_count": final_data.get("appendix_count", 0),
             "other_attachment_count": len(other_attachments),
             "encrypted": bool(pdf_password),
@@ -907,6 +909,7 @@ def _build_pdf_and_eml(
             summary={
                 "format": "both",
                 "email_count": pdf_data.get("email_count", 0),
+                "skipped_count": pdf_data.get("skipped_count", 0),
                 "appendix_count": pdf_data.get("appendix_count", 0),
                 "other_attachment_count": len(other_attachments),
                 "encrypted": True,
@@ -933,6 +936,7 @@ def _build_pdf_and_eml(
         summary={
             "format": "both",
             "email_count": pdf_data.get("email_count", 0),
+            "skipped_count": pdf_data.get("skipped_count", 0),
             "appendix_count": pdf_data.get("appendix_count", 0),
             "other_attachment_count": len(other_attachments),
         },

@@ -5,9 +5,9 @@ Provides endpoints for browsing the local filesystem
 to select files and folders for import.
 """
 
-import mailbox
 import os
 from email import message_from_binary_file, message_from_bytes
+from email.parser import BytesHeaderParser
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 
@@ -16,9 +16,11 @@ from flask import jsonify, request
 from utils.log import get_logger
 
 from . import api_bp
-from .email_parser import decode_email_header
+from .email_parser import decode_email_header, iter_mbox_bytes
 
 log = get_logger()
+
+_HEADERS = BytesHeaderParser()
 
 
 def get_home_dir():
@@ -312,11 +314,15 @@ def parse_mbox_file():
         return jsonify({"error": "Not a file"}), 400
 
     try:
-        mbox = mailbox.mbox(path)
         emails = []
 
-        for i, message in enumerate(mbox):
+        # Headers only, and through the mailbox email_parser keeps open:
+        # building a full MIME tree for every message just to list it
+        # made large files slow to open, and the commit that follows
+        # reuses the same table of contents.
+        for i, raw in iter_mbox_bytes(path):
             try:
+                message = _HEADERS.parsebytes(raw, headersonly=True)
                 # Parse date
                 date_str = message.get("Date", "")
                 date_ts = None
@@ -481,9 +487,9 @@ def scan_apple_mbox_folder():
         """Parse a traditional mbox file and return emails."""
         emails = []
         try:
-            mbox = mailbox.mbox(mbox_path)
-            for i, message in enumerate(mbox):
+            for i, raw in iter_mbox_bytes(mbox_path):
                 try:
+                    message = _HEADERS.parsebytes(raw, headersonly=True)
                     date_str = message.get("Date", "")
                     date_ts = None
                     if date_str:

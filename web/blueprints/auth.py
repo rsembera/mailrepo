@@ -349,6 +349,60 @@ def _recovery_gate():
     return None
 
 
+def startup_notices() -> list[str]:
+    """Things the user must be told before they type a password.
+
+    main.prepare_app prints these at launch, but the desktop app has no
+    terminal, so until now nobody running the packaged build ever saw
+    them. That includes the interrupted key-change explanation, whose
+    whole purpose is to stop "invalid password" being read as "my data
+    is gone" (code review 2026-11, second pass).
+
+    Worked out afresh on every render of a login screen, so a notice
+    disappears as soon as its cause does.
+    """
+    from flask import current_app
+
+    notices: list[str] = []
+
+    failed = current_app.config.get("RESTORE_FAILED")
+    if failed:
+        notices.append(
+            "The restore you prepared could not be completed, and the archive may be "
+            "partly replaced. Quit MailRepo, check that the disk has free space, and "
+            "open it again: the restore will be retried from where it stopped. "
+            f"(Reported: {failed})"
+        )
+
+    try:
+        from core.password_change import (
+            check_password_change_interrupted,
+            describe_interrupted_password_change,
+        )
+
+        marker = check_password_change_interrupted()
+        if marker:
+            notices.append(describe_interrupted_password_change(marker))
+    except Exception as e:  # noqa: BLE001 - a notice must never break the login page
+        log.warning(f"Interruption notice check failed: {e}")
+
+    try:
+        if Config.has_master_password() and not Config.get_database_path().exists():
+            notices.append(
+                "MailRepo found your encryption key file but no database. This usually "
+                "means the database was deleted or lost while the key file survived.\n\n"
+                "Logging in will create a new, empty archive. Your old mail will not come "
+                "back on its own, and the backup location you had set is stored in the "
+                "missing database.\n\n"
+                "If you have backups, restore one before archiving anything new: after "
+                "logging in, go to Settings, then Backups, then Restore."
+            )
+    except Exception as e:  # noqa: BLE001
+        log.warning(f"Missing-database notice check failed: {e}")
+
+    return notices
+
+
 def _restore_login_context():
     """What the login screen needs to say about a just-restored archive.
 
@@ -372,9 +426,10 @@ def _restore_login_context():
 
     restored = current_app.config.get("RESTORE_COMPLETED")
     unverified = backup.restore_unverified()
+    notices = startup_notices()
 
     if not restored and not unverified:
-        return {}
+        return {"startup_notices": notices} if notices else {}
 
     note = ""
     date = ""
@@ -392,6 +447,7 @@ def _restore_login_context():
         "restored_date": date,
         "restored_note": note,
         "restore_retry_available": unverified,
+        "startup_notices": notices,
     }
 
 
@@ -427,6 +483,30 @@ def _vouch_for_restored_data():
                 )
         except Exception as e:  # noqa: BLE001
             log.warning(f"Could not clear restored post-backup command: {e}")
+
+        # This is the first moment the restored database can be examined:
+        # it could not be opened without the password. Backups made
+        # before 1.1 were copied from a live database and can hold a
+        # damaged one that still unlocks (code review 2026-11, #1).
+        try:
+            result = Database.fetchall("PRAGMA quick_check")
+            if [tuple(r) for r in result] != [("ok",)]:
+                detail = "; ".join(str(r[0]) for r in result[:2])
+                log.error(f"Restored database failed its integrity check: {detail}")
+                flash(
+                    "The restored database did not pass its integrity check, so parts of "
+                    "this archive may be missing or wrong. Restore a different backup "
+                    "(Settings, then Backups). The safety backup taken just before this "
+                    "restore is in the list.",
+                    "error",
+                )
+        except Exception as e:  # noqa: BLE001
+            log.error(f"Could not check the restored database: {e}")
+            flash(
+                "The restored database could not be checked and may be damaged. "
+                "If anything looks wrong, restore a different backup.",
+                "error",
+            )
 
     backup.clear_restore_unverified()
     current_app.config.pop("RESTORE_COMPLETED", None)

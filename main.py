@@ -144,6 +144,7 @@ def prepare_app():
 
     # Check for pending restore before opening database
     restore_result = None
+    restore_error = None
     try:
         from utils import backup
 
@@ -152,6 +153,7 @@ def prepare_app():
             log.info(f"Restore completed from: {restore_result.get('restore_point', 'unknown')}")
     except Exception as e:
         log.error(f"Restore failed: {e}")
+        restore_error = str(e) or type(e).__name__
 
     # Surface an interrupted password change before the user hits a login
     # screen that would otherwise just say "invalid password".
@@ -252,6 +254,13 @@ def prepare_app():
     # wants, and it cannot say so without this.
     if restore_result and "error" not in restore_result:
         app.config["RESTORE_COMPLETED"] = restore_result
+
+    # The warnings above are printed, which reaches nobody in the desktop
+    # app: there is no terminal. The login screen works them out again
+    # for itself (auth.startup_notices); a failed restore is the one
+    # thing it cannot rediscover, so it is handed over here.
+    if restore_error:
+        app.config["RESTORE_FAILED"] = restore_error
 
     return app
 

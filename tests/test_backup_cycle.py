@@ -40,13 +40,13 @@ class TestRunDueBackup:
         calls = _spy(monkeypatch)
         _something_to_back_up()
         set_setting("backup_frequency", "daily")
-        set_setting("backup_retention", "6months")
+        set_setting("backup_retention", "6_months")
         set_setting("post_backup_command", "echo done")
 
         result = backup.run_due_backup()
 
         assert result is not None and result["type"] == "full"
-        assert calls["retention"] == ["6months"]
+        assert calls["retention"] == ["6_months"]
         assert calls["commands"] == ["echo done"]
         assert backup.load_manifest().get("last_backup_check")  # the check was recorded
 

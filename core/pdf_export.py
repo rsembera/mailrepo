@@ -25,7 +25,6 @@ silently dropped.
 
 from __future__ import annotations
 
-import email as email_lib
 import html as html_module
 import io
 import logging
@@ -36,6 +35,7 @@ from email.utils import parsedate_to_datetime
 from typing import Iterable, Iterator
 
 from core import Config, Database, Encryption
+from core.message_view import parse_message
 
 logger = logging.getLogger(__name__)
 
@@ -62,68 +62,6 @@ def _decode_header_value(header) -> str:
         return str(header)
 
 
-def _get_bodies(msg) -> tuple[str | None, str | None]:
-    """Return ``(html_body, text_body)`` for a parsed email message."""
-    html_body: str | None = None
-    text_body: str | None = None
-    if msg.is_multipart():
-        for part in msg.walk():
-            ctype = part.get_content_type()
-            disposition = str(part.get("Content-Disposition", ""))
-            if "attachment" in disposition:
-                continue
-            if ctype == "text/html" and not html_body:
-                payload = part.get_payload(decode=True)
-                if payload:
-                    charset = part.get_content_charset() or "utf-8"
-                    html_body = payload.decode(charset, errors="replace")
-            elif ctype == "text/plain" and not text_body:
-                payload = part.get_payload(decode=True)
-                if payload:
-                    charset = part.get_content_charset() or "utf-8"
-                    text_body = payload.decode(charset, errors="replace")
-    else:
-        payload = msg.get_payload(decode=True)
-        if payload:
-            charset = msg.get_content_charset() or "utf-8"
-            ctype = msg.get_content_type()
-            if ctype == "text/html":
-                html_body = payload.decode(charset, errors="replace")
-            else:
-                text_body = payload.decode(charset, errors="replace")
-    return (html_body, text_body)
-
-
-def _get_inline_images(msg) -> dict[str, str]:
-    """Return ``{cid: data-url}`` for inline images so WeasyPrint can render them."""
-    import base64
-
-    out: dict[str, str] = {}
-    if msg.is_multipart():
-        for part in msg.walk():
-            cid_header = part.get("Content-ID")
-            if cid_header:
-                payload = part.get_payload(decode=True)
-                if payload:
-                    cid = cid_header.strip("<>")
-                    ctype = part.get_content_type()
-                    b64 = base64.b64encode(payload).decode("ascii")
-                    out[cid] = f"data:{ctype};base64,{b64}"
-    return out
-
-
-def _replace_cid_refs(html: str, inline_images: dict[str, str]) -> str:
-    """Replace ``cid:foo`` refs in HTML with data URLs."""
-    if not html or not inline_images:
-        return html or ""
-
-    def replace(match: re.Match) -> str:
-        cid = match.group(1)
-        return inline_images.get(cid, match.group(0))
-
-    return re.sub(r'cid:([^"\'\s>]+)', replace, html)
-
-
 # S/MIME and PGP signatures and other crypto/protocol artifacts that mail
 # clients attach automatically. These aren't user-visible content and just
 # clutter the export's attachments folder. Filter at parse time.
@@ -148,43 +86,34 @@ def _is_crypto_artifact(filename: str, ctype: str) -> bool:
     return False
 
 
-def _get_attachments(msg) -> list[dict]:
-    """Return a list of attachments. Each entry has ``filename``, ``content_type``,
-    ``data`` (bytes), and ``is_pdf``/``is_image`` convenience flags.
+def _export_attachments(parsed_attachments: list[dict]) -> list[dict]:
+    """The viewer's attachment list, shaped for the export.
 
-    Skips S/MIME signatures and similar crypto/protocol artifacts \u2014 those
-    aren\'t user content, they\'re mail-client metadata.
+    Comes from core.message_view, the same list every viewer shows, so
+    an export lists what the user saw. This module used to have its own
+    copy of the rules, and that copy left out images carrying a
+    Content-ID the HTML never referenced (code review 2026-11).
+
+    Each entry has ``filename``, ``content_type``, ``data`` (bytes) and
+    ``is_pdf``/``is_image`` flags. S/MIME signatures and similar
+    crypto/protocol artifacts are skipped: those are mail-client
+    metadata, not user content.
     """
     attachments: list[dict] = []
-    if not msg.is_multipart():
-        return attachments
-    for part in msg.walk():
-        disposition = str(part.get("Content-Disposition", ""))
-        filename = part.get_filename()
-        ctype = part.get_content_type()
-        content_id = part.get("Content-ID")
-        # Skip inline images — handled via cid: replacement
-        if content_id and ctype.startswith("image/"):
+    for att in parsed_attachments:
+        filename = att["filename"]
+        ctype = att["content_type"]
+        if _is_crypto_artifact(filename, ctype) or not att["payload"]:
             continue
-        if "attachment" in disposition or (filename and part.get_content_maintype() != "text"):
-            if not filename:
-                continue
-            # Skip crypto/protocol artifacts (smime.p7s, signature.asc, etc.)
-            if _is_crypto_artifact(filename, ctype):
-                continue
-            payload = part.get_payload(decode=True)
-            if not payload:
-                continue
-            attachments.append(
-                {
-                    "filename": _decode_header_value(filename),
-                    "content_type": ctype,
-                    "data": payload,
-                    "is_pdf": ctype == "application/pdf"
-                    or (filename or "").lower().endswith(".pdf"),
-                    "is_image": ctype.startswith("image/"),
-                }
-            )
+        attachments.append(
+            {
+                "filename": filename,
+                "content_type": ctype,
+                "data": att["payload"],
+                "is_pdf": ctype == "application/pdf" or filename.lower().endswith(".pdf"),
+                "is_image": ctype.startswith("image/"),
+            }
+        )
     return attachments
 
 
@@ -217,24 +146,28 @@ def _load_email(message_id: int) -> dict | None:
 
     try:
         raw = Encryption.decrypt(filepath.read_bytes())
-        msg = email_lib.message_from_bytes(raw)
+        parsed = parse_message(raw, linkify=False)
     except Exception as e:
         logger.warning("Failed to decrypt/parse message id=%s: %s", message_id, e)
         return None
 
-    html_body, text_body = _get_bodies(msg)
-    inline_images = _get_inline_images(msg)
-    if html_body and inline_images:
-        html_body = _replace_cid_refs(html_body, inline_images)
+    msg = parsed["msg"]
+    html_body, text_body = parsed["html_body"], parsed["text_body"]
 
     date_str = msg.get("Date", "")
     date_iso = ""
     date_display = date_str
+    # The moment the message was sent, for ordering. Falls back to the
+    # date recorded when it was archived. Ordering by the ISO text was
+    # wrong whenever two messages carried different UTC offsets: 08:00
+    # -05:00 sorted before 10:00 +05:00, eight hours out of order.
+    date_ts = float(row["date"]) if row["date"] is not None else None
     if date_str:
         try:
             dt = parsedate_to_datetime(date_str)
             date_iso = dt.isoformat()
             date_display = dt.strftime("%Y-%m-%d %H:%M")
+            date_ts = dt.timestamp()
         except Exception:
             pass
 
@@ -247,10 +180,11 @@ def _load_email(message_id: int) -> dict | None:
         "recipients": _decode_header_value(msg.get("To", "")),
         "cc": _decode_header_value(msg.get("Cc", "")),
         "date_iso": date_iso,
+        "date_ts": date_ts,
         "date_display": date_display,
         "html_body": html_body,
         "text_body": text_body,
-        "attachments": _get_attachments(msg),
+        "attachments": _export_attachments(parsed["attachments"]),
         "raw_msg": msg,  # kept for downstream attachment access
     }
 
@@ -660,7 +594,7 @@ def _render_cover_page(scope_label: str, emails: list[dict], export_date: dateti
     else:
         dated = [e for e in emails if e.get("date_iso")]
         if dated:
-            dated.sort(key=lambda e: e["date_iso"])
+            dated.sort(key=lambda e: e.get("date_ts") or 0)
             try:
                 first = datetime.fromisoformat(dated[0]["date_iso"]).strftime("%b %d, %Y")
                 last = datetime.fromisoformat(dated[-1]["date_iso"]).strftime("%b %d, %Y")
@@ -884,7 +818,8 @@ def build_combined_pdf(
 
     # ---- Phase 2: sort ---------------------------------------------------
     def sort_key(e: dict):
-        return e.get("date_iso") or ""
+        ts = e.get("date_ts")
+        return ts if ts is not None else float("-inf")  # undated first, as before
 
     emails.sort(key=sort_key, reverse=(sort_order == "reverse_chronological"))
 
@@ -990,6 +925,9 @@ def build_combined_pdf(
             "pdf_bytes": pdf_bytes,
             "filename_hint": filename_hint,
             "email_count": len(emails),
+            # Selected but not in the PDF: file missing, unreadable, or
+            # trashed since the selection was made.
+            "skipped_count": total - len(emails),
             "appendix_count": len(attachment_refs),
             # Non-PDF attachments (images and other types) for the caller to
             # package alongside the PDF as sibling files. The caller may
