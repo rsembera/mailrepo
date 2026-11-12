@@ -38,6 +38,7 @@ Key management & threat model:
 import base64
 import os
 import secrets
+from contextlib import contextmanager
 from typing import Optional
 
 from argon2.low_level import Type as Argon2Type
@@ -243,6 +244,22 @@ class Encryption:
     # re-reading and re-sniffing the file.
     _master: Optional[bytes] = None
     _salt_version: Optional[int] = None
+
+    # True while a re-encryption (master rotation, recovery-key upgrade,
+    # v2 password change) is walking the archive. encrypt() refuses for
+    # the duration: anything encrypted now would be under the outgoing
+    # key and unreadable once the new one is adopted.
+    _rekey_in_progress: bool = False
+
+    @classmethod
+    @contextmanager
+    def rekeying(cls):
+        """Hold off new encryption while the archive changes keys."""
+        cls._rekey_in_progress = True
+        try:
+            yield
+        finally:
+            cls._rekey_in_progress = False
 
     # ----------------------------------------------------------
     # Initialization / unlock state
@@ -534,6 +551,10 @@ class Encryption:
         """AES-256-GCM encrypt with a fresh random nonce per call."""
         if cls._file_key_v2 is None:
             raise EncryptionError("Encryption is locked.")
+        if cls._rekey_in_progress:
+            raise EncryptionError(
+                "The archive is being re-encrypted. Nothing can be added until that finishes."
+            )
         return cls._encrypt_v2_with_key(data, cls._file_key_v2)
 
     @classmethod
@@ -1031,9 +1052,13 @@ class Encryption:
           2. fsync the temp file (durability of contents).
           3. os.replace (atomic on POSIX for same-filesystem rename).
           4. fsync the containing directory (durability of the rename itself).
+          5. Read the file back and compare it with what was written.
 
         Step 4 is the one usually missed: without it, the rename can vanish
-        on power loss even though the data was synced.
+        on power loss even though the data was synced. Step 5 is cheap
+        (the file is under 300 bytes) and is the only check that looks at
+        the disk rather than at memory: every wrapper in ``content`` was
+        already proven to open before this was called.
         """
         salt_path = Config.get_salt_path()
         tmp_path = salt_path.with_suffix(salt_path.suffix + ".v2tmp")
@@ -1047,3 +1072,12 @@ class Encryption:
             os.fsync(dir_fd)
         finally:
             os.close(dir_fd)
+        with open(salt_path, "rb") as f:
+            on_disk = f.read()
+        if on_disk != content:
+            raise EncryptionError(
+                "The key file on disk does not match what was just written "
+                f"({len(on_disk)} bytes read, {len(content)} written). Do not close "
+                "MailRepo: the archive is still open. Check the disk, then repeat the "
+                "operation; if it fails again, restore data/.salt from backup."
+            )

@@ -308,7 +308,9 @@ class TestMigrationResumeState:
 
     def test_state_written_before_the_walk(self, v2_archive):
         """Written early enough to survive a crash during the walk."""
-        import core.crypto_migration_v3 as mig
+        # The walk lives in core.password_change (shared by the upgrade,
+        # rotation and the v2 password change), so that is where to spy.
+        import core.password_change as mig
 
         seen = {}
         original = mig._rekey_file

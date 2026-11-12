@@ -40,7 +40,10 @@ from utils.log import get_logger
 
 from .config import Config
 from .database import Database
+from .database import sqlite3 as _sqlcipher
 from .encryption import (
+    GCM_NONCE_LENGTH,
+    GCM_TAG_LENGTH,
     Encryption,
     InvalidPasswordError,
 )
@@ -175,44 +178,25 @@ def change_master_password(
     #    only a user who knows that will try it.
     _write_interruption_marker(point, phase="file_walk")
 
-    if progress_cb:
-        progress_cb({"status": "counting", "message": "Counting encrypted files..."})
+    with Encryption.rekeying():
+        # 5-6. Files and stored credentials, then a second pass that
+        #      confirms everything opens under the new key.
+        summary = reencrypt_archive(old_file_key, new_file_key, progress_cb)
+        _finish_v2_password_change(point, new_file_key, new_db_key_hex, progress_cb)
 
-    files = list(_iter_archive_files())
-    total = len(files)
-
-    if progress_cb:
-        progress_cb(
-            {
-                "status": "counted",
-                "total": total,
-                "message": f"Found {total} encrypted files",
-            }
-        )
-
-    for i, path in enumerate(files):
-        _rekey_file(path, old_file_key, new_file_key)
-        if (i + 1) % 10 == 0 or (i + 1) == total:
-            if progress_cb:
-                progress_cb(
-                    {
-                        "status": "encrypting",
-                        "total": total,
-                        "current": i + 1,
-                        "message": f"Re-encrypting {i + 1} of {total}...",
-                    }
-                )
-
-    # 6. Stored credentials.
     if progress_cb:
         progress_cb(
             {
-                "status": "credentials",
-                "message": "Re-encrypting account credentials...",
+                "status": "complete",
+                "message": "Password changed successfully.",
             }
         )
-    cred_count = _rekey_credentials(old_file_key, new_file_key)
 
+    return summary
+
+
+def _finish_v2_password_change(point, new_file_key, new_db_key_hex, progress_cb) -> None:
+    """The irreversible tail of a v2 password change."""
     # 7. Database rekey + salt file rewrite. These two operations together
     #    form an irreversible commit point; if anything fails between them,
     #    recovery is restore-from-backup.
@@ -230,10 +214,7 @@ def change_master_password(
 
     Database.acquire_for_migration()
     try:
-        conn = Database.get_connection()
-        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        conn.execute(f"PRAGMA rekey = \"x'{new_db_key_hex}'\"")
-        Database._db_key = new_db_key_hex
+        rekey_database(new_db_key_hex)
 
         if progress_cb:
             progress_cb({"status": "finalizing", "message": "Updating salt file..."})
@@ -248,16 +229,6 @@ def change_master_password(
 
     # Window closed successfully — the marker's job is done.
     clear_interruption_marker()
-
-    if progress_cb:
-        progress_cb(
-            {
-                "status": "complete",
-                "message": "Password changed successfully.",
-            }
-        )
-
-    return {"files": total, "credentials": cred_count}
 
 
 # ============================================================
@@ -431,11 +402,55 @@ def _rekey_file(path: Path, old_key: bytes, new_key: bytes) -> bool:
             Encryption._decrypt_v2_with_key(data, new_key)
             return False  # already migrated; skip
         except Exception:
+            if _is_unreferenced_stub(path, data):
+                log.warning(f"Skipping {path}: too short to hold a message and not in the archive")
+                return False
             raise PasswordChangeCorruptionError(str(path), old_err)
 
     new_data = Encryption._encrypt_v2_with_key(plaintext, new_key)
+
+    # Prove the new ciphertext opens to the same bytes BEFORE it replaces
+    # the original. A bad encryption must never overwrite a good file.
+    try:
+        reopened = Encryption._decrypt_v2_with_key(new_data, new_key)
+    except Exception as e:
+        raise PasswordChangeError(
+            f"Re-encryption self-check failed for {path}: the new ciphertext does not "
+            f"decrypt ({type(e).__name__}). The original file was left untouched."
+        ) from e
+    if reopened != plaintext:
+        raise PasswordChangeError(
+            f"Re-encryption self-check failed for {path}: the new ciphertext decrypts "
+            f"to different bytes. The original file was left untouched."
+        )
+
     _atomic_write_file(path, new_data)
     return True
+
+
+# The shortest thing _encrypt_v2_with_key can produce (an empty message).
+_MIN_CIPHERTEXT_LENGTH = 1 + GCM_NONCE_LENGTH + GCM_TAG_LENGTH
+
+
+def _is_unreferenced_stub(path: Path, data: bytes) -> bool:
+    """True for a file that cannot be a message and that no row points at.
+
+    A write that failed partway (disk full) used to leave an empty
+    ``.eml.enc`` behind with no database row. It opens under no key, so
+    the walk called it corruption and every rotation halted on it until
+    someone deleted it by hand (code review 2026-11, #13). Only files
+    shorter than the smallest possible ciphertext qualify, and only if
+    the archive does not know them: anything a message row references,
+    or anything long enough to have been a message, still halts loudly.
+    """
+    if len(data) >= _MIN_CIPHERTEXT_LENGTH:
+        return False
+    try:
+        rel = str(Path(path).relative_to(Config.get_base_path()))
+        row = Database.fetchone("SELECT 1 FROM messages WHERE filepath = ?", (rel,))
+    except Exception:
+        return False  # cannot tell: treat as real and let the caller halt
+    return row is None
 
 
 def _rekey_credentials(old_key: bytes, new_key: bytes) -> int:
@@ -456,6 +471,9 @@ def _rekey_credentials(old_key: bytes, new_key: bytes) -> int:
         try:
             raw = base64.urlsafe_b64decode(enc_str.encode("ascii"))
         except Exception:
+            # Not something encrypt_string produced; no key will open it,
+            # so there is nothing to carry across. Say so and move on.
+            log.warning(f"accounts.id={row['id']}: stored credentials are not valid base64")
             continue
 
         # Try old key, fall back to new key for resumability.
@@ -477,6 +495,156 @@ def _rekey_credentials(old_key: bytes, new_key: bytes) -> int:
         count += 1
     Database.commit()
     return count
+
+
+# ============================================================
+# THE SHARED ENGINE: WALK, THEN CHECK
+# ============================================================
+#
+# Master rotation, the recovery-key upgrade and the v2 password change
+# all re-encrypt the whole archive and then cross a point of no return
+# (database rekey + key file). They share this engine so that "check
+# that the re-encryption worked" is one piece of code, not three
+# (code review 2026-11; requested via the Hermanubis review).
+
+
+def reencrypt_archive(
+    old_file_key: bytes,
+    new_file_key: bytes,
+    progress_cb: Optional[Callable[[dict], None]] = None,
+) -> dict:
+    """Re-encrypt every archive file and credential, then verify the result.
+
+    Resumable: a file or credential already under ``new_file_key`` is
+    skipped, so an interrupted run can simply be run again.
+
+    Returns ``{"files", "credentials", "verified", "late", "skipped"}``.
+    Raises PasswordChangeCorruptionError if anything opens under neither
+    key, and PasswordChangeError if a self-check fails. Either way
+    nothing irreversible has happened yet.
+    """
+    if progress_cb:
+        progress_cb({"status": "counting", "message": "Counting encrypted files..."})
+
+    files = list(_iter_archive_files())
+    total = len(files)
+
+    if progress_cb:
+        progress_cb(
+            {"status": "counted", "total": total, "message": f"Found {total} encrypted files"}
+        )
+
+    for i, path in enumerate(files):
+        _rekey_file(path, old_file_key, new_file_key)
+        if progress_cb and ((i + 1) % 10 == 0 or (i + 1) == total):
+            progress_cb(
+                {
+                    "status": "encrypting",
+                    "total": total,
+                    "current": i + 1,
+                    "message": f"Re-encrypting {i + 1} of {total}...",
+                }
+            )
+
+    if progress_cb:
+        progress_cb({"status": "credentials", "message": "Re-encrypting account credentials..."})
+    cred_count = _rekey_credentials(old_file_key, new_file_key)
+
+    check = verify_reencryption(old_file_key, new_file_key, progress_cb)
+    return {"files": total, "credentials": cred_count, **check}
+
+
+def verify_reencryption(
+    old_file_key: bytes,
+    new_file_key: bytes,
+    progress_cb: Optional[Callable[[dict], None]] = None,
+) -> dict:
+    """Second pass: everything on disk must open under the new key.
+
+    The archive is listed again from disk rather than trusting the list
+    the walk started with, so a message that arrived while the walk was
+    running (the walk can take minutes) is found here. Such a file is
+    still under the old key; it is converted now and counted as "late".
+    A file under neither key halts, exactly as in the walk.
+
+    This costs one more read-and-authenticate pass over the archive. It
+    runs BEFORE the database is rekeyed, so a failure here leaves the
+    archive on its old credentials and the whole operation re-runnable.
+    """
+    files = list(_iter_archive_files())
+    total = len(files)
+    late = 0
+    skipped = 0
+
+    for i, path in enumerate(files):
+        with open(path, "rb") as fh:
+            data = fh.read()
+        try:
+            Encryption._decrypt_v2_with_key(data, new_file_key)
+        except Exception:
+            if _is_unreferenced_stub(path, data):
+                skipped += 1
+            elif _rekey_file(path, old_file_key, new_file_key):  # raises if neither key opens it
+                late += 1
+                log.warning(f"Converted a file that appeared during re-encryption: {path}")
+        if progress_cb and ((i + 1) % 50 == 0 or (i + 1) == total):
+            progress_cb(
+                {
+                    "status": "verifying",
+                    "total": total,
+                    "current": i + 1,
+                    "message": f"Checking {i + 1} of {total}...",
+                }
+            )
+
+    # Credentials: convert anything saved meanwhile, then every row must open.
+    late += _rekey_credentials(old_file_key, new_file_key)
+    rows = Database.fetchall(
+        "SELECT id, credentials_encrypted FROM accounts WHERE credentials_encrypted IS NOT NULL"
+    )
+    for row in rows:
+        enc_str = row["credentials_encrypted"]
+        if not enc_str:
+            continue
+        try:
+            raw = base64.urlsafe_b64decode(enc_str.encode("ascii"))
+        except Exception:
+            continue  # reported by _rekey_credentials
+        try:
+            Encryption._decrypt_v2_with_key(raw, new_file_key)
+        except Exception as e:
+            raise PasswordChangeCorruptionError(f"accounts.id={row['id']}/credentials", e)
+
+    return {"verified": total - skipped, "late": late, "skipped": skipped}
+
+
+def rekey_database(new_db_key_hex: str) -> None:
+    """Rekey SQLCipher and prove the new key opens it.
+
+    Call inside Database.acquire_for_migration(). The proof is a second,
+    independent connection that knows only the new key: if it cannot
+    read the schema, the rekey did not take, and this raises BEFORE any
+    key file is written. The archive is then still described by its old
+    key file, and the operation can be run again.
+    """
+    conn = Database.get_connection()
+    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    conn.execute(f"PRAGMA rekey = \"x'{new_db_key_hex}'\"")
+
+    probe = _sqlcipher.connect(str(Config.get_database_path()))
+    try:
+        probe.execute(f"PRAGMA key = \"x'{new_db_key_hex}'\"")
+        probe.execute("SELECT count(*) FROM sqlite_master").fetchone()
+    except Exception as e:
+        raise PasswordChangeError(
+            "The database did not accept its new key, so nothing further was changed: "
+            "the key file still describes the old key. Log in with your current "
+            f"password and run the operation again. ({type(e).__name__}: {e})"
+        ) from e
+    finally:
+        probe.close()
+
+    Database._db_key = new_db_key_hex
 
 
 # ============================================================

@@ -62,12 +62,11 @@ from .encryption import (
 from .password_change import (
     MAX_BACKUP_AGE_HOURS,
     _atomic_write_file,
-    _iter_archive_files,
-    _rekey_credentials,
-    _rekey_file,
     _restore_point_age_hours,
     _write_interruption_marker,
     clear_interruption_marker,
+    reencrypt_archive,
+    rekey_database,
 )
 
 log = get_logger(__name__)
@@ -245,80 +244,44 @@ def migrate_to_v3(
     # caller to show the user.
     recovery_key = Encryption.generate_recovery_key()
 
-    # 4. Re-encrypt the archive. Resumable: already-converted files are
-    #    detected and skipped, so an interrupted run can be re-run.
-    if progress_cb:
-        progress_cb({"status": "counting", "message": "Counting encrypted files..."})
+    with Encryption.rekeying():
+        # 4-5. Re-encrypt the archive and stored credentials, then check
+        #      that everything on disk opens under the new key. Resumable:
+        #      already-converted files are detected and skipped, so an
+        #      interrupted run can be re-run.
+        summary = reencrypt_archive(old_file_key, new_file_key, progress_cb)
 
-    files = list(_iter_archive_files())
-    total = len(files)
-
-    if progress_cb:
-        progress_cb(
-            {
-                "status": "counted",
-                "total": total,
-                "message": f"Found {total} encrypted files",
-            }
-        )
-
-    for i, path in enumerate(files):
-        _rekey_file(path, old_file_key, new_file_key)
-        if (i + 1) % 10 == 0 or (i + 1) == total:
-            if progress_cb:
-                progress_cb(
-                    {
-                        "status": "encrypting",
-                        "total": total,
-                        "current": i + 1,
-                        "message": f"Re-encrypting {i + 1} of {total}...",
-                    }
-                )
-
-    # 5. Stored account credentials.
-    if progress_cb:
-        progress_cb(
-            {
-                "status": "credentials",
-                "message": "Re-encrypting account credentials...",
-            }
-        )
-    cred_count = _rekey_credentials(old_file_key, new_file_key)
-
-    # 6. The irreversible window: database rekey, then the new key file.
-    #    Marker first, so an interruption in here can explain itself.
-    _write_interruption_marker(point, phase="v3_migration")
-
-    if progress_cb:
-        progress_cb({"status": "database", "message": "Rekeying database..."})
-
-    blob = Encryption.build_v3_salt_blob(master, password, recovery_key)
-
-    Database.acquire_for_migration()
-    try:
-        conn = Database.get_connection()
-        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        conn.execute(f"PRAGMA rekey = \"x'{new_db_key_hex}'\"")
-        Database._db_key = new_db_key_hex
+        # 6. The irreversible window: database rekey, then the new key file.
+        #    Marker first, so an interruption in here can explain itself.
+        _write_interruption_marker(point, phase="v3_migration")
 
         if progress_cb:
-            progress_cb({"status": "finalizing", "message": "Writing new key file..."})
+            progress_cb({"status": "database", "message": "Rekeying database..."})
 
-        # The key file is written LAST, immediately after the DB rekey.
-        #
-        # Be precise about what that does and does not buy. A crash BEFORE
-        # the rekey leaves a re-runnable migration: the archive is still
-        # described by the v2 key file and the old password still opens
-        # it. A crash BETWEEN the rekey and this write does NOT — the
-        # database is on the new key while the key file still describes
-        # the old one, and recovery is restore-from-backup, exactly as
-        # the interruption marker tells the user. The window is two
-        # statements wide, which is why the verified-backup gate above is
-        # non-overridable.
-        Encryption.write_v3_salt_file(blob)
-        Encryption._adopt_master(master, version=3)
-    finally:
-        Database.release_after_migration()
+        blob = Encryption.build_v3_salt_blob(master, password, recovery_key)
+
+        Database.acquire_for_migration()
+        try:
+            rekey_database(new_db_key_hex)
+
+            if progress_cb:
+                progress_cb({"status": "finalizing", "message": "Writing new key file..."})
+
+            # The key file is written LAST, immediately after the DB rekey.
+            #
+            # Be precise about what that does and does not buy. A crash
+            # BEFORE the rekey leaves a re-runnable migration: the archive
+            # is still described by the v2 key file and the old password
+            # still opens it. A crash BETWEEN the rekey and this write does
+            # NOT — the database is on the new key while the key file still
+            # describes the old one, and recovery is restore-from-backup,
+            # exactly as the interruption marker tells the user. The window
+            # is two statements wide, which is why the verified-backup gate
+            # above is non-overridable.
+            Encryption.write_v3_salt_file(blob)
+            Encryption._adopt_master(master, version=3)
+        finally:
+            Database.release_after_migration()
 
     clear_interruption_marker()
     _clear_migration_state()
@@ -331,5 +294,8 @@ def migrate_to_v3(
             }
         )
 
-    log.info(f"v3 migration complete: {total} files, {cred_count} credentials")
+    log.info(
+        f"v3 migration complete: {summary['files']} files, {summary['credentials']} "
+        f"credentials; {summary['verified']} files verified, {summary['late']} converted late"
+    )
     return recovery_key

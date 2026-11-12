@@ -765,6 +765,14 @@ def login():
                 Database.close()
                 Encryption.lock()
                 raise
+            # A rotation that finished but died before tidying up leaves
+            # a state file the next rotation cannot read. Clear it now.
+            try:
+                from core.master_rotation import clear_finished_rotation_leftovers
+
+                clear_finished_rotation_leftovers()
+            except Exception as e:  # noqa: BLE001 - never block a login on cleanup
+                log.warning(f"Rotation leftover check failed: {e}")
             cleanup_expired_trash()
 
             # The password unwrapped the key file and opened the

@@ -792,7 +792,13 @@ async function handleChangePassword() {
                     }
                     break;
                 case 'credentials':
-                    progressBar.style.width = '85%';
+                    progressBar.style.width = '81%';
+                    break;
+                case 'verifying':
+                    if (progress.total > 0) {
+                        const pct = 82 + (progress.current / progress.total) * 7;
+                        progressBar.style.width = pct + '%';
+                    }
                     break;
                 case 'database':
                     progressBar.style.width = '90%';

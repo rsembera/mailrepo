@@ -159,7 +159,10 @@
                     case 'encrypting':
                         if (p.total > 0) { setWidth(6 + (p.current / p.total) * 74); }
                         break;
-                    case 'credentials': setWidth(85); break;
+                    case 'credentials': setWidth(81); break;
+                    case 'verifying':
+                        if (p.total > 0) { setWidth(82 + (p.current / p.total) * 7); }
+                        break;
                     case 'database': setWidth(90); break;
                     case 'finalizing': setWidth(95); break;
                     case 'complete':

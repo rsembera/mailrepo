@@ -44,12 +44,12 @@ from .encryption import (
 from .password_change import (
     MAX_BACKUP_AGE_HOURS,
     _atomic_write_file,
-    _iter_archive_files,
-    _rekey_credentials,
-    _rekey_file,
     _restore_point_age_hours,
     _write_interruption_marker,
+    check_password_change_interrupted,
     clear_interruption_marker,
+    reencrypt_archive,
+    rekey_database,
 )
 
 log = get_logger(__name__)
@@ -90,6 +90,36 @@ def clear_rotation_state() -> None:
         get_rotation_state_path().unlink(missing_ok=True)
     except Exception as e:
         log.warning(f"Could not clear rotation state: {e}")
+
+
+def clear_finished_rotation_leftovers() -> None:
+    """Run after a successful unlock. Removes what a finished rotation left.
+
+    The state file holds the NEW master wrapped under the OLD file key.
+    If the process died after the new key file landed but before cleanup,
+    the rotation is complete and the file is both useless and harmful:
+    the next rotation cannot read it and refuses to start, and anyone
+    holding the old credentials could use it to derive the current
+    master, which is the one thing a rotation exists to prevent.
+
+    The test is whether the key the archive just opened with can read
+    it. If it can, a rotation really was interrupted mid-walk and the
+    state is needed to resume. If it cannot, it belongs to a master this
+    archive no longer uses.
+    """
+    path = get_rotation_state_path()
+    if not path.exists() or Encryption._file_key_v2 is None:
+        return
+    try:
+        Encryption._decrypt_v2_with_key(path.read_bytes(), Encryption._file_key_v2)
+        return
+    except Exception:
+        pass
+    log.warning("Removing state left by a master rotation that had already finished")
+    clear_rotation_state()
+    marker = check_password_change_interrupted()
+    if marker and marker.get("phase") == "master_rotation":
+        clear_interruption_marker()
 
 
 def rotation_backup_gate():
@@ -151,59 +181,54 @@ def rotate_master_key(
     recovery_key = Encryption.generate_recovery_key()
     pw = new_password if new_password else password
 
-    # 3. Re-encrypt files (resumable) and credentials.
-    if progress_cb:
-        progress_cb({"status": "counting", "message": "Counting encrypted files..."})
-    files = list(_iter_archive_files())
-    total = len(files)
-    for i, path in enumerate(files):
-        _rekey_file(path, old_file_key, new_file_key)
-        if progress_cb and ((i + 1) % 10 == 0 or (i + 1) == total):
-            progress_cb(
-                {
-                    "status": "encrypting",
-                    "total": total,
-                    "current": i + 1,
-                    "message": f"Re-encrypting {i + 1} of {total}...",
-                }
-            )
-    if progress_cb:
-        progress_cb({"status": "credentials", "message": "Re-encrypting account credentials..."})
-    cred_count = _rekey_credentials(old_file_key, new_file_key)
-
-    # 4. The new key file, under the new master. Keep the archive_id: it
-    #    names the archive, not the key.
-    archive_id = blob[V4_OFF_ARCHIVE_ID:V4_OFF_BODY] if blob[:4] == SALT_MAGIC_V4 else None
-    v3_blob = Encryption.build_v3_salt_blob(new_master, pw, recovery_key)
-    new_blob = Encryption.build_v4_blob(new_master, Encryption.envelope_body(v3_blob), archive_id)
-
-    # 5. The irreversible window: database rekey, then the key file.
-    _write_interruption_marker(point, phase="master_rotation")
-    if progress_cb:
-        progress_cb({"status": "database", "message": "Rekeying database..."})
-
-    Database.acquire_for_migration()
-    try:
-        conn = Database.get_connection()
-        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        conn.execute(f"PRAGMA rekey = \"x'{new_db_key_hex}'\"")
-        Database._db_key = new_db_key_hex
-        if progress_cb:
-            progress_cb({"status": "finalizing", "message": "Writing new key file..."})
-        Encryption.write_v3_salt_file(new_blob)
-        Encryption._adopt_master(new_master, version=3)
-    finally:
-        Database.release_after_migration()
-
-    # The database is open on the new key; record the new key file's tag.
     from .keyfile_binding import record_current_tag
 
-    record_current_tag(new_blob, sole=True)
+    with Encryption.rekeying():
+        # 3. Re-encrypt files (resumable) and credentials, then check that
+        #    everything on disk opens under the new key.
+        summary = reencrypt_archive(old_file_key, new_file_key, progress_cb)
+
+        # 4. The new key file, under the new master. Keep the archive_id: it
+        #    names the archive, not the key.
+        archive_id = blob[V4_OFF_ARCHIVE_ID:V4_OFF_BODY] if blob[:4] == SALT_MAGIC_V4 else None
+        v3_blob = Encryption.build_v3_salt_blob(new_master, pw, recovery_key)
+        new_blob = Encryption.build_v4_blob(
+            new_master, Encryption.envelope_body(v3_blob), archive_id
+        )
+        # build_v3_salt_blob proved both doors of v3_blob. new_blob is a
+        # different object (re-wrapped as MRC4), and it is the one going
+        # to disk, so prove the printed recovery key opens IT, binding
+        # tag included.
+        Encryption._assert_recovery_wrapper_opens(new_blob, recovery_key, new_master)
+
+        # 5. The irreversible window: database rekey, then the key file.
+        _write_interruption_marker(point, phase="master_rotation")
+        if progress_cb:
+            progress_cb({"status": "database", "message": "Rekeying database..."})
+
+        Database.acquire_for_migration()
+        try:
+            rekey_database(new_db_key_hex)
+            # Record the new key file's tag BEFORE the file lands, as the
+            # password-change paths do. The database is already on the
+            # new key, so the old tags are dead either way; recording
+            # afterwards left a gap in which a crash made the next login
+            # refuse a perfectly good key file as "replaced".
+            record_current_tag(new_blob, sole=True)
+            if progress_cb:
+                progress_cb({"status": "finalizing", "message": "Writing new key file..."})
+            Encryption.write_v3_salt_file(new_blob)
+            Encryption._adopt_master(new_master, version=3)
+        finally:
+            Database.release_after_migration()
 
     clear_interruption_marker()
     clear_rotation_state()
 
     if progress_cb:
         progress_cb({"status": "complete", "message": "Master key rotated."})
-    log.info(f"Master key rotated: {total} files, {cred_count} credentials re-encrypted")
+    log.info(
+        f"Master key rotated: {summary['files']} files, {summary['credentials']} credentials "
+        f"re-encrypted; {summary['verified']} files verified, {summary['late']} converted late"
+    )
     return recovery_key
