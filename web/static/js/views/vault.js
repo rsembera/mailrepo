@@ -89,6 +89,9 @@ export async function showVaultView() {
     if (contextMeta) contextMeta.textContent = 'Loading...';
     
     await loadVaultFolders();
+    // The reader may have gone to another screen while this loaded; its
+    // content must not be painted over that one.
+    if (state.activeScreen !== 'vault' || viewingFolder) return;
     renderVaultList();
 }
 

@@ -133,8 +133,11 @@ export async function showTrashView() {
     await loadFolders();
     await loadTrashedEmails();
 
-    renderTrashView();
     updateTrashBadge();
+    // The reader may have gone to another screen while this loaded; its
+    // content must not be painted over that one.
+    if (state.activeScreen !== 'trash') return;
+    renderTrashView();
 }
 
 async function loadTrashedEmails() {
@@ -733,15 +736,21 @@ async function emptyTrashEmails() {
     if (!confirmed) return;
 
     try {
+        let failed = 0;
         for (const email of trashedEmails) {
-            await fetch(`/api/messages/${email.id}/permanent`, {
+            const response = await fetch(`/api/messages/${email.id}/permanent`, {
                 method: 'DELETE',
             });
+            if (!response.ok) failed += 1;
         }
 
-        trashedEmails = [];
+        // Show what the server still holds, not what was asked for.
+        await loadTrashedEmails();
         renderTrashView();
         updateTrashBadge();
+        if (failed > 0) {
+            showToast(`${failed} email${failed === 1 ? '' : 's'} could not be deleted and ${failed === 1 ? 'is' : 'are'} still in the trash.`, 'error');
+        }
     } catch (error) {
         console.error('Error emptying trash:', error);
         showToast('Failed to empty trash', 'error');

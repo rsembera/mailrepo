@@ -14,6 +14,7 @@ import { showToast } from '../toast.js';
 import { state, loadFolders, persistStaged } from '../state.js';
 import { refreshSidebarFolders } from '../components/sidebar.js';
 import { bindActions } from '../delegate.js';
+import { imapDelimiter } from '../archive-paths.js';
 
 // === Module State ===
 
@@ -567,7 +568,7 @@ function renderSourceGroup(source, sourceKey, destId, type) {
             sortedFolders.forEach(([folderName, items]) => {
                 const lineKey = `${sourceKey}:${folderName}`;
                 // Show just the leaf folder name (full path is implied by account context)
-                const leafName = folderName.includes('/') ? folderName.split('/').pop() : folderName;
+                const leafName = folderName.split(isImap ? imapDelimiter(state.imapFolders, source.accountId) : '/').pop();
                 
                 html += `
                     <div class="review-source-item">

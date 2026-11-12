@@ -18,7 +18,7 @@ class TestFtsQuerySanitization:
     def test_pure_punctuation_returns_empty(self, authenticated_client, initialized_app):
         resp = authenticated_client.get("/api/search", query_string={"q": "-"})
         assert resp.status_code == 200
-        assert resp.get_json()["results"] == []
+        assert resp.get_json()["emails"] == []
 
     def test_build_fts_match_quotes_tokens(self):
         from core.database import build_fts_match

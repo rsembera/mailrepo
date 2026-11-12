@@ -158,9 +158,12 @@ async function mountMboxFromPath(path, name) {
     emails.forEach(e => e.sourcePath = path);
     
     // Use server-detected folders, or null if none
+    // By lookup, not by searching each folder's list for each email: a
+    // large labelled export is tens of thousands of both.
+    const byUid = new Map(emails.map(e => [e.uid, e]));
     const folders = data.folders ? data.folders.map(f => ({
         ...f,
-        emails: emails.filter(e => f.emailUids.includes(e.uid)),
+        emails: f.emailUids.map(uid => byUid.get(uid)).filter(Boolean),
         children: [],
     })) : null;
     
@@ -296,6 +299,16 @@ async function mountEmlFolderFromPath(path, name) {
             console.warn(`Failed to parse ${file.name}:`, error);
         }
     }
+
+    // Say so when the list is shorter than the folder: a file left out
+    // here is a file that will not be archived.
+    const unread = scanData.files.length - emails.length;
+    if (emails.length === 0) {
+        throw new Error('None of the .eml files in this folder could be read');
+    }
+    if (unread > 0) {
+        showToast(`${unread} of ${scanData.files.length} .eml files could not be read and are not listed.`, 'warning');
+    }
     
     const importId = `eml-${Date.now()}`;
     mountedImports.set(importId, {
@@ -380,6 +393,7 @@ async function mountPstFromPath(path, name) {
         // Build folder structure from converted mbox files
         const folders = [];
         const allEmails = [];
+        const unreadFolders = [];
         
         for (const mboxFile of convertData.mbox_files) {
             // Parse each mbox file
@@ -405,6 +419,8 @@ async function mountPstFromPath(path, name) {
                     });
                     allEmails.push(...emails);
                 }
+            } else {
+                unreadFolders.push(mboxFile.name);
             }
         }
         
@@ -432,6 +448,13 @@ async function mountPstFromPath(path, name) {
         
         updateDisplayNames();
         renderImportsSection();
+
+        if (unreadFolders.length > 0) {
+            showAlert(
+                'Some PST folders could not be read',
+                `These folders are not in the import:\n\n${unreadFolders.join('\n')}`
+            );
+        }
         
         return importId;
         

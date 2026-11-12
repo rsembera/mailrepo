@@ -127,6 +127,9 @@ export async function showFolderSelectionView(accountId) {
         }
         
         const data = await response.json();
+        // Another screen, or another account's folders, was opened
+        // while this loaded.
+        if (state.activeScreen !== 'folderSelection' || currentFolderSelectionAccountId !== accountId) return;
         folderSelectionTree = buildImapFolderTree(data.folders || []);
         renderFolderSelectionView(folderSelectionTree, accountId);
     } catch (error) {

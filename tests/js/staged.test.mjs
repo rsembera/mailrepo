@@ -174,3 +174,42 @@ test('an unparseable date comes back as given, so callers must escape it', async
     assert.equal(formatDate(header), header);
     assert.equal(/[<>]/.test(escapeHtml(formatDate(header))), false);
 });
+
+function importItem(importId, uid) {
+    return { email: { uid }, destinationFolderId: 3, sourceType: 'import', sourceImportId: importId, sourceFolder: null };
+}
+
+test('unmounting an import unstages what came from it and nothing else', async () => {
+    const { unstageImport } = await import('../../web/static/js/state.js');
+    reset();
+    for (const item of [importItem('pst-1', 'mbox-0'), importItem('pst-1', 'mbox-1'), importItem('mbox-2', 'mbox-0'), imapItem(1, 'INBOX', '5')]) {
+        state.staged.set(stagedKeyOfItem(item), item);
+    }
+    state.stagedFolders = [
+        { sourceType: 'import', importId: 'pst-1', folder: 'Inbox', destinationFolderId: 3 },
+        { sourceType: 'import', importId: 'mbox-2', folder: 'Old', destinationFolderId: 3 },
+        { sourceType: 'account', accountId: 1, folder: 'pst-1', destinationFolderId: 3 },
+    ];
+    assert.equal(unstageImport('pst-1'), 3);
+    assert.equal(state.staged.size, 2);
+    assert.deepEqual(state.stagedFolders.map(sf => sf.importId || sf.accountId), ['mbox-2', 1]);
+    assert.equal(JSON.parse(store.get('stagedEmails')).length, 2);
+    assert.equal(unstageImport('pst-1'), 0);
+});
+
+test('items staged from a PST import do not come back after a page load', () => {
+    reset();
+    for (const item of [importItem('pst-1', 'mbox-0'), importItem('mbox-2', 'mbox-0'), imapItem(1, 'INBOX', '5')]) {
+        state.staged.set(stagedKeyOfItem(item), item);
+    }
+    state.stagedFolders = [
+        { sourceType: 'import', importId: 'pst-1', folder: 'Inbox' },
+        { sourceType: 'import', importId: 'eml-9', folder: 'Old' },
+    ];
+    persistStaged();
+    state.staged = new Map();
+    state.stagedFolders = [];
+    restoreStaged();
+    assert.deepEqual([...state.staged.values()].map(i => i.sourceImportId || 'imap').sort(), ['imap', 'mbox-2']);
+    assert.deepEqual(state.stagedFolders.map(sf => sf.importId), ['eml-9']);
+});

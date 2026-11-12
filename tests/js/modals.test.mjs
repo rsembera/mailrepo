@@ -45,3 +45,7 @@ test("one dialog's labels do not carry over to the next", async () => {
     await ask({ confirmText: 'Resume', cancelText: 'Discard' });
     assert.deepEqual(await ask(), { ok: 'OK', okClass: 'btn btn-primary', cancel: 'Cancel' });
 });
+
+test('okClass is honoured too', async () => {
+    assert.equal((await ask({ okText: 'Delete All', okClass: 'btn-danger' })).okClass, 'btn btn-danger');
+});

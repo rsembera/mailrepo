@@ -10,6 +10,7 @@
 
 import { state, setStagedBadgeElement, updateStagedBadge, persistStaged } from '../state.js';
 import { stagedKeyOfItem } from '../staged-key.js';
+import { computeArchivePaths, getFolderName, imapDelimiter } from '../archive-paths.js';
 import { closeModal, showPrompt } from '../modals.js';
 import { showToast } from '../toast.js';
 import { renderFolderTree } from '../components/folder-tree.js';
@@ -261,83 +262,6 @@ async function createFolderInTree(parentId) {
 }
 
 /**
- * Get folder name from full path.
- * Handles both filesystem paths and IMAP folder names.
- * 
- * IMAP folders use '/' as the hierarchy delimiter (detected from server).
- * Dots in folder names are NOT hierarchy separators - they're part of the name.
- */
-function getFolderName(fullPath) {
-    // Handle paths with '/' (both filesystem and IMAP hierarchy)
-    if (fullPath.includes('/')) {
-        const name = fullPath.split('/').pop();
-        // Remove .mbox extension if present (for Apple Mail imports)
-        return name.replace(/\.mbox$/, '');
-    }
-    // No hierarchy separator - return as-is
-    // (Dots are part of the folder name, not separators)
-    return fullPath;
-}
-
-/**
- * Compute archive paths for staged folders.
- * 
- * For each folder, determines the archive path based on whether its ancestors
- * are also being staged to the same destination:
- * - If ancestor is staged: preserve relative hierarchy (Parent/Child)
- * - If no ancestor staged: just the folder name (Child)
- * 
- * @param {string[]} folderPaths - All folder paths being staged
- * @param {string} sourceType - 'import' or 'account'
- * @param {string} importId - Import ID (for imports)
- * @returns {Object} Map of fullPath -> archivePath
- */
-function computeArchivePaths(folderPaths, sourceType, importId) {
-    const archivePaths = {};
-    
-    // Sort by path length (shortest first) to process ancestors before descendants
-    const sorted = [...folderPaths].sort((a, b) => a.length - b.length);
-    
-    for (const path of sorted) {
-        const folderName = getFolderName(path);
-        
-        // Find if any ancestor path is also being staged
-        let ancestorPath = null;
-        for (const otherPath of sorted) {
-            if (otherPath === path) continue;
-            
-            // Standard check: path is under otherPath directory
-            if (path.startsWith(otherPath + '/')) {
-                if (!ancestorPath || otherPath.length > ancestorPath.length) {
-                    ancestorPath = otherPath;
-                }
-            }
-            
-            // Apple Mail special case: Parent.mbox corresponds to Parent/ directory
-            // So if otherPath is "Foo.mbox" and path is "Foo/Bar.mbox", they're parent/child
-            if (otherPath.endsWith('.mbox')) {
-                const parentDir = otherPath.slice(0, -5); // Remove .mbox
-                if (path.startsWith(parentDir + '/')) {
-                    if (!ancestorPath || otherPath.length > ancestorPath.length) {
-                        ancestorPath = otherPath;
-                    }
-                }
-            }
-        }
-        
-        if (ancestorPath && archivePaths[ancestorPath]) {
-            // Ancestor is staged - build relative path
-            archivePaths[path] = archivePaths[ancestorPath] + '/' + folderName;
-        } else {
-            // No ancestor staged - just use folder name
-            archivePaths[path] = folderName;
-        }
-    }
-    
-    return archivePaths;
-}
-
-/**
  * Confirm staging - handles both email and folder staging.
  */
 export function confirmStage() {
@@ -365,11 +289,12 @@ export function confirmStage() {
         if (!pending) return;
         
         // Compute archive paths based on hierarchy
-        const archivePaths = computeArchivePaths(
-            pending.folders, 
-            pending.sourceType, 
-            pending.importId
-        );
+        // An account's folders are separated by whatever its server
+        // uses; import paths are file paths.
+        const delimiter = pending.sourceType === 'import'
+            ? '/'
+            : imapDelimiter(state.imapFolders, pending.accountId);
+        const archivePaths = computeArchivePaths(pending.folders, delimiter);
         
         // Add each folder as a separate entry with its destination and archive path
         pending.folders.forEach(folder => {
@@ -386,7 +311,7 @@ export function confirmStage() {
             }
             
             if (!exists) {
-                const archivePath = archivePaths[folder] || getFolderName(folder);
+                const archivePath = archivePaths[folder] || getFolderName(folder, delimiter);
                 
                 if (pending.sourceType === 'import') {
                     state.stagedFolders.push({

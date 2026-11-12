@@ -69,8 +69,11 @@ export async function showStarredView() {
     renderStarredView();
 
     await loadStarredEmails();
-    renderStarredView();
     updateStarredBadge();
+    // The reader may have gone to another screen while this loaded; its
+    // content must not be painted over that one.
+    if (state.activeScreen !== 'starred' || !inStarredContext) return;
+    renderStarredView();
 }
 
 async function loadStarredEmails() {

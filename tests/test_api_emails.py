@@ -335,3 +335,56 @@ def test_search_with_a_non_numeric_limit_is_not_a_server_error(
 ):
     resp = authenticated_client.get("/api/search?q=hello&limit=lots")
     assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Search: trashed folders, truncation (code review 2026-11, third pass)
+# ---------------------------------------------------------------------------
+
+
+def test_search_leaves_out_mail_in_a_trashed_folder(authenticated_client, initialized_app):
+    keep = _make_folder("Keep")
+    gone = _make_folder("Gone")
+    sub = _make_folder("Sub", parent_id=gone)
+    _make_message(keep, subject="needle kept")
+    _make_message(gone, subject="needle trashed")
+    _make_message(sub, subject="needle trashed deeper")
+    assert authenticated_client.get("/api/search?q=needle").get_json()["count"] == 3
+
+    assert authenticated_client.delete(f"/api/folders/{gone}").status_code == 200
+
+    data = authenticated_client.get("/api/search?q=needle").get_json()
+    assert [e["subject"] for e in data["emails"]] == ["needle kept"]
+
+
+def test_search_export_leaves_out_mail_in_a_trashed_folder(authenticated_client, initialized_app):
+    from web.blueprints.api.exports import _search_message_ids
+
+    keep = _make_folder("Keep")
+    gone = _make_folder("Gone")
+    kept_id = _make_message(keep, subject="needle kept")
+    _make_message(gone, subject="needle trashed")
+    assert len(_search_message_ids("needle", None, True)) == 2
+    authenticated_client.delete(f"/api/folders/{gone}")
+    assert _search_message_ids("needle", None, True) == [kept_id]
+
+
+def test_search_says_when_there_are_more_results_than_shown(authenticated_client, initialized_app):
+    fid = _make_folder("Clients")
+    for i in range(5):
+        _make_message(fid, subject=f"needle {i}")
+
+    data = authenticated_client.get("/api/search?q=needle&limit=3").get_json()
+    assert data["count"] == 3 and len(data["emails"]) == 3
+    assert data["truncated"] is True
+
+    data = authenticated_client.get("/api/search?q=needle&limit=5").get_json()
+    assert data["count"] == 5
+    assert data["truncated"] is False
+
+
+def test_search_with_nothing_searchable_answers_in_the_usual_shape(
+    authenticated_client, initialized_app
+):
+    data = authenticated_client.get("/api/search?q=...").get_json()
+    assert data["emails"] == [] and data["count"] == 0 and data["truncated"] is False

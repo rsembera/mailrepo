@@ -214,8 +214,9 @@ def _search_message_ids(query: str, folder_id: int | None, include_subs: bool) -
             f"""
             SELECT m.id FROM messages m
             JOIN messages_fts fts ON m.id = fts.rowid
+            JOIN folders f ON m.folder_id = f.id
             WHERE messages_fts MATCH ? AND m.folder_id IN ({placeholders})
-              AND m.deleted_at IS NULL
+              AND m.deleted_at IS NULL AND f.deleted_at IS NULL
             ORDER BY m.date
             """,
             (fts_query, *folder_ids),
@@ -225,7 +226,8 @@ def _search_message_ids(query: str, folder_id: int | None, include_subs: bool) -
             """
             SELECT m.id FROM messages m
             JOIN messages_fts fts ON m.id = fts.rowid
-            WHERE messages_fts MATCH ? AND m.deleted_at IS NULL
+            JOIN folders f ON m.folder_id = f.id
+            WHERE messages_fts MATCH ? AND m.deleted_at IS NULL AND f.deleted_at IS NULL
             ORDER BY m.date
             """,
             (fts_query,),

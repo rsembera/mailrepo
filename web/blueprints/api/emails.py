@@ -59,7 +59,7 @@ def search_emails():
     fts_query = build_fts_match(query)
     if fts_query is None:
         # Nothing searchable in the input (e.g. "-", "..."): no matches.
-        return jsonify({"results": [], "count": 0, "query": query})
+        return jsonify({"query": query, "count": 0, "emails": [], "truncated": False})
 
     if folder_id:
         # Either the folder alone, or the folder + all descendants
@@ -74,11 +74,12 @@ def search_emails():
             FROM messages m
             JOIN messages_fts fts ON m.id = fts.rowid
             JOIN folders f ON m.folder_id = f.id
-            WHERE messages_fts MATCH ? AND m.folder_id IN ({placeholders}) AND m.deleted_at IS NULL
+            WHERE messages_fts MATCH ? AND m.folder_id IN ({placeholders})
+              AND m.deleted_at IS NULL AND f.deleted_at IS NULL
             ORDER BY m.date DESC
             LIMIT ?
             """,
-            (fts_query, *folder_ids, limit),
+            (fts_query, *folder_ids, limit + 1),
         )
     else:
         results = Database.fetchall(
@@ -87,12 +88,18 @@ def search_emails():
             FROM messages m
             JOIN messages_fts fts ON m.id = fts.rowid
             JOIN folders f ON m.folder_id = f.id
-            WHERE messages_fts MATCH ? AND m.deleted_at IS NULL
+            WHERE messages_fts MATCH ? AND m.deleted_at IS NULL AND f.deleted_at IS NULL
             ORDER BY m.date DESC
             LIMIT ?
             """,
-            (fts_query, limit),
+            (fts_query, limit + 1),
         )
+
+    # One more than asked for was fetched, to know whether the list is
+    # complete. Mail in a trashed folder is left out (f.deleted_at): the
+    # folder is in the trash, and so is everything in it.
+    truncated = len(results) > limit
+    results = results[:limit]
 
     # Build folder path map from a single query (avoids N+1 per result)
     all_folders = Database.fetchall(
@@ -128,7 +135,7 @@ def search_emails():
         for r in results
     ]
 
-    return jsonify({"query": query, "count": len(emails), "emails": emails})
+    return jsonify({"query": query, "count": len(emails), "emails": emails, "truncated": truncated})
 
 
 @api_bp.route("/folders/<int:folder_id>/emails", methods=["GET"])

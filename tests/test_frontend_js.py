@@ -229,3 +229,86 @@ def test_list_loads_cannot_write_into_another_folders_list():
     assert folder.index("if (!isCurrent()) return;") < folder.index("state.emails = ")
     failed = folder[folder.index("} catch (error) {") :]
     assert failed.index("if (!isCurrent()) return;") < failed.index("showError(")
+
+
+# --- third pass -------------------------------------------------------------
+
+
+def _js(name):
+    return (JS / name).read_text(encoding="utf-8")
+
+
+def test_staged_folders_follow_the_servers_separator():
+    staging = _js("components/staging.js")
+    assert "imapDelimiter(state.imapFolders, pending.accountId)" in staging
+    assert "computeArchivePaths(pending.folders, delimiter)" in staging
+    # The old copy assumed "/" everywhere.
+    assert "function computeArchivePaths" not in staging
+    assert "function getFolderName" not in staging
+
+
+def test_imports_say_what_could_not_be_read():
+    imports = _js("components/imports.js")
+    assert "const unread = scanData.files.length - emails.length;" in imports
+    assert "if (unread > 0) {\n        showToast(`${unread} of ${scanData.files.length} .eml files could not be read" in imports
+    assert "unreadFolders.push(mboxFile.name);" in imports
+    assert "'Some PST folders could not be read'" in imports
+    # Grouping by lookup, not a search of every list for every email.
+    assert "f.emailUids.includes(" not in imports
+    assert "new Map(emails.map(e => [e.uid, e]))" in imports
+
+
+def test_unmounting_a_pst_import_unstages_its_items():
+    app = _js("app.js")
+    unmount = app[app.index("function handleImportUnmount(importId) {") :][:700]
+    assert "startsWith('pst-')" in unmount
+    assert "unstageImport(importId)" in unmount
+
+
+@pytest.mark.parametrize(
+    "name,guard,render",
+    [
+        (
+            "views/starred.js",
+            "if (state.activeScreen !== 'starred' || !inStarredContext) return;",
+            "renderStarredView();\n}",
+        ),
+        ("views/trash.js", "if (state.activeScreen !== 'trash') return;", "renderTrashView();\n}"),
+        (
+            "views/vault.js",
+            "if (state.activeScreen !== 'vault' || viewingFolder) return;",
+            "renderVaultList();\n}",
+        ),
+        (
+            "views/folder-selection.js",
+            "if (state.activeScreen !== 'folderSelection' || currentFolderSelectionAccountId !== accountId) return;",
+            "renderFolderSelectionView(folderSelectionTree, accountId);",
+        ),
+    ],
+)
+def test_a_screen_that_loads_late_does_not_paint_over_the_next_one(name, guard, render):
+    source = _js(name)
+    at = source.index(guard)
+    assert render in source[at : at + 400]
+
+
+def test_only_confirmed_deletions_leave_the_list():
+    rows = _js("components/email-list.js")
+    delete = rows[rows.index("async function deleteSelectedArchivedEmails()") :]
+    delete = delete[: delete.index("\n}\n")]
+    assert "if (response.ok) {\n                trashed.add(emailId);" in delete
+    assert "state.emails.filter(e => !trashed.has(e.id))" in delete
+    assert "could not be moved to trash" in delete
+
+    trash = _js("views/trash.js")
+    empty = trash[trash.index("async function emptyTrashEmails()") :]
+    empty = empty[: empty.index("\n}\n")]
+    assert "if (!response.ok) failed += 1;" in empty
+    assert "await loadTrashedEmails();" in empty
+    assert "trashedEmails = [];" not in empty
+
+
+def test_search_says_when_the_list_is_capped():
+    mail = _js("views/mail.js")
+    assert "data.truncated" in mail
+    assert "showing the newest ${data.count}" in mail

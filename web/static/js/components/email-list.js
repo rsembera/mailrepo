@@ -734,17 +734,25 @@ async function deleteSelectedArchivedEmails() {
     
     try {
         const ids = Array.from(selectedArchivedEmails);
+        // Only what the server confirmed leaves the list; an email whose
+        // delete failed is still in the folder and stays selected.
+        const trashed = new Set();
         for (const emailId of ids) {
             const response = await fetch(`/api/messages/${emailId}`, { method: 'DELETE' });
-            if (!response.ok) {
+            if (response.ok) {
+                trashed.add(emailId);
+            } else {
                 console.error(`Failed to delete email ${emailId}`);
             }
         }
         
-        // Remove from state and clear selection
-        state.emails = state.emails.filter(e => !selectedArchivedEmails.has(e.id));
-        selectedArchivedEmails.clear();
+        state.emails = state.emails.filter(e => !trashed.has(e.id));
+        trashed.forEach(id => selectedArchivedEmails.delete(id));
         renderEmailList();
+        const failed = ids.length - trashed.size;
+        if (failed > 0) {
+            showToast(`${failed} of ${ids.length} email${ids.length === 1 ? '' : 's'} could not be moved to trash.`, 'error');
+        }
         
         // Update trash badge
         const { updateTrashBadge } = await import('../views/trash.js');

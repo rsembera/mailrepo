@@ -10,6 +10,7 @@
 
 import { escapeHtml, debounce } from '../utils.js';
 import { beginListLoad } from '../list-load.js';
+import { imapDelimiter } from '../archive-paths.js';
 import { state } from '../state.js';
 import { renderEmailList, clearEmailFilter, clearArchivedEmailSelection } from '../components/email-list.js';
 import { bindActions } from '../delegate.js';
@@ -265,7 +266,7 @@ export async function loadAccountEmails(accountId, folder = 'INBOX', { forceRefr
     renderImapNavigation(accountId, folder);
     
     // Show just the folder name in title, not full path
-    const folderName = folder.includes('/') ? folder.split('/').pop() : folder;
+    const folderName = folder.split(imapDelimiter(state.imapFolders, accountId)).pop();
     if (contextTitle) contextTitle.textContent = folderName;
     if (contextMeta) contextMeta.textContent = 'Loading...';
     
@@ -930,10 +931,14 @@ async function executeArchiveSearch() {
         const data = await response.json();
         
         if (contextMeta) {
-            contextMeta.textContent = `${data.count} result${data.count !== 1 ? 's' : ''}`;
+            // The list is capped; say so, or 100 reads as "all of them".
+            // Exporting the results exports every match, not just these.
+            contextMeta.textContent = data.truncated
+                ? `More than ${data.count} results · showing the newest ${data.count}`
+                : `${data.count} result${data.count !== 1 ? 's' : ''}`;
         }
         
-        renderSearchView(data.emails, query);
+        renderSearchView(data.emails || [], query);
         
     } catch (error) {
         console.error('Search error:', error);

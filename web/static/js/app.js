@@ -15,7 +15,7 @@
 // ============================================
 
 import { escapeHtml, debounce } from './utils.js';
-import { state, loadFolders, confirmNavigation, restoreStaged } from './state.js';
+import { state, loadFolders, confirmNavigation, restoreStaged, unstageImport } from './state.js';
 import { closeModal, showPrompt, showConfirm, initModalListeners } from './modals.js';
 import { showToast } from './toast.js';
 import { renderFolderTree } from './components/folder-tree.js';
@@ -432,6 +432,19 @@ function loadImportEmails(importId, folderPath = null) {
  * Handle import unmount - clear main pane if viewing that import.
  */
 function handleImportUnmount(importId) {
+    // A PST import's converted files went with it; what was staged from
+    // it can no longer be read.
+    if (String(importId).startsWith('pst-')) {
+        const removed = unstageImport(importId);
+        if (removed > 0) {
+            updateStagedBadge();
+            showToast(`${removed} staged item${removed === 1 ? '' : 's'} from this PST import ${removed === 1 ? 'was' : 'were'} unstaged.`, 'info');
+            if (state.activeScreen === 'review') {
+                import('./views/review.js').then(m => m.renderReviewView());
+            }
+        }
+    }
+
     // Check if we're currently viewing this import (either emails or folder selection)
     const viewingThisImport = state.currentView?.id === importId && 
         (state.currentView?.type === 'import' || state.currentView?.type === 'importFolders');

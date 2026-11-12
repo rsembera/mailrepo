@@ -123,14 +123,48 @@ export function persistStaged() {
 }
 
 /**
+ * Remove everything staged from one import. Used when a PST import is
+ * unmounted: its converted files are deleted with it, so what was staged
+ * from it could no longer be read.
+ * @param {string} importId
+ * @returns {number} how many staged emails and folders were removed
+ */
+export function unstageImport(importId) {
+    let removed = 0;
+    for (const [key, item] of [...state.staged.entries()]) {
+        if (item.sourceType === 'import' && item.sourceImportId === importId) {
+            state.staged.delete(key);
+            removed += 1;
+        }
+    }
+    const kept = state.stagedFolders.filter(
+        sf => !(sf.sourceType === 'import' && sf.importId === importId)
+    );
+    removed += state.stagedFolders.length - kept.length;
+    state.stagedFolders = kept;
+    if (removed > 0) persistStaged();
+    return removed;
+}
+
+/** A PST import: its files exist only while the page that mounted it does. */
+function isPstImport(importId) {
+    return typeof importId === 'string' && importId.startsWith('pst-');
+}
+
+/**
  * Load the staged emails and folders saved by persistStaged().
+ *
+ * Items staged from a PST import are not restored: a page load means the
+ * import is no longer mounted, and its converted files are removed when
+ * the archive locks.
  */
 export function restoreStaged() {
     try {
         const savedEmails = sessionStorage.getItem('stagedEmails');
         if (savedEmails) {
             // Keys are rebuilt from the entries rather than trusted.
-            const items = JSON.parse(savedEmails).map(entry => entry[1]);
+            const items = JSON.parse(savedEmails).map(entry => entry[1])
+                .filter(item => !(item.sourceType === 'import' && isPstImport(item.sourceImportId)));
             state.staged = new Map(items.map(item => [stagedKeyOfItem(item), item]));
         }
     } catch (e) {
@@ -140,7 +174,8 @@ export function restoreStaged() {
         const savedFolders = sessionStorage.getItem('stagedFolders');
         if (savedFolders) {
             const parsed = JSON.parse(savedFolders);
-            state.stagedFolders = Array.isArray(parsed) ? parsed : [];
+            state.stagedFolders = (Array.isArray(parsed) ? parsed : [])
+                .filter(sf => !(sf.sourceType === 'import' && isPstImport(sf.importId)));
         }
     } catch (e) {
         console.error('Failed to restore staged folders:', e);
