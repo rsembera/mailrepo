@@ -13,6 +13,7 @@ from flask import jsonify, request
 
 from core import IMAP, Database, IMAPError, ImapPool
 from core.account_utils import is_gmail_host
+from core.message_view import attachment_at
 from web.responses import attachment_response, eml_download
 
 from . import api_bp
@@ -410,37 +411,10 @@ def download_imap_attachment(account_id, uid, index):
     try:
         client = ImapPool.acquire(account_id, account["credentials_encrypted"])
         client.select_folder(folder)
-        raw_bytes = client.fetch_raw(uid)
-        msg = email.message_from_bytes(raw_bytes)
-
-        # Find attachments (must match filtering in IMAP.fetch_email)
-        attachments = []
-        if msg.is_multipart():
-            for part in msg.walk():
-                content_disposition = str(part.get("Content-Disposition", ""))
-                content_id = part.get("Content-ID")
-                content_type = part.get_content_type()
-
-                # Skip inline images - they're handled via cid: replacement in HTML
-                # Only skip if it's an image with Content-ID (actual inline embedded image)
-                if content_id and content_type.startswith("image/"):
-                    continue
-
-                if "attachment" in content_disposition:
-                    filename = part.get_filename()
-                    if filename:
-                        attachments.append(
-                            {
-                                "filename": _decode_header_value(filename),
-                                "content_type": content_type,
-                                "payload": part.get_payload(decode=True),
-                            }
-                        )
-
-        if index < 0 or index >= len(attachments):
+        # The same list fetch_full reported (core/message_view.py).
+        att = attachment_at(client.fetch_raw(uid), index)
+        if att is None:
             return jsonify({"error": "Attachment not found"}), 404
-
-        att = attachments[index]
 
         # Inline only for a short list of inert types; see web/responses.py.
         view_inline = request.args.get("view") == "1"

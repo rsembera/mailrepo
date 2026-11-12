@@ -9,6 +9,7 @@ Handles parsing of various email formats:
 """
 
 import email as email_lib
+import html as html_lib
 import mailbox
 import os
 import re
@@ -196,18 +197,25 @@ def _get_email_from_mbox_by_index(source_path: str, uid: str) -> bytes | None:
     return None
 
 
+# How much of a message's text is indexed for search. Was 10,000, which
+# cut off long threads without saying so; text past the limit simply
+# could not be found. 200,000 covers all but pathological messages and
+# costs little: the text lives inside the encrypted database.
+BODY_TEXT_LIMIT = 200_000
+
+
 def extract_body_text(raw_email: bytes) -> str:
     """
     Extract plain text from email for full-text search indexing.
 
     Walks multipart messages to find text/plain parts and concatenates them.
-    Limits output to 10,000 characters for database storage.
+    Limits output to BODY_TEXT_LIMIT characters for database storage.
 
     Args:
         raw_email: Raw email bytes (RFC 822 format)
 
     Returns:
-        Plain text content, truncated to 10,000 chars
+        Plain text content, truncated to BODY_TEXT_LIMIT chars
     """
     try:
         msg = email_lib.message_from_bytes(raw_email)
@@ -228,8 +236,11 @@ def extract_body_text(raw_email: bytes) -> str:
             text = re.sub(r"<style[^>]*>[\s\S]*?</style>", "", html, flags=re.IGNORECASE)
             text = re.sub(r"<script[^>]*>[\s\S]*?</script>", "", text, flags=re.IGNORECASE)
             text = re.sub(r"<[^>]+>", " ", text)
-            text = re.sub(r"&nbsp;", " ", text)
-            text = re.sub(r"&[a-zA-Z]+;", " ", text)
+            # Decode entities, do not blank them: "caf&eacute;" and
+            # "Montr&#233;al" must be indexed as the words they are.
+            # (They used to become "caf" and "Montr&#233;al", so a search
+            # for either word missed the message.)
+            text = html_lib.unescape(text)
             text = re.sub(r"\s+", " ", text).strip()
             return text
 
@@ -252,7 +263,7 @@ def extract_body_text(raw_email: bytes) -> str:
         # Fall back to plain text if no HTML
         text_parts = html_parts if html_parts else plain_parts
 
-        return "\n".join(text_parts)[:10000]
+        return "\n".join(text_parts)[:BODY_TEXT_LIMIT]
     except Exception:
         return ""
 

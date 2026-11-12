@@ -4,15 +4,13 @@ MailRepo API - Email Routes
 Handles search and archived email retrieval endpoints.
 """
 
-import base64
-import email as email_lib
-import re
 import time
 
 from flask import jsonify, request
 
 from core import Config, Database, Encryption
 from core.database import build_fts_match
+from core.message_view import attachment_at, view_fields
 from utils.log import get_logger
 from web.responses import attachment_response, eml_download
 
@@ -21,44 +19,6 @@ from .email_parser import decode_email_header, extract_body_text
 from .folders import tree_email_counts
 
 log = get_logger()
-
-
-def _linkify_html(html):
-    """
-    Convert plain text URLs and email addresses in HTML to clickable links.
-    Skips content that's already inside anchor tags or other HTML attributes.
-    """
-    # Split HTML into parts: inside tags vs text content
-    # This regex captures HTML tags (including their content) as separate groups
-    parts = re.split(r"(<a\s[^>]*>.*?</a>|<[^>]+>)", html, flags=re.IGNORECASE | re.DOTALL)
-
-    result = []
-    for part in parts:
-        # Skip empty parts
-        if not part:
-            continue
-        # Skip HTML tags and existing anchor elements
-        if part.startswith("<"):
-            result.append(part)
-            continue
-
-        # This is text content - linkify URLs and emails
-        # URL pattern: match until we hit whitespace, quotes, angle brackets, or HTML entities
-        # The negative lookahead stops at &nbsp; &amp; &lt; etc but allows & in query strings
-        part = re.sub(
-            r'(https?://(?:(?!&(?:nbsp|amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)[^\s\u00a0<>"\'])+)',
-            r'<a href="\1" target="_blank" rel="noopener noreferrer">\1</a>',
-            part,
-        )
-        # Then linkify email addresses (but not ones we just made into links)
-        part = re.sub(
-            r"\b([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\b(?![^<]*>)",
-            r'<a href="mailto:\1">\1</a>',
-            part,
-        )
-        result.append(part)
-
-    return "".join(result)
 
 
 def _get_folder_and_descendants(folder_id: int) -> list[int]:
@@ -79,40 +39,6 @@ def _get_folder_and_descendants(folder_id: int) -> list[int]:
         result.extend(children)
         queue.extend(children)
     return result
-
-
-def _collect_referenced_cids(msg) -> set:
-    """Return the set of cid: tokens referenced in any text/html body of
-    the given email message. Used by the archive viewer routes to decide
-    which Content-ID parts are truly inline (referenced) vs. which are
-    really just attachments that happen to carry a Content-ID."""
-    referenced = set()
-    if not msg.is_multipart():
-        if msg.get_content_type() == "text/html":
-            payload = msg.get_payload(decode=True)
-            if payload:
-                charset = msg.get_content_charset() or "utf-8"
-                try:
-                    html = payload.decode(charset, errors="replace")
-                except Exception:
-                    return referenced
-                for m in re.finditer(r'cid:([^"\'\s>]+)', html):
-                    referenced.add(m.group(1))
-        return referenced
-    for part in msg.walk():
-        if part.get_content_type() != "text/html":
-            continue
-        payload = part.get_payload(decode=True)
-        if not payload:
-            continue
-        charset = part.get_content_charset() or "utf-8"
-        try:
-            html = payload.decode(charset, errors="replace")
-        except Exception:
-            continue
-        for m in re.finditer(r'cid:([^"\'\s>]+)', html):
-            referenced.add(m.group(1))
-    return referenced
 
 
 @api_bp.route("/search", methods=["GET"])
@@ -271,113 +197,12 @@ def get_archived_email(folder_id, message_id):
         return jsonify({"error": "Email file not found"}), 404
 
     try:
-        raw_bytes = filepath.read_bytes()
-        raw_bytes = Encryption.decrypt(raw_bytes)
-        msg = email_lib.message_from_bytes(raw_bytes)
-
+        raw_bytes = Encryption.decrypt(filepath.read_bytes())
         result = {
             "id": message["id"],
-            "subject": _decode_header(msg.get("Subject", "")),
-            "from": _decode_header(msg.get("From", "")),
-            "to": _decode_header(msg.get("To", "")),
-            "cc": _decode_header(msg.get("Cc", "")),
-            "date": msg.get("Date", ""),
             "flagged_at": message["flagged_at"],
-            "text_body": None,
-            "html_body": None,
-            "attachments": [],
+            **view_fields(raw_bytes),
         }
-
-        # Pre-scan: find every cid: reference that appears in the html
-        # body(ies). A part with a Content-ID is only truly "inline" if
-        # its id is actually referenced by the html. Without this,
-        # Gmail-mobile picture messages (Content-Disposition: attachment
-        # AND Content-ID, but html doesn't reference the cid) lose their
-        # attachments completely \u2014 the part is registered for cid
-        # replacement that never happens, AND skipped from the
-        # attachments list. Same fix as core/imap.py fetch_full.
-        referenced_cids = _collect_referenced_cids(msg)
-
-        # First pass: collect inline images for cid: replacement. Only
-        # parts whose Content-ID is actually referenced in the html.
-        inline_images = {}
-        if msg.is_multipart():
-            for part in msg.walk():
-                content_id = part.get("Content-ID")
-                if not content_id:
-                    continue
-                cid = content_id.strip("<>")
-                if cid not in referenced_cids:
-                    continue
-                payload = part.get_payload(decode=True)
-                if not payload:
-                    continue
-                content_type = part.get_content_type()
-                b64_data = base64.b64encode(payload).decode("ascii")
-                inline_images[cid] = f"data:{content_type};base64,{b64_data}"
-
-        # Second pass: collect body and attachments
-        if msg.is_multipart():
-            for part in msg.walk():
-                content_type = part.get_content_type()
-                content_disposition = str(part.get("Content-Disposition", ""))
-                filename = part.get_filename()
-                content_id = part.get("Content-ID")
-
-                # Skip only the inline images registered above
-                if content_id and content_type.startswith("image/"):
-                    cid = content_id.strip("<>")
-                    if cid in referenced_cids:
-                        continue
-
-                # Treat as attachment if explicitly marked as attachment,
-                # OR if it has a filename (even if inline) and isn't text
-                if "attachment" in content_disposition or (
-                    filename and part.get_content_maintype() != "text"
-                ):
-                    if filename:
-                        result["attachments"].append(
-                            {
-                                "filename": _decode_header(filename),
-                                "content_type": content_type,
-                                "size": len(part.get_payload(decode=True) or b""),
-                            }
-                        )
-                    continue
-
-                payload = part.get_payload(decode=True)
-                if payload:
-                    charset = part.get_content_charset() or "utf-8"
-                    body = payload.decode(charset, errors="replace")
-                    if content_type == "text/plain":
-                        result["text_body"] = (result["text_body"] or "") + body
-                    elif content_type == "text/html":
-                        result["html_body"] = (result["html_body"] or "") + body
-        else:
-            content_type = msg.get_content_type()
-            payload = msg.get_payload(decode=True)
-            if payload:
-                charset = msg.get_content_charset() or "utf-8"
-                body = payload.decode(charset, errors="replace")
-                if content_type == "text/html":
-                    result["html_body"] = body
-                else:
-                    result["text_body"] = body
-
-        # Replace cid: references in HTML body with data URLs
-        if result["html_body"] and inline_images:
-
-            def replace_cid(match):
-                cid = match.group(1)
-                return inline_images.get(cid, match.group(0))
-
-            # Match cid:xxx in src attributes (handles quoted and unquoted)
-            result["html_body"] = re.sub(r'cid:([^"\'\s>]+)', replace_cid, result["html_body"])
-
-        # Linkify URLs and emails in HTML body that aren't already links
-        if result["html_body"]:
-            result["html_body"] = _linkify_html(result["html_body"])
-
         return jsonify({"email": result})
     except Exception as e:
         return jsonify({"error": f"Failed to read email: {e}"}), 500
@@ -713,45 +538,11 @@ def download_archived_attachment(folder_id, message_id, index):
         return jsonify({"error": "Email file not found"}), 404
 
     try:
-        raw_bytes = filepath.read_bytes()
-        raw_bytes = Encryption.decrypt(raw_bytes)
-        msg = email_lib.message_from_bytes(raw_bytes)
-
-        # Find attachments. Must match the filtering in get_archived_email
-        # exactly, or attachment indices in the JSON response won\'t line
-        # up with what this route returns when the user clicks Download.
-        referenced_cids = _collect_referenced_cids(msg)
-        attachments = []
-        if msg.is_multipart():
-            for part in msg.walk():
-                content_disposition = str(part.get("Content-Disposition", ""))
-                filename = part.get_filename()
-                content_id = part.get("Content-ID")
-                content_type = part.get_content_type()
-
-                # Skip only the inline images that are actually referenced
-                # via cid: in the html body \u2014 same logic as the viewer route.
-                if content_id and content_type.startswith("image/"):
-                    cid = content_id.strip("<>")
-                    if cid in referenced_cids:
-                        continue
-
-                if "attachment" in content_disposition or (
-                    filename and part.get_content_maintype() != "text"
-                ):
-                    if filename:
-                        attachments.append(
-                            {
-                                "filename": _decode_header(filename),
-                                "content_type": content_type,
-                                "payload": part.get_payload(decode=True),
-                            }
-                        )
-
-        if index < 0 or index >= len(attachments):
+        # The same list the viewer route reported, so the index that was
+        # clicked is the file that is served (core/message_view.py).
+        att = attachment_at(Encryption.decrypt(filepath.read_bytes()), index)
+        if att is None:
             return jsonify({"error": "Attachment not found"}), 404
-
-        att = attachments[index]
 
         # Inline only for a short list of inert types; see web/responses.py.
         view_inline = request.args.get("view") == "1"
@@ -824,6 +615,7 @@ def reindex_search():
 
         # Rebuild FTS index
         Database.execute("INSERT INTO messages_fts(messages_fts) VALUES('rebuild')", ())
+        Database.commit()
 
         return jsonify(
             {

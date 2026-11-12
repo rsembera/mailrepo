@@ -437,11 +437,28 @@ class IMAP:
             raise IMAPError("Not connected")
 
         try:
-            status, data = self.connection.uid("FETCH", uid, "(RFC822)")
-            if status != "OK" or not data[0]:
+            # BODY.PEEK[] returns the same bytes as RFC822 without setting
+            # \Seen. MailRepo does not show read/unread state, so it does
+            # not change it either: archiving a folder used to mark every
+            # message in it as read on the server (code review 2026-11, #19).
+            status, data = self.connection.uid("FETCH", uid, "(UID BODY.PEEK[])")
+            if status != "OK" or not data:
                 raise IMAPError(f"Failed to fetch message {uid}")
 
-            return data[0][1]
+            # Servers may interleave other untagged FETCH responses (flag
+            # updates). Take the part that carries a literal for this UID;
+            # if none names the UID, the first literal there is.
+            literals = [p for p in data if isinstance(p, tuple) and len(p) >= 2]
+            for part in literals:
+                meta = part[0] if isinstance(part[0], bytes) else str(part[0]).encode()
+                m = self._UID_IN_RESPONSE.search(meta)
+                if m and m.group(1).decode() == str(uid):
+                    return part[1]
+            if literals:
+                return literals[0][1]
+            raise IMAPError(f"Failed to fetch message {uid}")
+        except IMAPError:
+            raise
         except Exception as e:
             raise IMAPError(f"Failed to fetch message {uid}: {e}")
 
@@ -455,137 +472,9 @@ class IMAP:
         Returns:
             Dict with headers and body (text and/or html).
         """
-        raw = self.fetch_raw(uid)
-        msg = email.message_from_bytes(raw)
+        from .message_view import view_fields
 
-        result = {
-            "uid": uid,
-            "subject": self._decode_header(msg.get("Subject", "")),
-            "from": self._decode_header(msg.get("From", "")),
-            "to": self._decode_header(msg.get("To", "")),
-            "cc": self._decode_header(msg.get("Cc", "")),
-            "date": msg.get("Date", ""),
-            "message_id": msg.get("Message-ID", ""),
-            "text_body": None,
-            "html_body": None,
-            "attachments": [],
-        }
-
-        # Pre-scan: extract every cid: reference that appears in the html
-        # bodies of this message. A MIME part with a Content-ID is only
-        # truly "inline" if its id is actually referenced by the html.
-        # This matters for Gmail mobile and similar clients that set both
-        # Content-Disposition: attachment AND Content-ID on attached
-        # images that the html doesn\'t reference \u2014 those should appear
-        # in the attachments list, not be silently dropped.
-        import base64
-
-        referenced_cids: set[str] = set()
-        if msg.is_multipart():
-            for part in msg.walk():
-                if part.get_content_type() != "text/html":
-                    continue
-                payload = part.get_payload(decode=True)
-                if not payload:
-                    continue
-                charset = part.get_content_charset() or "utf-8"
-                try:
-                    html_text = payload.decode(charset, errors="replace")
-                except Exception:
-                    continue
-                for m in re.finditer(r'cid:([^"\'\s>]+)', html_text):
-                    referenced_cids.add(m.group(1))
-
-        # First pass: collect inline images for cid: replacement. Only
-        # parts whose Content-ID is actually referenced in the html.
-        inline_images = {}  # cid -> data URL
-
-        if msg.is_multipart():
-            for part in msg.walk():
-                content_id = part.get("Content-ID")
-                if not content_id:
-                    continue
-                cid = content_id.strip("<>")
-                if cid not in referenced_cids:
-                    # Has a Content-ID but the html doesn\'t use it \u2014
-                    # the second pass will handle it as a regular attachment.
-                    continue
-                payload = part.get_payload(decode=True)
-                if not payload:
-                    continue
-                content_type = part.get_content_type()
-                b64_data = base64.b64encode(payload).decode("ascii")
-                inline_images[cid] = f"data:{content_type};base64,{b64_data}"
-
-        # Second pass: parse body and collect attachments
-        if msg.is_multipart():
-            for part in msg.walk():
-                content_type = part.get_content_type()
-                content_disposition = str(part.get("Content-Disposition", ""))
-                content_id = part.get("Content-ID")
-
-                # Skip parts we registered as inline images above. Use the
-                # set of referenced cids so we don\'t accidentally also skip
-                # attachments that happen to have a Content-ID.
-                if content_id and content_type.startswith("image/"):
-                    cid = content_id.strip("<>")
-                    if cid in referenced_cids:
-                        continue
-
-                # Collect attachments
-                if "attachment" in content_disposition:
-                    filename = part.get_filename()
-                    if filename:
-                        result["attachments"].append(
-                            {
-                                "filename": self._decode_header(filename),
-                                "content_type": content_type,
-                                "size": len(part.get_payload(decode=True) or b""),
-                            }
-                        )
-                    continue
-
-                if content_type == "text/plain":
-                    payload = part.get_payload(decode=True)
-                    if payload:
-                        charset = part.get_content_charset() or "utf-8"
-                        result["text_body"] = (result["text_body"] or "") + payload.decode(
-                            charset, errors="replace"
-                        )
-
-                elif content_type == "text/html":
-                    payload = part.get_payload(decode=True)
-                    if payload:
-                        charset = part.get_content_charset() or "utf-8"
-                        result["html_body"] = (result["html_body"] or "") + payload.decode(
-                            charset, errors="replace"
-                        )
-        else:
-            # Simple message
-            content_type = msg.get_content_type()
-            payload = msg.get_payload(decode=True)
-            if payload:
-                charset = msg.get_content_charset() or "utf-8"
-                body = payload.decode(charset, errors="replace")
-                if content_type == "text/html":
-                    result["html_body"] = body
-                else:
-                    result["text_body"] = body
-
-        # Replace cid: references in HTML body with data URLs
-        if result["html_body"] and inline_images:
-
-            def replace_cid(match):
-                cid = match.group(1)
-                return inline_images.get(cid, match.group(0))
-
-            result["html_body"] = re.sub(r'cid:([^"\'\s>]+)', replace_cid, result["html_body"])
-
-        # Linkify URLs and emails in HTML body that aren't already links
-        if result["html_body"]:
-            result["html_body"] = self._linkify_html(result["html_body"])
-
-        return result
+        return {"uid": uid, **view_fields(self.fetch_raw(uid))}
 
     def fetch_thread_headers(self, uid: str) -> dict:
         """Fetch just the thread-related headers for a message.
@@ -926,39 +815,6 @@ class IMAP:
             return " ".join(decoded)
         except Exception:
             return header
-
-    def _linkify_html(self, html: str) -> str:
-        """
-        Convert plain text URLs and email addresses in HTML to clickable links.
-        Skips content that's already inside anchor tags or other HTML attributes.
-        """
-        # Split HTML into parts: inside tags vs text content
-        parts = re.split(r"(<a\s[^>]*>.*?</a>|<[^>]+>)", html, flags=re.IGNORECASE | re.DOTALL)
-
-        result = []
-        for part in parts:
-            if not part:
-                continue
-            if part.startswith("<"):
-                result.append(part)
-                continue
-
-            # This is text content - linkify URLs and emails
-            # URL pattern: match until we hit whitespace, quotes, angle brackets, or HTML entities
-            # The negative lookahead stops at &nbsp; &amp; &lt; etc but allows & in query strings
-            part = re.sub(
-                r'(https?://(?:(?!&(?:nbsp|amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)[^\s\u00a0<>"\'])+)',
-                r'<a href="\1" target="_blank" rel="noopener noreferrer">\1</a>',
-                part,
-            )
-            part = re.sub(
-                r"\b([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\b(?![^<]*>)",
-                r'<a href="mailto:\1">\1</a>',
-                part,
-            )
-            result.append(part)
-
-        return "".join(result)
 
     # ==========================================
     # Credential management (stored encrypted)

@@ -219,9 +219,16 @@ def stream_account_emails(account_id):
                     cached_emails = get_cached_emails(account_id, folder, uidvalidity)
                     highest_cached_uid = get_highest_cached_uid(account_id, folder, uidvalidity)
 
-            # Determine which UIDs are new (not in cache)
+            # Determine which UIDs are missing from the cache. This is a
+            # set difference, not "everything above the highest cached
+            # UID": headers arrive newest first, so a first load that was
+            # interrupted (the user clicked another folder) leaves the
+            # NEWEST chunk cached. A high-water mark then concluded
+            # nothing was missing and the older messages never appeared
+            # (code review 2026-11, #7).
             if cache_valid and highest_cached_uid > 0:
-                new_uids = [uid for uid in all_uids if int(uid) > highest_cached_uid]
+                cached_uid_set = {str(e.get("uid")) for e in cached_emails}
+                new_uids = [uid for uid in all_uids if str(uid) not in cached_uid_set]
             else:
                 new_uids = all_uids
                 if uidvalidity:

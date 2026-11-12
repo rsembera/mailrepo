@@ -3,6 +3,9 @@ Code review 2026-11: the IMAP folder listing must match the server.
 
 Finding 8: a folder emptied on the server kept showing its cached
 messages, because stale-entry removal returned early on an empty list.
+
+Finding 7: a first load interrupted partway left the newest chunk in
+the cache, and the high-water-mark test then never fetched the rest.
 """
 
 import json
@@ -84,3 +87,29 @@ def test_stale_removal_handles_many_uids(initialized_app):
     removed = remove_stale_cache_entries(account_id, "INBOX", 7, ["1", "2"])
     assert removed == 1298
     assert Database.fetchone("SELECT COUNT(*) AS c FROM email_cache")["c"] == 2
+
+
+def test_interrupted_first_load_is_completed_on_the_next_visit(
+    authenticated_client, initialized_app, monkeypatch
+):
+    account_id = _account()
+    uids = [str(i) for i in range(300, 0, -1)]  # newest first, as IMAP.search returns
+    _cache(account_id, uids[:100])  # the first chunk landed, then the user clicked away
+    monkeypatch.setattr(ImapPool, "acquire", classmethod(lambda cls, a, c: _Client(uids)))
+
+    final = _final_listing(authenticated_client, account_id)
+    assert final["total"] == 300
+    assert final["fetched"] == 200
+    assert [e["uid"] for e in final["emails"]] == uids
+
+
+def test_a_message_reappearing_below_the_highest_uid_is_picked_up(
+    authenticated_client, initialized_app, monkeypatch
+):
+    account_id = _account()
+    _cache(account_id, ["10", "12"])
+    monkeypatch.setattr(
+        ImapPool, "acquire", classmethod(lambda cls, a, c: _Client(["12", "11", "10"]))
+    )
+    final = _final_listing(authenticated_client, account_id)
+    assert [e["uid"] for e in final["emails"]] == ["12", "11", "10"]

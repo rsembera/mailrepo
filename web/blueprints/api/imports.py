@@ -5,57 +5,19 @@ Handles mbox and eml import, and folder export.
 """
 
 import io
-import re
 import zipfile
 from pathlib import Path
 
 from flask import jsonify, request, send_file
 
 from core import Config, Database, Encryption, scan_mbox_file
+from core.message_view import attachment_at, view_fields
 from utils.log import get_logger
 from web.responses import attachment_response
 
 from . import api_bp
 
 log = get_logger()
-
-
-def _linkify_html(html):
-    """
-    Convert plain text URLs and email addresses in HTML to clickable links.
-    Skips content that's already inside anchor tags or other HTML attributes.
-    """
-    # Split HTML into parts: inside tags vs text content
-    # This regex captures HTML tags (including their content) as separate groups
-    parts = re.split(r"(<a\s[^>]*>.*?</a>|<[^>]+>)", html, flags=re.IGNORECASE | re.DOTALL)
-
-    result = []
-    for part in parts:
-        # Skip empty parts
-        if not part:
-            continue
-        # Skip HTML tags and existing anchor elements
-        if part.startswith("<"):
-            result.append(part)
-            continue
-
-        # This is text content - linkify URLs and emails
-        # URL pattern: match until we hit whitespace, quotes, angle brackets, or HTML entities
-        # The negative lookahead stops at &nbsp; &amp; &lt; etc but allows & in query strings
-        part = re.sub(
-            r'(https?://(?:(?!&(?:nbsp|amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)[^\s\u00a0<>"\'])+)',
-            r'<a href="\1" target="_blank" rel="noopener noreferrer">\1</a>',
-            part,
-        )
-        # Then linkify email addresses (but not ones we just made into links)
-        part = re.sub(
-            r"\b([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})\b(?![^<]*>)",
-            r'<a href="mailto:\1">\1</a>',
-            part,
-        )
-        result.append(part)
-
-    return "".join(result)
 
 
 @api_bp.route("/import/mbox/scan", methods=["POST"])
@@ -198,8 +160,6 @@ def get_import_email():
     Returns:
         email: Full email data including body
     """
-    import email as email_lib
-    from email.header import decode_header
     from email.utils import parsedate_to_datetime
 
     data = request.get_json() or {}
@@ -218,125 +178,6 @@ def get_import_email():
     if source_path and not source_path.exists():
         return jsonify({"error": "Source not found"}), 404
 
-    def decode_header_value(header):
-        if not header:
-            return ""
-        try:
-            parts = decode_header(header)
-            decoded = []
-            for content, charset in parts:
-                if isinstance(content, bytes):
-                    decoded.append(content.decode(charset or "utf-8", errors="replace"))
-                else:
-                    decoded.append(content)
-            return " ".join(decoded)
-        except Exception:
-            return str(header)
-
-    def get_email_body(msg):
-        """Extract email body - returns (html_body, text_body) tuple."""
-        html_body = None
-        text_body = None
-
-        if msg.is_multipart():
-            for part in msg.walk():
-                content_type = part.get_content_type()
-                content_disposition = str(part.get("Content-Disposition", ""))
-
-                if "attachment" in content_disposition:
-                    continue
-
-                if content_type == "text/html" and not html_body:
-                    payload = part.get_payload(decode=True)
-                    if payload:
-                        charset = part.get_content_charset() or "utf-8"
-                        html_body = payload.decode(charset, errors="replace")
-                elif content_type == "text/plain" and not text_body:
-                    payload = part.get_payload(decode=True)
-                    if payload:
-                        charset = part.get_content_charset() or "utf-8"
-                        text_body = payload.decode(charset, errors="replace")
-        else:
-            payload = msg.get_payload(decode=True)
-            if payload:
-                charset = msg.get_content_charset() or "utf-8"
-                content_type = msg.get_content_type()
-                if content_type == "text/html":
-                    html_body = payload.decode(charset, errors="replace")
-                else:
-                    text_body = payload.decode(charset, errors="replace")
-
-        return (html_body, text_body)
-
-    def get_inline_images(msg):
-        """Extract inline images (parts with Content-ID) for cid: replacement."""
-        import base64
-
-        inline_images = {}  # cid -> data URL
-
-        if msg.is_multipart():
-            for part in msg.walk():
-                content_id = part.get("Content-ID")
-                if content_id:
-                    payload = part.get_payload(decode=True)
-                    if payload:
-                        content_type = part.get_content_type()
-                        # Strip angle brackets: <image001.png@...> -> image001.png@...
-                        cid = content_id.strip("<>")
-                        b64_data = base64.b64encode(payload).decode("ascii")
-                        inline_images[cid] = f"data:{content_type};base64,{b64_data}"
-
-        return inline_images
-
-    def replace_cid_refs(html_body, inline_images):
-        """Replace cid: references in HTML with data URLs."""
-        if not html_body or not inline_images:
-            return html_body
-
-        import re
-
-        def replace_cid(match):
-            cid = match.group(1)
-            return inline_images.get(cid, match.group(0))
-
-        return re.sub(r'cid:([^"\'\s>]+)', replace_cid, html_body)
-
-    def get_attachments(msg):
-        """Extract attachment info from email (excludes inline images)."""
-        attachments = []
-        if msg.is_multipart():
-            for part in msg.walk():
-                content_disposition = str(part.get("Content-Disposition", ""))
-                filename = part.get_filename()
-                content_type = part.get_content_type()
-                content_id = part.get("Content-ID")
-
-                # Debug logging
-                log.debug(
-                    f"  Part: {content_type}, filename: {filename}, disposition: {content_disposition[:30] if content_disposition else 'None'}"
-                )
-
-                # Skip inline images - they're handled via cid: replacement in HTML
-                # Only skip if it's an image with Content-ID (actual inline embedded image)
-                if content_id and content_type.startswith("image/"):
-                    continue
-
-                # Treat as attachment if explicitly marked as attachment,
-                # OR if it has a filename (even if inline)
-                if "attachment" in content_disposition or (
-                    filename and part.get_content_maintype() != "text"
-                ):
-                    if filename:
-                        attachments.append(
-                            {
-                                "filename": decode_header_value(filename),
-                                "content_type": part.get_content_type(),
-                                "size": len(part.get_payload(decode=True) or b""),
-                            }
-                        )
-        log.debug(f"  Found {len(attachments)} attachments")
-        return attachments
-
     try:
         raw_email = _locate_import_raw_email(
             source_path, uid, import_type, folder_path, email_source_path
@@ -345,11 +186,10 @@ def get_import_email():
         if not raw_email:
             return jsonify({"error": "Email not found in import source"}), 404
 
-        # Parse the email
-        msg = email_lib.message_from_bytes(raw_email)
+        fields = view_fields(raw_email)
 
         # Parse date
-        date_str = msg.get("Date", "")
+        date_str = fields["date"]
         date_display = date_str
         if date_str:
             try:
@@ -358,26 +198,11 @@ def get_import_email():
             except Exception:
                 pass
 
-        html_body, text_body = get_email_body(msg)
-
-        # Resolve cid: references in HTML body
-        inline_images = get_inline_images(msg)
-        html_body = replace_cid_refs(html_body, inline_images)
-
-        # Linkify URLs and emails in HTML body that aren't already links
-        if html_body:
-            html_body = _linkify_html(html_body)
-
         email_data = {
+            **fields,
             "uid": uid,
-            "subject": decode_header_value(msg.get("Subject", "(no subject)")),
-            "from": decode_header_value(msg.get("From", "")),
-            "to": decode_header_value(msg.get("To", "")),
-            "cc": decode_header_value(msg.get("Cc", "")),
+            "subject": fields["subject"] or "(no subject)",
             "date": date_display,
-            "html_body": html_body,
-            "text_body": text_body,
-            "attachments": get_attachments(msg),
         }
 
         return jsonify({"email": email_data})
@@ -441,12 +266,9 @@ def download_import_attachment():
     Returns:
         Attachment file data
     """
-    import email as email_lib
-    from email.header import decode_header
 
     from utils.log import get_logger
 
-    from .email_parser import _parse_eml_directory, get_raw_email_from_import
 
     log = get_logger()
 
@@ -473,135 +295,20 @@ def download_import_attachment():
     if source_path and not source_path.exists():
         return jsonify({"error": "Source not found"}), 404
 
-    def decode_header_value(header):
-        if not header:
-            return ""
-        try:
-            parts = decode_header(header)
-            decoded = []
-            for content, charset in parts:
-                if isinstance(content, bytes):
-                    decoded.append(content.decode(charset or "utf-8", errors="replace"))
-                else:
-                    decoded.append(content)
-            return " ".join(decoded)
-        except Exception:
-            return str(header)
-
     try:
-        # Get raw email - same logic as get_import_email
-        raw_email = None
-
-        if email_source_path:
-            email_path = Path(email_source_path).expanduser()
-            if email_path.exists() and email_path.is_file():
-                suffix = email_path.suffix.lower()
-                if suffix == ".emlx":
-                    with open(email_path, "rb") as f:
-                        content = f.read()
-                    first_newline = content.find(b"\n")
-                    if first_newline > 0:
-                        email_content = content[first_newline + 1 :]
-                        plist_marker = email_content.rfind(b"<?xml version=")
-                        if plist_marker > 0:
-                            email_content = email_content[:plist_marker]
-                        raw_email = email_content
-                elif suffix == ".eml":
-                    with open(email_path, "rb") as f:
-                        raw_email = f.read()
-
-        if not raw_email:
-            if import_type == "pst":
-                if email_source_path:
-                    raw_email = get_raw_email_from_import(email_source_path, uid)
-                else:
-                    raw_email = get_raw_email_from_import(str(source_path), uid)
-            elif import_type == "eml":
-                if uid.startswith("eml-"):
-                    results = _parse_eml_directory(str(source_path))
-                    for r_uid, r_bytes in results:
-                        if r_uid == uid:
-                            raw_email = r_bytes
-                            break
-            elif import_type == "apple-mbox":
-                import mailbox
-                import os
-
-                mbox_dir = folder_path if folder_path else str(source_path)
-                mbox_file = os.path.join(mbox_dir, "mbox")
-                if os.path.isfile(mbox_file):
-                    try:
-                        mbox = mailbox.mbox(mbox_file)
-                        for i, message in enumerate(mbox):
-                            expected_uid = f"apple-{os.path.basename(mbox_file)}-{i}"
-                            if expected_uid == uid:
-                                raw_email = message.as_bytes()
-                                break
-                    except Exception:
-                        pass
-                if not raw_email:
-                    messages_dir = os.path.join(mbox_dir, "Messages")
-                    if os.path.isdir(messages_dir):
-                        for entry in os.scandir(messages_dir):
-                            if entry.name.endswith(".emlx") and entry.is_file():
-                                expected_uid = f"emlx-{entry.name}"
-                                if expected_uid == uid:
-                                    try:
-                                        with open(entry.path, "rb") as f:
-                                            content = f.read()
-                                        first_newline = content.find(b"\n")
-                                        if first_newline > 0:
-                                            email_content = content[first_newline + 1 :]
-                                            plist_marker = email_content.rfind(b"<?xml version=")
-                                            if plist_marker > 0:
-                                                email_content = email_content[:plist_marker]
-                                            raw_email = email_content
-                                            break
-                                    except Exception:
-                                        pass
-            else:
-                raw_email = get_raw_email_from_import(str(source_path), uid)
-
+        raw_email = _locate_import_raw_email(
+            source_path, uid, import_type, folder_path, email_source_path
+        )
         if not raw_email:
             return jsonify({"error": "Email not found in import source"}), 404
 
-        # Parse the email and find attachments (must match filtering in get_attachments)
-        msg = email_lib.message_from_bytes(raw_email)
-
-        attachments = []
-        if msg.is_multipart():
-            for part in msg.walk():
-                content_disposition = str(part.get("Content-Disposition", ""))
-                filename = part.get_filename()
-                content_id = part.get("Content-ID")
-                content_type = part.get_content_type()
-
-                # Skip inline images - they're handled via cid: replacement in HTML
-                # Only skip if it's an image with Content-ID (actual inline embedded image)
-                if content_id and content_type.startswith("image/"):
-                    continue
-
-                # Treat as attachment if explicitly marked as attachment,
-                # OR if it has a filename (even if inline) and isn't text
-                if "attachment" in content_disposition or (
-                    filename and part.get_content_maintype() != "text"
-                ):
-                    if filename:
-                        attachments.append(
-                            {
-                                "filename": decode_header_value(filename),
-                                "content_type": content_type,
-                                "data": part.get_payload(decode=True),
-                            }
-                        )
-
-        if index < 0 or index >= len(attachments):
+        # The same list the preview route reported (core/message_view.py).
+        att = attachment_at(raw_email, index)
+        if att is None:
             return jsonify({"error": "Attachment not found"}), 404
-
-        att = attachments[index]
         # Inline only for a short list of inert types; see web/responses.py.
         return attachment_response(
-            att["data"], att["content_type"], att["filename"], inline=view_inline
+            att["payload"], att["content_type"], att["filename"], inline=view_inline
         )
 
     except Exception as e:
