@@ -228,7 +228,7 @@ def get_account_emails(account_id):
         return jsonify({"error": "Account not configured. Add credentials first."}), 401
 
     folder = request.args.get("folder", "INBOX")
-    limit = int(request.args.get("limit", 50))
+    limit = max(0, request.args.get("limit", 50, type=int))
 
     client = None
     try:

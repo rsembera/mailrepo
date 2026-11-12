@@ -10,7 +10,7 @@ from pathlib import Path
 
 from flask import jsonify, request, send_file
 
-from core import Config, Database, Encryption, scan_mbox_file
+from core import Config, Database, Encryption
 from core.message_view import attachment_at, view_fields
 from utils.log import get_logger
 from web.responses import attachment_response
@@ -18,26 +18,6 @@ from web.responses import attachment_response
 from . import api_bp
 
 log = get_logger()
-
-
-@api_bp.route("/import/mbox/scan", methods=["POST"])
-def scan_mbox():
-    """Scan an mbox file and return summary."""
-    data = request.get_json()
-    mbox_path = data.get("path", "").strip()
-
-    if not mbox_path:
-        return jsonify({"error": "Path is required"}), 400
-
-    path = Path(mbox_path).expanduser()
-    if not path.exists():
-        return jsonify({"error": "File not found"}), 404
-
-    try:
-        result = scan_mbox_file(path)
-        return jsonify(result)
-    except ImportError as e:
-        return jsonify({"error": str(e)}), 500
 
 
 def _locate_import_raw_email(

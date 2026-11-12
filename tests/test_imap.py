@@ -338,7 +338,7 @@ class TestBatchedGmailDelete:
         monkeypatch.setattr(
             client,
             "delete_email_via_trash",
-            lambda uid, src: (seen.append(uid) or True),
+            lambda uid, src: seen.append(uid) or True,
         )
         result = client.delete_emails_via_trash(["100"], "INBOX")
         assert result == {"100": True}
@@ -350,7 +350,7 @@ class TestBatchedGmailDelete:
         monkeypatch.setattr(
             client,
             "delete_email_via_trash",
-            lambda uid, src: (seen.append(uid) or True),
+            lambda uid, src: seen.append(uid) or True,
         )
         result = client.delete_emails_via_trash(["100", "101"], "[Gmail]/Trash")
         assert result == {"100": True, "101": True}
@@ -427,11 +427,20 @@ class TestFetchHeadersBatch:
         client, conn = make_client()
         conn.uid.return_value = (
             "OK",
-            [self._resp(12, "twelve"), b")", self._resp(10, "ten"), b")", self._resp(11, "eleven"), b")"],
+            [
+                self._resp(12, "twelve"),
+                b")",
+                self._resp(10, "ten"),
+                b")",
+                self._resp(11, "eleven"),
+                b")",
+            ],
         )
         got = client.fetch_headers_batch(["10", "11", "12"])
         assert [(h["uid"], h["subject"]) for h in got] == [
-            ("10", "ten"), ("11", "eleven"), ("12", "twelve")
+            ("10", "ten"),
+            ("11", "eleven"),
+            ("12", "twelve"),
         ]
         assert got[0]["message_id"] == "<10@x>"
         verb, uid_set, fields = conn.uid.call_args[0]
@@ -464,3 +473,93 @@ class TestFetchHeadersBatch:
         conn.uid.return_value = ("NO", [b"nope"])
         with pytest.raises(IMAPError):
             client.fetch_headers_batch(["1"])
+
+
+# ---------------------------------------------------------------------------
+# LIST parsing and mailbox quoting (code review 2026-11, smaller items)
+# ---------------------------------------------------------------------------
+
+
+class TestListParsing:
+    def test_quoted_name(self):
+        from core.imap import parse_list_response
+
+        got = parse_list_response(b'(\\HasNoChildren) "/" "INBOX/Clients"')
+        assert (got["name"], got["delimiter"], got["noselect"]) == ("INBOX/Clients", "/", False)
+
+    def test_unquoted_atom(self):
+        from core.imap import parse_list_response
+
+        assert parse_list_response(b'(\\HasNoChildren) "." INBOX')["name"] == "INBOX"
+
+    def test_noselect_flag(self):
+        from core.imap import parse_list_response
+
+        got = parse_list_response(b'(\\Noselect \\HasChildren) "/" "[Gmail]"')
+        assert got["noselect"] is True
+
+    def test_nil_delimiter_keeps_the_folder(self):
+        """A flat namespace. The folder used to vanish from the list."""
+        from core.imap import parse_list_response
+
+        got = parse_list_response(b'(\\HasNoChildren) NIL "Archive"')
+        assert (got["name"], got["delimiter"]) == ("Archive", "/")
+
+    def test_escaped_quote_in_name(self):
+        from core.imap import parse_list_response
+
+        got = parse_list_response(b'(\\HasNoChildren) "/" "Smith \\"v\\" Jones"')
+        assert got["name"] == 'Smith "v" Jones'
+
+    def test_literal_name(self):
+        """imaplib hands a literal over as a tuple; that used to raise and
+        fail the whole listing."""
+        from core.imap import parse_list_response
+
+        got = parse_list_response((b'(\\HasNoChildren) "/" {9}', b'Odd "one"'))
+        assert got["name"] == 'Odd "one"'
+
+    def test_one_odd_line_does_not_fail_the_listing(self):
+        from core.imap import IMAP
+
+        class Conn:
+            def list(self):
+                return "OK", [
+                    b'(\\HasNoChildren) "/" "INBOX"',
+                    (b'(\\HasNoChildren) "/" {3}', b'A"B'),
+                    None,
+                    b"garbage that is not a LIST line",
+                    b"(\\HasNoChildren) NIL Flat",
+                ]
+
+        client = IMAP("x")
+        client.connection = Conn()
+        assert [f["name"] for f in client.list_folders()] == ["INBOX", 'A"B', "Flat"]
+
+
+class TestMailboxQuoting:
+    def test_quote_and_backslash_are_escaped(self):
+        from core.imap import _quote_mailbox
+
+        assert _quote_mailbox("INBOX") == '"INBOX"'
+        assert _quote_mailbox('a"b\\c') == '"a\\"b\\\\c"'
+
+    def test_select_sends_the_escaped_name(self):
+        from core.imap import IMAP
+
+        sent = []
+
+        class Conn:
+            def select(self, mailbox):
+                sent.append(mailbox)
+                return "OK", [b"3"]
+
+            def status(self, mailbox, items):
+                sent.append(mailbox)
+                return "OK", [b'"x" (UIDVALIDITY 7 HIGHESTMODSEQ 9)']
+
+        client = IMAP("x")
+        client.connection = Conn()
+        info = client.select_folder('Smith "v" Jones')
+        assert sent == ['"Smith \\"v\\" Jones"'] * 2
+        assert (info["message_count"], info["uidvalidity"]) == (3, 7)

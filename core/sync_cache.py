@@ -10,6 +10,7 @@ File: data/.sync_cache.db (dot-prefixed, excluded from backups)
 """
 
 import sqlite3
+import threading
 import time
 from pathlib import Path
 from typing import Optional
@@ -17,6 +18,9 @@ from typing import Optional
 from .config import Config
 
 _connection: Optional[sqlite3.Connection] = None
+
+# One connection shared by every request thread: serialize its use.
+_lock = threading.RLock()
 
 
 def _get_db_path() -> Path:
@@ -46,28 +50,30 @@ def _get_connection() -> sqlite3.Connection:
 
 def close():
     """Close the sync cache connection."""
-    global _connection
-    if _connection is not None:
-        _connection.close()
-        _connection = None
+    with _lock:
+        global _connection
+        if _connection is not None:
+            _connection.close()
+            _connection = None
 
 
 def get_folder_sync_state(account_id: int, folder: str) -> dict | None:
     """Get sync state for a folder."""
-    conn = _get_connection()
-    row = conn.execute(
-        """SELECT uidvalidity, highestmodseq, last_synced_at
-           FROM folder_sync_state
-           WHERE account_id = ? AND folder_name = ?""",
-        (account_id, folder),
-    ).fetchone()
-    if not row:
-        return None
-    return {
-        "uidvalidity": row["uidvalidity"],
-        "highestmodseq": row["highestmodseq"],
-        "last_synced_at": row["last_synced_at"],
-    }
+    with _lock:
+        conn = _get_connection()
+        row = conn.execute(
+            """SELECT uidvalidity, highestmodseq, last_synced_at
+               FROM folder_sync_state
+               WHERE account_id = ? AND folder_name = ?""",
+            (account_id, folder),
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "uidvalidity": row["uidvalidity"],
+            "highestmodseq": row["highestmodseq"],
+            "last_synced_at": row["last_synced_at"],
+        }
 
 
 def update_folder_sync_state(
@@ -77,25 +83,27 @@ def update_folder_sync_state(
     highestmodseq: int | None,
 ) -> None:
     """Record that we just synced a folder."""
-    conn = _get_connection()
-    now = int(time.time())
-    conn.execute(
-        """INSERT OR REPLACE INTO folder_sync_state
-           (account_id, folder_name, uidvalidity, highestmodseq, last_synced_at)
-           VALUES (?, ?, ?, ?, ?)""",
-        (account_id, folder, uidvalidity, highestmodseq, now),
-    )
-    conn.commit()
+    with _lock:
+        conn = _get_connection()
+        now = int(time.time())
+        conn.execute(
+            """INSERT OR REPLACE INTO folder_sync_state
+               (account_id, folder_name, uidvalidity, highestmodseq, last_synced_at)
+               VALUES (?, ?, ?, ?, ?)""",
+            (account_id, folder, uidvalidity, highestmodseq, now),
+        )
+        conn.commit()
 
 
 def clear_folder_sync_state(account_id: int, folder: str) -> None:
     """Clear sync state for a folder (e.g. after cache clear)."""
-    conn = _get_connection()
-    conn.execute(
-        "DELETE FROM folder_sync_state WHERE account_id = ? AND folder_name = ?",
-        (account_id, folder),
-    )
-    conn.commit()
+    with _lock:
+        conn = _get_connection()
+        conn.execute(
+            "DELETE FROM folder_sync_state WHERE account_id = ? AND folder_name = ?",
+            (account_id, folder),
+        )
+        conn.commit()
 
 
 # How many seconds a cached folder is served without asking the server.

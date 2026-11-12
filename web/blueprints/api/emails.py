@@ -46,7 +46,8 @@ def search_emails():
     """Search archived emails using full-text search."""
     query = request.args.get("q", "").strip()
     folder_id = request.args.get("folder_id")
-    limit = int(request.args.get("limit", 50))
+    # A non-numeric limit falls back to the default instead of a 500.
+    limit = max(1, min(request.args.get("limit", 50, type=int), 500))
     # When a folder is selected, decide whether to also search its descendants.
     # Defaults to True to preserve previous behavior.
     include_subfolders_arg = request.args.get("include_subfolders", "true").lower()

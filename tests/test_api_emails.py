@@ -328,3 +328,10 @@ class TestMoveMessage:
         assert resp.status_code == 200
         row = Database.fetchone("SELECT folder_id FROM messages WHERE id = ?", (mid,))
         assert row["folder_id"] == dest
+
+
+def test_search_with_a_non_numeric_limit_is_not_a_server_error(
+    authenticated_client, initialized_app
+):
+    resp = authenticated_client.get("/api/search?q=hello&limit=lots")
+    assert resp.status_code == 200

@@ -67,16 +67,6 @@ def _seed_encrypted_message(folder_id, subject="Export me", body="secret content
 
 
 class TestScanImportValidation:
-    def test_scan_requires_path(self, authenticated_client, initialized_app):
-        resp = authenticated_client.post("/api/import/mbox/scan", json={})
-        assert resp.status_code == 400
-
-    def test_scan_missing_file(self, authenticated_client, initialized_app):
-        resp = authenticated_client.post(
-            "/api/import/mbox/scan", json={"path": "/no/such/file.mbox"}
-        )
-        assert resp.status_code == 404
-
     def test_legacy_direct_import_routes_are_gone(self, authenticated_client, initialized_app):
         """The legacy /api/import/mbox and /api/import/eml routes (unreferenced
         by the UI; named archive files by Message-ID, leaking correspondent

@@ -29,6 +29,74 @@ def is_loopback_host(host: str) -> bool:
     return len(parts) == 4 and parts[0] == "127" and all(p.isdigit() for p in parts)
 
 
+def _quote_mailbox(name: str) -> str:
+    """A mailbox name as an IMAP quoted string.
+
+    Backslash and double quote are escaped. Without that, a folder whose
+    name contains either could not be opened, and the name ended the
+    quoted string early.
+    """
+    return '"' + _imap_escape(name) + '"'
+
+
+_LIST_LINE = re.compile(
+    r"""^\((?P<flags>[^)]*)\)\s+(?P<delim>"(?:\\.|[^"\\])"|NIL)\s*(?P<name>.*)$""", re.DOTALL
+)
+
+
+def _unquote_mailbox(text: str) -> str:
+    """Undo IMAP quoted-string escaping; an unquoted atom is returned as is."""
+    text = text.strip()
+    if len(text) >= 2 and text[0] == '"' and text[-1] == '"':
+        return re.sub(r"\\(.)", r"\1", text[1:-1])
+    return text
+
+
+def parse_list_response(item) -> dict | None:
+    """One LIST response line as ``{name, delimiter, noselect, raw}``.
+
+    Handles the three shapes servers use for the name: a quoted string,
+    a bare atom, and a literal (which imaplib hands over as a tuple of
+    ``(prefix, name_bytes)``). The literal form used to raise and take
+    the whole folder listing down with it, and a NIL delimiter (a flat
+    namespace) made the folder disappear.
+    """
+    literal_name = None
+    if isinstance(item, tuple):
+        if len(item) < 2:
+            return None
+        head, literal_name = item[0], item[1]
+    else:
+        head = item
+    if head is None:
+        return None
+    decoded = head.decode("utf-8", errors="replace") if isinstance(head, bytes) else str(head)
+
+    m = _LIST_LINE.match(decoded.strip())
+    if not m:
+        return None
+    flags = m.group("flags").split()
+    delim = m.group("delim")
+    delimiter = "/" if delim == "NIL" else _unquote_mailbox(delim) or "/"
+
+    if literal_name is not None:
+        name = (
+            literal_name.decode("utf-8", errors="replace")
+            if isinstance(literal_name, bytes)
+            else str(literal_name)
+        )
+    else:
+        name = _unquote_mailbox(m.group("name"))
+    if not name:
+        return None
+    return {
+        "name": name,
+        "delimiter": delimiter,
+        "noselect": any(f.lower() == "\\noselect" for f in flags),
+        "raw": decoded,
+    }
+
+
 def _imap_escape(value: str) -> str:
     """Escape a value for use inside an IMAP SEARCH string literal.
 
@@ -206,34 +274,9 @@ class IMAP:
 
             folders = []
             for item in data:
-                if item is None:
-                    continue
-                # Parse folder line: (\\Flags) "delimiter" "FolderName"
-                # Example: (\HasNoChildren) "/" "INBOX/Subfolder"
-                # Example: (\Noselect \HasChildren) "/" "[Gmail]"
-                decoded = item.decode() if isinstance(item, bytes) else item
-
-                # Extract flags
-                flags_match = re.match(r"\(([^)]*)\)", decoded)
-                flags = flags_match.group(1).split() if flags_match else []
-                noselect = any(f.lower() == "\\noselect" for f in flags)
-
-                # Extract delimiter - it's between the flags and folder name
-                match = re.match(r'\([^)]*\)\s+"(.)"|\s+NIL\s+', decoded)
-                delimiter = match.group(1) if match and match.group(1) else "/"
-
-                # Extract folder name - it's after the delimiter specification
-                parts = decoded.rsplit('" ', 1)
-                if len(parts) == 2:
-                    name = parts[1].strip('"')
-                    folders.append(
-                        {
-                            "name": name,
-                            "delimiter": delimiter,
-                            "noselect": noselect,
-                            "raw": decoded,
-                        }
-                    )
+                parsed = parse_list_response(item)
+                if parsed is not None:
+                    folders.append(parsed)
 
             self._folder_cache = folders
             return list(folders)
@@ -254,7 +297,7 @@ class IMAP:
             raise IMAPError("Not connected")
 
         try:
-            status, data = self.connection.select(f'"{folder}"')
+            status, data = self.connection.select(_quote_mailbox(folder))
             if status != "OK":
                 raise IMAPError(f"Failed to select folder: {folder}")
 
@@ -268,7 +311,7 @@ class IMAP:
             # Get UIDVALIDITY and HIGHESTMODSEQ using STATUS command
             try:
                 status, status_data = self.connection.status(
-                    f'"{folder}"', "(UIDVALIDITY HIGHESTMODSEQ)"
+                    _quote_mailbox(folder), "(UIDVALIDITY HIGHESTMODSEQ)"
                 )
                 if status == "OK" and status_data and status_data[0]:
                     response = (
@@ -288,7 +331,9 @@ class IMAP:
                 # HIGHESTMODSEQ not supported — fall back to UIDVALIDITY only
                 log.debug(f"Could not get STATUS with HIGHESTMODSEQ: {e}")
                 try:
-                    status, status_data = self.connection.status(f'"{folder}"', "(UIDVALIDITY)")
+                    status, status_data = self.connection.status(
+                        _quote_mailbox(folder), "(UIDVALIDITY)"
+                    )
                     if status == "OK" and status_data and status_data[0]:
                         response = (
                             status_data[0].decode()
@@ -1098,7 +1143,7 @@ class IMAP:
         if not self.connection:
             raise IMAPError("Not connected")
 
-        dest = f'"{destination_folder}"'
+        dest = _quote_mailbox(destination_folder)
         try:
             if self._has_capability("MOVE"):
                 status, data = self.connection.uid("MOVE", uid, dest)
@@ -1418,7 +1463,7 @@ class IMAP:
         self.select_folder(source_folder)
         ordered = sorted(uids, key=lambda u: (0, int(u)) if u.isdigit() else (1, u))
         uid_set = ",".join(ordered)
-        dest = f'"{trash}"'
+        dest = _quote_mailbox(trash)
 
         if self._has_capability("MOVE"):
             status, data = self.connection.uid("MOVE", uid_set, dest)
