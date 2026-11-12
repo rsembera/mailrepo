@@ -69,6 +69,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   most apps. The field always re-masks the moment you submit.
 
 ### Fixed
+
+- **Backups always hold a database that opens (Session 103).** A backup
+  taken while mail was being archived could contain a damaged database:
+  the live file was zipped while another thread was still writing to
+  it, and neither the zip check nor the integrity tag could see the
+  damage. Every backup now copies the database while it is held still,
+  checks the copy, and zips the copy. Backups also no longer depend on
+  the caller having flushed recent changes first; the backups taken
+  before a master-key rotation and before the recovery-key upgrade had
+  not.
+- **Key rotation, the recovery-key upgrade and the v2 password change
+  check that the re-encryption worked (Session 103).** Each file is
+  proven to open under the new key before it replaces the original;
+  the whole archive is checked again before the point of no return,
+  which also picks up any message that arrived while the work was
+  running; the database must open with its new key before a key file
+  is written; and the key file is read back from disk. Nothing can be
+  archived while keys are changing. The progress bar shows a
+  "Checking" phase.
+- **A crash at the very end of a master-key rotation no longer locks
+  you out (Session 103).** In one narrow window the next login was
+  refused with a "key file replaced" message although nothing was
+  wrong, and a later rotation could not start. Both are fixed.
+- **An empty leftover file no longer blocks key rotation (Session
+  103).** A failed write could leave an empty archive file that every
+  later rotation stopped on.
+- **A message is only treated as a duplicate if it is the same message
+  (Session 103).** Duplicate detection compared the Message-ID alone,
+  which the sender chooses. A different message carrying an id already
+  in the folder was skipped, and then removed from the server if the
+  commit was set to delete, trash or archive. The content is now
+  compared.
+- **Archived mail is confirmed on disk before the server copy is
+  touched (Session 103).** Archive files are written in full, flushed
+  to disk when they come from a mail server, read back and decrypted
+  before they count as archived, and removed if anything fails. A
+  folder commit also saves its last few rows before it starts removing
+  mail from the server.
+- **Automatic trash cleanup removes the files (Session 103).** Folders
+  removed by the "empty trash after N days" setting had their entries
+  deleted and their encrypted message files left on disk, where they
+  kept going into backups. Manual deletion was not affected.
+- **A folder emptied on the server shows as empty (Session 103).** It
+  used to keep listing its cached messages.
 - **Archiving no longer forces a full re-download of the folder
   (Session 97).** Every post-commit action (archive, trash, delete)
   wiped the whole source folder's cached listing, so the next view

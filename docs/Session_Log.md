@@ -7386,3 +7386,99 @@ needs a numeric version) -- set both to 1.1.0 at release, along with the
 
 - `b614767` -- Mark main as 1.1.0-dev
 - (this entry) -- docs: Session 102; CHANGELOG
+
+---
+
+## Session 103 — November 12, 2026 (cloud sandbox + MacBook)
+
+### Code review of `main`, and the first three batches of fixes
+
+Rick asked for a comprehensive code review and passed on an item from
+the Hermanubis review: "make password change and key rotation check
+that the re-encryption worked."
+
+**Review.** `main` at `126c498`, 20 findings, 15 reproduced with failing
+tests and 5 traced through the code. Full write-up in the Claude project
+as `claude/Code_Review_2026-11.md` (scope, what was and was not read,
+streamlining list, suggested order). Not yet reviewed: `pdf_export.py`,
+`filesystem.py`, `launcher.py`, the restore half of `backup.py`, the
+JavaScript beyond lint.
+
+**How the work was done.** Changes were written and tested in a cloud
+sandbox clone (Linux, `sqlcipher3-binary`), pushed to the branch
+`review-2026-11`, then checked out on the MacBook and the full suite run
+natively before each fast-forward of `main`. The MacBook working copy
+was left on `main` each time.
+
+**Batch 1 (`47487d4`): findings 1, 3, 8.**
+- `utils/backup.py`: `_database_snapshot()`. Under `Database._lock`:
+  commit, `wal_checkpoint(TRUNCATE)`, copy the database to
+  `data/.backup_snapshot.db`; then `quick_check` the copy and zip it
+  with the lock released. Used by full, incremental and pre-restore.
+  The snapshot is taken before archive files are listed, so every row
+  in it has its file. Baseline hash and metadata for the database come
+  from the snapshot, so the recorded baseline is what went into the
+  zip. `create_incremental_backup` settles the database before its
+  quick mtime check. Repro before the fix: 12 of 12 backups taken under
+  concurrent writes held a damaged database, with zip CRC and MAC
+  passing; control with no writer, 0 of 3.
+- `progress_commit.py`: `Database.commit()` before the IMAP folder
+  post-action.
+- `streaming.py`: `remove_stale_cache_entries` no longer returns early
+  on an empty server list; deletes chunked at 500.
+
+**Batch 2 (`6262a34`): the Hermanubis item, with findings 5, 12, 13.**
+- `core/password_change.py`: shared engine `reencrypt_archive()` (walk,
+  credentials, then `verify_reencryption()`), and `rekey_database()`
+  (PRAGMA rekey, then a second connection must open with the new key).
+  `rotate_master_key`, `migrate_to_v3` and the v2
+  `change_master_password` all use it. `_rekey_file` decrypts and
+  compares the new ciphertext before replacing the original.
+- `Encryption.rekeying()` gate: `encrypt()` refuses while keys change.
+- `_atomic_write_salt_file` reads the key file back and compares.
+- Rotation: recovery wrapper asserted on the final MRC4 blob; tag
+  recorded inside the window before the key file is written;
+  `clear_finished_rotation_leftovers()` runs at login.
+- `_is_unreferenced_stub`: a file shorter than the smallest possible
+  ciphertext that no message row references is skipped, not treated as
+  corruption. Anything a row references, or long enough to be mail,
+  still halts.
+- New `verifying` progress status; both progress UIs handle it.
+- Deliberately NOT done: a second Argon2id pass to re-derive the
+  password KEK after a rewrap. The existing ruling in
+  `_assert_password_wrapper_opens` stands; the read-back is a byte
+  comparison.
+
+**Batch 3 (`1ac0d5b`): findings 2, 4, 6.**
+- `commit.py`: `_check_duplicate(folder_id, message_id, raw_email)`
+  compares content (CRLF/LF-insensitive) against the archived copy; an
+  unreadable archived copy is not trusted as a duplicate.
+  `_write_new_file` loops `os.write`, fsyncs file and directory when
+  the source is an IMAP account, unlinks on failure;
+  `_save_email_to_archive` reads back and decrypts before the insert.
+- `core/purge.py` (new): `folder_tree_ids`, `purge_folders`. Replaces
+  four copies of `collect_descendants` in `folders.py` and fixes
+  `cleanup_expired_trash`, which had relied on the cascade.
+
+**Tests.** New: `test_backup_snapshot.py` (6), `test_commit_durability.py`
+(1), `test_folder_cache_sync.py` (2), `test_reencryption_verify.py` (16),
+`test_commit_safety.py` (11), `test_purge.py` (7). 25 sealing mutations
+across batches 2 and 3, all caught (one was missed on the first run and
+a test was added for it). Sandbox: 826 -> 869 passed, 1 skipped.
+MacBook: 839 -> 848 after batch 1, 864 after batch 2, 882 after batch 3. ruff clean,
+ESLint at the 65-warning baseline.
+
+**Still open from the review:** findings 7, 9, 10, 11 and 14-20, the
+shared message-view parser, the single backup cycle, and the second
+review pass over the files listed above.
+
+Navigation Map per-file counts updated for the files touched; the cloc
+overview table was not re-run.
+
+### Commits
+
+- `47487d4` -- Backups snapshot the database under the lock; commit before folder post-action; emptied IMAP folder clears its cache
+- `6262a34` -- Password change and key rotation check that the re-encryption worked
+- `1ac0d5b` -- A message leaves the server only once that exact message is archived; permanent deletion removes the files
+- (this entry) -- docs: Session 103; CHANGELOG; Navigation Map
+
