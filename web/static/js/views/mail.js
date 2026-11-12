@@ -9,6 +9,7 @@
  */
 
 import { escapeHtml, debounce } from '../utils.js';
+import { beginListLoad } from '../list-load.js';
 import { state } from '../state.js';
 import { renderEmailList, clearEmailFilter, clearArchivedEmailSelection } from '../components/email-list.js';
 import { bindActions } from '../delegate.js';
@@ -23,6 +24,9 @@ let emailList = null;
 
 // Current email viewer context (for download/print functions)
 let currentViewerContext = null;
+
+// The mailbox stream feeding the list, if one is running.
+let activeListStream = null;
 
 /**
  * Show or hide the "Stage thread to..." button based on the viewer context.
@@ -250,6 +254,12 @@ export function selectView(view) {
 export async function loadAccountEmails(accountId, folder = 'INBOX', { forceRefresh = false, rebuild = false } = {}) {
     // Restore default header actions and toolbar
     restoreDefaultHeaderActions();
+
+    // Whatever was loading before is no longer wanted. Its rows must not
+    // land in this folder's list (see list-load.js).
+    if (activeListStream) activeListStream.cancel();
+    activeListStream = null;
+    const isCurrent = beginListLoad(state);
     
     // Render IMAP breadcrumbs and subfolders
     renderImapNavigation(accountId, folder);
@@ -268,8 +278,10 @@ export async function loadAccountEmails(accountId, folder = 'INBOX', { forceRefr
     
     // Dynamically import progress component
     const { createProgress } = await import('../components/progress.js');
+    if (!isCurrent()) return;
     const progressContainer = document.getElementById('loadProgress');
     const progress = createProgress(progressContainer);
+    activeListStream = progress;
     
     // Start streaming - fetch all emails (or use a large limit)
     // The backend can handle large numbers efficiently with streaming
@@ -283,18 +295,20 @@ export async function loadAccountEmails(accountId, folder = 'INBOX', { forceRefr
     
     progress.startStream(streamUrl, {
         onCached: (data) => {
+            if (!isCurrent()) return;
             showingCache = true;
             state.emails = data.emails || [];
             if (contextMeta) contextMeta.textContent = `${state.emails.length} emails · checking for new mail…`;
             renderEmailList();
         },
         onUpdate: (p) => {
-            if (!showingCache || !contextMeta) return;
+            if (!isCurrent() || !showingCache || !contextMeta) return;
             if (p.phase === 'loading' && p.total > 0) {
                 contextMeta.textContent = `${state.emails.length} emails · fetching ${p.current} of ${p.total}…`;
             }
         },
         onComplete: (data) => {
+            if (!isCurrent()) return;
             state.emails = data.emails || [];
             if (contextMeta) {
                 contextMeta.textContent = data.offline
@@ -304,6 +318,7 @@ export async function loadAccountEmails(accountId, folder = 'INBOX', { forceRefr
             renderEmailList();
         },
         onError: (err) => {
+            if (!isCurrent()) return;
             if (showingCache) {
                 // Keep the cached list on screen; say what happened.
                 if (contextMeta) contextMeta.textContent = `${state.emails.length} emails · could not check server`;
@@ -327,6 +342,10 @@ export async function loadFolderEmails(folderId) {
     if (contextTitle) contextTitle.textContent = 'Loading...';
     if (contextMeta) contextMeta.textContent = '';
     showLoading();
+
+    if (activeListStream) activeListStream.cancel();
+    activeListStream = null;
+    const isCurrent = beginListLoad(state);
     
     try {
         const response = await fetch(`/api/folders/${folderId}/emails`);
@@ -337,6 +356,8 @@ export async function loadFolderEmails(folderId) {
         }
         
         const data = await response.json();
+        // The reader has moved on; this answer is for a folder no longer shown.
+        if (!isCurrent()) return;
         state.emails = data.emails || [];
         const subfolderCounts = data.subfolder_counts || {};
         
@@ -363,6 +384,7 @@ export async function loadFolderEmails(folderId) {
         
     } catch (error) {
         console.error('Error loading emails:', error);
+        if (!isCurrent()) return;
         if (contextTitle) contextTitle.textContent = 'Error';
         showError(error.message);
     }
@@ -1464,10 +1486,12 @@ function plainTextToHtml(text) {
  * @param {string} html - HTML content
  * @returns {string} Plain text with appropriate line breaks
  */
-function htmlToPlainText(html) {
-    // Create a temporary element to parse HTML
-    const temp = document.createElement('div');
-    temp.innerHTML = html;
+export function htmlToPlainText(html) {
+    // Parse into a separate, inert document. Assigning an email's HTML to
+    // an element of this page (even one never attached to it) starts its
+    // image loads and runs its onerror/onload handlers, here, with the
+    // app's own access.
+    const temp = new DOMParser().parseFromString(html, 'text/html').body;
     
     // Recursive function to extract text with proper spacing
     function extractText(node) {
@@ -1657,7 +1681,9 @@ function renderEmailContent(email, context = null) {
     // whitespace and check whether there\'s any visible content.
     const stripHtml = (s) => (s || '').replace(/<[^>]*>/g, '').replace(/\s+/g, '').trim();
     const stripText = (s) => (s || '').replace(/\s+/g, '').trim();
-    const htmlHasContent = email.html_body && stripHtml(email.html_body).length > 0;
+    // An email that is all picture has no text but is not empty.
+    const htmlHasContent = email.html_body
+        && (stripHtml(email.html_body).length > 0 || /<img\b/i.test(email.html_body));
     const textHasContent = email.text_body && stripText(email.text_body).length > 0;
     const hasAttachments = Array.isArray(email.attachments) && email.attachments.length > 0;
 
@@ -2078,6 +2104,7 @@ export async function printEmail() {
     const doc = `<!DOCTYPE html>
 <html>
 <head>
+    ${printCsp(currentViewerContext.remoteLoaded === true)}
     <title>Print: ${escapeHtml(email.subject || '(No subject)')}</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
@@ -2114,25 +2141,57 @@ export async function printEmail() {
         return;
     }
 
-    // Browser: window.open must stay synchronous with the click, or the
-    // popup blocker eats it — hence the check above rather than an await.
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-    printWindow.document.write(doc);
-    printWindow.document.close();
-    
-    // Wait for content to render, then print and close
-    printWindow.onload = () => {
-        printWindow.print();
-        printWindow.close();
+    // Browser: print from a sandboxed frame. The document used to be
+    // written into a new window, which shares this page's origin, so a
+    // script or onerror handler in the email ran with the app's access.
+    const frame = buildPrintFrame(doc);
+    let printed = false;
+    const print = () => {
+        if (printed) return;
+        printed = true;
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
+        // print() returns when the dialog closes in most browsers, but
+        // not all; leave the frame long enough for the others.
+        setTimeout(() => frame.remove(), 60000);
     };
-    // Fallback if onload doesn't fire (some browsers)
-    setTimeout(() => {
-        if (!printWindow.closed) {
-            printWindow.print();
-            printWindow.close();
-        }
-    }, 500);
+    // Wait for images, then print; do not wait for ever.
+    frame.contentWindow.addEventListener('load', print, { once: true });
+    setTimeout(print, 500);
+}
+
+/**
+ * Content-Security-Policy tag for a print document: the same rule as the
+ * viewer, so printing loads remote images only if the reader chose to.
+ * @param {boolean} allowRemote
+ * @returns {string}
+ */
+export function printCsp(allowRemote) {
+    const policy = allowRemote
+        ? "default-src 'none'; img-src * data:; style-src * 'unsafe-inline'; font-src * data:"
+        : "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:";
+    return `<meta http-equiv="Content-Security-Policy" content="${policy}">`;
+}
+
+/**
+ * Put a print document in a hidden frame that cannot run script.
+ * The sandbox is set before the frame joins the page, as it must be.
+ * @param {string} doc - Complete HTML document
+ * @returns {HTMLIFrameElement}
+ */
+export function buildPrintFrame(doc) {
+    const frame = document.createElement('iframe');
+    // allow-same-origin so this page can write the document and call
+    // print(); allow-modals for the print dialog. No allow-scripts.
+    frame.sandbox = 'allow-same-origin allow-modals';
+    frame.setAttribute('aria-hidden', 'true');
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+    document.body.appendChild(frame);
+    const frameDoc = frame.contentDocument || frame.contentWindow.document;
+    frameDoc.open();
+    frameDoc.write(doc);
+    frameDoc.close();
+    return frame;
 }
 
 /**
@@ -2225,6 +2284,8 @@ export function loadRemoteContent() {
     
     const bodyDiv = document.getElementById('viewerBody');
     renderHtmlBody(bodyDiv, currentViewerContext.emailData.html_body, true);
+    // Printing follows the same choice.
+    currentViewerContext.remoteLoaded = true;
     
     // Disable the button after loading (keep visible as indicator)
     const loadRemoteBtn = document.getElementById('loadRemoteBtn');

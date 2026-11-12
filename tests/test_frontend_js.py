@@ -148,3 +148,84 @@ def test_server_error_text_is_escaped_before_display():
     for path, text in _sources().items():
         for m in re.finditer(r"innerHTML = `[^`]*\$\{[^}]*\.error[^}]*\}", text):
             assert "escapeHtml(" in m.group(0), f"{path.name}: {m.group(0)[:120]}"
+
+
+def _mail_function(name):
+    mail = (JS / "views" / "mail.js").read_text(encoding="utf-8")
+    start = mail.index(f"function {name}(")
+    end = mail.find("\n}\n", start)
+    return mail[start:end]
+
+
+def test_email_html_is_never_parsed_into_this_page():
+    """div.innerHTML = <email html> runs the email's onerror handlers.
+
+    Even on an element that is never attached. Copy-as-reply did this.
+    """
+    body = _mail_function("htmlToPlainText")
+    assert "DOMParser().parseFromString(html, 'text/html')" in body
+    assert "innerHTML" not in body
+    mail = (JS / "views" / "mail.js").read_text(encoding="utf-8")
+    assert not re.search(r"\.innerHTML\s*=\s*[a-zA-Z_.]*html_body\s*;", mail)
+
+
+def test_print_uses_a_frame_that_cannot_run_script():
+    """A window opened from the page shares its origin; a sandboxed frame does not run script."""
+    printing = _mail_function("printEmail")
+    assert "window.open" not in printing
+    assert "document.write" not in printing
+    assert "buildPrintFrame(doc)" in printing
+    assert "${printCsp(currentViewerContext.remoteLoaded === true)}" in printing
+
+    frame = _mail_function("buildPrintFrame")
+    sandbox = re.search(r"frame\.sandbox = '([^']*)'", frame).group(1).split()
+    assert "allow-scripts" not in sandbox
+    assert sorted(sandbox) == ["allow-modals", "allow-same-origin"]
+    # The sandbox only binds a frame that has it before joining the page.
+    assert (
+        frame.index("frame.sandbox")
+        < frame.index("appendChild(frame)")
+        < frame.index(".write(doc)")
+    )
+
+
+def test_print_blocks_remote_content_unless_the_reader_loaded_it():
+    csp = _mail_function("printCsp")
+    blocked = re.search(r': "([^"]*)";', csp).group(1)
+    allowed = re.search(r'\? "([^"]*)"', csp).group(1)
+    for policy in (blocked, allowed):
+        assert policy.startswith("default-src 'none'")
+        assert "script-src" not in policy
+    assert "img-src data:;" in blocked and "*" not in blocked
+    assert "img-src * data:" in allowed
+    remote = _mail_function("loadRemoteContent")
+    assert "currentViewerContext.remoteLoaded = true" in remote
+
+
+def test_an_image_only_email_is_not_reported_empty():
+    mail = (JS / "views" / "mail.js").read_text(encoding="utf-8")
+    assert r"/<img\b/i.test(email.html_body)" in mail
+
+
+def test_list_loads_cannot_write_into_another_folders_list():
+    """Every callback of a mailbox load checks it is still the one on screen.
+
+    The cached rows show at once and the server's answer follows; a reader
+    who had opened Sent by then got INBOX's rows under Sent's name, staged
+    as if they came from Sent.
+    """
+    account = _mail_function("loadAccountEmails")
+    assert "activeListStream.cancel()" in account
+    assert "const isCurrent = beginListLoad(state);" in account
+    for callback in ("onCached: (data) => {", "onComplete: (data) => {", "onError: (err) => {"):
+        after = account[account.index(callback) + len(callback) :].lstrip()
+        assert after.startswith("if (!isCurrent()) return;"), callback
+    assert "if (!isCurrent() || !showingCache" in account
+    # Nothing is written before the guard in any of them.
+    assert account.count("state.emails = ") == 2
+
+    folder = _mail_function("loadFolderEmails")
+    assert "const isCurrent = beginListLoad(state);" in folder
+    assert folder.index("if (!isCurrent()) return;") < folder.index("state.emails = ")
+    failed = folder[folder.index("} catch (error) {") :]
+    assert failed.index("if (!isCurrent()) return;") < failed.index("showError(")
