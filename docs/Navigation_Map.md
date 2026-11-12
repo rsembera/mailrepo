@@ -163,7 +163,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `auth.py` | 1,622 | Setup, login, logout, rate limiting, session management; recovery-key verification + server-side handoff to a mandatory password reset (no session granted), v3 upgrade flow, rotation API, master-key rotation (page + one-time job + SSE progress + one-time done page); pre-login disaster-recovery routes (`/auth/restore`, scan, prepare, search, browse) gated on `_recovery_door_open()` — no archive, OR an unverified restore; both login paths vouch for restored data (clear the marker) and the login screens carry the restored-from-backup banner |
+| `auth.py` | 1,641 | Setup, login, logout, rate limiting, session management; recovery-key verification + server-side handoff to a mandatory password reset (no session granted), v3 upgrade flow, rotation API, master-key rotation (page + one-time job + SSE progress + one-time done page); pre-login disaster-recovery routes (`/auth/restore`, scan, prepare, search, browse) gated on `_recovery_door_open()` — no archive, OR an unverified restore; both login paths vouch for restored data (clear the marker) and the login screens carry the restored-from-backup banner |
 | `backups.py` | 305 | Backup/restore endpoints, folder picker |
 | `main.py` | 115 | Page routes: index, create_archive, settings, `/launch-check` nonce echo for the desktop launcher |
 
@@ -219,7 +219,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 |------|-------|--------------|
 | `mail.js` | 2,502 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
 | `settings.js` | 1,482 | Settings: appearance, accounts, security, recovery-key status + check + rotation, backup, reset |
-| `review.js` | 1,075 | Review staged items, destination editing, commit |
+| `review.js` | 1,078 | Review staged items, destination editing, commit |
 | `backups.js` | 1,034 | Backup/restore UI, restore points, settings |
 | `folder-selection.js` | 897 | Bulk folder staging from IMAP/imports |
 | `vault.js` | 881 | Retention vault: move to vault, restore, permanent delete; subfolder links carry tree counts |

@@ -7620,3 +7620,33 @@ Sandbox 916 -> 936; MacBook 949. ruff clean, ESLint 65 warnings.
 - `2ec0313` -- Second review pass: restore completion, launch notices on the login screen, reset, PDF export, commit failures stay on screen
 - (this entry) -- docs: Session 103 second pass; CHANGELOG; Navigation Map
 
+### Session 103, continued: the new screens seen running
+
+A throwaway instance (`scripts/make_demo_archive.py` into `/tmp`,
+`main.py --port=5099`, fast KDF) was run on the MacBook and looked at
+in a browser; Rick's own archive and instance were not touched.
+
+- **Login notice.** Rendered, but the interrupted-key-change text is
+  hard-wrapped for a terminal and broke raggedly in the card. Added
+  `auth._reflow` (paragraphs kept, in-paragraph breaks become spaces,
+  the "backup was verified" line stays on its own). Re-checked: reads
+  cleanly.
+- **Commit-problems dialog.** Driven with a sample result from the
+  page; readable. Sections now separated by a blank line.
+- **Export completion.** A real PDF export of a folder with one
+  message file removed from disk showed "2 emails" and "1 email could
+  not be read and is not in this export." A clean export showed its
+  count and no warning.
+- Login, folder view, folder menu and export dialog all worked against
+  the new code.
+
+Not seen running: the missing-database and failed-restore notices
+(same template, tested at the server), and a real commit failure.
+
+937 passed in the sandbox, 950 on the MacBook.
+
+### Commits (continued)
+
+- `dbe5624` -- Login notice wraps to the page; commit-problems dialog spaced into sections
+- (this entry) -- docs: Session 103, visual check
+
