@@ -81,8 +81,17 @@ def _effective_message_id(message_id: str, raw_email: bytes) -> str:
     return f"<{hashlib.sha256(raw_email).hexdigest()}@mailrepo.dedup>"
 
 
-def _check_duplicate(folder_id: int, message_id: str) -> bool:
-    """Check if an email with this message_id already exists in the folder (excluding trashed)."""
+def _same_message(a: bytes, b: bytes) -> bool:
+    """Byte-for-byte the same message, ignoring line-ending convention.
+
+    IMAP hands over CRLF; an mbox import of the same message arrives with
+    LF. Those are the same message and must not be archived twice.
+    """
+    return a.replace(b"\r\n", b"\n") == b.replace(b"\r\n", b"\n")
+
+
+def _has_message_id(folder_id: int, message_id: str) -> bool:
+    """True if the folder already holds a (non-trashed) message with this Message-ID."""
     if not message_id:
         return False
     existing = Database.fetchone(
@@ -90,6 +99,44 @@ def _check_duplicate(folder_id: int, message_id: str) -> bool:
         (folder_id, message_id),
     )
     return existing is not None
+
+
+def _check_duplicate(folder_id: int, message_id: str, raw_email: bytes | None = None) -> bool:
+    """Is this message already in the folder (excluding trashed)?
+
+    A matching Message-ID is not enough. The sender chooses it, and anyone
+    who has seen a thread knows the ids of its earlier messages, so a
+    DIFFERENT message can carry the same one. Treating that as a
+    duplicate meant it was never archived and was then removed from the
+    server by the post-commit action (code review 2026-11, #2).
+
+    So with ``raw_email`` a duplicate is a row with the same Message-ID
+    whose archived file holds the same message. If the archived copy
+    cannot be read, the answer is "not a duplicate": a second copy is
+    harmless, and a message that exists only on the server is not.
+
+    Without ``raw_email`` this answers the Message-ID question only; no
+    caller that goes on to act on the server should use it that way.
+    """
+    if not message_id:
+        return False
+    rows = Database.fetchall(
+        """SELECT filepath FROM messages
+           WHERE folder_id = ? AND message_id = ? AND deleted_at IS NULL""",
+        (folder_id, message_id),
+    )
+    if not rows:
+        return False
+    if raw_email is None:
+        return True
+    for row in rows:
+        try:
+            stored = Encryption.decrypt((Config.get_base_path() / row["filepath"]).read_bytes())
+        except Exception:
+            continue
+        if _same_message(stored, raw_email):
+            return True
+    return False
 
 
 def _safe_uid(uid) -> str:
@@ -102,6 +149,48 @@ def _safe_uid(uid) -> str:
     return s
 
 
+def _write_new_file(path, data: bytes, durable: bool) -> bool:
+    """Create ``path`` holding exactly ``data``. False if it already exists.
+
+    os.write may write fewer bytes than asked (a disk filling up
+    mid-write does exactly that, without raising), so it is looped until
+    everything is out. On any failure the file is removed before the
+    error propagates: a half-written or empty .eml.enc left behind opens
+    under no key and used to halt every later key rotation.
+
+    ``durable`` also flushes the file and its directory entry to disk.
+    Used when the source is an IMAP server, because the original may be
+    removed from that server moments later.
+    """
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        return False
+    try:
+        try:
+            view = memoryview(data)
+            while view:
+                written = os.write(fd, view)
+                view = view[written:]
+            if durable:
+                os.fsync(fd)
+        finally:
+            os.close(fd)
+        if durable:
+            dir_fd = os.open(str(path.parent), os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+    except BaseException:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+        raise
+    return True
+
+
 def _save_email_to_archive(
     raw_email: bytes, folder_id: int, account_id: int | None, uid_prefix: str
 ) -> None:
@@ -109,7 +198,12 @@ def _save_email_to_archive(
     Encrypt and save a raw email to the archive, inserting a DB row.
 
     This operation is made atomic: if the DB insert fails, the file is deleted.
-    If the file write fails, no DB record is created.
+    If the file write fails, no file is left behind and no DB record is created.
+
+    Before the row is inserted the file is read back from disk and
+    decrypted, and must come out as the message that went in. Callers
+    treat a return from here as "this message is safely in the archive"
+    and may then remove the original from the mail server.
 
     Args:
         raw_email: Raw RFC 2822 email bytes.
@@ -136,18 +230,22 @@ def _save_email_to_archive(
         candidate = archive_path / (
             f"{uid_prefix}.eml.enc" if attempt == 0 else f"{uid_prefix}_{attempt}.eml.enc"
         )
-        try:
-            fd = os.open(candidate, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        except FileExistsError:
-            continue
-        try:
-            os.write(fd, encrypted_data)
-        finally:
-            os.close(fd)
-        filepath = candidate
-        break
+        if _write_new_file(candidate, encrypted_data, durable=account_id is not None):
+            filepath = candidate
+            break
     if filepath is None:
         raise OSError(f"Could not find a free archive filename for {uid_prefix}")
+
+    # Read it back: what is on disk must decrypt to what was handed in.
+    try:
+        if Encryption.decrypt(filepath.read_bytes()) != raw_email:
+            raise OSError(f"Archive file {filepath.name} does not match the message written")
+    except Exception as e:
+        try:
+            filepath.unlink()
+        except OSError:
+            pass
+        raise OSError(f"Archive file {filepath.name} failed its read-back check: {e}") from e
 
     # Insert DB record - if this fails, clean up the file
     try:
@@ -211,7 +309,7 @@ def commit_import_email(item: dict, results: dict) -> dict:
 
         # Check for duplicate
         message_id = _effective_message_id(email_data.get("message_id", ""), raw_email)
-        if _check_duplicate(folder_id, message_id):
+        if _check_duplicate(folder_id, message_id, raw_email):
             results["skipped"].append({"uid": uid, "reason": "duplicate", "subject": subject})
             return {"status": "skipped", "subject": subject, "uid": uid}
 
@@ -259,16 +357,22 @@ def commit_imap_email(
         if not folder:
             raise ValueError(f"Folder {folder_id} not found")
 
-        # Check for duplicate. With a Message-ID this needs no fetch;
-        # without one, fetch first so the content-hash fallback applies.
+        # Check for duplicate. A Message-ID the folder has never seen
+        # needs no fetch to rule out; one it HAS seen is only a candidate,
+        # and the message is fetched so its content can be compared. A
+        # skipped message is removed from the server by the post-commit
+        # action, so "skipped" has to mean "this exact message is here".
         message_id = email_data.get("message_id", "")
         raw_email = None
         if not message_id:
             raw_email = client.fetch_raw(uid)
             message_id = _effective_message_id("", raw_email)
-        if _check_duplicate(folder_id, message_id):
-            results["skipped"].append({"uid": uid, "reason": "duplicate", "subject": subject})
-            return {"status": "skipped", "subject": subject, "uid": uid}
+        if _has_message_id(folder_id, message_id):
+            if raw_email is None:
+                raw_email = client.fetch_raw(uid)
+            if _check_duplicate(folder_id, message_id, raw_email):
+                results["skipped"].append({"uid": uid, "reason": "duplicate", "subject": subject})
+                return {"status": "skipped", "subject": subject, "uid": uid}
 
         # Fetch and save email
         if raw_email is None:
@@ -423,7 +527,7 @@ def commit_imap_folder(
                 subject = (metadata.get("subject", "") or "(no subject)")[:50]
                 message_id = _effective_message_id(metadata.get("message_id", ""), raw_email)
 
-                if _check_duplicate(target_folder_id, message_id):
+                if _check_duplicate(target_folder_id, message_id, raw_email):
                     results["skipped"].append({"uid": uid})
                     yield {
                         "type": "progress",

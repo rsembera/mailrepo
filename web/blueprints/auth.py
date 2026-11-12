@@ -193,11 +193,17 @@ def cleanup_expired_trash():
         )
 
         if expired_folders:
-            # Delete the folders (CASCADE will handle children)
-            for folder in expired_folders:
-                Database.execute("DELETE FROM folders WHERE id = ?", (folder["id"],))
+            # Files first, then rows. The cascade alone removes the rows
+            # and leaves every encrypted message file on disk, where it
+            # keeps going into backups (code review 2026-11, #6).
+            from core.purge import purge_folders
+
+            result = purge_folders([folder["id"] for folder in expired_folders])
             Database.commit()
-            log.info(f"Trash cleanup: permanently deleted {len(expired_folders)} expired folder(s)")
+            log.info(
+                f"Trash cleanup: permanently deleted {len(expired_folders)} expired folder(s) "
+                f"and {result['emails']} email(s)"
+            )
 
         # Find emails that have been deleted longer than retention period
         expired_emails = Database.fetchall(

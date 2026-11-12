@@ -9,7 +9,8 @@ import time
 
 from flask import jsonify, request
 
-from core import Config, Database
+from core import Database
+from core.purge import purge_folders
 from utils.log import get_logger
 
 from . import api_bp
@@ -274,42 +275,9 @@ def permanently_delete_folder(folder_id):
     if not folder["deleted_at"]:
         return jsonify({"error": "Folder must be in trash before permanent deletion"}), 400
 
-    # Collect all descendant folder IDs recursively
+    # The folder, every descendant, and all their mail: files first, then rows.
     # (Retention vault folders are already detached when moved to vault, so they won't be included)
-    def collect_descendants(parent_id):
-        ids = [parent_id]
-        children = Database.fetchall("SELECT id FROM folders WHERE parent_id = ?", (parent_id,))
-        for child in children:
-            ids.extend(collect_descendants(child["id"]))
-        return ids
-
-    all_folder_ids = collect_descendants(folder_id)
-    placeholders = ",".join(["?" for _ in all_folder_ids])
-
-    # Delete message files for all folders in the tree
-    messages = Database.fetchall(
-        f"SELECT filepath FROM messages WHERE folder_id IN ({placeholders})", tuple(all_folder_ids)
-    )
-
-    for msg in messages:
-        try:
-            filepath = Config.get_base_path() / msg["filepath"]
-            if filepath.exists():
-                filepath.unlink()
-        except Exception as e:
-            log.warning(f"Could not delete file {msg['filepath']}: {e}")
-
-    # Try to remove folder directories
-    for fid in all_folder_ids:
-        try:
-            folder_path = Config.get_archive_path() / str(fid)
-            if folder_path.exists() and folder_path.is_dir():
-                folder_path.rmdir()
-        except Exception:
-            pass
-
-    # Delete all folders (CASCADE will handle messages)
-    Database.execute(f"DELETE FROM folders WHERE id IN ({placeholders})", tuple(all_folder_ids))
+    purge_folders([folder_id])
     Database.commit()
     return jsonify({"success": True})
 
@@ -322,22 +290,7 @@ def empty_trash():
     if not trashed:
         return jsonify({"success": True, "deleted": 0})
 
-    folder_ids = [f["id"] for f in trashed]
-    placeholders = ",".join(["?" for _ in folder_ids])
-
-    messages = Database.fetchall(
-        f"SELECT filepath FROM messages WHERE folder_id IN ({placeholders})", tuple(folder_ids)
-    )
-
-    for msg in messages:
-        try:
-            filepath = Config.get_base_path() / msg["filepath"]
-            if filepath.exists():
-                filepath.unlink()
-        except Exception as e:
-            log.warning(f"Could not delete file {msg['filepath']}: {e}")
-
-    Database.execute(f"DELETE FROM folders WHERE id IN ({placeholders})", tuple(folder_ids))
+    purge_folders([f["id"] for f in trashed])
     Database.commit()
 
     return jsonify({"success": True, "deleted": len(trashed)})
@@ -583,50 +536,10 @@ def permadelete_vault_folder(folder_id):
     if folder["retention_date"] > now:
         return jsonify({"error": "Folder is not yet overdue"}), 400
 
-    # Collect all descendant folder IDs recursively
-    def collect_descendants(parent_id):
-        ids = [parent_id]
-        children = Database.fetchall("SELECT id FROM folders WHERE parent_id = ?", (parent_id,))
-        for child in children:
-            ids.extend(collect_descendants(child["id"]))
-        return ids
-
-    all_folder_ids = collect_descendants(folder_id)
-    placeholders = ",".join(["?" for _ in all_folder_ids])
-
-    # Count emails before deletion
-    email_count = Database.fetchone(
-        f"SELECT COUNT(*) as cnt FROM messages WHERE folder_id IN ({placeholders})",
-        tuple(all_folder_ids),
-    )["cnt"]
-
-    # Delete message files for all folders in the tree
-    messages = Database.fetchall(
-        f"SELECT filepath FROM messages WHERE folder_id IN ({placeholders})", tuple(all_folder_ids)
-    )
-
-    for msg in messages:
-        try:
-            filepath = Config.get_base_path() / msg["filepath"]
-            if filepath.exists():
-                filepath.unlink()
-        except Exception as e:
-            log.warning(f"Could not delete file {msg['filepath']}: {e}")
-
-    # Try to remove folder directories
-    for fid in all_folder_ids:
-        try:
-            folder_path = Config.get_archive_path() / str(fid)
-            if folder_path.exists() and folder_path.is_dir():
-                folder_path.rmdir()
-        except Exception:
-            pass
-
-    # Delete all folders (CASCADE will handle messages)
-    Database.execute(f"DELETE FROM folders WHERE id IN ({placeholders})", tuple(all_folder_ids))
+    result = purge_folders([folder_id])
     Database.commit()
 
-    return jsonify({"success": True, "emails_deleted": email_count})
+    return jsonify({"success": True, "emails_deleted": result["emails"]})
 
 
 @api_bp.route("/folders/batch-permadelete", methods=["POST"])
@@ -640,10 +553,7 @@ def batch_permadelete_vault():
     if not folder_ids:
         return jsonify({"error": "No folders specified"}), 400
 
-    # Validate all folders
-    total_emails = 0
-    all_folder_ids_to_delete = []
-
+    # Validate all folders before touching anything
     for folder_id in folder_ids:
         folder = Database.fetchone(
             "SELECT id, deleted_at, retention_date FROM folders WHERE id = ?", (folder_id,)
@@ -657,55 +567,10 @@ def batch_permadelete_vault():
         if folder["retention_date"] > now:
             return jsonify({"error": f"Folder {folder_id} is not yet overdue"}), 400
 
-        # Collect descendants
-        def collect_descendants(parent_id):
-            ids = [parent_id]
-            children = Database.fetchall("SELECT id FROM folders WHERE parent_id = ?", (parent_id,))
-            for child in children:
-                ids.extend(collect_descendants(child["id"]))
-            return ids
-
-        all_folder_ids_to_delete.extend(collect_descendants(folder_id))
-
-    # Deduplicate (in case of nested selections)
-    all_folder_ids_to_delete = list(set(all_folder_ids_to_delete))
-    placeholders = ",".join(["?" for _ in all_folder_ids_to_delete])
-
-    # Count emails
-    total_emails = Database.fetchone(
-        f"SELECT COUNT(*) as cnt FROM messages WHERE folder_id IN ({placeholders})",
-        tuple(all_folder_ids_to_delete),
-    )["cnt"]
-
-    # Delete message files
-    messages = Database.fetchall(
-        f"SELECT filepath FROM messages WHERE folder_id IN ({placeholders})",
-        tuple(all_folder_ids_to_delete),
-    )
-
-    for msg in messages:
-        try:
-            filepath = Config.get_base_path() / msg["filepath"]
-            if filepath.exists():
-                filepath.unlink()
-        except Exception as e:
-            log.warning(f"Could not delete file {msg['filepath']}: {e}")
-
-    # Try to remove folder directories
-    for fid in all_folder_ids_to_delete:
-        try:
-            folder_path = Config.get_archive_path() / str(fid)
-            if folder_path.exists() and folder_path.is_dir():
-                folder_path.rmdir()
-        except Exception:
-            pass
-
-    # Delete all folders
-    Database.execute(
-        f"DELETE FROM folders WHERE id IN ({placeholders})", tuple(all_folder_ids_to_delete)
-    )
+    # Nested selections are handled by purge_folders (each id once).
+    result = purge_folders(folder_ids)
     Database.commit()
 
     return jsonify(
-        {"success": True, "folders_deleted": len(folder_ids), "emails_deleted": total_emails}
+        {"success": True, "folders_deleted": len(folder_ids), "emails_deleted": result["emails"]}
     )
