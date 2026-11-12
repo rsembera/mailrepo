@@ -25,21 +25,18 @@ def csp_nonce() -> str:
     return nonce
 
 
-def csp_mode(app) -> str:
+def csp_mode() -> str:
     """How the page policy is applied: "enforce", "report" or "off".
 
-    Enforced when the app is used from a browser, where it has been
-    checked screen by screen. In the desktop shell it is sent in
-    report-only form for now: the policy has not yet been run inside
-    WebKit with pywebview's bridge, and a policy that turned out to
-    block the bridge would break printing and saving attachments there.
-    MAILREPO_CSP=enforce runs the desktop shell with it enforced, to
-    try it; MAILREPO_CSP=off removes it.
+    Enforced, in a browser and in the desktop shell alike. Both were
+    run with it: every screen in headless Chrome, and the real app in
+    the pywebview/WebKit shell on macOS (login, folders, viewer, every
+    rail screen, the Python bridge), with no violation in either.
+    MAILREPO_CSP=report sends it in report-only form and
+    MAILREPO_CSP=off removes it, for tracking down a problem.
     """
     chosen = os.environ.get("MAILREPO_CSP", "").strip().lower()
-    if chosen in ("enforce", "report", "off"):
-        return chosen
-    return "report" if app.config.get("LAUNCH_NONCE") else "enforce"
+    return chosen if chosen in ("enforce", "report", "off") else "enforce"
 
 
 def content_security_policy(nonce: str | None, *, desktop_shell: bool = False) -> str:
@@ -65,8 +62,9 @@ def content_security_policy(nonce: str | None, *, desktop_shell: bool = False) -
     scripts = "'self'" + (f" 'nonce-{nonce}'" if nonce else "")
     if desktop_shell:
         # pywebview builds each function of its Python bridge with
-        # new Function(). That needs this keyword; markup injected into
-        # the page still cannot run, which needs 'unsafe-inline'.
+        # new Function(); without this keyword the bridge never comes up
+        # (seen in WebKit). Markup injected into the page still cannot
+        # run: that needs 'unsafe-inline', which is not here.
         scripts += " 'unsafe-eval'"
     return "; ".join(
         [
@@ -296,7 +294,7 @@ def create_app(test_config: dict = None) -> Flask:
         response.headers.setdefault("Referrer-Policy", "no-referrer")
         # Pages only. Attachments served inline carry their own, stricter
         # policy (web/responses.py), which setdefault leaves alone.
-        mode = csp_mode(app)
+        mode = csp_mode()
         if response.mimetype == "text/html" and mode != "off":
             desktop = bool(app.config.get("LAUNCH_NONCE"))
             policy = content_security_policy(g.get("csp_nonce"), desktop_shell=desktop)

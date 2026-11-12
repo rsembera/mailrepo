@@ -157,15 +157,15 @@ def test_overlay_buttons_are_wired_by_listener():
 # --- desktop shell, and the switch ------------------------------------------
 
 
-def test_desktop_shell_gets_the_policy_in_report_only_form_for_now(
+def test_desktop_shell_enforces_the_policy_with_eval_for_the_bridge(
     client, initialized_app, monkeypatch
 ):
     app, _ = initialized_app
     monkeypatch.delenv("MAILREPO_CSP", raising=False)
     monkeypatch.setitem(app.config, "LAUNCH_NONCE", "x")
     resp = client.get("/auth/login")
-    assert "Content-Security-Policy" not in resp.headers
-    policy = _directives(resp.headers["Content-Security-Policy-Report-Only"])
+    assert "Content-Security-Policy-Report-Only" not in resp.headers
+    policy = _directives(resp.headers["Content-Security-Policy"])
     # pywebview's bridge needs eval; injected markup still needs what is not there.
     assert "'unsafe-eval'" in policy["script-src"]
     assert "'unsafe-inline'" not in policy["script-src"]
@@ -185,8 +185,9 @@ def test_browser_mode_never_allows_eval(client, initialized_app, monkeypatch):
         ("report", False, False, True),
         ("off", False, False, False),
         ("off", True, False, False),
+        ("report", True, False, True),
         ("nonsense", False, True, False),
-        ("nonsense", True, False, True),
+        ("nonsense", True, True, False),
     ],
 )
 def test_the_environment_switch(

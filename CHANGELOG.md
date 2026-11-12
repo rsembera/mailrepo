@@ -18,9 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   email is now confined to its own part of the document.
 - **The app's pages only run the app's own scripts (Session 103).** A
   Content-Security-Policy stops anything injected into a page from
-  running. It is enforced when MailRepo is used from a browser; in the
-  desktop app it is in report-only form until it has been checked
-  there.
+  running, in the desktop app and in a browser alike.
 - **Converted PST files are removed (Session 103).** A PST import is
   converted to plain-text mailbox files in the temp folder. On macOS
   they were never removed until the next launch. They now go when the

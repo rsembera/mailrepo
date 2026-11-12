@@ -7839,3 +7839,31 @@ The commit message of `b3a1260` gives 132 tests for
 - `6bf90ef` -- Content-Security-Policy on the app's own pages
 - (this entry) -- docs: Session 103, third pass
 
+
+### Session 103, continued: third pass on the MacBook; page policy enforced in the desktop shell
+
+- Third pass run natively: 1,128 passed. `main` fast-forwarded to
+  `630277f` and pushed.
+- The page policy was then run where it had not been: inside the
+  pywebview/WebKit shell on the MacBook, enforced, against a throwaway
+  demo archive (Rick's archive not touched; MailRepo was not running).
+  - A bare probe window: with the desktop policy the nonce'd script
+    ran, an un-nonce'd inline script and an `onerror` handler did not,
+    and a call through the Python bridge returned. With the browser
+    policy (no `'unsafe-eval'`) the bridge never came up, which is why
+    the desktop policy has that keyword.
+  - The real app through `launcher.py`'s own pieces: login, main page
+    (10 sidebar rows), a folder, an email in the viewer, every rail
+    screen. Bridge methods present (`open_bytes`, `print_html`,
+    `wipe_viewer_files`); no script error; the only violations were
+    the ones the probe injected, and those were blocked.
+- So the policy is now enforced in the desktop shell as well.
+  `MAILREPO_CSP=report|off` remain for tracking down a problem.
+
+Not done in the shell: an actual print, an attachment save, a remote
+image in an HTML email (all three were run in Chrome; the first two go
+through the bridge that was exercised).
+
+### Commits (continued)
+
+- (this entry) -- Page policy enforced in the desktop shell; docs
