@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Removed the unused legacy importer (`core/importer.py`) and its `/api/import/mbox/scan` route (Session 103).
 - Development builds on `main` now identify as `1.1.0-dev` (terminal banner, web UI, backup manifests) instead of `1.0.0`.
 
 ### Added
@@ -113,6 +114,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   kept going into backups. Manual deletion was not affected.
 - **A folder emptied on the server shows as empty (Session 103).** It
   used to keep listing its cached messages.
+- **The attachment you click is the attachment you get (Session 103).**
+  In the live view of a mail account, clicking one attachment could
+  download a different one. Every view of a message (mail account,
+  archive, import preview) now builds its attachment list the same way
+  and downloads from that same list. Attachments that Apple Mail sends
+  "inline", forwarded messages attached as files, and messages that are
+  nothing but a PDF or an image now all show their attachments. An
+  attached message opens as its own .eml instead of having its text
+  merged into the message it came with.
+- **A crafted email can no longer freeze the app (Session 103).** Turning
+  plain web addresses into links took half a minute on a 200 KB message
+  built to provoke it, and nothing else could run meanwhile. It is now
+  instant, and it no longer rewrites addresses inside a message's own
+  style rules.
+- **A folder whose first load was interrupted now loads completely
+  (Session 103).** Clicking away from a large mail-account folder while
+  it was loading left it showing only its newest messages, for good.
+- **MailRepo no longer marks mail as read on the server (Session 103).**
+  Viewing or archiving a message used to set it as read in your mail
+  account.
+- **Search finds accented words in HTML mail, and text deep in long
+  messages (Session 103).** Words written with HTML codes for accents
+  ("caf&eacute;") were indexed without them, and only the first 10,000
+  characters of a message were searchable. The limit is now 200,000.
+  Mail already in the archive is re-read once, in the background, after
+  your next login.
+- **The idle lock waits for work in progress (Session 103).** A long
+  commit, export or key rotation left running unattended was cut off
+  when the idle timeout arrived. The lock now waits until the work is
+  done, then counts a full timeout from there.
+- **Locking the archive drops the database key as well (Session 103).**
+- **Closing the app runs the same backup routine as logging out
+  (Session 103).** It had been skipping the clean-up of old backups, and
+  a post-backup command that timed out could be left running.
+- **Exports say how many emails they contain (Session 103).** If any of
+  the selected emails could not be read, the export says how many were
+  left out instead of silently omitting them.
+- **Imported mail is stored exactly as it is in the source file
+  (Session 103).** Importing from an mbox file used to rewrite line
+  endings. Large mbox files are now read one message at a time, and an
+  mbox that cannot be opened is reported as an error instead of
+  appearing as an empty folder.
+- **Folder lists from unusual mail servers (Session 103).** A folder
+  name sent in one less common form made the whole folder list fail;
+  servers with no folder separator lost folders; names containing a
+  quote or backslash could not be opened.
 - **Archiving no longer forces a full re-download of the folder
   (Session 97).** Every post-commit action (archive, trash, delete)
   wiped the whole source folder's cached listing, so the next view

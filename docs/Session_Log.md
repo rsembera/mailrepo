@@ -7482,3 +7482,84 @@ overview table was not re-run.
 - `1ac0d5b` -- A message leaves the server only once that exact message is archived; permanent deletion removes the files
 - (this entry) -- docs: Session 103; CHANGELOG; Navigation Map
 
+### Session 103, continued: batches 4 to 6
+
+Rick's decision on finding 19: MailRepo never changes read/unread state
+on the server, for viewing as well as archiving (his call was "whatever
+you recommend"; the app does not display that state, so it should not
+alter it).
+
+**Batch 4 (`88e3e04`): findings 7, 9, 14, 15, 16, 19.**
+- `core/message_view.py` (new): `parse_message`, `view_fields`,
+  `attachment_at`, `linkify_html`. `IMAP.fetch_full`, the archive
+  viewer, the import preview and the three attachment-download routes
+  all use it. Rules are in the module docstring. Attached messages
+  (message/rfc822) are leaves: offered whole, not walked into.
+- `linkify_html` tokenises with `str.find` in one pass. Measured before:
+  20,000 unclosed `<a>` 8.5 s, 40,000 34 s (holding the GIL). The email
+  pattern has bounded repeats; URL and email are one alternation so an
+  address inside a URL is not linked twice.
+- `IMAP.fetch_raw`: `(UID BODY.PEEK[])`, and the literal is chosen by
+  the UID in its response line. **Not yet exercised against a real
+  server**; it is standard IMAP4rev1 and the header fetch already uses
+  the same response shape, but the first live folder view and commit
+  are the real test.
+- `progress_emails.py`: set difference instead of a high-water mark.
+- `email_parser.py`: `html.unescape`; `BODY_TEXT_LIMIT = 200_000`.
+- `imports.download_import_attachment` now calls
+  `_locate_import_raw_email` (it had its own copy of the lookup).
+
+**Batch 5 (`a8c1375`): findings 10, 11, 17, 18, 20.**
+- `web/idle.py`: `busy(name)`, `stream_while_busy`, `run_busy`,
+  `is_busy`. Users: commit stream, export worker, rotation and
+  password-change workers, the upgrade route, the reindex thread.
+  `check_and_lock` and `check_auth` hold off while busy; `busy` calls
+  `touch()` on exit.
+- `Database.forget_key()` on every lock, via `Encryption.on_lock` in
+  `core/__init__.py`.
+- `utils/backup.py`: `run_due_backup()`, `finish_backup()`. Used by
+  logout, `main._cleanup` (skips when locked) and Backup Now.
+- `exports.py`: optional `report` dict on the three builders;
+  `_export_counts`. Completion view shows the count and a warning.
+  The PDF path was not changed (not yet reviewed).
+- `email_parser.py`: `mailbox.get_bytes` instead of `as_bytes()`; an
+  open mailbox and its table of contents cached per file (4 entries,
+  invalidated on mtime/size); `iter_emails_from_import_folder` and
+  `count_emails_in_import_folder`; `.emlx` by byte count.
+- `emails.py`: `reindex_all()`, `start_reindex_if_needed()` called at
+  login (setting `search_index_version`, currently "2"). On Rick's
+  archive this will run once, in the background, at the next login.
+
+**Batch 6 (`b577dc3`): smaller items.**
+- `core/imap.py`: `parse_list_response`, `_quote_mailbox`.
+- `core/sync_cache.py`: lock around its connection.
+- limit parsing in `/api/search` and the account listing.
+- Removed `core/importer.py`, `tests/test_importer.py`, the
+  `/api/import/mbox/scan` route.
+
+**Considered and left alone:** reading UIDVALIDITY/HIGHESTMODSEQ from
+the SELECT response to save a STATUS round trip. It touches the
+CONDSTORE short-circuit and cannot be checked without a live server;
+not worth the risk for one round trip.
+
+**Tests.** New files: `test_message_view.py`, `test_search_text.py`,
+`test_idle_busy.py`, `test_backup_cycle.py`, `test_export_counts.py`,
+`test_import_bytes.py`; additions to `test_folder_cache_sync.py`,
+`test_imap.py`, `test_api_emails.py`. 26 more sealing mutations, all
+caught (one test tightened after a miss). Sandbox: 869 -> 916 passed,
+1 skipped (31 importer tests went with the module). MacBook: 913 after
+batch 4, 950 after batch 5, 929 after batch 6. ruff clean, ESLint 65
+warnings.
+
+**All 20 findings from the review are now addressed.** Still to do: the
+second review pass (`pdf_export.py`, `filesystem.py`, `launcher.py`,
+the restore half of `backup.py`, the JavaScript), and retiring the v2
+password-change path after 1.1.
+
+### Commits (continued)
+
+- `88e3e04` -- One message-view parser; linear-time linkify; fetch without marking read; folder listing by set difference; search text
+- `a8c1375` -- Idle lock waits for running work; lock drops the database key; one backup cycle; exports count what they wrote; mbox read as-is
+- `b577dc3` -- Folder listing survives odd server replies; mailbox names are escaped; dead importer removed
+- (this entry) -- docs: Session 103 continued; CHANGELOG; Navigation Map
+

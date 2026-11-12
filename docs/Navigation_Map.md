@@ -133,54 +133,54 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `imap.py` | 1,610 | IMAP client: connect, auth, folders, batched header fetch (`fetch_headers_batch`, 100 UIDs per FETCH, keyed by UID in the response), MOVE/COPY + UID-scoped expunge, Gmail-aware delete (incl. batched set delete), CONDSTORE |
+| `imap.py` | 1,511 | IMAP client: connect, auth, folders, batched header fetch (`fetch_headers_batch`, 100 UIDs per FETCH, keyed by UID in the response), MOVE/COPY + UID-scoped expunge, Gmail-aware delete (incl. batched set delete), CONDSTORE |
 | `imap_pool.py` | 185 | One held, authenticated IMAP connection per account (`ImapPool.acquire` -> lease, `release`); per-account lock, NOOP probe + lazy reconnect, `close_all` on lock/exit, `evict` on account change (Session 97) |
 | `pdf_export.py` | 1,083 | PDF export: per-email PDFs, attachment merging, WeasyPrint |
 | `encryption.py` | 1,083 | Argon2id KDF + HKDF + AES-256-GCM (v2) plus the v3 envelope: random master wrapped under password and recovery key, each wrapper verified to open before the key file is written; MRC4 (Session 93): the envelope plus archive_id and an HMAC binding the halves, verified at every unwrap; backup-MAC and key-file-bind subkeys; lock hooks; work factor via argon2_parameters() — production everywhere, cheap only when the test suite's double guard (MAILREPO_FAST_KDF + MAILREPO_DATA_DIR) is met |
 | `password_change.py` | 830 | Password change — v2 full re-encryption, v3 rewrap; recovery-key password reset (needs no unlocked session), recovery-key rotation, on-disk backup gate, interruption marker |
-| `database.py` | 493 | SQLCipher connection, schema v5, FTS5, migrations, threading lock, hard refusal to open unencrypted |
+| `database.py` | 506 | SQLCipher connection, schema v5, FTS5, migrations, threading lock, hard refusal to open unencrypted |
 | `keyfile_binding.py` | 131 | MRC4 rollback detection: records the current key file's tag in the encrypted settings table, refuses a rolled-back file at login, upgrades MRC3 → MRC4 in place (review #8a) |
 | `master_rotation.py` | 234 | Master-key rotation: fresh master, re-encrypt files + credentials, rekey SQLCipher, new MRC4 key file with new recovery key; backup-gated, resumable, interruption marker (review #8b) |
 | `pdf_fetcher.py` | 72 | The one WeasyPrint URL fetcher: `data:` always, `http(s):` on request, nothing from disk (review #3) |
 | `crypto_migration_v3.py` | 301 | v2 → v3 migration: re-encrypt under a random master, resumable via wrapped-master state file |
-| `importer.py` | 280 | mbox, Apple mbox, EML, PST import handling |
 | `pending_commit.py` | 222 | Commit resume: save/restore interrupted commits |
 | `config.py` | 150 | Paths, constants, Flask config; state dir outside the app folder for the backup-location record |
-| `sync_cache.py` | 111 | Two-layer IMAP folder cache (TTL + CONDSTORE/HIGHESTMODSEQ) |
+| `sync_cache.py` | 124 | Two-layer IMAP folder cache (TTL + CONDSTORE/HIGHESTMODSEQ) |
 | `__init__.py` | 30 | Module exports |
 | `account_utils.py` | 18 | Shared account helpers (`is_gmail_host` — Gmail provider detection) |
 | `purge.py` | 100 | Permanent folder deletion: `folder_tree_ids` + `purge_folders` (unlink message files, then delete rows). The one path behind trash delete, Empty Trash, vault delete and the automatic trash cleanup (Session 103) |
+| `message_view.py` | 302 | The one message-view parser: bodies, inline images, ordered attachment list (`parse_message`, `view_fields`, `attachment_at`) and the linear-time `linkify_html`. Behind the live IMAP view, the archive viewer, the import preview and all three attachment-download routes (Session 103) |
 
 ### Web App (`/web/`)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `idle.py` | 173 | Process-level activity clock, idle-lock watchdog thread (skips while a backup or logout is running), logout claim, per-login id (review #1, #11) |
+| `idle.py` | 226 | Process-level activity clock, idle-lock watchdog thread (skips while a backup or logout is running), logout claim, per-login id (review #1, #11) |
 | `responses.py` | 88 | Attachment/EML response builder: inline allowlist, sandbox CSP, werkzeug-encoded filenames (review #2, #17) |
-| `app.py` | 258 | Flask factory, blueprint registration, auth/CSRF middleware |
+| `app.py` | 268 | Flask factory, blueprint registration, auth/CSRF middleware |
 
 ### Blueprints (`/web/blueprints/`)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `auth.py` | 1,579 | Setup, login, logout, rate limiting, session management; recovery-key verification + server-side handoff to a mandatory password reset (no session granted), v3 upgrade flow, rotation API, master-key rotation (page + one-time job + SSE progress + one-time done page); pre-login disaster-recovery routes (`/auth/restore`, scan, prepare, search, browse) gated on `_recovery_door_open()` — no archive, OR an unverified restore; both login paths vouch for restored data (clear the marker) and the login screens carry the restored-from-backup banner |
-| `backups.py` | 319 | Backup/restore endpoints, folder picker |
+| `auth.py` | 1,542 | Setup, login, logout, rate limiting, session management; recovery-key verification + server-side handoff to a mandatory password reset (no session granted), v3 upgrade flow, rotation API, master-key rotation (page + one-time job + SSE progress + one-time done page); pre-login disaster-recovery routes (`/auth/restore`, scan, prepare, search, browse) gated on `_recovery_door_open()` — no archive, OR an unverified restore; both login paths vouch for restored data (clear the marker) and the login screens carry the restored-from-backup banner |
+| `backups.py` | 305 | Backup/restore endpoints, folder picker |
 | `main.py` | 115 | Page routes: index, create_archive, settings, `/launch-check` nonce echo for the desktop launcher |
 
 ### API (`/web/blueprints/api/`)
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `exports.py` | 1,000 | Bulk PDF/encrypted-ZIP export pipeline + SSE progress |
-| `emails.py` | 836 | Archived email operations: view, move, delete, batch, download; folder listing carries per-subfolder tree counts |
+| `exports.py` | 1,199 | Bulk PDF/encrypted-ZIP export pipeline + SSE progress |
+| `emails.py` | 694 | Archived email operations: view, move, delete, batch, download; folder listing carries per-subfolder tree counts |
 | `filesystem.py` | 807 | File browser for imports, path validation, PST conversion |
-| `imports.py` | 728 | Mount/unmount imports, browse imported emails/folders |
-| `progress_commit.py` | 766 | SSE streaming for commit operations; batched Gmail deletes; unified post-action failure accounting + logging (Sessions 47/54/57); post-actions evict only acted-on UIDs from the folder cache (Session 97) |
+| `imports.py` | 396 | Mount/unmount imports, browse imported emails/folders |
+| `progress_commit.py` | 767 | SSE streaming for commit operations; batched Gmail deletes; unified post-action failure accounting + logging (Sessions 47/54/57); post-actions evict only acted-on UIDs from the folder cache (Session 97) |
 | `folders.py` | 576 | Archive folder CRUD, trash, restore, vault, retention; `tree_email_counts()` is the single roll-up behind every folder size the app shows |
-| `accounts.py` | 487 | IMAP account CRUD, Gmail auto-detection, folder listing |
-| `commit.py` | 655 | Email/folder commit workflow |
-| `email_parser.py` | 336 | Email parsing: headers, body, attachments, body text extraction |
-| `progress_emails.py` | 309 | Folder listing stream: `cached` event first, TTL + CONDSTORE short-circuits, incremental sync in FETCH chunks; `refresh=true` reconciles keeping the cache, `rebuild=true` discards it (Session 97) |
+| `accounts.py` | 461 | IMAP account CRUD, Gmail auto-detection, folder listing |
+| `commit.py` | 658 | Email/folder commit workflow |
+| `email_parser.py` | 427 | Email parsing: headers, body, attachments, body text extraction |
+| `progress_emails.py` | 316 | Folder listing stream: `cached` event first, TTL + CONDSTORE short-circuits, incremental sync in FETCH chunks; `refresh=true` reconciles keeping the cache, `rebuild=true` discards it (Session 97) |
 | `settings.py` | 263 | App settings: timeout, retention, keepalive |
 | `streaming.py` | 190 | Email-cache helpers: read/write rows, stale removal, `evict_cached_uids` after post-commit actions (Session 97) |
 | `threads.py` | 138 | Thread search and staging endpoints |
@@ -190,7 +190,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `backup.py` | 2,582 | Full/incremental backup (serialized on `backup_lock`; names claimed atomically; full chain_id derived from its filename), restore, retention, external state file (Libram-style), on-disk restore-chain verification, manifest sidecars stamped with the app identity and written to every backup destination, a durable record of backup locations kept outside the app folder, record-first location lookup (no disk search -- the folder picker covers unknown locations), filename-based chain reconstruction; unverified-restore marker (`data/.restore_unverified`, set by complete_restore, never inside a zip) |
+| `backup.py` | 2,653 | Full/incremental backup (serialized on `backup_lock`; names claimed atomically; full chain_id derived from its filename), restore, retention, external state file (Libram-style), on-disk restore-chain verification, manifest sidecars stamped with the app identity and written to every backup destination, a durable record of backup locations kept outside the app folder, record-first location lookup (no disk search -- the folder picker covers unknown locations), filename-based chain reconstruction; unverified-restore marker (`data/.restore_unverified`, set by complete_restore, never inside a zip) |
 | `log.py` | 51 | Logging setup, polling filter |
 | `__init__.py` | 34 | Shell command runner, path utilities |
 
@@ -232,7 +232,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `export-modal.js` | 875 | Bulk export UI: scope picker, format (pdf/eml/mbox/both), scope-aware password, progress |
+| `export-modal.js` | 888 | Bulk export UI: scope picker, format (pdf/eml/mbox/both), scope-aware password, progress |
 | `image-lightbox.js` | 315 | Click-to-zoom overlay for inline images and image attachments (Session 94); click targets are laid over the sandboxed body iframe from the parent, because WebKit runs no listeners inside a no-scripts frame |
 | `email-list.js` | 794 | Email list rendering, selection, toolbar, filter input |
 | `sidebar.js` | 744 | Sidebar: archive folders, IMAP folders, imports, resize |
@@ -412,13 +412,18 @@ first run of this found a `ReferenceError` that had been shipping.
 | `tests/test_api_accounts.py` | Accounts API: listing + runtime `is_gmail` detection, create/update validation, no-password update, cached-folder fast path, delete, server detection (23 tests, Session 41) |
 | `tests/test_commit.py` | Commit helpers (archive-folder-from-path, duplicate detection, summary, post-action key parsing, atomic save + orphan cleanup) + SSE `/api/commit/stream` empty-guard and import round-trip (29 tests, Sessions 41/97) |
 | `tests/test_commit_safety.py` | A duplicate is the same message, not the same Message-ID; archive writes are complete, flushed for IMAP sources, cleaned up on failure and read back (11 tests, Session 103) |
+| `tests/test_message_view.py` | Listing and download agree on every route; attachment rules (inline disposition, referenced/unreferenced CID images, attached messages, bare PDF); linkify incl. hostile markup in linear time; fetch without `\\Seen` (Session 103) |
+| `tests/test_search_text.py` | Search text: entities decoded, 200,000-character limit, reindex commits, one-time background reindex (Session 103) |
+| `tests/test_idle_busy.py` | Idle lock waits for running work and restarts its clock after; session does not expire under a job; lock drops the database key (Session 103) |
+| `tests/test_backup_cycle.py` | `run_due_backup` / `finish_backup`: retention, post-backup command, check recorded; app exit uses the shared cycle and does nothing after a lock (Session 103) |
+| `tests/test_export_counts.py` | Zip and mbox exports report what was written and what was left out (Session 103) |
+| `tests/test_import_bytes.py` | mbox read as the original bytes, lazily, from one open mailbox; `.emlx` delimited by its byte count (Session 103) |
 | `tests/test_commit_durability.py` | Folder commit: archive rows are committed before the server post-action starts (Session 103) |
 | `tests/test_purge.py` | Permanent deletion removes the files: automatic trash cleanup, folder tree, Empty Trash, vault batch delete (7 tests, Session 103) |
 | `tests/test_folder_cache_sync.py` | IMAP folder cache vs server: an emptied folder shows empty; chunked stale removal (Session 103) |
 | `tests/test_api_threads.py` | Thread-discovery request validation before IMAP connect (6 tests, Session 41) |
 | `tests/test_api_settings.py` | Settings API: validated retention/timeout/thread-size endpoints, session-status, keepalive, reset-database guards (14 tests, Session 41) |
 | `tests/test_api_exports.py` | Export pipeline: scope resolution (folder/messages/search + subfolders + FTS), job state machine (save-to-disk, disambiguation, TTL GC), plain + AES-256 ZIP decrypt round-trips, endpoint contracts (39 tests, Session 42) |
-| `tests/test_importer.py` | Importer: header decode + metadata, mbox/eml import driven by `test_files/` edge cases; malformed mail archived byte-for-byte, corrupt mbox handled per-message (29 tests, Session 42) |
 | `tests/test_sync_cache.py` | Sync-cache state + TTL freshness logic, and the pure `IMAP.detect_server` domain lookup (14 tests, Session 42) |
 | `tests/test_imap.py` | `core/imap.py` dispatch logic via a mocked connection (no real IMAP): MOVE-vs-COPY, UID-scoped vs bare expunge, COPYUID parsing, Gmail delete-via-trash, spam-folder resolution, call-site contract, batched header fetch parsing/chunking (39 tests, Sessions 45/97) |
 | `tests/test_imap_pool.py` | `core/imap_pool.py`: reuse, folder-cache reset, dead-connection reconnect, lock release on connect failure, same-account queueing, acquire timeout, close on `Encryption.lock()`, evict (10 tests, Session 97) |
