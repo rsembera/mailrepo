@@ -49,7 +49,12 @@ def _locate_import_raw_email(
     (.eml, .emlx) are read as-is; everything else is a UID lookup that
     depends on the import type.
     """
-    from .email_parser import _parse_eml_directory, get_raw_email_from_import
+    from .email_parser import (
+        _parse_eml_directory,
+        _parse_emlx_file,
+        get_raw_email_from_import,
+        mbox_message_bytes,
+    )
 
     raw_email = None
 
@@ -61,16 +66,7 @@ def _locate_import_raw_email(
             suffix = email_path.suffix.lower()
             # Only use direct file reading for individual email files
             if suffix == ".emlx":
-                # Parse Apple .emlx format
-                with open(email_path, "rb") as f:
-                    content = f.read()
-                first_newline = content.find(b"\n")
-                if first_newline > 0:
-                    email_content = content[first_newline + 1 :]
-                    plist_marker = email_content.rfind(b"<?xml version=")
-                    if plist_marker > 0:
-                        email_content = email_content[:plist_marker]
-                    raw_email = email_content
+                raw_email = _parse_emlx_file(str(email_path))
             elif suffix == ".eml":
                 # Regular .eml file
                 with open(email_path, "rb") as f:
@@ -89,7 +85,6 @@ def _locate_import_raw_email(
                         break
         elif import_type == "apple-mbox":
             # Apple Mail export - parse directly using same logic as filesystem.py
-            import mailbox
             import os
 
             # Use folder_path which points to the specific .mbox directory
@@ -100,15 +95,12 @@ def _locate_import_raw_email(
             if os.path.isfile(mbox_file):
                 # UID format from filesystem.py: f"apple-{basename}-{i}"
                 # e.g., "apple-mbox-0" where "mbox" is basename of the mbox file
-                try:
-                    mbox = mailbox.mbox(mbox_file)
-                    for i, message in enumerate(mbox):
-                        expected_uid = f"apple-{os.path.basename(mbox_file)}-{i}"
-                        if expected_uid == uid:
-                            raw_email = message.as_bytes()
-                            break
-                except Exception:
-                    pass
+                prefix = f"apple-{os.path.basename(mbox_file)}-"
+                if uid.startswith(prefix) and uid[len(prefix) :].isdigit():
+                    try:
+                        raw_email = mbox_message_bytes(mbox_file, int(uid[len(prefix) :]))
+                    except Exception:
+                        raw_email = None
 
             # Check for Messages directory with .emlx files
             if not raw_email:
@@ -119,20 +111,9 @@ def _locate_import_raw_email(
                         if entry.name.endswith(".emlx") and entry.is_file():
                             expected_uid = f"emlx-{entry.name}"
                             if expected_uid == uid:
-                                try:
-                                    with open(entry.path, "rb") as f:
-                                        content = f.read()
-                                    # .emlx format: first line is byte count, then email, then plist
-                                    first_newline = content.find(b"\n")
-                                    if first_newline > 0:
-                                        email_content = content[first_newline + 1 :]
-                                        plist_marker = email_content.rfind(b"<?xml version=")
-                                        if plist_marker > 0:
-                                            email_content = email_content[:plist_marker]
-                                        raw_email = email_content
-                                        break
-                                except Exception:
-                                    pass
+                                raw_email = _parse_emlx_file(entry.path)
+                                if raw_email:
+                                    break
         elif import_type == "pst":
             # PST converted to mbox - use emailSourcePath which points to specific mbox file
             if email_source_path:

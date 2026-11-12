@@ -229,6 +229,19 @@ class Database:
                 cls._connection = None
 
     @classmethod
+    def forget_key(cls) -> None:
+        """Close the connection AND drop the key. Runs on every lock.
+
+        close() alone keeps the key, so after a logout or an idle lock
+        the next call from any thread quietly reopened the database
+        (code review 2026-11, #11). A locked archive must hold no key
+        to anything.
+        """
+        with cls._lock:
+            cls.close()
+            cls._db_key = None
+
+    @classmethod
     def checkpoint(cls) -> None:
         """
         Checkpoint the WAL file to ensure all changes are in main database.

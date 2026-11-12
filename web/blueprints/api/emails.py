@@ -585,33 +585,98 @@ def get_archived_email_source(folder_id, message_id):
         return jsonify({"error": f"Failed to read email source: {e}"}), 500
 
 
-@api_bp.route("/search/reindex", methods=["POST"])
-def reindex_search():
-    """Rebuild FTS index by re-extracting body text from archived .eml files."""
-    try:
-        messages = Database.fetchall(
-            "SELECT id, filepath FROM messages WHERE deleted_at IS NULL", ()
-        )
+# Bumped whenever extract_body_text changes what it produces, so that
+# existing archives are re-read once and search sees the improvement.
+#   2: HTML entities decoded; limit raised from 10,000 to 200,000 chars.
+SEARCH_INDEX_VERSION = "2"
 
-        updated = 0
-        errors = 0
 
-        for msg in messages:
-            try:
-                filepath = Config.get_base_path() / msg["filepath"]
-                if not filepath.exists():
-                    errors += 1
-                    continue
-                raw_email = filepath.read_bytes()
-                raw_email = Encryption.decrypt(raw_email)
-                body_text = extract_body_text(raw_email)
+class _ReindexAborted(Exception):
+    pass
+
+
+def reindex_all(should_continue=None) -> tuple[int, int]:
+    """Re-extract search text for every archived message.
+
+    Returns ``(updated, errors)``. Only rows whose text actually changes
+    are written. ``should_continue`` is polled between messages; when it
+    returns False the run stops (raising _ReindexAborted) with whatever
+    it had done already committed.
+    """
+    messages = Database.fetchall(
+        "SELECT id, filepath, body_text FROM messages WHERE deleted_at IS NULL", ()
+    )
+    updated = 0
+    errors = 0
+    for n, msg in enumerate(messages, 1):
+        if should_continue is not None and not should_continue():
+            raise _ReindexAborted()
+        try:
+            filepath = Config.get_base_path() / msg["filepath"]
+            if not filepath.exists():
+                errors += 1
+                continue
+            body_text = extract_body_text(Encryption.decrypt(filepath.read_bytes()))
+            if body_text != (msg["body_text"] or ""):
+                # The messages_au trigger keeps the FTS index in step.
                 Database.execute(
                     "UPDATE messages SET body_text = ? WHERE id = ?", (body_text, msg["id"])
                 )
                 updated += 1
-            except Exception as e:
-                log.warning(f"Failed to reindex message {msg['id']}: {e}")
-                errors += 1
+        except Exception as e:
+            log.warning(f"Failed to reindex message {msg['id']}: {e}")
+            errors += 1
+        if n % 200 == 0:
+            Database.commit()
+    Database.commit()
+    return updated, errors
+
+
+def start_reindex_if_needed() -> bool:
+    """After login: bring an older archive's search text up to date, once.
+
+    Runs in the background under idle.busy, so the idle lock waits for
+    it. Returns True if a run was started. If it is cut short (logout,
+    quit) nothing is recorded and the next login starts it again.
+    """
+    import threading
+
+    from core.database import get_setting, set_setting
+    from web import idle
+
+    if get_setting("search_index_version", "1") == SEARCH_INDEX_VERSION:
+        return False
+    if Database.fetchone("SELECT 1 FROM messages LIMIT 1") is None:
+        set_setting("search_index_version", SEARCH_INDEX_VERSION)
+        return False
+
+    login_id = idle.current_login_id()
+
+    def still_this_session() -> bool:
+        return Encryption.is_unlocked() and idle.current_login_id() == login_id
+
+    def work():
+        try:
+            updated, errors = reindex_all(still_this_session)
+            if still_this_session():
+                set_setting("search_index_version", SEARCH_INDEX_VERSION)
+                log.info(f"Search index brought up to date: {updated} updated, {errors} errors")
+        except _ReindexAborted:
+            log.info("Search reindex stopped early; it will resume at the next login")
+        except Exception as e:  # noqa: BLE001 - background housekeeping must not crash
+            log.warning(f"Search reindex failed: {e}")
+
+    threading.Thread(
+        target=idle.run_busy, args=("reindex", work), daemon=True, name="search-reindex"
+    ).start()
+    return True
+
+
+@api_bp.route("/search/reindex", methods=["POST"])
+def reindex_search():
+    """Rebuild FTS index by re-extracting body text from archived .eml files."""
+    try:
+        updated, errors = reindex_all()
 
         # Rebuild FTS index
         Database.execute("INSERT INTO messages_fts(messages_fts) VALUES('rebuild')", ())

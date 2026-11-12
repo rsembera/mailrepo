@@ -516,3 +516,24 @@
     height: 16px;
     margin-top: 2px;
 }
+
+/* Shown when some of the selected emails could not be exported. */
+.export-complete-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    padding: 0.625rem 0.75rem;
+    border-radius: 6px;
+    border: 1px solid var(--color-warning, #b45309);
+    color: var(--color-warning, #b45309);
+    font-size: 0.875rem;
+    text-align: left;
+}
+
+.export-complete-warning svg {
+    flex: 0 0 auto;
+    width: 1rem;
+    height: 1rem;
+    margin-top: 0.125rem;
+}

@@ -60,58 +60,23 @@ def _cleanup(app):
     _cleanup_done = True
 
     try:
-        from core.database import Database, get_setting
+        from core.database import Database
+        from core.encryption import Encryption
         from core.imap_pool import ImapPool
 
         ImapPool.close_all()
         with app.app_context():
-            # Checkpoint WAL first so backup captures all changes
-            Database.checkpoint()
+            # After a logout or an idle lock there is nothing to do: the
+            # archive holds no keys, and logout already ran this check.
+            if Encryption.is_unlocked():
+                try:
+                    from utils import backup
 
-            # Run backup check before shutdown
-            try:
-                import subprocess
-
-                from utils import backup
-
-                frequency = get_setting("backup_frequency", "daily")
-                if backup.check_backup_needed(frequency):
-                    location = get_setting("backup_location", "")
-                    result = backup.create_backup(location if location else None)
+                    result = backup.run_due_backup()
                     if result:
                         log.info(f"Backup completed: {result['filename']}")
-                        # Run post-backup command if configured
-                        post_cmd = get_setting("post_backup_command", "")
-                        if post_cmd:
-                            log.info("Running post-backup command")
-                            try:
-                                proc_result = subprocess.run(
-                                    post_cmd,
-                                    shell=True,
-                                    timeout=300,
-                                    capture_output=True,
-                                    text=True,
-                                )
-                                if proc_result.stdout:
-                                    for line in proc_result.stdout.strip().split("\n"):
-                                        if line:
-                                            log.info(f"  {line}")
-                                if proc_result.returncode == 0:
-                                    log.info("Post-backup command completed")
-                                else:
-                                    error_msg = (
-                                        proc_result.stderr.strip()
-                                        if proc_result.stderr
-                                        else f"Exit code {proc_result.returncode}"
-                                    )
-                                    log.warning(f"Post-backup command failed: {error_msg}")
-                            except subprocess.TimeoutExpired:
-                                log.warning("Post-backup command timed out")
-                            except Exception as e:
-                                log.warning(f"Post-backup command error: {e}")
-                    backup.record_backup_check()
-            except Exception as e:
-                log.warning(f"Backup warning: {e}")
+                except Exception as e:
+                    log.warning(f"Backup warning: {e}")
 
             # Close database connection cleanly
             Database.close()

@@ -159,6 +159,16 @@ def create_app(test_config: dict = None) -> Flask:
             idle.touch()
             return
 
+        # A long job is running (commit, export, rotation, reindex). The
+        # idle lock waits for it, so the session must not expire under it
+        # either: every request, the status poll included, keeps it
+        # current, and the countdown never starts. idle.busy() restarts
+        # the clock when the job ends.
+        if idle.is_busy():
+            session["last_activity"] = time.time()
+            idle.touch()
+            return
+
         # Housekeeping requests the page makes on its own must not count
         # as activity. The status poll fires every 30 seconds while a tab
         # is open; if it refreshed last_activity the timeout could never

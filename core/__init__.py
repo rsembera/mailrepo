@@ -11,6 +11,9 @@ from .imap import IMAP, IMAPError
 from .imap_pool import ImapPool
 from .importer import ImportError, import_eml_file, import_mbox_file, scan_mbox_file
 
+# Locking the archive drops the database key along with the file keys.
+Encryption.on_lock(Database.forget_key)
+
 __all__ = [
     "Config",
     "FlaskConfig",

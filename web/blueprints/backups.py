@@ -11,7 +11,7 @@ from pathlib import Path
 
 from flask import Blueprint, jsonify, request
 
-from core.database import Database, get_setting, set_setting
+from core.database import get_setting, set_setting
 from utils.log import get_logger
 
 log = get_logger()
@@ -133,8 +133,8 @@ def backup_now():
     """Trigger immediate backup. System auto-decides full vs incremental."""
     from utils import backup
 
-    # Checkpoint WAL to ensure all changes are in main database file
-    Database.checkpoint()
+    # (No checkpoint here: the backup settles and snapshots the database
+    # itself.)
 
     # Note: No need to call refresh_hash_baseline() here.
     # The backup system handles baseline updates internally.
@@ -152,23 +152,9 @@ def backup_now():
                 {"success": True, "message": "No changes since last backup", "backup": None}
             )
 
-        # Run retention cleanup
-        retention = get_setting("backup_retention", "forever")
-        if retention != "forever":
-            backup.cleanup_old_backups(retention, location)
-
-        # Run post-backup command if configured
-        post_cmd = get_setting("post_backup_command", "")
-        if post_cmd:
-            from utils import run_shell_command
-
-            success, msg, cmd_stdout = run_shell_command(post_cmd, timeout=300)
-            for line in (cmd_stdout or "").strip().split("\n"):
-                if line:
-                    log.info(f"  {line}")
-            if not success:
-                # Log but don't fail the backup
-                log.warning(f"Post-backup command error: {msg}")
+        # Retention cleanup and the post-backup command (a failed
+        # command is logged; it does not fail the backup).
+        backup.finish_backup(result, location)
 
         return jsonify({"success": True, "message": "Backup created", "backup": result})
     except Exception as e:

@@ -766,6 +766,11 @@ function _updateStatus(message, percent, indeterminate) {
 function _renderCompleteView(jobId, data) {
     const filename = data.filename || 'export';
     const sizeStr = _formatSize(data.size);
+    const summary = data.summary || {};
+    const skipped = Number(summary.skipped_count) || 0;
+    const countStr = summary.email_count != null
+        ? `${summary.email_count} email${summary.email_count === 1 ? '' : 's'}`
+        : '';
     const savedPath = data.saved_path || null;
     const platform = navigator.platform || '';
     const isMac = /Mac/i.test(platform);
@@ -780,6 +785,14 @@ function _renderCompleteView(jobId, data) {
                 <div class="export-complete-icon"><i data-lucide="check-circle"></i></div>
                 <div class="export-complete-filename">${escapeHtml(filename)}</div>
                 ${sizeStr ? `<div class="export-complete-size">${sizeStr}</div>` : ''}
+                ${countStr ? `<div class="export-complete-size">${escapeHtml(countStr)}</div>` : ''}
+                ${skipped > 0 ? `
+                    <div class="export-complete-warning">
+                        <i data-lucide="alert-triangle"></i>
+                        <span>${skipped} email${skipped === 1 ? '' : 's'} could not be read and
+                        ${skipped === 1 ? 'is' : 'are'} not in this export.</span>
+                    </div>
+                ` : ''}
                 ${savedPath ? `
                     <div class="export-complete-path" title="${escapeHtml(savedPath)}">
                         <i data-lucide="folder"></i>

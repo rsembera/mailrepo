@@ -796,6 +796,15 @@ def login():
             session.permanent = True
             idle.touch()
 
+            # Older archives: re-read search text once, in the background,
+            # so fixes to what gets indexed reach mail archived earlier.
+            try:
+                from web.blueprints.api.emails import start_reindex_if_needed
+
+                start_reindex_if_needed()
+            except Exception as e:  # noqa: BLE001 - never block a login on this
+                log.warning(f"Could not start search reindex: {e}")
+
             # Offer the recovery-key upgrade on the way in. A one-time
             # nudge per login rather than a permanent nag: the archive
             # works fine without it, and pestering someone on every page
@@ -1002,7 +1011,8 @@ def upgrade_to_recovery_keys():
                 location = get_setting("backup_location", "")
                 create_full_backup(location if location else None)
 
-            recovery_key = migrate_to_v3(password)
+            with idle.busy("rekey"):
+                recovery_key = migrate_to_v3(password)
         except InvalidPasswordError:
             return render_template(
                 "auth/upgrade.html",
@@ -1205,7 +1215,7 @@ def api_rotate_master_key_progress(job_id):
             finally:
                 q.put(SENTINEL)
 
-        t = threading.Thread(target=worker, daemon=True)
+        t = threading.Thread(target=idle.run_busy, args=("rekey", worker), daemon=True)
         t.start()
         while True:
             ev = q.get()
@@ -1300,54 +1310,7 @@ def _run_auto_backup_check():
     try:
         from utils import backup
 
-        # Checkpoint WAL first so backup captures all changes
-        Database.checkpoint()
-
-        frequency = get_setting("backup_frequency", "daily")
-        log.debug(f"Backup frequency setting: {frequency}")
-
-        if backup.check_backup_needed(frequency):
-            log.info("Checking backup status...")
-            location = get_setting("backup_location", "")
-            if not location:
-                location = None  # Use default
-            result = backup.create_backup(location)
-            if result:
-                log.info(f"Backup created: {result['filename']}")
-
-                # Retention cleanup. This lives here as well as in the
-                # manual Backup Now endpoint because almost every backup
-                # is automatic — pruning only on the days the user
-                # happens to click the button means a retention setting
-                # that quietly does nothing.
-                retention = get_setting("backup_retention", "forever")
-                if retention != "forever":
-                    backup.cleanup_old_backups(retention, location)
-
-                # Run post-backup command if configured. run_shell_command
-                # owns the process group and kills it wholesale on timeout,
-                # so the outcome we log is the outcome that happened (no
-                # orphaned rsync finishing after a reported "timeout").
-                post_cmd = get_setting("post_backup_command", "")
-                if post_cmd:
-                    log.info("Running post-backup command")
-                    from utils import run_shell_command
-
-                    success, msg, cmd_stdout = run_shell_command(post_cmd, timeout=300)
-                    for line in (cmd_stdout or "").strip().split("\n"):
-                        if line:
-                            log.info(f"  {line}")
-                    if success:
-                        log.info("Post-backup command completed")
-                    else:
-                        log.warning(f"Post-backup command: {msg}")
-            else:
-                log.info("No changes since last backup")
-
-            # Record that we checked today (whether backup created or not)
-            backup.record_backup_check()
-        else:
-            log.debug("Backup not needed (frequency check)")
+        backup.run_due_backup()
     except Exception as e:
         log.error(f"Auto-backup failed: {e}")
 
@@ -1567,7 +1530,7 @@ def change_password_progress(job_id):
             finally:
                 q.put(SENTINEL)
 
-        t = threading.Thread(target=worker, daemon=True)
+        t = threading.Thread(target=idle.run_busy, args=("rekey", worker), daemon=True)
         t.start()
         while True:
             ev = q.get()

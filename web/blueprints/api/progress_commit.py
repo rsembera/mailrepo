@@ -33,6 +33,7 @@ from core.pending_commit import (
     mark_item_committed,
     mark_item_done,
 )
+from web import idle
 
 from . import api_bp
 from .commit import (
@@ -432,7 +433,7 @@ def stream_commit():
         )
 
     return Response(
-        stream_with_context(generate()),
+        stream_with_context(idle.stream_while_busy("commit", generate())),
         mimetype="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

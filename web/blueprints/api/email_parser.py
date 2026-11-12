@@ -13,110 +13,185 @@ import html as html_lib
 import mailbox
 import os
 import re
+import threading
 from email.header import decode_header
+from email.parser import BytesHeaderParser
 from email.utils import parsedate_to_datetime
+
+# ---------------------------------------------------------------------------
+# Reading mbox files
+#
+# Messages are read with mailbox.get_bytes(), which returns the bytes as
+# they are in the file. The earlier code used message.as_bytes(), which
+# parses and regenerates each message: a CRLF message came back with LF
+# endings, so the archived copy was not the original, signatures over it
+# no longer verified, and the same message arriving by IMAP did not
+# compare equal (code review 2026-11, #20).
+#
+# One open mailbox per file is kept, with its table of contents, so that
+# fetching message N is a seek rather than a re-parse of everything
+# before it. Committing individually staged messages from a large mbox
+# used to be quadratic.
+# ---------------------------------------------------------------------------
+
+_mbox_lock = threading.Lock()
+_mbox_cache: dict[str, tuple] = {}  # path -> ((mtime_ns, size), mailbox, keys)
+_MBOX_CACHE_SIZE = 4
+
+
+def _open_mbox(path: str):
+    """``(mailbox, keys)`` for an mbox file. Call with _mbox_lock held."""
+    path = str(path)
+    st = os.stat(path)
+    signature = (st.st_mtime_ns, st.st_size)
+    hit = _mbox_cache.get(path)
+    if hit and hit[0] == signature:
+        return hit[1], hit[2]
+    if hit:
+        _close_quietly(_mbox_cache.pop(path)[1])
+    while len(_mbox_cache) >= _MBOX_CACHE_SIZE:
+        oldest = next(iter(_mbox_cache))
+        _close_quietly(_mbox_cache.pop(oldest)[1])
+    box = mailbox.mbox(path, create=False)
+    keys = box.keys()
+    _mbox_cache[path] = (signature, box, keys)
+    return box, keys
+
+
+def _close_quietly(box) -> None:
+    try:
+        box.close()
+    except Exception:
+        pass
+
+
+def mbox_message_count(path: str) -> int:
+    with _mbox_lock:
+        return len(_open_mbox(path)[1])
+
+
+def mbox_message_bytes(path: str, index: int) -> bytes | None:
+    """The original bytes of message ``index`` in an mbox file, or None."""
+    with _mbox_lock:
+        box, keys = _open_mbox(path)
+        if index < 0 or index >= len(keys):
+            return None
+        return box.get_bytes(keys[index])
+
+
+def iter_mbox_bytes(path: str):
+    """Yield ``(index, raw_bytes)`` for every message, one at a time."""
+    for index in range(mbox_message_count(path)):
+        raw = mbox_message_bytes(path, index)
+        if raw is not None:
+            yield index, raw
+
+
+def _mbox_folder_of(raw: bytes) -> str:
+    headers = BytesHeaderParser().parsebytes(raw, headersonly=True)
+    return headers.get("X-Folder") or headers.get("X-Gmail-Labels") or ""
+
+
+def iter_emails_from_import_folder(source_path: str, folder_path: str, import_type: str):
+    """Yield ``(uid, raw_email_bytes)`` for the emails DIRECTLY in a folder.
+
+    Only direct children: staging a parent folder without its children
+    archives the parent's own emails and nothing nested. One message is
+    in memory at a time, so a multi-gigabyte mbox does not have to fit
+    in RAM. A source that cannot be opened raises; it used to come back
+    as an empty list, which looked like "this folder has no mail".
+    """
+    if import_type == "eml":
+        yield from _iter_eml_directory(source_path)
+    elif import_type == "apple-mbox":
+        yield from _iter_apple_mbox(folder_path)
+    elif import_type == "mbox" and os.path.isfile(source_path):
+        for index, raw in iter_mbox_bytes(source_path):
+            if not folder_path or _mbox_folder_of(raw) == folder_path:
+                yield f"mbox-{index}", raw
+
+
+def count_emails_in_import_folder(source_path: str, folder_path: str, import_type: str) -> int:
+    """How many emails iter_emails_from_import_folder will yield."""
+    if import_type == "eml":
+        if not os.path.isdir(source_path):
+            return 0
+        return sum(1 for name in os.listdir(source_path) if name.lower().endswith(".eml"))
+    if import_type == "apple-mbox":
+        mbox_internal = os.path.join(folder_path, "mbox")
+        if os.path.exists(mbox_internal):
+            return mbox_message_count(mbox_internal)
+        messages_dir = os.path.join(folder_path, "Messages")
+        if os.path.isdir(messages_dir):
+            return sum(1 for name in os.listdir(messages_dir) if name.endswith(".emlx"))
+        return 0
+    if import_type == "mbox" and os.path.isfile(source_path):
+        if not folder_path:
+            return mbox_message_count(source_path)
+        return sum(
+            1 for _i, raw in iter_mbox_bytes(source_path) if _mbox_folder_of(raw) == folder_path
+        )
+    return 0
 
 
 def get_emails_from_import_folder(source_path: str, folder_path: str, import_type: str) -> list:
-    """
-    Get emails belonging DIRECTLY to a specific folder in an import.
+    """List form of iter_emails_from_import_folder (loads everything)."""
+    return list(iter_emails_from_import_folder(source_path, folder_path, import_type))
 
-    IMPORTANT: Only returns emails that are direct children of the folder,
-    NOT emails from nested subfolders. This ensures that staging a parent
-    folder without its children only archives the parent's direct emails.
 
-    Args:
-        source_path: Path to the mbox file or Apple Mail export root
-        folder_path: Full path to the specific folder (e.g., "/path/to/Parent.mbox/Child.mbox")
-        import_type: 'mbox', 'apple-mbox', or 'eml'
-
-    Returns:
-        List of (uid, raw_email_bytes) tuples
-    """
-    results = []
-
-    if import_type == "eml":
-        results = _parse_eml_directory(source_path)
-    elif import_type == "apple-mbox":
-        results = _parse_apple_mbox(folder_path)
-    elif import_type == "mbox" and os.path.isfile(source_path):
-        results = _parse_standard_mbox(source_path, folder_path)
-
-    return results
+def _iter_eml_directory(source_path: str):
+    if not os.path.isdir(source_path):
+        return
+    for i, filename in enumerate(sorted(os.listdir(source_path))):
+        if filename.lower().endswith(".eml"):
+            filepath = os.path.join(source_path, filename)
+            try:
+                with open(filepath, "rb") as f:
+                    raw_email = f.read()
+            except OSError:
+                continue  # Skip unreadable files
+            yield f"eml-{i}", raw_email
 
 
 def _parse_eml_directory(source_path: str) -> list:
     """Parse a directory of .eml files."""
-    results = []
-    if os.path.isdir(source_path):
-        for i, filename in enumerate(sorted(os.listdir(source_path))):
-            if filename.lower().endswith(".eml"):
-                filepath = os.path.join(source_path, filename)
-                try:
-                    with open(filepath, "rb") as f:
-                        raw_email = f.read()
-                    results.append((f"eml-{i}", raw_email))
-                except Exception:
-                    pass  # Skip unreadable files
-    return results
+    return list(_iter_eml_directory(source_path))
 
 
-def _parse_apple_mbox(folder_path: str) -> list:
+def _iter_apple_mbox(folder_path: str):
     """
-    Parse Apple Mail export (.mbox directory).
+    Apple Mail export (.mbox directory).
 
     Apple Mail .mbox directories can contain either:
     - An 'mbox' file (standard mbox format)
     - A 'Messages' subdirectory with .emlx files
     """
-    results = []
-
-    # Try standard mbox file inside the .mbox directory
     mbox_internal = os.path.join(folder_path, "mbox")
     if os.path.exists(mbox_internal):
-        try:
-            mbox = mailbox.mbox(mbox_internal)
-            for i, message in enumerate(mbox):
-                results.append((f"apple-{i}", message.as_bytes()))
-        except Exception:
-            pass  # Skip unreadable mbox
-        return results
+        for index, raw in iter_mbox_bytes(mbox_internal):
+            yield f"apple-{index}", raw
+        return
 
-    # Check for emlx files in Messages subdirectory
     messages_dir = os.path.join(folder_path, "Messages")
     if os.path.isdir(messages_dir):
-        for i, filename in enumerate(sorted(os.listdir(messages_dir))):
+        for filename in sorted(os.listdir(messages_dir)):
             if filename.endswith(".emlx"):
-                filepath = os.path.join(messages_dir, filename)
-                email_content = _parse_emlx_file(filepath)
+                email_content = _parse_emlx_file(os.path.join(messages_dir, filename))
                 if email_content:
-                    results.append((f"emlx-{filename}", email_content))
+                    yield f"emlx-{filename}", email_content
 
-    return results
+
+def _parse_apple_mbox(folder_path: str) -> list:
+    return list(_iter_apple_mbox(folder_path))
 
 
 def _parse_standard_mbox(source_path: str, folder_path: str) -> list:
-    """
-    Parse a standard mbox file, filtering by folder header for exact match.
-
-    Args:
-        source_path: Path to the mbox file
-        folder_path: Folder path to filter by (emails in child folders excluded)
-    """
-    results = []
-    try:
-        mbox = mailbox.mbox(source_path)
-        for i, message in enumerate(mbox):
-            # Check if email belongs to this folder
-            email_folder = message.get("X-Folder") or message.get("X-Gmail-Labels") or ""
-
-            # If folder_path is empty/root, include emails without folder or match exactly
-            if not folder_path or email_folder == folder_path:
-                results.append((f"mbox-{i}", message.as_bytes()))
-    except Exception:
-        pass  # Skip unreadable mbox
-
-    return results
+    """Messages of a standard mbox whose folder header matches exactly."""
+    return [
+        (f"mbox-{index}", raw)
+        for index, raw in iter_mbox_bytes(source_path)
+        if not folder_path or _mbox_folder_of(raw) == folder_path
+    ]
 
 
 def _parse_emlx_file(filepath: str) -> bytes | None:
@@ -127,23 +202,32 @@ def _parse_emlx_file(filepath: str) -> bytes | None:
     - First line: byte count of email content
     - Email content (RFC 822 format)
     - Apple plist metadata at the end
+
+    The byte count is what delimits the message. Searching for the
+    plist's "<?xml" instead cut a message short if it carried XML of its
+    own and the file had no plist; that search is now only the fallback
+    for a first line that is not a number.
     """
     try:
         with open(filepath, "rb") as f:
             content = f.read()
+    except OSError:
+        return None
 
-        # Skip the byte count line
-        first_newline = content.find(b"\n")
-        if first_newline > 0:
-            email_content = content[first_newline + 1 :]
-            # Find where the email ends (before Apple's plist metadata)
-            plist_marker = email_content.rfind(b"<?xml version=")
-            if plist_marker > 0:
-                email_content = email_content[:plist_marker]
-            return email_content
-    except Exception:
-        pass
-    return None
+    first_newline = content.find(b"\n")
+    if first_newline <= 0:
+        return None
+    rest = content[first_newline + 1 :]
+    try:
+        length = int(content[:first_newline].strip())
+    except ValueError:
+        length = -1
+    if 0 < length <= len(rest):
+        return rest[:length]
+    plist_marker = rest.rfind(b"<?xml version=")
+    if plist_marker > 0:
+        return rest[:plist_marker]
+    return rest
 
 
 def get_raw_email_from_import(source_path: str, uid: str) -> bytes | None:
@@ -182,19 +266,15 @@ def get_raw_email_from_import(source_path: str, uid: str) -> bytes | None:
 
 
 def _get_email_from_mbox_by_index(source_path: str, uid: str) -> bytes | None:
-    """Extract a specific email from mbox by index in UID."""
+    """Extract a specific email from mbox by the index in its UID ("mbox-5" -> 5)."""
     try:
-        # Extract index from uid (e.g., "mbox-5" -> 5)
-        parts = uid.split("-")
-        if len(parts) >= 2:
-            index = int(parts[-1])
-            mbox = mailbox.mbox(source_path)
-            for i, message in enumerate(mbox):
-                if i == index:
-                    return message.as_bytes()
+        index = int(uid.rsplit("-", 1)[1])
+    except (IndexError, ValueError):
+        return None
+    try:
+        return mbox_message_bytes(source_path, index)
     except Exception:
-        pass
-    return None
+        return None
 
 
 # How much of a message's text is indexed for search. Was 10,000, which

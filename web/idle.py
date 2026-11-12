@@ -15,6 +15,7 @@ own housekeeping deliberately do not call it.
 
 import threading
 import time
+from contextlib import contextmanager
 
 from core import Encryption
 from core.database import Database, get_setting
@@ -55,6 +56,54 @@ def release_logout() -> None:
 def logout_in_progress() -> bool:
     with _lock:
         return _logout_in_progress
+
+
+# Long-running work the user started and may well have walked away from:
+# a commit, an export, a key rotation, a search reindex. While any is
+# running the idle lock holds off. Locking in the middle closed the
+# database and the mail-server connection under the job, failed whatever
+# was left, and returned the user to a login screen with half the work
+# done and no summary (code review 2026-11, #10). When the last job ends
+# the idle clock restarts, so the archive locks one full timeout after
+# the work finished rather than the instant it did.
+_busy: dict[str, int] = {}
+
+
+@contextmanager
+def busy(name: str):
+    """Mark a long job as running for the duration of the block."""
+    with _lock:
+        _busy[name] = _busy.get(name, 0) + 1
+    try:
+        yield
+    finally:
+        with _lock:
+            _busy[name] -= 1
+            if _busy[name] <= 0:
+                del _busy[name]
+        touch()
+
+
+def stream_while_busy(name: str, generator):
+    """Wrap a streaming response's generator in ``busy(name)``."""
+    with busy(name):
+        yield from generator
+
+
+def run_busy(name: str, fn) -> None:
+    """Thread target: run ``fn`` inside ``busy(name)``."""
+    with busy(name):
+        fn()
+
+
+def is_busy() -> bool:
+    with _lock:
+        return bool(_busy)
+
+
+def busy_with() -> list[str]:
+    with _lock:
+        return sorted(_busy)
 
 
 def new_login_id() -> str:
@@ -123,6 +172,10 @@ def check_and_lock(now: float | None = None) -> bool:
         return False
 
     if seconds_idle(now) <= timeout:
+        return False
+
+    # Never lock under a job the user started; see ``busy`` above.
+    if is_busy():
         return False
 
     # Never lock under a running backup or logout. The timeout countdown

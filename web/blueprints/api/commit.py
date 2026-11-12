@@ -10,9 +10,10 @@ import os
 from core import Config, Database, Encryption, ImapPool
 
 from .email_parser import (
+    count_emails_in_import_folder,
     extract_body_text,
-    get_emails_from_import_folder,
     get_raw_email_from_import,
+    iter_emails_from_import_folder,
     parse_email_metadata,
 )
 
@@ -410,8 +411,10 @@ def commit_import_folder(
     archive_path = folder_item.get("archivePath", "")
     folder_name = archive_path.split("/")[-1] if archive_path else "folder"
 
-    emails = get_emails_from_import_folder(import_path, folder_path, import_type)
-    folder_email_count = len(emails)
+    # Counted first for the progress bar, then read one message at a time:
+    # a large mbox no longer has to fit in memory.
+    folder_email_count = count_emails_in_import_folder(import_path, folder_path, import_type)
+    emails = iter_emails_from_import_folder(import_path, folder_path, import_type)
 
     # Yield folder start status
     yield {

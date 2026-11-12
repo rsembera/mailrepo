@@ -2580,3 +2580,74 @@ def record_backup_check():
     manifest = load_manifest()
     manifest["last_backup_check"] = datetime.now().isoformat()
     save_manifest(manifest)
+
+
+# ---------------------------------------------------------------------------
+# The backup cycle
+#
+# "Is one due, take it, prune, run the user's command, note that we
+# checked" existed three times (logout, app exit, Backup Now) and the
+# three had drifted: the exit path never pruned, and still ran the
+# command through a plain subprocess.run that orphans its children on
+# timeout, which run_shell_command was written to stop
+# (code review 2026-11, #17).
+# ---------------------------------------------------------------------------
+
+
+def finish_backup(result, location) -> tuple[bool | None, str]:
+    """What follows every newly created backup: retention, then the command.
+
+    Returns ``(command_ok, message)``; ``command_ok`` is None when no
+    post-backup command is configured. Never raises for a failed
+    command: the backup itself succeeded.
+    """
+    from core.database import get_setting
+    from utils import run_shell_command
+
+    retention = get_setting("backup_retention", "forever")
+    if retention != "forever":
+        cleanup_old_backups(retention, location)
+
+    post_cmd = get_setting("post_backup_command", "")
+    if not post_cmd:
+        return None, ""
+
+    log.info("Running post-backup command")
+    success, msg, cmd_stdout = run_shell_command(post_cmd, timeout=300)
+    for line in (cmd_stdout or "").strip().split("\n"):
+        if line:
+            log.info(f"  {line}")
+    if success:
+        log.info("Post-backup command completed")
+    else:
+        log.warning(f"Post-backup command: {msg}")
+    return success, msg
+
+
+def run_due_backup():
+    """Take the automatic backup if the frequency setting says one is due.
+
+    Used at logout and at app exit. Returns the backup info, or None if
+    none was due or nothing had changed. Requires an unlocked archive
+    (the settings are in the encrypted database).
+    """
+    from core.database import get_setting
+
+    frequency = get_setting("backup_frequency", "daily")
+    log.debug(f"Backup frequency setting: {frequency}")
+    if not check_backup_needed(frequency):
+        log.debug("Backup not needed (frequency check)")
+        return None
+
+    log.info("Checking backup status...")
+    location = get_setting("backup_location", "") or None
+    result = create_backup(location)
+    if result:
+        log.info(f"Backup created: {result['filename']}")
+        finish_backup(result, location)
+    else:
+        log.info("No changes since last backup")
+
+    # Record that we checked today (whether a backup was created or not)
+    record_backup_check()
+    return result

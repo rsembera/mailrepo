@@ -304,7 +304,36 @@ def _write_other_attachments(zf, other_attachments: list[dict]) -> None:
         zf.writestr(f"attachments/email-{eidx}/{name}", att["data"])
 
 
-def _build_encrypted_eml_zip(message_ids: list[int], password: str) -> tuple[bytes, str]:
+def _note_requested(report: dict | None, message_ids: list[int], rows) -> None:
+    """Start an export's accounting: what was asked for, what was found.
+
+    An export goes to a client, a regulator or a court. If a message
+    could not be read it must not simply be absent: the count the user
+    sees is the number actually written, and anything left out is named
+    (code review 2026-11, #18).
+    """
+    if report is None:
+        return
+    found = {row["id"] for row in rows}
+    report["requested"] = len(message_ids)
+    report["skipped_ids"] = [m for m in message_ids if m not in found]
+    report["found"] = len(found)
+
+
+def _note_skipped(report: dict | None, message_id: int) -> None:
+    if report is not None:
+        report.setdefault("skipped_ids", []).append(message_id)
+
+
+def _export_counts(report: dict, message_ids: list[int]) -> dict:
+    """``email_count`` (written) and ``skipped_count`` for a job summary."""
+    skipped = len(report.get("skipped_ids", []))
+    return {"email_count": len(message_ids) - skipped, "skipped_count": skipped}
+
+
+def _build_encrypted_eml_zip(
+    message_ids: list[int], password: str, report: dict | None = None
+) -> tuple[bytes, str]:
     """Build an AES-256 encrypted ZIP of decrypted .eml files.
 
     Same shape as ``_build_eml_zip`` but writes via pyzipper with a password,
@@ -326,6 +355,7 @@ def _build_encrypted_eml_zip(message_ids: list[int], password: str) -> tuple[byt
         """,
         tuple(message_ids),
     )
+    _note_requested(report, message_ids, rows)
 
     folder_paths: dict[int, str] = {}
 
@@ -347,11 +377,13 @@ def _build_encrypted_eml_zip(message_ids: list[int], password: str) -> tuple[byt
             used = per_folder_used.setdefault(fid, set())
             filepath = Config.get_base_path() / row["filepath"]
             if not filepath.exists():
+                _note_skipped(report, row["id"])
                 continue
             try:
                 decrypted = Encryption.decrypt(filepath.read_bytes())
             except Exception as e:
                 logger.warning("Failed to decrypt message %s for export: %s", row["id"], e)
+                _note_skipped(report, row["id"])
                 continue
             subject = row["subject"] or "no_subject"
             safe_subject = re.sub(r"[^A-Za-z0-9 _\-]", "_", subject)[:50].strip() or "email"
@@ -373,7 +405,7 @@ def _build_encrypted_eml_zip(message_ids: list[int], password: str) -> tuple[byt
 # ---------------------------------------------------------------------------
 
 
-def _build_eml_zip(message_ids: list[int]) -> tuple[bytes, str]:
+def _build_eml_zip(message_ids: list[int], report: dict | None = None) -> tuple[bytes, str]:
     """Build an unencrypted ZIP of decrypted .eml files.
 
     Returns ``(bytes, filename_hint)``.
@@ -396,6 +428,7 @@ def _build_eml_zip(message_ids: list[int]) -> tuple[bytes, str]:
         """,
         tuple(message_ids),
     )
+    _note_requested(report, message_ids, rows)
 
     # Build folder paths once
     folder_paths: dict[int, str] = {}
@@ -415,11 +448,13 @@ def _build_eml_zip(message_ids: list[int]) -> tuple[bytes, str]:
             used = per_folder_used.setdefault(fid, set())
             filepath = Config.get_base_path() / row["filepath"]
             if not filepath.exists():
+                _note_skipped(report, row["id"])
                 continue
             try:
                 decrypted = Encryption.decrypt(filepath.read_bytes())
             except Exception as e:
                 logger.warning("Failed to decrypt message %s for export: %s", row["id"], e)
+                _note_skipped(report, row["id"])
                 continue
             subject = row["subject"] or "no_subject"
             safe_subject = re.sub(r"[^A-Za-z0-9 _\-]", "_", subject)[:50].strip() or "email"
@@ -502,7 +537,9 @@ def _mbox_encode_message(raw: bytes) -> bytes:
     return body + b"\n"
 
 
-def _build_mbox(message_ids: list[int], scope_label: str = "") -> tuple[bytes, str]:
+def _build_mbox(
+    message_ids: list[int], scope_label: str = "", report: dict | None = None
+) -> tuple[bytes, str]:
     """Build a single mbox file (mboxrd flavour) of decrypted messages.
 
     Returns ``(bytes, filename_hint)``. Messages are in date order. The
@@ -526,16 +563,19 @@ def _build_mbox(message_ids: list[int], scope_label: str = "") -> tuple[bytes, s
         """,
         tuple(message_ids),
     )
+    _note_requested(report, message_ids, rows)
 
     buf = io.BytesIO()
     for row in rows:
         filepath = Config.get_base_path() / row["filepath"]
         if not filepath.exists():
+            _note_skipped(report, row["id"])
             continue
         try:
             decrypted = Encryption.decrypt(filepath.read_bytes())
         except Exception as e:
             logger.warning("Failed to decrypt message %s for export: %s", row["id"], e)
+            _note_skipped(report, row["id"])
             continue
         buf.write(_mbox_separator(decrypted, row["date"]))
         buf.write(_mbox_encode_message(decrypted))
@@ -555,6 +595,13 @@ def _run_export_job(job_id: str, payload: dict) -> None:
     """Worker thread entry point. Resolves selection, builds the export, and
     writes results into the job record.
     """
+    from web import idle
+
+    with idle.busy("export"):
+        _run_export_job_inner(job_id, payload)
+
+
+def _run_export_job_inner(job_id: str, payload: dict) -> None:
     try:
         selection = payload.get("selection") or {}
         message_ids, scope_label = _resolve_message_ids(selection)
@@ -706,14 +753,15 @@ def _build_eml_only(job_id: str, message_ids: list[int], scope_label: str, paylo
             "progress",
             {"phase": "loading", "current": 0, "total": len(message_ids), "percent": 5},
         )
-        zip_bytes, filename = _build_encrypted_eml_zip(message_ids, eml_password)
+        report: dict = {}
+        zip_bytes, filename = _build_encrypted_eml_zip(message_ids, eml_password, report)
         _push_event(job_id, "progress", {"phase": "done", "percent": 100})
         _finish_job(
             job_id,
             result_bytes=zip_bytes,
             result_mimetype="application/zip",
             result_filename=filename,
-            summary={"format": "eml", "email_count": len(message_ids), "encrypted": True},
+            summary={"format": "eml", "encrypted": True, **_export_counts(report, message_ids)},
             output_dir=payload.get("output_dir"),
         )
         return
@@ -726,14 +774,15 @@ def _build_eml_only(job_id: str, message_ids: list[int], scope_label: str, paylo
         "progress",
         {"phase": "loading", "current": 0, "total": len(message_ids), "percent": 5},
     )
-    zip_bytes, filename = _build_eml_zip(message_ids)
+    report = {}
+    zip_bytes, filename = _build_eml_zip(message_ids, report)
     _push_event(job_id, "progress", {"phase": "done", "percent": 100})
     _finish_job(
         job_id,
         result_bytes=zip_bytes,
         result_mimetype="application/zip",
         result_filename=filename,
-        summary={"format": "eml", "email_count": len(message_ids)},
+        summary={"format": "eml", **_export_counts(report, message_ids)},
         output_dir=payload.get("output_dir"),
     )
 
@@ -751,7 +800,8 @@ def _build_mbox_only(job_id: str, message_ids: list[int], scope_label: str, payl
         "progress",
         {"phase": "loading", "current": 0, "total": len(message_ids), "percent": 5},
     )
-    mbox_bytes, mbox_filename = _build_mbox(message_ids, scope_label)
+    report: dict = {}
+    mbox_bytes, mbox_filename = _build_mbox(message_ids, scope_label, report)
     _push_event(job_id, "progress", {"phase": "done", "percent": 100})
 
     if password:
@@ -761,7 +811,7 @@ def _build_mbox_only(job_id: str, message_ids: list[int], scope_label: str, payl
             result_bytes=zip_bytes,
             result_mimetype="application/zip",
             result_filename=mbox_filename[: -len(".mbox")] + ".zip",
-            summary={"format": "mbox", "email_count": len(message_ids), "encrypted": True},
+            summary={"format": "mbox", "encrypted": True, **_export_counts(report, message_ids)},
             output_dir=payload.get("output_dir"),
         )
         return
@@ -771,7 +821,7 @@ def _build_mbox_only(job_id: str, message_ids: list[int], scope_label: str, payl
         result_bytes=mbox_bytes,
         result_mimetype="application/mbox",
         result_filename=mbox_filename,
-        summary={"format": "mbox", "email_count": len(message_ids)},
+        summary={"format": "mbox", **_export_counts(report, message_ids)},
         output_dir=payload.get("output_dir"),
     )
 
