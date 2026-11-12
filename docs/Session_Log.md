@@ -7650,3 +7650,102 @@ Not seen running: the missing-database and failed-restore notices
 - `dbe5624` -- Login notice wraps to the page; commit-problems dialog spaced into sections
 - (this entry) -- docs: Session 103, visual check
 
+### Session 103, continued: JavaScript read-through
+
+Read: `progress.js`, `staging.js`, `state.js`, `review.js`,
+`thread-stage.js`, `utils.js`, `modals.js`, the staging/selection half
+of `email-list.js`, and in `mail.js` the list loading, viewer body,
+print, copy-as-reply and text/HTML helpers. Every file was scanned for
+values put into markup unescaped. Not read line by line: `sidebar.js`,
+`imports.js`, `settings.js`, `backups.js`, `export-modal.js`,
+`folder-mgmt.js`, `trash.js`, `vault.js`, `starred.js`, `recover.js`,
+the search half of `mail.js`, and the small components.
+
+**Email content could run script in the app page (three ways).**
+
+- J1. A message's `Date` header went into the mailbox list as markup
+  when it did not parse as a date: `formatDate` returns its input, and
+  IMAP and import listings pass the raw header. Any sender could put
+  markup there. Escaped at every place a date enters markup, along
+  with import ids in row attributes, server error text in four
+  places, and a folder name in the export panel.
+- J2. "Copy as reply" parsed the email's HTML with
+  `div.innerHTML = html` on the app page. That runs the email's
+  `onerror` handlers and loads its remote images even though the div
+  is never attached. Now `DOMParser`, which is inert. The September
+  security review's "no innerHTML of raw server strings" missed this
+  one.
+- J3. Print in browser mode wrote the email into `window.open('')`,
+  which shares the page's origin. Now a hidden frame sandboxed without
+  `allow-scripts`, with a CSP that follows the reader's "Load remote
+  content" choice. The desktop shell's print (WeasyPrint) was already
+  safe.
+
+**Staging.**
+
+- J4. Staged emails were keyed by bare id. Message 12 in Sent counted
+  as staged because message 12 in INBOX was; "Stage thread" skipped
+  such members as "already staged". Keys now carry the source
+  (`staged-key.js`).
+- J5. A superseded mailbox load could write its rows into the list on
+  screen (cached rows first, server answer seconds later, no check in
+  between). INBOX's rows could show under Sent and be staged as
+  Sent's, then fetched by UID from the wrong folder, and removed from
+  it if a server action was chosen. `list-load.js` guard on every
+  callback; a new load closes the old stream.
+- J6. One writer for staged items in sessionStorage. The list's
+  unstage wrote the wrong key and an emptied set was never removed, so
+  unstaged emails could come back after a page load.
+- J7. `data-*` attributes were still escaped by the old onclick
+  escaper (`O'Connor` became `O\'Connor`): such folders could not be
+  selected for staging, unstaged from Review, or reached by
+  breadcrumb. `escapeForOnclick` removed.
+- J8. The "on server" choice no longer carries over from one commit to
+  the next.
+
+**Dialogs and feedback.**
+
+- J9. `showConfirm` ignored `confirmText` / `cancelText` /
+  `confirmClass`, which eight callers pass. The interrupted-commit
+  prompt showed OK / Cancel where it meant Resume / Discard, with
+  Cancel discarding; destructive confirmations had a blue OK.
+- J10. A server-reported commit error was replaced by "connection
+  lost"; a refused request showed only its status number.
+- J11. "Copy as reply" feedback looked up a removed `onclick`
+  attribute. An HTML email that is only a picture showed as
+  "(No content)".
+
+Removed as unused: `goToReview`, `clearStagedEmail`,
+`clearStagedFolder`, `restoreStagedFromSession`.
+
+**Tests.** The repository had no JavaScript tests. Added
+`tests/js/*.test.mjs` (Node's own test runner, no dependencies) for
+the logic that needs no page, run from pytest by
+`tests/test_frontend_js.py` when Node 22.7+ is present, and source
+checks there that run everywhere. 41 sealing mutations caught.
+
+**Seen running** (throwaway demo instance on the MacBook, Chrome
+pane): the old `div.innerHTML` way did run a handler there, the new
+parse did not; a script and an `onerror` in a print document did not
+run and the console showed the sandbox and CSP refusing them; a
+crafted date rendered as text; the confirm dialog showed
+Discard / Resume and a red Unstage All; staged state followed the
+folder. No module failed to load.
+
+Not seen running: a real print dialog, a real IMAP folder switch
+mid-load, WebKit (the desktop shell) specifically.
+
+952 passed, 1 skipped in the sandbox; 965 on the MacBook. ESLint 64
+warnings (was 65), 0 errors.
+
+**Recommended, not done:** a Content-Security-Policy on the app's own
+pages. It would have turned J1 to J3 from script execution into
+nothing. It needs the inline scripts and `onclick` attributes in
+`base.html` and the auth templates moved out first.
+
+### Commits (continued)
+
+- `8733e73` -- Front end: staged emails keyed by source; dates escaped; confirm labels honoured
+- `ecef5ea` -- Viewer: email HTML can no longer run in the app page; list loads guarded
+- (this entry) -- docs: Session 103, JavaScript read-through
+

@@ -204,12 +204,14 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 |------|-------|--------------|
 | `password-toggle.js` | 128 | Show/hide password toggle (Session 88): auto-wires password inputs; reserve computed inline from the button's measured band (Daybook PLAN.md 9ab — CSS reserves lose specificity fights silently); re-mask defers submit one painted frame |
 | `desktop.js` | 98 | Desktop-shell bridge (Session 88): no-ops in a browser; in the packaged app routes open-in-new-tab, print, and same-origin _blank links through DesktopApi |
-| `app.js` | 747 | Init, event listeners, rail nav, nav guards, template-bindings wiring |
+| `app.js` | 718 | Init, event listeners, rail nav, nav guards, template-bindings wiring |
 | `template-bindings.js` | 143 | Single delegated handler for index.html data-tpl-action attrs (Session 38) |
 | `delegate.js` | 116 | `bindActions(container, handlers)` helper for per-view delegation |
-| `state.js` | 137 | Central state object, session persistence |
-| `utils.js` | 97 | escapeHtml, formatDate, debounce, extractName |
-| `modals.js` | 156 | Alert/confirm/prompt + canonical closeModal + registerModalCloseHandler |
+| `state.js` | 210 | Central state object; staged-item persistence (`persistStaged` / `restoreStaged`, the only writer); `isStagedInView` / `unstageInView` |
+| `staged-key.js` | 63 | Keys for staged emails: source type + account/import + folder + id, since ids repeat across folders (Session 103). No DOM; tested in Node |
+| `list-load.js` | 27 | `beginListLoad(state)`: guard that tells a mailbox load it has been superseded (Session 103). No DOM; tested in Node |
+| `utils.js` | 86 | escapeHtml, formatDate, debounce, extractName |
+| `modals.js` | 164 | Alert/confirm/prompt + canonical closeModal + registerModalCloseHandler |
 | `toast.js` | 106 | showToast(message, type) — non-blocking status card, bottom centre, auto-dismiss (Session 94); modals stay for anything needing a decision |
 | `recovery-key.js` | 131 | One-time recovery-key screen: copy / print / download, beforeunload guard |
 
@@ -217,9 +219,9 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `mail.js` | 2,502 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
+| `mail.js` | 2,563 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav; guarded list loads; sandboxed print frame |
 | `settings.js` | 1,482 | Settings: appearance, accounts, security, recovery-key status + check + rotation, backup, reset |
-| `review.js` | 1,078 | Review staged items, destination editing, commit |
+| `review.js` | 1,080 | Review staged items, destination editing, commit |
 | `backups.js` | 1,034 | Backup/restore UI, restore points, settings |
 | `folder-selection.js` | 897 | Bulk folder staging from IMAP/imports |
 | `vault.js` | 881 | Retention vault: move to vault, restore, permanent delete; subfolder links carry tree counts |
@@ -234,17 +236,17 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 |------|-------|--------------|
 | `export-modal.js` | 888 | Bulk export UI: scope picker, format (pdf/eml/mbox/both), scope-aware password, progress |
 | `image-lightbox.js` | 315 | Click-to-zoom overlay for inline images and image attachments (Session 94); click targets are laid over the sandboxed body iframe from the parent, because WebKit runs no listeners inside a no-scripts frame |
-| `email-list.js` | 794 | Email list rendering, selection, toolbar, filter input |
+| `email-list.js` | 792 | Email list rendering, selection, toolbar, filter input |
 | `sidebar.js` | 744 | Sidebar: archive folders, IMAP folders, imports, resize |
 | `imports.js` | 728 | Import mount/unmount, browse, folder/email display |
-| `staging.js` | 561 | Staging workflow, destination picker, stage/unstage |
+| `staging.js` | 526 | Staging workflow, destination picker, stage/unstage |
 | `file-picker.js` | 438 | Filesystem browser modal for import file selection |
 | `date-picker.js` | 383 | Date picker (ported from EdgeCase) for vault retention dates |
-| `progress.js` | 369 | SSE progress modal for commit/import operations |
+| `progress.js` | 375 | SSE progress modal for commit/import operations |
 | `context-menu.js` | 288 | Right-click context menu for sidebar/folders |
 | `folder-tree.js` | 265 | Reusable folder tree renderer |
 | `custom-select.js` | 223 | Custom dropdown select component |
-| `thread-stage.js` | 221 | Stage-entire-thread modal from email viewer |
+| `thread-stage.js` | 218 | Stage-entire-thread modal from email viewer |
 | `move-email-modal.js` | 122 | Move archived emails between folders |
 
 ---
@@ -419,6 +421,8 @@ first run of this found a `ReferenceError` that had been shipping.
 | `tests/test_export_counts.py` | Zip and mbox exports report what was written and what was left out (Session 103) |
 | `tests/test_import_bytes.py` | mbox read as the original bytes, lazily, from one open mailbox; `.emlx` delimited by its byte count (Session 103) |
 | `tests/test_second_pass.py` | Restore completion (moved not copied, stale state cleared, re-runnable), launch notices on the login screen, restored-database check, reset, PDF export attachments / ordering / skipped count, mbox folder names (20 tests, Session 103) |
+| `tests/test_frontend_js.py` | Front end: runs `tests/js/*.test.mjs` in Node when Node 22.7+ is installed, plus checks on the JavaScript source that run everywhere: staged keys, single storage writer, escaping of dates / ids / error text / data attributes, inert parsing of email HTML, sandboxed print frame, list-load guards (15 tests, Session 103) |
+| `tests/js/*.test.mjs` | Node test-runner files (`node --test tests/js/*.test.mjs`): staged keys and persistence, list-load guard, commit progress stream, confirm dialog labels (26 tests, Session 103) |
 | `tests/test_commit_durability.py` | Folder commit: archive rows are committed before the server post-action starts (Session 103) |
 | `tests/test_purge.py` | Permanent deletion removes the files: automatic trash cleanup, folder tree, Empty Trash, vault batch delete (7 tests, Session 103) |
 | `tests/test_folder_cache_sync.py` | IMAP folder cache vs server: an emptied folder shows empty; chunked stale removal (Session 103) |

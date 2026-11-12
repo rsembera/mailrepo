@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Email content can no longer run script in the app (Session 103).**
+  Three paths let a crafted message do so: a `Date` header containing
+  markup, shown in the mailbox list; "Copy as reply" on an HTML email;
+  and Print in browser mode. All three are closed. Print now also
+  follows the viewer's rule for remote images: none are fetched unless
+  you pressed "Load remote content".
+
 ### Changed
 
 - Removed the unused legacy importer (`core/importer.py`) and its `/api/import/mbox/scan` route (Session 103).
@@ -70,6 +79,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   most apps. The field always re-masks the moment you submit.
 
 ### Fixed
+
+- **Staging keeps folders apart (Session 103).** A message could show
+  as already staged, and be skipped by "Stage thread", because a
+  different message with the same number in another folder or account
+  was staged. And if you opened one mailbox folder and then another
+  while the first was still checking the server, the first folder's
+  messages could appear under the second folder's name and be staged
+  from the wrong place. Both are fixed.
+- **Unstaged emails stay unstaged (Session 103).** Emails removed from
+  the staged list could reappear after the page reloaded.
+- **Folders with an apostrophe in the name (Session 103)** can be
+  selected for staging, unstaged from Review, and reached from the
+  breadcrumb trail.
+- **Confirmation buttons say what they do (Session 103).** Several
+  dialogs showed OK / Cancel in place of their own labels; the prompt
+  to resume an interrupted commit now reads Resume / Discard, and
+  destructive confirmations are red again.
+- **The "on server" choice in Review (Session 103)** (leave, archive,
+  trash, delete) starts at "Leave in place" for every commit instead
+  of remembering the last one.
+- An HTML email consisting only of a picture is shown instead of
+  "(No content)"; "Copy as reply" confirms the copy again; a commit
+  error reported by the server is no longer replaced by "connection
+  lost" (Session 103).
 
 - **Backups always hold a database that opens (Session 103).** A backup
   taken while mail was being archived could contain a damaged database:
