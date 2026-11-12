@@ -138,6 +138,8 @@ export function initTemplateBindings() {
             console.warn(`[template-bindings] No handler for action: ${action}`);
             return;
         }
+        // A link used as a button goes nowhere.
+        if (el.tagName === 'A' && el.getAttribute('href') === '#') ev.preventDefault();
         handler(el, ev);
     });
 }

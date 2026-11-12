@@ -4,15 +4,85 @@ MailRepo - Flask application factory.
 Creates and configures the Flask application.
 """
 
+import os
 import secrets
 import time
 
-from flask import Flask, jsonify, redirect, request, session, url_for
+from flask import Flask, g, jsonify, redirect, request, session, url_for
 
 from core import Config, Database, Encryption, FlaskConfig
 from core.database import get_setting
 
 from . import idle
+
+
+def csp_nonce() -> str:
+    """This request's script nonce."""
+    nonce = g.get("csp_nonce")
+    if not nonce:
+        nonce = secrets.token_urlsafe(18)
+        g.csp_nonce = nonce
+    return nonce
+
+
+def csp_mode(app) -> str:
+    """How the page policy is applied: "enforce", "report" or "off".
+
+    Enforced when the app is used from a browser, where it has been
+    checked screen by screen. In the desktop shell it is sent in
+    report-only form for now: the policy has not yet been run inside
+    WebKit with pywebview's bridge, and a policy that turned out to
+    block the bridge would break printing and saving attachments there.
+    MAILREPO_CSP=enforce runs the desktop shell with it enforced, to
+    try it; MAILREPO_CSP=off removes it.
+    """
+    chosen = os.environ.get("MAILREPO_CSP", "").strip().lower()
+    if chosen in ("enforce", "report", "off"):
+        return chosen
+    return "report" if app.config.get("LAUNCH_NONCE") else "enforce"
+
+
+def content_security_policy(nonce: str | None, *, desktop_shell: bool = False) -> str:
+    """The Content-Security-Policy for the app's own pages.
+
+    What it is for: mail is untrusted, and the app builds a good deal of
+    markup from it. If a piece of it ever reaches the page unescaped (a
+    Date header did, until the 2026-11 review), this is what stops it
+    running: only script files served by the app, and the inline blocks
+    in the templates that carry this request's nonce, are executed.
+    Inline event handlers and javascript: links are not, and scripts can
+    only talk to the app itself.
+
+    What it deliberately leaves open: images, styles and fonts from
+    anywhere. The email viewer is a frame written by the page, so it
+    inherits this policy, and "Load remote content" has to be able to
+    load them; the viewer's own, stricter policy is what blocks them
+    until the reader asks. Inline styles are everywhere in the UI. There
+    is no base-uri rule for the same reason: an email may carry its own
+    <base href>, and with scripts, requests and forms held to this
+    origin a <base> injected into the page gains nothing.
+    """
+    scripts = "'self'" + (f" 'nonce-{nonce}'" if nonce else "")
+    if desktop_shell:
+        # pywebview builds each function of its Python bridge with
+        # new Function(). That needs this keyword; markup injected into
+        # the page still cannot run, which needs 'unsafe-inline'.
+        scripts += " 'unsafe-eval'"
+    return "; ".join(
+        [
+            "default-src 'self'",
+            f"script-src {scripts}",
+            "style-src * 'unsafe-inline'",
+            "img-src * data: blob:",
+            "font-src * data:",
+            "media-src * data: blob:",
+            "connect-src 'self' data: blob:",
+            "frame-src 'self' blob: data:",
+            "object-src 'none'",
+            "form-action 'self'",
+            "frame-ancestors 'none'",
+        ]
+    )
 
 
 def create_app(test_config: dict = None) -> Flask:
@@ -71,6 +141,12 @@ def create_app(test_config: dict = None) -> Flask:
         return "/api/" in (request.path or "")
 
     # Before request: check authentication and session timeout
+    @app.before_request
+    def new_csp_nonce():
+        # Set here and not on first use, so that it is new for every
+        # request whatever the lifetime of the context holding it.
+        g.csp_nonce = secrets.token_urlsafe(18)
+
     @app.before_request
     def check_auth():
         """Ensure user is authenticated and session hasn't timed out."""
@@ -218,6 +294,18 @@ def create_app(test_config: dict = None) -> Flask:
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "no-referrer")
+        # Pages only. Attachments served inline carry their own, stricter
+        # policy (web/responses.py), which setdefault leaves alone.
+        mode = csp_mode(app)
+        if response.mimetype == "text/html" and mode != "off":
+            desktop = bool(app.config.get("LAUNCH_NONCE"))
+            policy = content_security_policy(g.get("csp_nonce"), desktop_shell=desktop)
+            if mode == "report":
+                # Checked by the browser, reported in its console, not
+                # enforced.
+                response.headers.setdefault("Content-Security-Policy-Report-Only", policy)
+            else:
+                response.headers.setdefault("Content-Security-Policy", policy)
         return response
 
     # Context processor: make common variables available to all templates
@@ -233,6 +321,7 @@ def create_app(test_config: dict = None) -> Flask:
             "app_name": Config.APP_NAME,
             "app_version": Config.VERSION,
             "csrf_token": csrf_token,
+            "csp_nonce": csp_nonce(),
             # Whether this archive can be opened with a recovery key.
             # Injected globally so the login screen does not have to
             # thread it through every render path (there are several,

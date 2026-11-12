@@ -64,7 +64,7 @@
 </div>
 
 {% if lockout_seconds is defined and lockout_seconds %}
-<script>
+<script nonce="{{ csp_nonce }}">
 (function() {
     let remaining = {{ lockout_seconds }};
     const errorBox = document.getElementById('errorBox');

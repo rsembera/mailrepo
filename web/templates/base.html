@@ -19,7 +19,7 @@
     {% block styles %}{% endblock %}
     
     <!-- Apply theme and font early to prevent flash -->
-    <script>
+    <script nonce="{{ csp_nonce }}">
         (function() {
             // Theme
             const theme = localStorage.getItem('mailrepo-theme') || 'pine';
@@ -55,8 +55,8 @@
             <p>Your session will expire in <strong id="timeout-countdown">--</strong> seconds.</p>
             <p class="session-modal-hint">Any unsaved work may be lost.</p>
             <div class="session-modal-actions">
-                <button onclick="stayLoggedIn()" class="btn btn-primary">Stay Logged In</button>
-                <button onclick="window.mailrepoLogout()" class="btn btn-secondary">Log Out</button>
+                <button id="stay-logged-in-btn" class="btn btn-primary">Stay Logged In</button>
+                <button id="timeout-logout-btn" class="btn btn-secondary">Log Out</button>
             </div>
         </div>
     </div>
@@ -66,7 +66,7 @@
         <div class="session-modal">
             <h2>Session Expired</h2>
             <p>Your session has expired due to inactivity.</p>
-            <button onclick="window.location.href='/auth/login'" class="btn btn-primary" style="width: 100%;">Log In</button>
+            <button id="session-expired-login-btn" class="btn btn-primary" style="width: 100%;">Log In</button>
         </div>
     </div>
     
@@ -75,12 +75,12 @@
         <div class="session-modal">
             <h2>Server Disconnected</h2>
             <p>Unable to connect to the MailRepo server. Check that it's running and try again.</p>
-            <button onclick="location.reload()" class="btn btn-primary" style="width: 100%;">Try Again</button>
+            <button id="server-retry-btn" class="btn btn-primary" style="width: 100%;">Try Again</button>
         </div>
     </div>
     
     <!-- Immediate server disconnect detection -->
-    <script>
+    <script nonce="{{ csp_nonce }}">
     (function() {
         let disconnectShown = false;
         let heartbeatInterval = null;
@@ -211,14 +211,14 @@
     <script src="{{ url_for('static', filename='js/lucide.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/password-toggle.js') }}"></script>
     {% block scripts %}{% endblock %}
-    <script>
+    <script nonce="{{ csp_nonce }}">
         // Apply theme to body as well (html already has it from head script)
         document.body.setAttribute('data-theme', localStorage.getItem('mailrepo-theme') || 'pine');
         lucide.createIcons();
     </script>
     
     <!-- Session timeout warning system -->
-    <script>
+    <script nonce="{{ csp_nonce }}">
     (function() {
         let warningShown = false;
         let countdownInterval = null;
@@ -339,7 +339,7 @@
     </script>
     
     <!-- Client-side timeout protection -->
-    <script>
+    <script nonce="{{ csp_nonce }}">
     (function() {
         let timeoutMinutes = null;
         let lastActivityTime = Date.now();
@@ -430,7 +430,7 @@
     })();
     </script>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
     // Logout is state-changing (clears the session, locks the archive,
     // triggers a backup check), so it is POST-only. Any navigation that
     // used to be a plain link goes through here.
@@ -454,6 +454,20 @@
         document.body.appendChild(f);
         f.submit();
     };
+
+    // The overlay buttons. Wired here and not with onclick attributes:
+    // the page's Content-Security-Policy does not run inline handlers,
+    // which is what keeps markup injected into the page from running.
+    (function () {
+        function on(id, fn) {
+            var el = document.getElementById(id);
+            if (el) el.addEventListener('click', fn);
+        }
+        on('stay-logged-in-btn', function () { if (window.stayLoggedIn) window.stayLoggedIn(); });
+        on('timeout-logout-btn', function () { window.mailrepoLogout(); });
+        on('session-expired-login-btn', function () { window.location.href = '/auth/login'; });
+        on('server-retry-btn', function () { location.reload(); });
+    })();
     </script>
 </body>
 </html>

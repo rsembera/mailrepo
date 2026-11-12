@@ -270,8 +270,13 @@ export async function refreshSidebarAccounts() {
             empty.className = 'sidebar-empty';
             empty.innerHTML = `
                 <p>No accounts connected</p>
-                <button class="btn btn-sm btn-primary" onclick="document.querySelector('.rail-btn[data-view=settings]').click()">Add Account</button>
+                <button class="btn btn-sm btn-primary">Add Account</button>
             `;
+            // A listener, not an onclick attribute: the page's
+            // Content-Security-Policy does not run inline handlers.
+            empty.querySelector('button').addEventListener('click', () => {
+                document.querySelector('.rail-btn[data-view=settings]')?.click();
+            });
             section.appendChild(empty);
         } else {
             accounts.forEach(account => {

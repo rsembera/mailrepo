@@ -142,7 +142,7 @@ function renderSettingsView() {
             
             <!-- About Link -->
             <div class="settings-about-link">
-                <a href="javascript:void(0);" data-action="showAbout">About MailRepo</a>
+                <a href="#" data-action="showAbout">About MailRepo</a>
             </div>
         </div>
     `;
@@ -165,9 +165,9 @@ function renderSettingsView() {
     const root = emailList.querySelector('.settings-view-root');
     if (root) {
         bindActions(root, {
-            showAbout: () => showAboutModal(),
+            showAbout: (el, ev) => { ev.preventDefault(); showAboutModal(); },
             openAddAccount: () => openAddAccountModal(),
-            showAppPasswordInfo: () => showAppPasswordInfo(),
+            showAppPasswordInfo: (el, ev) => { ev.preventDefault(); showAppPasswordInfo(); },
             showResetDatabase: () => showResetDatabaseModal(),
             editAccount: (el) => editAccount(
                 Number(el.dataset.accountId),
@@ -261,7 +261,7 @@ function renderAccountsSection() {
         <div class="helper-box">
             <strong>Note:</strong> For Gmail, iCloud, and other providers with 2FA, 
             you'll need to use an <strong>app-specific password</strong> instead of your regular password.
-            <a href="javascript:void(0);" data-action="showAppPasswordInfo">What's this?</a>
+            <a href="#" data-action="showAppPasswordInfo">What's this?</a>
         </div>
 
         <hr class="settings-divider">
