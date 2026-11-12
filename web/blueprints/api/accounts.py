@@ -59,6 +59,13 @@ def list_accounts():
                 creds = IMAP.load_credentials(a["credentials_encrypted"])
                 if creds and is_gmail_host(creds.get("host")):
                     account_dict["is_gmail"] = True
+                if creds:
+                    # For the edit form, which used to open on a blank
+                    # server and port 993 whatever was stored. Never the
+                    # password.
+                    account_dict["host"] = creds.get("host") or ""
+                    account_dict["port"] = creds.get("port") or 993
+                    account_dict["use_ssl"] = bool(creds.get("use_ssl", True))
             except Exception:
                 pass  # If decryption fails, default to False
         result.append(account_dict)
@@ -132,24 +139,51 @@ def update_account(account_id):
 
     data = request.get_json()
 
-    name = data.get("name", "").strip()
-    email_addr = data.get("email", "").strip()
-    password = data.get("password", "")  # Empty means don't change
-    host = data.get("host", "").strip()
-    port = int(data.get("port", 993))
-    use_ssl = data.get("use_ssl", True)
+    name = (data.get("name") or "").strip()
+    email_addr = (data.get("email") or "").strip()
+    password = data.get("password") or ""  # Empty means don't change
+    host = (data.get("host") or "").strip()
 
     if not name:
         return jsonify({"error": "Account name is required"}), 400
     if not email_addr:
         return jsonify({"error": "Email address is required"}), 400
 
-    # If password provided, update credentials; otherwise keep existing
-    if password:
-        if not host:
+    stored = IMAP.load_credentials(account["credentials_encrypted"]) or {}
+
+    # What the account would connect with after this edit. A blank
+    # password or server means "as it is": the form's port and SSL box
+    # only count when a server is given with them.
+    wanted = {
+        "email": email_addr,
+        "password": password or stored.get("password", ""),
+        "host": stored.get("host", ""),
+        "port": stored.get("port", 993),
+        "use_ssl": stored.get("use_ssl", True),
+    }
+    if host:
+        try:
+            port = int(data.get("port", 993))
+        except (TypeError, ValueError):
+            return jsonify({"error": "Port must be a number"}), 400
+        if not 1 <= port <= 65535:
+            return jsonify({"error": "Port must be between 1 and 65535"}), 400
+        wanted.update(host=host, port=port, use_ssl=bool(data.get("use_ssl", True)))
+
+    # A changed address, password, server, port or SSL setting is a
+    # changed login. It used to be kept only if a password came with it:
+    # a new server address was answered "updated" and thrown away, and a
+    # new email address was shown in the list while the login went on
+    # using the old one.
+    changed = bool(wanted["password"]) and any(
+        wanted[k] != stored.get(k) for k in ("email", "password", "host", "port", "use_ssl")
+    )
+
+    if changed:
+        if not wanted["host"]:
             detected = IMAP.detect_server(email_addr)
             if detected:
-                host, port = detected
+                wanted["host"], wanted["port"] = detected
             else:
                 return jsonify(
                     {
@@ -157,17 +191,25 @@ def update_account(account_id):
                     }
                 ), 400
 
-        # Test connection with new credentials
-        test_result = IMAP.test_connection(email_addr, password, host, port, use_ssl)
+        # Nothing is kept unless it connects.
+        test_result = IMAP.test_connection(
+            wanted["email"], wanted["password"], wanted["host"], wanted["port"], wanted["use_ssl"]
+        )
         if not test_result["success"]:
             return jsonify({"error": test_result["message"]}), 400
 
-        # Save new credentials
-        IMAP.save_credentials(account_id, email_addr, password, host, port, use_ssl)
+        IMAP.save_credentials(
+            account_id,
+            wanted["email"],
+            wanted["password"],
+            wanted["host"],
+            wanted["port"],
+            wanted["use_ssl"],
+        )
         ImapPool.evict(account_id)
         message = test_result["message"]
     else:
-        message = "Account updated (password unchanged)"
+        message = "Account updated (connection details unchanged)"
 
     # Update account name and email
     Database.execute(

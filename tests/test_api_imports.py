@@ -9,9 +9,7 @@ folder export (built from a genuinely encrypted message, then read back
 and verified to decrypt to the original bytes).
 """
 
-import io
 import secrets
-import zipfile
 
 from core import Config, Database, Encryption
 
@@ -145,9 +143,7 @@ class TestGetImportEmailSource:
     def test_unauthenticated_is_refused(self, client, initialized_app, tmp_path):
         f = tmp_path / "src.eml"
         f.write_bytes(_eml_bytes())
-        resp = client.post(
-            "/api/import/source", json={"emailSourcePath": str(f), "uid": "eml-0"}
-        )
+        resp = client.post("/api/import/source", json={"emailSourcePath": str(f), "uid": "eml-0"})
         assert resp.status_code in (401, 302)
 
 
@@ -178,42 +174,9 @@ class TestImportAttachment:
         assert resp.status_code == 404
 
 
-# ---------------------------------------------------------------------------
-# Folder export (unencrypted ZIP round-trip)
-# ---------------------------------------------------------------------------
-
-
-class TestExportFolder:
-    def test_export_folder_not_found(self, authenticated_client, initialized_app):
-        resp = authenticated_client.post("/api/folders/9999/export", json={})
-        assert resp.status_code == 404
-
-    def test_export_round_trip_decrypts(self, authenticated_client, initialized_app):
-        fid = _make_folder("Exports")
-        original = _seed_encrypted_message(fid, subject="Export subject", body="zip body marker")
-        resp = authenticated_client.post(f"/api/folders/{fid}/export", json={})
-        assert resp.status_code == 200
-        assert resp.mimetype == "application/zip"
-
-        with zipfile.ZipFile(io.BytesIO(resp.data)) as zf:
-            names = zf.namelist()
-            assert len(names) == 1
-            extracted = zf.read(names[0])
-        # The ZIP holds the decrypted original .eml, not the ciphertext
-        assert extracted == original
-        assert b"zip body marker" in extracted
-
-    def test_export_includes_subfolders(self, authenticated_client, initialized_app):
-        parent = _make_folder("Parent")
-        child = _make_folder("Child", parent_id=parent)
-        _seed_encrypted_message(parent, subject="parent-msg")
-        _seed_encrypted_message(child, subject="child-msg")
-        resp = authenticated_client.post(
-            f"/api/folders/{parent}/export", json={"include_subfolders": True}
-        )
-        assert resp.status_code == 200
-        with zipfile.ZipFile(io.BytesIO(resp.data)) as zf:
-            names = zf.namelist()
-        assert len(names) == 2
-        # Child folder's message is nested under the child path in the ZIP
-        assert any("Child/" in n for n in names)
+def test_the_old_folder_export_route_is_gone(authenticated_client, initialized_app):
+    """Superseded by /api/export/start, which reports what it wrote,
+    can encrypt, and holds off the idle lock. Nothing called this one."""
+    fid = _make_folder("Exports")
+    resp = authenticated_client.post(f"/api/folders/{fid}/export", json={})
+    assert resp.status_code in (404, 405)

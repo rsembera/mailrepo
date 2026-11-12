@@ -1115,6 +1115,9 @@ function setFontSize(size) {
 /**
  * Load accounts from API.
  */
+// The accounts as last listed, for the edit form.
+let loadedAccounts = [];
+
 async function loadAccounts() {
     const container = document.getElementById('accountsList');
     if (!container) return;
@@ -1122,6 +1125,7 @@ async function loadAccounts() {
     try {
         const response = await fetch('/api/accounts');
         const data = await response.json();
+        loadedAccounts = data.accounts || [];
         
         if (data.accounts && data.accounts.length > 0) {
             container.innerHTML = data.accounts.map(account => `
@@ -1288,9 +1292,12 @@ function editAccount(accountId, name, email) {
         document.getElementById('accountEmail').value = email;
         document.getElementById('accountPassword').value = '';  // Don't show password
         document.getElementById('accountPassword').placeholder = 'Leave blank to keep current';
-        document.getElementById('imapHost').value = '';
-        document.getElementById('imapPort').value = '993';
-        document.getElementById('imapSsl').checked = true;
+        // Show what is stored. The form used to open on a blank server
+        // and port 993 whatever the account used.
+        const stored = loadedAccounts.find(a => String(a.id) === String(accountId)) || {};
+        document.getElementById('imapHost').value = stored.host || '';
+        document.getElementById('imapPort').value = String(stored.port || 993);
+        document.getElementById('imapSsl').checked = stored.use_ssl !== false;
         
         // Collapse advanced settings
         const details = modal.querySelector('.advanced-settings');
@@ -1352,7 +1359,7 @@ async function saveAccount() {
         const response = await fetch(url, {
             method,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, email, password, host, port: parseInt(port), use_ssl: ssl })
+            body: JSON.stringify({ name, email, password, host, port: parseInt(port, 10) || 993, use_ssl: ssl })
         });
         
         const data = await response.json();

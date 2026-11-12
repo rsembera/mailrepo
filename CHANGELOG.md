@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Removed the old in-memory folder export route and its unused front-end code; exports go through the export dialog (Session 103).
+- The About box shows the running version.
 - Removed the unused legacy importer (`core/importer.py`) and its `/api/import/mbox/scan` route (Session 103).
 - Development builds on `main` now identify as `1.1.0-dev` (terminal banner, web UI, backup manifests) instead of `1.0.0`.
 
@@ -94,6 +96,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   most apps. The field always re-masks the moment you submit.
 
 ### Fixed
+
+- **Editing an account keeps your changes (Session 103).** Changing an
+  account's server, port or email address without retyping the
+  password said "updated" and changed nothing that mattered: the
+  server change was dropped, and a new address was shown while the old
+  one was still used to sign in. The form now opens on the stored
+  settings, any change is tested against the server before it is
+  kept, and a change that does not connect is refused.
 
 - **Folder trees from "."-separated mail servers (Session 103).**
   Staging whole folders from a server that separates levels with "."

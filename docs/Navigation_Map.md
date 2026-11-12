@@ -176,10 +176,10 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | `exports.py` | 1,203 | Bulk PDF/encrypted-ZIP export pipeline + SSE progress |
 | `emails.py` | 694 | Archived email operations: view, move, delete, batch, download; folder listing carries per-subfolder tree counts |
 | `filesystem.py` | 757 | File browser for imports, path validation, PST conversion |
-| `imports.py` | 396 | Mount/unmount imports, browse imported emails/folders |
+| `imports.py` | 273 | Imported email: view, source, attachment (the old in-memory folder export was removed in Session 103) |
 | `progress_commit.py` | 767 | SSE streaming for commit operations; batched Gmail deletes; unified post-action failure accounting + logging (Sessions 47/54/57); post-actions evict only acted-on UIDs from the folder cache (Session 97) |
 | `folders.py` | 576 | Archive folder CRUD, trash, restore, vault, retention; `tree_email_counts()` is the single roll-up behind every folder size the app shows |
-| `accounts.py` | 461 | IMAP account CRUD, Gmail auto-detection, folder listing |
+| `accounts.py` | 503 | IMAP account CRUD, Gmail auto-detection, folder listing |
 | `commit.py` | 658 | Email/folder commit workflow |
 | `email_parser.py` | 435 | Email parsing: headers, body, attachments, body text extraction |
 | `progress_emails.py` | 316 | Folder listing stream: `cached` event first, TTL + CONDSTORE short-circuits, incremental sync in FETCH chunks; `refresh=true` reconciles keeping the cache, `rebuild=true` discards it (Session 97) |
@@ -223,13 +223,13 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 | File | Lines | What It Does |
 |------|-------|--------------|
 | `mail.js` | 2,568 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav; guarded list loads; sandboxed print frame |
-| `settings.js` | 1,482 | Settings: appearance, accounts, security, recovery-key status + check + rotation, backup, reset |
+| `settings.js` | 1,489 | Settings: appearance, accounts, security, recovery-key status + check + rotation, backup, reset |
 | `review.js` | 1,081 | Review staged items, destination editing, commit |
 | `backups.js` | 1,034 | Backup/restore UI, restore points, settings |
 | `folder-selection.js` | 897 | Bulk folder staging from IMAP/imports |
 | `vault.js` | 881 | Retention vault: move to vault, restore, permanent delete; subfolder links carry tree counts |
 | `trash.js` | 785 | Trash view: deleted folders, emails, restore, purge |
-| `folder-mgmt.js` | 711 | Manage folders: rename, color, create, delete |
+| `folder-mgmt.js` | 646 | Manage folders: rename, color, create, delete |
 | `starred.js` | 369 | Starred email view |
 | `recover.js` | 336 | Pre-login disaster recovery: scan a backup folder, list restore points, stage a restore. Deliberately talks to nothing else — there is no session, database or settings when it runs |
 

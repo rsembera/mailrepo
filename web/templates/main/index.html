@@ -620,23 +620,11 @@
     </div>
 </div>
 
-<!-- Export Progress Modal -->
-<div class="modal-overlay" id="exportProgressModal">
-    <div class="modal-content modal-sm">
-        <div class="modal-header">
-            <h2>Exporting...</h2>
-        </div>
-        <div id="exportProgressContent">
-            <!-- Progress component renders here -->
-        </div>
-    </div>
-</div>
-
 <!-- About Modal -->
 <div class="modal-overlay" id="aboutModal">
     <div class="modal-content about-modal-content">
         <img src="{{ url_for('static', filename='assets/logo.svg') }}" alt="MailRepo Logo" class="about-logo">
-        <p class="about-version">v1.0.0 "Enigma"</p>
+        <p class="about-version">v{{ app_version }}</p>
         <p class="about-credits">Designed by Richard Sembera</p>
         <p class="about-credits">Coded by Claude — Opus 4.5–4.8 and Fable 5</p>
         <p class="about-tagline">"Your correspondence, your machine, your control."</p>

@@ -7867,3 +7867,45 @@ through the bridge that was exercised).
 ### Commits (continued)
 
 - (this entry) -- Page policy enforced in the desktop shell; docs
+
+### Session 103, continued: the last unread code
+
+Read: the rest of `folder-mgmt.js`, `recover.js`, `file-picker.js`, the
+save path of `image-lightbox.js`, the account forms in `settings.js`
+with `accounts.py` behind them, the folder update route, how
+`date-picker.js` builds retention dates. `recover.js`, the file picker
+and the folder routes were sound.
+
+- U1. **Editing an account threw away server changes.** The edit form
+  opened on a blank server and port 993 whatever was stored, and the
+  server kept connection details only when a password came with them.
+  A changed server address was answered "Account updated" and
+  discarded; a changed email address showed in the list while the
+  login went on using the old one; retyping only the password on an
+  account with a custom server ran auto-detection instead of using the
+  stored server. Now: the form shows what is stored (never the
+  password), any change to address, password, server, port or SSL is
+  tested and then saved, a blank server means "as it is", and nothing
+  is kept, the name included, if the connection fails. A port that is
+  not a number is a plain error instead of a 500.
+- U2. Removed the old folder export (`/api/folders/<id>/export`, its
+  uncalled `exportFolder` in `folder-mgmt.js`, and its modal). It
+  built the whole zip in memory, reported nothing, and was superseded
+  by the export job pipeline.
+- The About box showed `v1.0.0 "Enigma"` as a constant; it shows the
+  running version.
+
+Skimmed only, nothing found: `context-menu.js`, `custom-select.js`,
+the rest of `date-picker.js` and `image-lightbox.js`. The CSS was not
+reviewed.
+
+1,123 passed, 1 skipped in the sandbox. 10 sealing mutations caught.
+
+**Held on the branch.** Rick is testing `main` on the MacBook, whose
+working copy is the running app, so this commit is on
+`review-2026-11` only: not yet run on the MacBook, not merged.
+
+### Commits (continued)
+
+- (this entry) -- Account edits apply and test connection changes; old folder export removed; docs
+

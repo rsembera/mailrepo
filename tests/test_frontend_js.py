@@ -250,7 +250,10 @@ def test_staged_folders_follow_the_servers_separator():
 def test_imports_say_what_could_not_be_read():
     imports = _js("components/imports.js")
     assert "const unread = scanData.files.length - emails.length;" in imports
-    assert "if (unread > 0) {\n        showToast(`${unread} of ${scanData.files.length} .eml files could not be read" in imports
+    assert (
+        "if (unread > 0) {\n        showToast(`${unread} of ${scanData.files.length} .eml files could not be read"
+        in imports
+    )
     assert "unreadFolders.push(mboxFile.name);" in imports
     assert "'Some PST folders could not be read'" in imports
     # Grouping by lookup, not a search of every list for every email.
@@ -312,3 +315,22 @@ def test_search_says_when_the_list_is_capped():
     mail = _js("views/mail.js")
     assert "data.truncated" in mail
     assert "showing the newest ${data.count}" in mail
+
+
+def test_account_edit_form_opens_on_what_is_stored():
+    settings = _js("views/settings.js")
+    edit = settings[settings.index("function editAccount(accountId, name, email) {") :]
+    edit = edit[: edit.index("\n}\n")]
+    assert "loadedAccounts.find(a => String(a.id) === String(accountId))" in edit
+    assert "value = stored.host || ''" in edit
+    assert "value = String(stored.port || 993)" in edit
+    assert "checked = stored.use_ssl !== false" in edit
+    assert "loadedAccounts = data.accounts || [];" in settings
+
+
+def test_the_old_folder_export_is_gone():
+    assert "exportFolder" not in _js("views/folder-mgmt.js")
+    index = (ROOT / "web" / "templates" / "main" / "index.html").read_text(encoding="utf-8")
+    assert "exportProgressModal" not in index
+    # The About box shows the running version, not a constant.
+    assert 'class="about-version">v{{ app_version }}<' in index

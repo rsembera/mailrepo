@@ -212,3 +212,146 @@ class TestDetectServer:
         )
         assert resp.status_code == 200
         assert resp.get_json()["detected"] is False
+
+
+# ---------------------------------------------------------------------------
+# Editing an account's connection details (code review 2026-11, third pass)
+# ---------------------------------------------------------------------------
+
+
+class TestEditConnectionDetails:
+    """The edit form showed a blank host and port 993, and the server kept
+    whatever it was sent only when a password came with it: a changed
+    server address was answered "Account updated" and thrown away, and a
+    changed email address was shown in the list while the login kept
+    using the old one."""
+
+    @staticmethod
+    def _stored(aid):
+        row = Database.fetchone("SELECT credentials_encrypted FROM accounts WHERE id = ?", (aid,))
+        return IMAP.load_credentials(row["credentials_encrypted"])
+
+    @staticmethod
+    def _accept(monkeypatch):
+        calls = []
+
+        def fake(email, password, host, port, use_ssl):
+            calls.append((email, password, host, port, use_ssl))
+            return {"success": True, "message": "Connected"}
+
+        monkeypatch.setattr(IMAP, "test_connection", staticmethod(fake))
+        return calls
+
+    def test_list_gives_the_form_what_is_stored(self, authenticated_client, initialized_app):
+        aid = _make_account(host="mail.example.org")
+        account = authenticated_client.get("/api/accounts").get_json()["accounts"][0]
+        assert account["id"] == aid
+        assert account["host"] == "mail.example.org"
+        assert account["port"] == 993
+        assert account["use_ssl"] is True
+        assert "password" not in account and "secret" not in json.dumps(account)
+
+    def test_changing_the_server_without_retyping_the_password_is_saved(
+        self, authenticated_client, initialized_app, monkeypatch
+    ):
+        calls = self._accept(monkeypatch)
+        aid = _make_account(host="old.example.org")
+        resp = authenticated_client.patch(
+            f"/api/accounts/{aid}",
+            json={"name": "Work", "email": "user@example.com", "password": "",
+                  "host": "new.example.org", "port": 1993, "use_ssl": True},
+        )  # fmt: skip
+        assert resp.status_code == 200, resp.get_json()
+        # Tested with the stored password before being kept.
+        assert calls == [("user@example.com", "secret", "new.example.org", 1993, True)]
+        stored = self._stored(aid)
+        assert (stored["host"], stored["port"], stored["password"]) == (
+            "new.example.org",
+            1993,
+            "secret",
+        )
+
+    def test_changing_the_address_changes_the_login_too(
+        self, authenticated_client, initialized_app, monkeypatch
+    ):
+        calls = self._accept(monkeypatch)
+        aid = _make_account(email="old@example.com", host="mail.example.org")
+        resp = authenticated_client.patch(
+            f"/api/accounts/{aid}",
+            json={"name": "Work", "email": "new@example.com", "password": "",
+                  "host": "mail.example.org", "port": 993, "use_ssl": True},
+        )  # fmt: skip
+        assert resp.status_code == 200
+        assert calls[0][0] == "new@example.com"
+        assert self._stored(aid)["email"] == "new@example.com"
+
+    def test_a_change_that_does_not_connect_is_refused_and_nothing_is_kept(
+        self, authenticated_client, initialized_app, monkeypatch
+    ):
+        monkeypatch.setattr(
+            IMAP,
+            "test_connection",
+            staticmethod(lambda *a: {"success": False, "message": "Login failed"}),
+        )
+        aid = _make_account(name="Work", email="user@example.com", host="old.example.org")
+        resp = authenticated_client.patch(
+            f"/api/accounts/{aid}",
+            json={"name": "Renamed", "email": "user@example.com", "password": "",
+                  "host": "typo.example.org", "port": 993, "use_ssl": True},
+        )  # fmt: skip
+        assert resp.status_code == 400
+        assert "Login failed" in resp.get_json()["error"]
+        assert self._stored(aid)["host"] == "old.example.org"
+        row = Database.fetchone("SELECT name FROM accounts WHERE id = ?", (aid,))
+        assert row["name"] == "Work"
+
+    def test_a_rename_alone_does_not_touch_the_server(
+        self, authenticated_client, initialized_app, monkeypatch
+    ):
+        calls = self._accept(monkeypatch)
+        aid = _make_account(host="mail.example.org")
+        resp = authenticated_client.patch(
+            f"/api/accounts/{aid}",
+            json={"name": "Renamed", "email": "user@example.com", "password": "",
+                  "host": "mail.example.org", "port": 993, "use_ssl": True},
+        )  # fmt: skip
+        assert resp.status_code == 200
+        assert calls == []
+        assert "unchanged" in resp.get_json()["message"].lower()
+
+    def test_a_blank_server_keeps_the_stored_one(
+        self, authenticated_client, initialized_app, monkeypatch
+    ):
+        calls = self._accept(monkeypatch)
+        aid = _make_account(host="mail.example.org")
+        IMAP.save_credentials(aid, "user@example.com", "secret", "mail.example.org", 143, False)
+        resp = authenticated_client.patch(
+            f"/api/accounts/{aid}",
+            json={"name": "Work", "email": "user@example.com", "password": "new-secret",
+                  "host": "", "port": 993, "use_ssl": True},
+        )  # fmt: skip
+        assert resp.status_code == 200
+        # Not auto-detected, and not reset to the form's 993 / SSL.
+        assert calls == [("user@example.com", "new-secret", "mail.example.org", 143, False)]
+        stored = self._stored(aid)
+        assert (stored["host"], stored["port"], stored["use_ssl"]) == (
+            "mail.example.org",
+            143,
+            False,
+        )
+
+    def test_a_port_that_is_not_a_number_is_a_plain_error(
+        self, authenticated_client, initialized_app
+    ):
+        aid = _make_account(host="mail.example.org")
+        resp = authenticated_client.patch(
+            f"/api/accounts/{aid}",
+            json={
+                "name": "Work",
+                "email": "user@example.com",
+                "host": "mail.example.org",
+                "port": None,
+            },
+        )
+        assert resp.status_code == 400
+        assert "port" in resp.get_json()["error"].lower()

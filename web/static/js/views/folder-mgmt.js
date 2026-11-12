@@ -8,7 +8,6 @@
  * - Color picker
  */
 
-import { escapeHtml } from '../utils.js';
 import { state, loadFolders, setSelectedFoldersGetter, setSelectedFoldersClearer } from '../state.js';
 import { closeModal, showPrompt, showConfirm } from '../modals.js';
 import { showToast } from '../toast.js';
@@ -364,71 +363,6 @@ export async function deleteFolder(folderId) {
     } catch (error) {
         console.error('Error deleting folder:', error);
         showToast('Failed to delete folder', 'error');
-    }
-}
-
-export async function exportFolder(folderId) {
-    const folder = state.folders.find(f => f.id == folderId);
-    if (!folder) return;
-    
-    // Show progress modal
-    const modal = document.getElementById('exportProgressModal');
-    const content = document.getElementById('exportProgressContent');
-    if (modal && content) {
-        content.innerHTML = `
-            <div class="progress-display">
-                <div class="progress-status">
-                    <i data-lucide="loader" class="progress-icon spin"></i>
-                    <span class="progress-message">Preparing export...</span>
-                </div>
-                <div class="progress-detail">
-                    <span class="progress-subject">Decrypting and packaging "${escapeHtml(folder.name)}"</span>
-                </div>
-            </div>
-        `;
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-        modal.classList.add('active');
-    }
-    
-    try {
-        const response = await fetch(`/api/folders/${folderId}/export`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ include_subfolders: true }),
-        });
-        
-        // Hide progress modal
-        if (modal) modal.classList.remove('active');
-        
-        if (!response.ok) {
-            const data = await response.json();
-            showToast(data.error || 'Failed to export folder', 'error');
-            return;
-        }
-        
-        // Get filename from Content-Disposition header
-        const contentDisposition = response.headers.get('Content-Disposition');
-        let filename = `${folder.name}_export.zip`;
-        if (contentDisposition) {
-            const match = contentDisposition.match(/filename="?([^";\n]+)"?/);
-            if (match) filename = match[1];
-        }
-        
-        // Download the file
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    } catch (error) {
-        // Hide progress modal on error
-        if (modal) modal.classList.remove('active');
-        console.error('Error exporting folder:', error);
-        showToast('Failed to export folder', 'error');
     }
 }
 
