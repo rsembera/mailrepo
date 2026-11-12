@@ -90,7 +90,6 @@ class TestRestoreCompletion:
             assert Encryption.decrypt((archive / rel).read_bytes()) == expected
         assert not archive.with_name("archive.replaced").exists()
 
-
     def test_a_set_aside_folder_from_an_earlier_attempt_does_not_block(self, archive_with_backup):
         self._stage()
         leftover = Config.get_archive_path().with_name("archive.replaced")
@@ -127,6 +126,16 @@ class TestStartupNotices:
         assert "startup-notice" in page
         assert "master-key rotation was interrupted" in page
         assert "full_x.zip" in page
+
+    def test_terminal_line_breaks_are_unwrapped_for_the_page(self):
+        from web.blueprints.auth import _reflow
+
+        text = "First line of a\nparagraph that was\nwrapped.\n\nSecond paragraph.\nA backup was verified immediately beforehand: full_x.zip"
+        assert _reflow(text) == (
+            "First line of a paragraph that was wrapped.\n\n"
+            "Second paragraph.\n\n"
+            "A backup was verified immediately beforehand: full_x.zip"
+        )
 
     def test_a_missing_database_is_explained(self, initialized_app):
         app, _pw = initialized_app

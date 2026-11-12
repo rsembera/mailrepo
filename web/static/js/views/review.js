@@ -648,15 +648,17 @@ export function describeCommitProblems(results) {
     if (!results) return '';
     const failed = results.failed || [];
     const post = results.post_actions || {};
+    const sections = [];
     const lines = [];
 
     if (failed.length) {
-        lines.push(`Not archived (${failed.length}), still on the server:`);
+        const list = [`Not archived (${failed.length}), still on the server:`];
         failed.slice(0, 10).forEach(f => {
             const what = f.subject || (f.uid != null ? `message ${f.uid}` : 'message');
-            lines.push(`• ${what}: ${f.error || 'unknown error'}`);
+            list.push(`• ${what}: ${f.error || 'unknown error'}`);
         });
-        if (failed.length > 10) lines.push(`…and ${failed.length - 10} more.`);
+        if (failed.length > 10) list.push(`…and ${failed.length - 10} more.`);
+        sections.push(list.join('\n'));
     }
     if (results.folders_failed) {
         lines.push(`${results.folders_failed} folder${results.folders_failed === 1 ? '' : 's'} could not be committed.`);
@@ -667,7 +669,8 @@ export function describeCommitProblems(results) {
     if (post.skipped_folders) {
         lines.push(`${post.skipped_folders} folder${post.skipped_folders === 1 ? ' was' : 's were'} left untouched on the server because some of ${post.skipped_folders === 1 ? 'its' : 'their'} emails could not be archived.`);
     }
-    return lines.join('\n');
+    // One blank line between the list of failures and each note after it.
+    return sections.concat(lines).join('\n\n');
 }
 
 function renderSourceActionDropdown(sourceKey, selectedValue = 'leave') {

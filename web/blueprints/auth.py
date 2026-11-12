@@ -349,6 +349,25 @@ def _recovery_gate():
     return None
 
 
+def _reflow(text: str) -> str:
+    """Unwrap text that was hard-wrapped for a terminal.
+
+    Paragraphs (separated by a blank line) are kept; line breaks inside
+    a paragraph become spaces so the browser can wrap to the width it
+    has. A line naming the verified backup stays on its own.
+    """
+    paragraphs = []
+    for block in text.split("\n\n"):
+        lines = [line.strip() for line in block.split("\n") if line.strip()]
+        tail = []
+        while lines and lines[-1].startswith("A backup was verified"):
+            tail.insert(0, lines.pop())
+        if lines:
+            paragraphs.append(" ".join(lines))
+        paragraphs.extend(tail)
+    return "\n\n".join(paragraphs)
+
+
 def startup_notices() -> list[str]:
     """Things the user must be told before they type a password.
 
@@ -382,7 +401,7 @@ def startup_notices() -> list[str]:
 
         marker = check_password_change_interrupted()
         if marker:
-            notices.append(describe_interrupted_password_change(marker))
+            notices.append(_reflow(describe_interrupted_password_change(marker)))
     except Exception as e:  # noqa: BLE001 - a notice must never break the login page
         log.warning(f"Interruption notice check failed: {e}")
 
