@@ -7563,3 +7563,60 @@ password-change path after 1.1.
 - `b577dc3` -- Folder listing survives odd server replies; mailbox names are escaped; dead importer removed
 - (this entry) -- docs: Session 103 continued; CHANGELOG; Navigation Map
 
+### Session 103, continued: second review pass and batch 7
+
+Read in this pass: the restore half of `utils/backup.py`
+(`prepare_restore_from_point`, `complete_restore`, restore points,
+`cleanup_old_backups`, `verify_restore_point_files`), `launcher.py`,
+`core/pdf_export.py` (loading, attachments, ordering; not the HTML/CSS
+sanitiser), `web/blueprints/api/filesystem.py` (mbox and Apple mbox
+scanning; not the browse or PST routes), `settings.py` (reset,
+session status), `backups.py`, and in the frontend the commit and
+export result paths, `utils.js` escaping and browser-storage use.
+**Not read:** the rest of the JavaScript (about 15,000 lines), the
+templates and CSS, `threads.py`, the PDF sanitiser, the PST routes,
+packaging.
+
+Findings, all fixed in `2ec0313`:
+
+1. **Launch warnings never reached desktop users.** `prepare_app`
+   printed the interrupted-key-change explanation, the "key file but no
+   database" warning and restore failures to stderr only.
+   `auth.startup_notices()` now renders them on both login screens.
+2. **`complete_restore` copied instead of moving** (needed a second
+   copy of the archive; a failure mid-copy left a half-restored archive
+   and the app started anyway), **left stale state behind** (the
+   interruption marker survived the restore that the marker itself
+   recommends; also the sync cache and key-change resume state), and
+   **left today's files in place when restoring an empty archive**.
+3. **A restored database was never checked.** Now `quick_check` on the
+   first login after a restore. Relevant because backups made before
+   this session's finding-1 fix could hold a damaged database.
+4. **`reset_database` left pooled IMAP connections open.** Account ids
+   restart at 1 in the new database, so `ImapPool.acquire(1, ...)`
+   could return the previous account 1's live connection. Also left
+   the database key, the sync-cache connection and markers.
+5. **`pdf_export` had a fourth copy of the attachment rules** (dropping
+   unreferenced-CID images), **sorted by ISO text** (wrong across UTC
+   offsets), and **did not report skipped messages**.
+6. **Commit results with failures were a green self-dismissing toast**
+   and the staged items were cleared. Now a dialog
+   (`describeCommitProblems` in `review.js`), for resumed commits too.
+7. **mbox folder labels**: the scan decoded RFC 2047 labels, the commit
+   compared the raw header, so an accented folder committed nothing.
+8. The mbox scan built a full MIME tree per message; now headers only,
+   through the shared open mailbox.
+
+Checked and found sound: `cleanup_old_backups` (keeps the newest chain,
+verifies it before deleting older ones, resolves paths per entry),
+`prepare_restore_from_point` (MAC gate, per-zip tombstones, path
+validation), the launcher's socket hand-off and viewer directory.
+
+Tests: `tests/test_second_pass.py` (20), 15 sealing mutations caught.
+Sandbox 916 -> 936; MacBook 949. ruff clean, ESLint 65 warnings.
+
+### Commits (continued)
+
+- `2ec0313` -- Second review pass: restore completion, launch notices on the login screen, reset, PDF export, commit failures stay on screen
+- (this entry) -- docs: Session 103 second pass; CHANGELOG; Navigation Map
+

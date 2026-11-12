@@ -135,7 +135,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 |------|-------|--------------|
 | `imap.py` | 1,511 | IMAP client: connect, auth, folders, batched header fetch (`fetch_headers_batch`, 100 UIDs per FETCH, keyed by UID in the response), MOVE/COPY + UID-scoped expunge, Gmail-aware delete (incl. batched set delete), CONDSTORE |
 | `imap_pool.py` | 185 | One held, authenticated IMAP connection per account (`ImapPool.acquire` -> lease, `release`); per-account lock, NOOP probe + lazy reconnect, `close_all` on lock/exit, `evict` on account change (Session 97) |
-| `pdf_export.py` | 1,083 | PDF export: per-email PDFs, attachment merging, WeasyPrint |
+| `pdf_export.py` | 1,021 | PDF export: per-email PDFs, attachment merging, WeasyPrint |
 | `encryption.py` | 1,083 | Argon2id KDF + HKDF + AES-256-GCM (v2) plus the v3 envelope: random master wrapped under password and recovery key, each wrapper verified to open before the key file is written; MRC4 (Session 93): the envelope plus archive_id and an HMAC binding the halves, verified at every unwrap; backup-MAC and key-file-bind subkeys; lock hooks; work factor via argon2_parameters() — production everywhere, cheap only when the test suite's double guard (MAILREPO_FAST_KDF + MAILREPO_DATA_DIR) is met |
 | `password_change.py` | 830 | Password change — v2 full re-encryption, v3 rewrap; recovery-key password reset (needs no unlocked session), recovery-key rotation, on-disk backup gate, interruption marker |
 | `database.py` | 506 | SQLCipher connection, schema v5, FTS5, migrations, threading lock, hard refusal to open unencrypted |
@@ -163,7 +163,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `auth.py` | 1,542 | Setup, login, logout, rate limiting, session management; recovery-key verification + server-side handoff to a mandatory password reset (no session granted), v3 upgrade flow, rotation API, master-key rotation (page + one-time job + SSE progress + one-time done page); pre-login disaster-recovery routes (`/auth/restore`, scan, prepare, search, browse) gated on `_recovery_door_open()` — no archive, OR an unverified restore; both login paths vouch for restored data (clear the marker) and the login screens carry the restored-from-backup banner |
+| `auth.py` | 1,622 | Setup, login, logout, rate limiting, session management; recovery-key verification + server-side handoff to a mandatory password reset (no session granted), v3 upgrade flow, rotation API, master-key rotation (page + one-time job + SSE progress + one-time done page); pre-login disaster-recovery routes (`/auth/restore`, scan, prepare, search, browse) gated on `_recovery_door_open()` — no archive, OR an unverified restore; both login paths vouch for restored data (clear the marker) and the login screens carry the restored-from-backup banner |
 | `backups.py` | 305 | Backup/restore endpoints, folder picker |
 | `main.py` | 115 | Page routes: index, create_archive, settings, `/launch-check` nonce echo for the desktop launcher |
 
@@ -171,17 +171,17 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `exports.py` | 1,199 | Bulk PDF/encrypted-ZIP export pipeline + SSE progress |
+| `exports.py` | 1,203 | Bulk PDF/encrypted-ZIP export pipeline + SSE progress |
 | `emails.py` | 694 | Archived email operations: view, move, delete, batch, download; folder listing carries per-subfolder tree counts |
-| `filesystem.py` | 807 | File browser for imports, path validation, PST conversion |
+| `filesystem.py` | 813 | File browser for imports, path validation, PST conversion |
 | `imports.py` | 396 | Mount/unmount imports, browse imported emails/folders |
 | `progress_commit.py` | 767 | SSE streaming for commit operations; batched Gmail deletes; unified post-action failure accounting + logging (Sessions 47/54/57); post-actions evict only acted-on UIDs from the folder cache (Session 97) |
 | `folders.py` | 576 | Archive folder CRUD, trash, restore, vault, retention; `tree_email_counts()` is the single roll-up behind every folder size the app shows |
 | `accounts.py` | 461 | IMAP account CRUD, Gmail auto-detection, folder listing |
 | `commit.py` | 658 | Email/folder commit workflow |
-| `email_parser.py` | 427 | Email parsing: headers, body, attachments, body text extraction |
+| `email_parser.py` | 435 | Email parsing: headers, body, attachments, body text extraction |
 | `progress_emails.py` | 316 | Folder listing stream: `cached` event first, TTL + CONDSTORE short-circuits, incremental sync in FETCH chunks; `refresh=true` reconciles keeping the cache, `rebuild=true` discards it (Session 97) |
-| `settings.py` | 263 | App settings: timeout, retention, keepalive |
+| `settings.py` | 288 | App settings: timeout, retention, keepalive |
 | `streaming.py` | 190 | Email-cache helpers: read/write rows, stale removal, `evict_cached_uids` after post-commit actions (Session 97) |
 | `threads.py` | 138 | Thread search and staging endpoints |
 | `progress.py` | 63 | Progress entry point (split into streams/state/handlers in Session 37) |
@@ -190,7 +190,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `backup.py` | 2,653 | Full/incremental backup (serialized on `backup_lock`; names claimed atomically; full chain_id derived from its filename), restore, retention, external state file (Libram-style), on-disk restore-chain verification, manifest sidecars stamped with the app identity and written to every backup destination, a durable record of backup locations kept outside the app folder, record-first location lookup (no disk search -- the folder picker covers unknown locations), filename-based chain reconstruction; unverified-restore marker (`data/.restore_unverified`, set by complete_restore, never inside a zip) |
+| `backup.py` | 2,721 | Full/incremental backup (serialized on `backup_lock`; names claimed atomically; full chain_id derived from its filename), restore, retention, external state file (Libram-style), on-disk restore-chain verification, manifest sidecars stamped with the app identity and written to every backup destination, a durable record of backup locations kept outside the app folder, record-first location lookup (no disk search -- the folder picker covers unknown locations), filename-based chain reconstruction; unverified-restore marker (`data/.restore_unverified`, set by complete_restore, never inside a zip) |
 | `log.py` | 51 | Logging setup, polling filter |
 | `__init__.py` | 34 | Shell command runner, path utilities |
 
@@ -204,12 +204,12 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 |------|-------|--------------|
 | `password-toggle.js` | 128 | Show/hide password toggle (Session 88): auto-wires password inputs; reserve computed inline from the button's measured band (Daybook PLAN.md 9ab — CSS reserves lose specificity fights silently); re-mask defers submit one painted frame |
 | `desktop.js` | 98 | Desktop-shell bridge (Session 88): no-ops in a browser; in the packaged app routes open-in-new-tab, print, and same-origin _blank links through DesktopApi |
-| `app.js` | 739 | Init, event listeners, rail nav, nav guards, template-bindings wiring |
+| `app.js` | 747 | Init, event listeners, rail nav, nav guards, template-bindings wiring |
 | `template-bindings.js` | 143 | Single delegated handler for index.html data-tpl-action attrs (Session 38) |
 | `delegate.js` | 116 | `bindActions(container, handlers)` helper for per-view delegation |
 | `state.js` | 137 | Central state object, session persistence |
 | `utils.js` | 97 | escapeHtml, formatDate, debounce, extractName |
-| `modals.js` | 153 | Alert/confirm/prompt + canonical closeModal + registerModalCloseHandler |
+| `modals.js` | 156 | Alert/confirm/prompt + canonical closeModal + registerModalCloseHandler |
 | `toast.js` | 106 | showToast(message, type) — non-blocking status card, bottom centre, auto-dismiss (Session 94); modals stay for anything needing a decision |
 | `recovery-key.js` | 131 | One-time recovery-key screen: copy / print / download, beforeunload guard |
 
@@ -219,7 +219,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 |------|-------|--------------|
 | `mail.js` | 2,502 | Email viewing (IMAP/archive/import), search, viewer, keyboard nav |
 | `settings.js` | 1,482 | Settings: appearance, accounts, security, recovery-key status + check + rotation, backup, reset |
-| `review.js` | 1,035 | Review staged items, destination editing, commit |
+| `review.js` | 1,075 | Review staged items, destination editing, commit |
 | `backups.js` | 1,034 | Backup/restore UI, restore points, settings |
 | `folder-selection.js` | 897 | Bulk folder staging from IMAP/imports |
 | `vault.js` | 881 | Retention vault: move to vault, restore, permanent delete; subfolder links carry tree counts |
@@ -253,7 +253,7 @@ Largest growth: encryption refactor (Sessions 36–37), retention vault
 
 | File | Lines | What It Does |
 |------|-------|--------------|
-| `shared.css` | 944 | Design tokens, buttons, forms, utilities, credential badges, restored-from-backup notice |
+| `shared.css` | 990 | Design tokens, buttons, forms, utilities, credential badges, restored-from-backup notice |
 | `themes.css` | 318 | Five themes: Atlantic, Ember, Graphite, Obsidian, **Pine** (default) |
 | `main.css` | 23 | Import hub for all module CSS |
 
@@ -418,6 +418,7 @@ first run of this found a `ReferenceError` that had been shipping.
 | `tests/test_backup_cycle.py` | `run_due_backup` / `finish_backup`: retention, post-backup command, check recorded; app exit uses the shared cycle and does nothing after a lock (Session 103) |
 | `tests/test_export_counts.py` | Zip and mbox exports report what was written and what was left out (Session 103) |
 | `tests/test_import_bytes.py` | mbox read as the original bytes, lazily, from one open mailbox; `.emlx` delimited by its byte count (Session 103) |
+| `tests/test_second_pass.py` | Restore completion (moved not copied, stale state cleared, re-runnable), launch notices on the login screen, restored-database check, reset, PDF export attachments / ordering / skipped count, mbox folder names (20 tests, Session 103) |
 | `tests/test_commit_durability.py` | Folder commit: archive rows are committed before the server post-action starts (Session 103) |
 | `tests/test_purge.py` | Permanent deletion removes the files: automatic trash cleanup, folder tree, Empty Trash, vault batch delete (7 tests, Session 103) |
 | `tests/test_folder_cache_sync.py` | IMAP folder cache vs server: an emptied folder shows empty; chunked stale removal (Session 103) |

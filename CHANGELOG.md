@@ -156,6 +156,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   endings. Large mbox files are now read one message at a time, and an
   mbox that cannot be opened is reported as an error instead of
   appearing as an empty folder.
+- **Warnings at launch now appear on the login screen (Session 103).**
+  If a password change or key rotation was interrupted, if the key file
+  is present but the database is missing, or if a restore could not be
+  completed, MailRepo used to say so only in a terminal window, which
+  the desktop app does not have. The login screen now shows the
+  explanation.
+- **Restoring a backup is safer and needs less disk space (Session
+  103).** Restored files are moved into place instead of copied, so a
+  restore no longer needs room for a second copy of the archive and
+  cannot stop halfway for lack of space. Restoring to a point when the
+  archive was empty now empties it. Warnings and sync information that
+  belonged to the replaced archive are cleared. On the first login
+  after a restore the database is checked, and you are told if it is
+  damaged.
+- **A commit that could not archive everything says so and stays on
+  screen (Session 103).** Failures used to appear in a brief green
+  notice. They now open a dialog listing what was not archived and why.
+- **PDF exports list every attachment, in the right order (Session
+  103).** Some image attachments were left out of the PDF's attachment
+  list; emails sent from different time zones could appear out of
+  order; and an export now says if any selected emails are missing
+  from it.
+- **Importing a folder with an accented name from an mbox file (Session
+  103).** It showed its emails in the list and then archived none.
+- **Reset Database (Session 103).** After a reset and a fresh setup in
+  the same session, a new mail account could be shown the previous
+  account's mailbox. Connections and leftover warnings are now cleared.
 - **Folder lists from unusual mail servers (Session 103).** A folder
   name sent in one less common form made the whole folder list fail;
   servers with no folder separator lost folders; names containing a
