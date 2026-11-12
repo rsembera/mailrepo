@@ -8,7 +8,8 @@
  * - Staged item badges and counts
  */
 
-import { state, setStagedBadgeElement, updateStagedBadge } from '../state.js';
+import { state, setStagedBadgeElement, updateStagedBadge, persistStaged } from '../state.js';
+import { stagedKeyOfItem } from '../staged-key.js';
 import { closeModal, showPrompt } from '../modals.js';
 import { showToast } from '../toast.js';
 import { renderFolderTree } from '../components/folder-tree.js';
@@ -409,6 +410,7 @@ export function confirmStage() {
             }
         });
         
+        persistStaged();
         clearPendingFolderStaging();
         clearAllSelected();  // Clear the selected folders now that staging is confirmed
         modal.dataset.stagingMode = '';
@@ -444,11 +446,12 @@ export function confirmStage() {
                 stagedItem.sourceFolder = state.currentView.folder || null;
             }
             
-            state.staged.set(emailId, stagedItem);
+            state.staged.set(stagedKeyOfItem(stagedItem), stagedItem);
         }
     });
     
     state.selectedEmails.clear();
+    persistStaged();
     closeModal('stageModal');
     
     updateStagedBadge();
@@ -486,28 +489,6 @@ export function updateButtonStates() {
 }
 
 /**
- * Navigate to review page with staged items.
- * Always navigates, even if nothing is staged (shows empty state).
- */
-export function goToReview() {
-    const hasEmails = state.staged.size > 0;
-    const hasFolders = state.stagedFolders.length > 0;
-    
-    if (hasEmails) {
-        sessionStorage.setItem('stagedEmails', JSON.stringify([...state.staged.entries()]));
-    }
-    
-    if (hasFolders) {
-        sessionStorage.setItem('stagedFolders', JSON.stringify(state.stagedFolders));
-    }
-    
-    if (beforeUnloadHandler) {
-        window.removeEventListener('beforeunload', beforeUnloadHandler);
-    }
-    window.location.href = '/review';
-}
-
-/**
  * Get the currently selected destination folder ID.
  */
 export function getSelectedDestinationFolder() {
@@ -536,27 +517,10 @@ export function getStagedFolders() {
 }
 
 /**
- * Clear a staged email by ID.
- */
-export function clearStagedEmail(emailId) {
-    state.staged.delete(emailId);
-    sessionStorage.setItem('stagedEmails', JSON.stringify([...state.staged.entries()]));
-}
-
-/**
- * Clear a staged folder by index.
- */
-export function clearStagedFolder(index) {
-    state.stagedFolders.splice(index, 1);
-    sessionStorage.setItem('stagedFolders', JSON.stringify(state.stagedFolders));
-}
-
-/**
  * Clear all staged items.
  */
 export function clearAllStaged() {
     state.staged.clear();
     state.stagedFolders = [];
-    sessionStorage.removeItem('stagedEmails');
-    sessionStorage.removeItem('stagedFolders');
+    persistStaged();
 }

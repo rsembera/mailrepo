@@ -7,8 +7,8 @@
  * - Bulk staging operations
  */
 
-import { escapeHtml, escapeForOnclick } from '../utils.js';
-import { state, setSelectedFoldersGetter, setSelectedFoldersClearer, updateStagedBadge } from '../state.js';
+import { escapeHtml } from '../utils.js';
+import { state, setSelectedFoldersGetter, setSelectedFoldersClearer, updateStagedBadge, persistStaged } from '../state.js';
 import { showToast } from '../toast.js';
 import { buildImapFolderTree, getFolderIcon } from '../components/sidebar.js';
 import { getMountedImports } from '../components/imports.js';
@@ -122,7 +122,7 @@ export async function showFolderSelectionView(accountId) {
         const response = await fetch(`/api/accounts/${accountId}/folders`);
         if (!response.ok) {
             const data = await response.json();
-            emailList.innerHTML = `<div class="empty-state"><p>Error: ${data.error || 'Failed to load folders'}</p></div>`;
+            emailList.innerHTML = `<div class="empty-state"><p>Error: ${escapeHtml(data.error || 'Failed to load folders')}</p></div>`;
             return;
         }
         
@@ -289,7 +289,7 @@ function renderImportFolderSelectionTree(nodes, importId, depth, ancestry = []) 
         if (isSelected) rowClass += ' selected';
         if (node.noselect) rowClass += ' noselect';
         
-        const escapedPath = escapeForOnclick(folderPath);
+        const escapedPath = escapeHtml(folderPath);
         let actionsHtml = '';
         
         if (node.noselect) {
@@ -442,7 +442,7 @@ function renderFolderSelectionTree(nodes, accountId, depth, ancestry = []) {
         if (node.noselect) rowClass += ' noselect';
         
         let actionsHtml = '';
-        const escapedPath = escapeForOnclick(folderPath);
+        const escapedPath = escapeHtml(folderPath);
         
         if (node.noselect) {
             // Non-selectable container folders (e.g. [Gmail]) get no actions
@@ -627,7 +627,7 @@ export function clearFolder(folderPath) {
     });
     
     if (clearedStaged) {
-        sessionStorage.setItem('stagedFolders', JSON.stringify(state.stagedFolders));
+        persistStaged();
         updateStagedBadge();
         refreshFolderSelectionView();
     }
@@ -790,7 +790,7 @@ export function unstageSingleFolder(folderPath) {
     
     if (index !== -1) {
         state.stagedFolders.splice(index, 1);
-        sessionStorage.setItem('stagedFolders', JSON.stringify(state.stagedFolders));
+        persistStaged();
         updateStagedBadge();
         refreshFolderSelectionView();
     }

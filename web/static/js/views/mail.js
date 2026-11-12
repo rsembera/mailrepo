@@ -8,7 +8,7 @@
  * - View state management
  */
 
-import { escapeHtml, escapeForOnclick, debounce } from '../utils.js';
+import { escapeHtml, debounce } from '../utils.js';
 import { state } from '../state.js';
 import { renderEmailList, clearEmailFilter, clearArchivedEmailSelection } from '../components/email-list.js';
 import { bindActions } from '../delegate.js';
@@ -594,7 +594,7 @@ function renderSearchBody(results, query) {
                     <div class="email-list-main">
                         <div class="email-list-header-row">
                             <span class="email-sender">${escapeHtml(extractName(email.sender))}</span>
-                            <span class="email-date">${formatDate(email.date)}</span>
+                            <span class="email-date">${escapeHtml(formatDate(email.date))}</span>
                         </div>
                         <span class="email-subject">${escapeHtml(email.subject || '(no subject)')}</span>
                         <span class="email-folder-path">${escapeHtml(email.folder_path)}</span>
@@ -1090,7 +1090,7 @@ function renderImapNavigation(accountId, folderPath) {
                     html += `<span class="breadcrumb-current">${escapeHtml(part)}</span>`;
                 } else {
                     const pathToHere = parts.slice(0, i + 1).join(delimiter);
-                    html += `<a href="#" data-action="navImap" data-account-id="${accountId}" data-folder-path="${escapeForOnclick(pathToHere)}" class="breadcrumb-link">${escapeHtml(part)}</a>`;
+                    html += `<a href="#" data-action="navImap" data-account-id="${accountId}" data-folder-path="${escapeHtml(pathToHere)}" class="breadcrumb-link">${escapeHtml(part)}</a>`;
                 }
             });
             html += `</div>`;
@@ -1110,7 +1110,7 @@ function renderImapNavigation(accountId, folderPath) {
             html += subfolders.map((sf, i) => {
                 const name = sf.name.split(delimiter).pop();
                 const separator = i < subfolders.length - 1 ? ', ' : '';
-                return `<a href="#" data-action="navImap" data-account-id="${accountId}" data-folder-path="${escapeForOnclick(sf.name)}" class="subfolder-link">${escapeHtml(name)}</a>${separator}`;
+                return `<a href="#" data-action="navImap" data-account-id="${accountId}" data-folder-path="${escapeHtml(sf.name)}" class="subfolder-link">${escapeHtml(name)}</a>${separator}`;
             }).join('');
             html += `</div>`;
         }
@@ -2177,7 +2177,7 @@ export async function copyAsReply() {
         await navigator.clipboard.write([clipboardItem]);
         
         // Brief visual feedback on the button
-        const btn = document.querySelector('[onclick="copyAsReply()"]');
+        const btn = document.querySelector('[data-tpl-action="copyAsReply"]');
         if (btn) {
             const originalTitle = btn.title;
             btn.title = 'Copied!';

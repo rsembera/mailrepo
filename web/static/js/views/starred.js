@@ -254,7 +254,7 @@ function renderStarredEmailRow(email) {
                         <span class="email-sender">${escapeHtml(senderName)}</span>
                         <span class="email-list-meta">
                             <i data-lucide="star" class="email-list-star"></i>
-                            <span class="email-date">${formatDate(email.date)}</span>
+                            <span class="email-date">${escapeHtml(formatDate(email.date))}</span>
                         </span>
                     </div>
                     <span class="email-subject">${escapeHtml(subject)}</span>

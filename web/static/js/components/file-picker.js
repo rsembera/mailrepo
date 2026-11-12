@@ -128,7 +128,7 @@ async function loadFilePickerDirectory(path) {
         
         if (!response.ok) {
             const data = await response.json();
-            list.innerHTML = `<div class="file-picker-empty">${data.error || 'Failed to load'}</div>`;
+            list.innerHTML = `<div class="file-picker-empty">${escapeHtml(data.error || 'Failed to load')}</div>`;
             return;
         }
         

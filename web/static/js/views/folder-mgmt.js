@@ -8,7 +8,7 @@
  * - Color picker
  */
 
-import { escapeHtml, escapeForOnclick } from '../utils.js';
+import { escapeHtml } from '../utils.js';
 import { state, loadFolders, setSelectedFoldersGetter, setSelectedFoldersClearer } from '../state.js';
 import { closeModal, showPrompt, showConfirm } from '../modals.js';
 import { showToast } from '../toast.js';
@@ -382,7 +382,7 @@ export async function exportFolder(folderId) {
                     <span class="progress-message">Preparing export...</span>
                 </div>
                 <div class="progress-detail">
-                    <span class="progress-subject">Decrypting and packaging "${folder.name}"</span>
+                    <span class="progress-subject">Decrypting and packaging "${escapeHtml(folder.name)}"</span>
                 </div>
             </div>
         `;

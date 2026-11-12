@@ -192,13 +192,17 @@ export function createProgress(container) {
             });
             
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+                // Say what the server said (locked, bad request) rather
+                // than a bare status number.
+                const body = await response.json().catch(() => null);
+                throw new Error((body && body.error) || `HTTP ${response.status}`);
             }
             
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
-            let completeFired = false;
+            // True once the server has said how it ended, either way.
+            let finished = false;
             // Parser state, NOT per-read state: an "event:" line and its
             // "data:" line can arrive in different network reads (WebKitGTK
             // segments streams differently than WKWebView), and resetting
@@ -225,16 +229,18 @@ export function createProgress(container) {
                         currentEvent = line.slice(7);
                     } else if (line.startsWith('data: ') && currentEvent) {
                         const data = JSON.parse(line.slice(6));
-                        if (currentEvent === 'complete') completeFired = true;
+                        if (currentEvent === 'complete' || currentEvent === 'error') finished = true;
                         handleEvent(currentEvent, data);
                         currentEvent = null;
                     }
                 }
             }
             
-            // If the stream ended without a complete event, the server
-            // was interrupted (killed, crashed, etc.)
-            if (!completeFired) {
+            // If the stream ended without a complete or error event, the
+            // server was interrupted (killed, crashed, etc.). An error it
+            // did report has already been shown and must not be replaced
+            // by this one.
+            if (!finished) {
                 render({
                     phase: 'error',
                     message: 'Connection to server was lost. Your archived emails are safe.',

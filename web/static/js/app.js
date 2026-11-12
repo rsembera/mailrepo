@@ -15,7 +15,7 @@
 // ============================================
 
 import { escapeHtml, debounce } from './utils.js';
-import { state, loadFolders, confirmNavigation } from './state.js';
+import { state, loadFolders, confirmNavigation, restoreStaged } from './state.js';
 import { closeModal, showPrompt, showConfirm, initModalListeners } from './modals.js';
 import { showToast } from './toast.js';
 import { renderFolderTree } from './components/folder-tree.js';
@@ -70,7 +70,7 @@ const elements = {
 document.addEventListener('DOMContentLoaded', () => {
     initDesktopLinkHandling();
     // Restore staged items from sessionStorage (e.g., when returning from review page)
-    restoreStagedFromSession();
+    restoreStaged();
     
     // Initialize email list component
     initEmailList({
@@ -567,35 +567,6 @@ function showMailView() {
     
     // Remove active state from sidebar items
     document.querySelectorAll('.tree-item-row').forEach(r => r.classList.remove('active'));
-}
-
-/**
- * Restore staged items from sessionStorage.
- * Called on page load to preserve staged items when navigating back from review.
- */
-function restoreStagedFromSession() {
-    // Restore staged emails
-    const savedEmails = sessionStorage.getItem('stagedEmails');
-    if (savedEmails) {
-        try {
-            const entries = JSON.parse(savedEmails);
-            state.staged = new Map(entries);
-        } catch (e) {
-            console.error('Failed to restore staged emails:', e);
-        }
-    }
-    
-    // Restore staged folders
-    const savedFolders = sessionStorage.getItem('stagedFolders');
-    if (savedFolders) {
-        try {
-            const parsed = JSON.parse(savedFolders);
-            // Ensure it's an array (handle old format)
-            state.stagedFolders = Array.isArray(parsed) ? parsed : [];
-        } catch (e) {
-            console.error('Failed to restore staged folders:', e);
-        }
-    }
 }
 
 /**

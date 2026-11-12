@@ -5,7 +5,7 @@
  */
 
 import { escapeHtml, extractName, formatDate } from '../utils.js';
-import { state } from '../state.js';
+import { state, isStagedInView, unstageInView } from '../state.js';
 import { bindActions } from '../delegate.js';
 import { showToast } from '../toast.js';
 
@@ -346,7 +346,7 @@ export function renderEmailList() {
 
         html += filteredEmails.map(email => {
         const emailId = email.uid || email.id;
-        const isStaged = state.staged.has(emailId);
+        const isStaged = isStagedInView(emailId);
         const isSelected = state.selectedEmails.has(emailId);
         const isArchivedSelected = selectedArchivedEmails.has(emailId);
 
@@ -377,13 +377,13 @@ export function renderEmailList() {
                     <button class="btn btn-sm btn-icon btn-selected" disabled title="Selected">
                         <i data-lucide="check"></i>
                     </button>
-                    <button class="btn btn-sm btn-icon" data-action="toggleArchSel" data-email-id="${emailId}" title="Deselect">
+                    <button class="btn btn-sm btn-icon" data-action="toggleArchSel" data-email-id="${escapeHtml(emailId)}" title="Deselect">
                         <i data-lucide="x"></i>
                     </button>
                 `;
             } else {
                 actionsHtml = `
-                    <button class="btn btn-sm btn-icon" data-action="toggleArchSel" data-email-id="${emailId}" title="Select">
+                    <button class="btn btn-sm btn-icon" data-action="toggleArchSel" data-email-id="${escapeHtml(emailId)}" title="Select">
                         <i data-lucide="circle"></i>
                     </button>
                     <button class="btn btn-sm btn-icon" disabled title="Not selected">
@@ -396,7 +396,7 @@ export function renderEmailList() {
                 <button class="btn btn-sm btn-icon" disabled title="Already staged">
                     <i data-lucide="circle"></i>
                 </button>
-                <button class="btn btn-sm btn-icon" data-action="clearOne" data-email-id="${emailId}" title="Unstage">
+                <button class="btn btn-sm btn-icon" data-action="clearOne" data-email-id="${escapeHtml(emailId)}" title="Unstage">
                     <i data-lucide="x"></i>
                 </button>
             `;
@@ -405,13 +405,13 @@ export function renderEmailList() {
                 <button class="btn btn-sm btn-icon btn-selected" disabled title="Selected">
                     <i data-lucide="check"></i>
                 </button>
-                <button class="btn btn-sm btn-icon" data-action="clearOne" data-email-id="${emailId}" title="Deselect">
+                <button class="btn btn-sm btn-icon" data-action="clearOne" data-email-id="${escapeHtml(emailId)}" title="Deselect">
                     <i data-lucide="x"></i>
                 </button>
             `;
         } else {
             actionsHtml = `
-                <button class="btn btn-sm btn-icon" data-action="selectOne" data-email-id="${emailId}" title="Select">
+                <button class="btn btn-sm btn-icon" data-action="selectOne" data-email-id="${escapeHtml(emailId)}" title="Select">
                     <i data-lucide="circle"></i>
                 </button>
                 <button class="btn btn-sm btn-icon" disabled title="Not selected">
@@ -422,14 +422,14 @@ export function renderEmailList() {
         
         return `
             ${dividerHtml}
-            <div class="${rowClass}" data-id="${emailId}" data-action="openEmail" data-email-id="${emailId}">
+            <div class="${rowClass}" data-id="${escapeHtml(emailId)}" data-action="openEmail" data-email-id="${escapeHtml(emailId)}">
                 <div class="email-list-content">
                     <div class="email-list-main">
                         <div class="email-list-header-row">
                             <span class="email-sender">${isSentFolder ? 'To: ' : ''}${escapeHtml(extractName(isSentFolder ? (email.to || email.recipients) : (email.from || email.sender)))}</span>
                             <span class="email-list-meta">
                                 ${email.flagged_at ? '<i data-lucide="star" class="email-list-star"></i>' : ''}
-                                <span class="email-date">${formatDate(email.date)}</span>
+                                <span class="email-date">${escapeHtml(formatDate(email.date))}</span>
                             </span>
                         </div>
                         <span class="email-subject">${escapeHtml(email.subject || '(no subject)')}</span>
@@ -486,7 +486,7 @@ export function renderEmailList() {
  * Select an email.
  */
 export function selectEmail(emailId) {
-    if (state.staged.has(emailId)) return;
+    if (isStagedInView(emailId)) return;
     state.selectedEmails.add(emailId);
     renderEmailList();
     if (onSelectionChange) onSelectionChange();
@@ -503,9 +503,7 @@ export function clearEmail(emailId) {
         return;
     }
     
-    if (state.staged.has(emailId)) {
-        state.staged.delete(emailId);
-        sessionStorage.setItem('staged', JSON.stringify([...state.staged.entries()]));
+    if (unstageInView(emailId)) {
         renderEmailList();
         if (onSelectionChange) onSelectionChange();
         // Update staged badge
@@ -519,7 +517,7 @@ export function clearEmail(emailId) {
 export function selectAllEmails() {
     state.emails.forEach(email => {
         const emailId = email.uid || email.id;
-        if (!state.staged.has(emailId)) {
+        if (!isStagedInView(emailId)) {
             state.selectedEmails.add(emailId);
         }
     });
@@ -560,7 +558,7 @@ export function updateToolbarButtons() {
 
 // Legacy function for backward compatibility
 export function toggleEmailSelection(emailId) {
-    if (state.staged.has(emailId)) return;
+    if (isStagedInView(emailId)) return;
     
     if (state.selectedEmails.has(emailId)) {
         state.selectedEmails.delete(emailId);

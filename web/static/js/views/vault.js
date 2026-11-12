@@ -216,7 +216,7 @@ function renderVaultItem(folder) {
     if (isOverdue) {
         dateText = `<span class="vault-overdue-badge">OVERDUE</span>`;
     } else {
-        dateText = formatDate(folder.retention_date);
+        dateText = escapeHtml(formatDate(folder.retention_date));
     }
     
     const colorDot = folder.color ? 

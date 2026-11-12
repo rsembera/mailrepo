@@ -553,7 +553,7 @@ export async function loadAccountLabels(accountId, options = false) {
             if (cached.ok) {
                 _renderAccountFolders(container, accountId, cached.folders);
             } else {
-                container.innerHTML = `<div class="tree-loading">${cached.error}</div>`;
+                container.innerHTML = `<div class="tree-loading">${escapeHtml(cached.error)}</div>`;
             }
 
             // Pass 2: re-fetch live in the background. Only re-render if
@@ -575,7 +575,7 @@ export async function loadAccountLabels(accountId, options = false) {
         // Single-fetch path: forceRefresh or default cached read.
         const result = await fetchFolders(opts.forceRefresh);
         if (!result.ok) {
-            container.innerHTML = `<div class="tree-loading">${result.error}</div>`;
+            container.innerHTML = `<div class="tree-loading">${escapeHtml(result.error)}</div>`;
             return;
         }
         _renderAccountFolders(container, accountId, result.folders);

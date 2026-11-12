@@ -79,8 +79,9 @@ export function resolvePrompt(value) {
  * @param {string} title - Modal title
  * @param {string} message - Confirmation message
  * @param {Object} options - Optional settings
- * @param {string} options.okText - Text for OK button
- * @param {boolean} options.danger - Use danger styling
+ * @param {string} options.okText - Text for OK button (also: confirmText)
+ * @param {string} options.cancelText - Text for the Cancel button
+ * @param {boolean} options.danger - Use danger styling (also: confirmClass 'btn-danger')
  * @returns {Promise<boolean>} True if confirmed
  */
 export function showConfirm(title, message, options = {}) {
@@ -90,8 +91,15 @@ export function showConfirm(title, message, options = {}) {
         document.getElementById('confirmMessage').textContent = message;
         
         const okBtn = document.getElementById('confirmOkBtn');
-        okBtn.textContent = options.okText || 'OK';
-        okBtn.className = options.danger ? 'btn btn-danger' : 'btn btn-primary';
+        // Callers use both spellings. confirmText / cancelText / confirmClass
+        // used to be ignored, so "Resume or Discard?" was shown as
+        // "OK or Cancel?" with Cancel doing the discarding.
+        okBtn.textContent = options.okText || options.confirmText || 'OK';
+        const danger = options.danger || options.confirmClass === 'btn-danger';
+        okBtn.className = danger ? 'btn btn-danger' : 'btn btn-primary';
+        // Set every time: the button keeps the last caller's label otherwise.
+        const cancelBtn = document.querySelector('#confirmModal [data-confirm="false"]');
+        if (cancelBtn) cancelBtn.textContent = options.cancelText || 'Cancel';
         
         document.getElementById('confirmModal').classList.add('active');
     });

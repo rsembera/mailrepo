@@ -3,6 +3,7 @@
  */
 
 import { showConfirm } from './modals.js';
+import { stagedKeyInView, stagedKeyOfItem } from './staged-key.js';
 
 // Reference to folder selection state (set by folder-mgmt.js)
 let getSelectedFoldersCount = () => 0;
@@ -73,6 +74,78 @@ export const state = {
     expandedAccounts: new Set(),
     imapFolders: new Map(), // Map<accountId, {folders: [], tree: {}}>
 };
+
+/**
+ * Is this email, as shown in the current view, staged?
+ * @param {number|string} emailId - email.uid || email.id
+ * @returns {boolean}
+ */
+export function isStagedInView(emailId) {
+    const key = stagedKeyInView(state.currentView, emailId);
+    return key !== null && state.staged.has(key);
+}
+
+/**
+ * Remove this email, as shown in the current view, from the staged set.
+ * @param {number|string} emailId - email.uid || email.id
+ * @returns {boolean} true if it was staged
+ */
+export function unstageInView(emailId) {
+    const key = stagedKeyInView(state.currentView, emailId);
+    if (key === null || !state.staged.delete(key)) return false;
+    persistStaged();
+    return true;
+}
+
+/**
+ * Write the staged emails and folders to sessionStorage, so they survive
+ * a page load (an idle lock sends the page to the login screen). The one
+ * place that writes them: an empty set removes the entry, so nothing that
+ * was unstaged can come back on the next load.
+ */
+export function persistStaged() {
+    try {
+        if (state.staged.size > 0) {
+            sessionStorage.setItem('stagedEmails', JSON.stringify([...state.staged.entries()]));
+        } else {
+            sessionStorage.removeItem('stagedEmails');
+        }
+        if (state.stagedFolders.length > 0) {
+            sessionStorage.setItem('stagedFolders', JSON.stringify(state.stagedFolders));
+        } else {
+            sessionStorage.removeItem('stagedFolders');
+        }
+    } catch (e) {
+        // Storage full or unavailable: the staged set still lives in
+        // memory for this page.
+        console.warn('Could not persist staged items:', e);
+    }
+}
+
+/**
+ * Load the staged emails and folders saved by persistStaged().
+ */
+export function restoreStaged() {
+    try {
+        const savedEmails = sessionStorage.getItem('stagedEmails');
+        if (savedEmails) {
+            // Keys are rebuilt from the entries rather than trusted.
+            const items = JSON.parse(savedEmails).map(entry => entry[1]);
+            state.staged = new Map(items.map(item => [stagedKeyOfItem(item), item]));
+        }
+    } catch (e) {
+        console.error('Failed to restore staged emails:', e);
+    }
+    try {
+        const savedFolders = sessionStorage.getItem('stagedFolders');
+        if (savedFolders) {
+            const parsed = JSON.parse(savedFolders);
+            state.stagedFolders = Array.isArray(parsed) ? parsed : [];
+        }
+    } catch (e) {
+        console.error('Failed to restore staged folders:', e);
+    }
+}
 
 /**
  * Check if there are unsaved selections that would be lost on navigation.

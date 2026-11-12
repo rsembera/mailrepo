@@ -7,11 +7,11 @@
  * @module views/review
  */
 
-import { escapeHtml, escapeForOnclick } from '../utils.js';
+import { escapeHtml } from '../utils.js';
 import { getStagedEmails, getStagedFolders, clearAllStaged, updateStagedBadge, openChangeDestinationModal } from '../components/staging.js';
 import { showConfirm, showAlert } from '../modals.js';
 import { showToast } from '../toast.js';
-import { state, loadFolders } from '../state.js';
+import { state, loadFolders, persistStaged } from '../state.js';
 import { refreshSidebarFolders } from '../components/sidebar.js';
 import { bindActions } from '../delegate.js';
 
@@ -523,7 +523,6 @@ function renderSourceGroup(source, sourceKey, destId, type) {
     const sourceName = isImap ? getAccountName(source.accountId) : getImportName(source.importId);
     const groupId = `${sourceKey}:${destId}:${type}`;
     const isExpanded = expandedSourceGroups.has(groupId);
-    const escapedGroupId = escapeForOnclick(groupId);
     
     // Count items
     let itemCount = 0;
@@ -538,7 +537,7 @@ function renderSourceGroup(source, sourceKey, destId, type) {
     
     let html = `
         <div class="review-source-group" data-group-id="${escapeHtml(groupId)}">
-            <div class="review-source-header" data-action="toggleSource" data-group-id="${escapedGroupId}">
+            <div class="review-source-header" data-action="toggleSource" data-group-id="${escapeHtml(groupId)}">
                 <div class="review-source-header-left">
                     <i data-lucide="${isExpanded ? 'chevron-down' : 'chevron-right'}" class="review-chevron"></i>
                     <i data-lucide="${isImap ? 'mail' : 'archive'}" class="review-source-icon"></i>
@@ -567,8 +566,6 @@ function renderSourceGroup(source, sourceKey, destId, type) {
             
             sortedFolders.forEach(([folderName, items]) => {
                 const lineKey = `${sourceKey}:${folderName}`;
-                const escapedLineKey = escapeForOnclick(lineKey);
-                const escapedDestId = escapeForOnclick(String(destId));
                 // Show just the leaf folder name (full path is implied by account context)
                 const leafName = folderName.includes('/') ? folderName.split('/').pop() : folderName;
                 
@@ -580,7 +577,7 @@ function renderSourceGroup(source, sourceKey, destId, type) {
                             <span class="review-item-count">(${items.length})</span>
                         </div>
                         <div class="review-source-item-right">
-                            <button class="btn btn-sm btn-icon" data-action="unstageSourceFolder" data-line-key="${escapedLineKey}" data-dest-id="${escapedDestId}" title="Unstage">
+                            <button class="btn btn-sm btn-icon" data-action="unstageSourceFolder" data-line-key="${escapeHtml(lineKey)}" data-dest-id="${escapeHtml(String(destId))}" title="Unstage">
                                 <i data-lucide="x"></i>
                             </button>
                         </div>
@@ -617,7 +614,7 @@ function toggleSourceGroup(groupId) {
  */
 function renderDestinationDropdown(currentDestId) {
     return `
-        <button class="btn btn-sm btn-secondary" data-action="openChangeDest" data-current-dest="${escapeForOnclick(String(currentDestId))}" title="Change destination folder">
+        <button class="btn btn-sm btn-secondary" data-action="openChangeDest" data-current-dest="${escapeHtml(String(currentDestId))}" title="Change destination folder">
             <i data-lucide="folder-output"></i>
             Change Destination
         </button>
@@ -740,7 +737,7 @@ async function unstageDestination(destId) {
         }
     });
     toDelete.forEach(id => stagedEmails.delete(id));
-    sessionStorage.setItem('stagedEmails', JSON.stringify([...stagedEmails.entries()]));
+    persistStaged();
     
     // Remove matching folders - modify the array in place
     for (let i = stagedFolders.length - 1; i >= 0; i--) {
@@ -750,7 +747,7 @@ async function unstageDestination(destId) {
             stagedFolders.splice(i, 1);
         }
     }
-    sessionStorage.setItem('stagedFolders', JSON.stringify(stagedFolders));
+    persistStaged();
     
     // Clear expanded state for removed groups
     expandedSourceGroups.clear();
@@ -800,7 +797,7 @@ async function unstageSourceFolder(lineKey, destId) {
         }
     });
     toDelete.forEach(id => stagedEmails.delete(id));
-    sessionStorage.setItem('stagedEmails', JSON.stringify([...stagedEmails.entries()]));
+    persistStaged();
     
     updateStagedBadge();
     renderReviewView();
@@ -847,7 +844,7 @@ async function unstageFolderByIndex(index) {
     for (const i of toRemove) {
         stagedFolders.splice(i, 1);
     }
-    sessionStorage.setItem('stagedFolders', JSON.stringify(stagedFolders));
+    persistStaged();
     
     updateStagedBadge();
     renderReviewView();
@@ -866,7 +863,7 @@ function changeDestination(oldDestId, newDestId) {
             data.destinationFolderId = newDestId;
         }
     });
-    sessionStorage.setItem('stagedEmails', JSON.stringify([...stagedEmails.entries()]));
+    persistStaged();
     
     // Update folders
     stagedFolders.forEach(sf => {
@@ -875,7 +872,7 @@ function changeDestination(oldDestId, newDestId) {
             sf.destinationFolderId = newDestId;
         }
     });
-    sessionStorage.setItem('stagedFolders', JSON.stringify(stagedFolders));
+    persistStaged();
     
     renderReviewView();
 }
@@ -957,6 +954,7 @@ function initIconSelects() {
  */
 function unstageAll() {
     clearAllStaged();
+    sourceActions = {};
     expandedSourceGroups.clear();
     updateStagedBadge();
     renderReviewView();
@@ -1046,6 +1044,10 @@ async function commitAll() {
             onComplete: async (data) => {
                 modal.classList.remove('active');
                 clearAllStaged();
+                // A choice such as "Delete emails" is for this commit
+                // only; the next thing staged from the same account
+                // starts again at "Leave in place".
+                sourceActions = {};
                 expandedSourceGroups.clear();
                 updateStagedBadge();
                 await refreshSidebar();

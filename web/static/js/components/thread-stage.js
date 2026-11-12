@@ -15,7 +15,8 @@
  * @module components/thread-stage
  */
 
-import { state, updateStagedBadge } from '../state.js';
+import { state, updateStagedBadge, persistStaged } from '../state.js';
+import { stagedKeyOfItem, viewSource } from '../staged-key.js';
 import { showAlert } from '../modals.js';
 import { showToast } from '../toast.js';
 import { openChangeDestinationModal } from './staging.js';
@@ -129,38 +130,15 @@ async function _findAndStageThread({ accountId, folder, uid, subject, destinatio
     }
 
     // Stage each message. Mirror the shape that staging.js produces for
-    // IMAP-sourced emails: state.staged is a Map keyed by email id, value
+    // IMAP-sourced emails: state.staged is a Map keyed by stagedKeyOfItem(), value
     // is { email, destinationFolderId, sourceType, sourceAccountId,
     // sourceFolder }. The commit path reads sourceFolder to know which
     // IMAP folder to fetch from (see progress.py line 473).
     let added = 0;
     let skipped = 0;
+    const here = viewSource(state.currentView);
     for (const m of messages) {
-        // Key by UID to match the existing staging convention (see
-        // staging.js line ~466: state.staged.set(emailId, ...) where
-        // emailId is email.uid || email.id). This is what the email-list
-        // renderer checks via state.staged.has(emailId) to gray out
-        // staged rows.
-        const key = m.uid;
-        // If the user individually selected any of these messages before
-        // staging the whole conversation, deselect them now — selected and
-        // staged are mutually exclusive (selectEmail refuses staged
-        // emails), and a stale selection here made confirmNavigation()
-        // show a spurious "selected but not staged" warning after the
-        // thread was in fact staged. clearEmail() also fires the
-        // selection-count refresh. Selection keys come from dataset
-        // attributes (strings), so probe both forms.
-        const selKey = state.selectedEmails.has(key)
-            ? key
-            : state.selectedEmails.has(String(key))
-                ? String(key)
-                : null;
-        if (selKey !== null) clearEmail(selKey);
-        if (state.staged.has(key)) {
-            skipped += 1;
-            continue;
-        }
-        state.staged.set(key, {
+        const item = {
             email: {
                 uid: m.uid,
                 id: m.uid,
@@ -173,21 +151,39 @@ async function _findAndStageThread({ accountId, folder, uid, subject, destinatio
             sourceType: 'imap',
             sourceAccountId: accountId,
             sourceFolder: m.folder,
-        });
+        };
+        // A thread spans folders (INBOX and Sent, usually), and a UID
+        // means something only inside its own folder, so the key carries
+        // the account and folder too.
+        const key = stagedKeyOfItem(item);
+        // If the user individually selected any of these messages before
+        // staging the whole conversation, deselect them now — selected and
+        // staged are mutually exclusive (selectEmail refuses staged
+        // emails), and a stale selection here made confirmNavigation()
+        // show a spurious "selected but not staged" warning after the
+        // thread was in fact staged. clearEmail() also fires the
+        // selection-count refresh. The selection belongs to the folder on
+        // screen, so only members from that folder can be in it; its keys
+        // come from dataset attributes (strings), so probe both forms.
+        const onScreen = here && here.sourceType === 'imap'
+            && String(here.sourceId) === String(accountId) && here.folder === m.folder;
+        if (onScreen) {
+            const selKey = state.selectedEmails.has(m.uid)
+                ? m.uid
+                : state.selectedEmails.has(String(m.uid))
+                    ? String(m.uid)
+                    : null;
+            if (selKey !== null) clearEmail(selKey);
+        }
+        if (state.staged.has(key)) {
+            skipped += 1;
+            continue;
+        }
+        state.staged.set(key, item);
         added += 1;
     }
 
-    // Persist to sessionStorage (same as staging.js does on its own writes)
-    try {
-        sessionStorage.setItem(
-            'stagedEmails',
-            JSON.stringify([...state.staged.entries()])
-        );
-    } catch (e) {
-        // sessionStorage full or unavailable — staged state still lives in
-        // memory for this session, which is good enough.
-        console.warn('Could not persist staged emails:', e);
-    }
+    persistStaged();
 
     updateStagedBadge();
     // Repaint whichever screen currently owns the shared content area so the

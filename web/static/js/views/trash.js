@@ -365,7 +365,7 @@ function renderTrashItem(folder) {
                 <span class="folder-label">${escapeHtml(folder.name)}</span>
                 ${descendantCount > 0 ? `<span class="subfolder-count">(+${descendantCount})</span>` : ''}
             </div>
-            <div class="trash-management-date">${formatDate(deletedDate)}</div>
+            <div class="trash-management-date">${escapeHtml(formatDate(deletedDate))}</div>
             <div class="trash-management-actions">
                 <button class="btn btn-sm btn-icon"
                         data-action="restoreFolder" data-folder-id="${folder.id}"
@@ -405,7 +405,7 @@ function renderTrashEmailItem(email) {
                     ${originLine}
                 </div>
             </div>
-            <div class="trash-management-date">${formatDate(deletedDate)}</div>
+            <div class="trash-management-date">${escapeHtml(formatDate(deletedDate))}</div>
             <div class="trash-management-actions">
                 <button class="btn btn-sm btn-icon"
                         data-action="restoreEmail" data-email-id="${email.id}"
